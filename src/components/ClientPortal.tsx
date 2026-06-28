@@ -121,7 +121,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
             <h3 className="font-semibold text-sm mb-2">Абонемент</h3>
-            <p className="text-sm text-zinc-300">{m.type === "subscription" ? "Подписка" : "По тренировкам"}{m.remaining !== "" && m.remaining != null && ` · осталось ${combinedRemaining(m)}`}</p>
+            <p className="text-sm text-zinc-300">{m.type === "subscription" ? "Подписка" : "По тренировкам"}{m.remaining !== "" && m.remaining != null && ` · осталось ${combinedRemaining(m as clientsApi.Membership)}`}</p>
           </div>
         </div>
       )}
@@ -216,7 +216,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
         <div className="space-y-3">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-1 text-sm">
             <p className="text-zinc-300">Тип: {m.type === "subscription" ? "Подписка" : "По тренировкам"}</p>
-            {m.remaining !== "" && m.remaining != null && <p className="text-zinc-300">Осталось тренировок: {combinedRemaining(m)}</p>}
+            {m.remaining !== "" && m.remaining != null && <p className="text-zinc-300">Осталось тренировок: {combinedRemaining(m as clientsApi.Membership)}</p>}
             {m.pricePerSession && <p className="text-zinc-300">Цена занятия: {m.pricePerSession} ₽</p>}
             {m.nextPaymentDate && <p className="text-zinc-300">Следующая оплата: {fmtDate(m.nextPaymentDate)}</p>}
           </div>

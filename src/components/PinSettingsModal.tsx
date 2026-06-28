@@ -16,7 +16,7 @@ export default function PinSettingsModal({ id, table = "trainers", onClose }: { 
     if (pin.length < 4) { setErr("PIN должен быть не короче 4 цифр"); return; }
     if (pin !== confirm) { setErr("PIN не совпадает"); return; }
     setBusy(true);
-    try { await setPin(id, pin, table); setHasPin(true); setPin(""); setConfirm(""); setErr(""); }
+    try { await setPin(id, pin, table); setHasPin(true); setPinVal(""); setConfirm(""); setErr(""); }
     finally { setBusy(false); }
   };
 
