@@ -151,9 +151,10 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         <div className="flex items-center gap-2">
           <input value={plan.name} onChange={(e) => updatePlanMeta({ name: e.target.value })} className="flex-1 min-w-0 bg-transparent text-xl font-bold outline-none border-b border-transparent focus:border-lime-400/50 pb-1" placeholder="Название плана" />
           {clientName && (
-            <span className="flex items-center gap-1.5 text-sm text-zinc-400 shrink-0">
+            <span className="flex items-center gap-1.5 text-sm text-zinc-400 shrink-0 max-w-[140px] sm:max-w-none">
               {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />}
-              <User size={14} className="text-zinc-500" /> {clientName}
+              <User size={14} className="text-zinc-500 shrink-0" />
+              <span className="truncate">{clientName}</span>
             </span>
           )}
         </div>

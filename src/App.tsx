@@ -168,10 +168,10 @@ export default function App() {
               <Sparkles size={10} className="text-lime-400" /> Старт
             </button>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            <button onClick={() => setShowPinSettings(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="PIN-код на вход"><Lock size={14} /> PIN</button>
-            <button onClick={() => setShowTrash(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="Корзина"><Trash size={14} /> Корзина</button>
-            <button onClick={() => setShowBackup(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="Резервная копия"><Database size={14} /> Бэкап</button>
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <button onClick={() => setShowPinSettings(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="PIN-код на вход"><Lock size={14} /><span className="hidden sm:inline">PIN</span></button>
+            <button onClick={() => setShowTrash(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="Корзина"><Trash size={14} /><span className="hidden sm:inline">Корзина</span></button>
+            <button onClick={() => setShowBackup(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="Бэкап"><Database size={14} /><span className="hidden sm:inline">Бэкап</span></button>
             <button onClick={() => supabase.auth.signOut()} className="text-sm text-zinc-500 hover:text-zinc-300">Выйти</button>
           </div>
         </div>
