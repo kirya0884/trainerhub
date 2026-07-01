@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, CalendarDays, Database, Lock, Trash, ClipboardList, User, Settings } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Settings } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -10,6 +10,7 @@ import ClientProfile from "./components/ClientProfile";
 import Dashboard from "./components/Dashboard";
 import CalendarView from "./components/CalendarView";
 import ClientPortal from "./components/ClientPortal";
+import SubscriptionModal from "./components/SubscriptionModal";
 import BackupModal from "./components/BackupModal";
 import PinGate from "./components/PinGate";
 import PinSettingsModal from "./components/PinSettingsModal";
@@ -58,6 +59,7 @@ export default function App() {
   const [showBackup, setShowBackup] = useState(false);
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
+  const [showSubscription, setShowSubscription] = useState(false);
   const [trainerName, setTrainerName] = useState("");
   const [trainerAvatar, setTrainerAvatar] = useState("");
   const [tabOrder, setTabOrder] = useState<TabKind[]>(loadTabOrder);
@@ -152,14 +154,20 @@ export default function App() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6">
       <div className="max-w-2xl mx-auto space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
-          <button onClick={() => setView({ kind: "trainerProfile" })} className="flex items-center gap-2 text-lime-400 font-semibold text-sm hover:text-lime-300 transition truncate max-w-[55%] sm:max-w-none">
-            {trainerAvatar ? (
-              <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
-            ) : (
-              <span className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[11px] text-zinc-500 shrink-0">{(trainerName || session.user.email || "?")[0]?.toUpperCase()}</span>
-            )}
-            <span className="truncate">{trainerName || session.user.email}</span>
-          </button>
+          <div className="flex items-center gap-2 min-w-0">
+            <button onClick={() => setView({ kind: "trainerProfile" })} className="flex items-center gap-2 text-lime-400 font-semibold text-sm hover:text-lime-300 transition truncate max-w-[55%] sm:max-w-none">
+              {trainerAvatar ? (
+                <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
+              ) : (
+                <span className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[11px] text-zinc-500 shrink-0">{(trainerName || session.user.email || "?")[0]?.toUpperCase()}</span>
+              )}
+              <span className="truncate">{trainerName || session.user.email}</span>
+            </button>
+            {/* ponytail: план пока всегда «Старт» — подключится к биллингу при интеграции оплаты */}
+            <button onClick={() => setShowSubscription(true)} className="flex items-center gap-1 shrink-0 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 text-[11px] font-semibold rounded-full px-2 py-0.5 transition">
+              <Sparkles size={10} className="text-lime-400" /> Старт
+            </button>
+          </div>
           <div className="flex items-center gap-3 shrink-0">
             <button onClick={() => setShowPinSettings(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="PIN-код на вход"><Lock size={14} /> PIN</button>
             <button onClick={() => setShowTrash(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="Корзина"><Trash size={14} /> Корзина</button>
@@ -170,6 +178,7 @@ export default function App() {
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
         {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
+        {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
         {(view.kind === "dashboard" || view.kind === "plans" || view.kind === "clients" || view.kind === "calendar" || view.kind === "trainerProfile") && (
           <div className="flex items-center gap-1.5">
             <div className="relative shrink-0">
