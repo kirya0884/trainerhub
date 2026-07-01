@@ -347,7 +347,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               <button onClick={() => setSessionDay(day)} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Провести тренировку"><Play size={15} /></button>
               <button onClick={() => deleteDay(day.id)} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><Trash2 size={15} /></button>
             </div>
-            {isOpen && <DayBody day={day} />}
+            {isOpen && DayBody({ day })}
           </div>
         );
       })}
@@ -363,7 +363,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
       {editingDay && (
         <ModalShell title={editingDay.name || "Тренировка"} icon={<Pencil size={17} className="text-lime-400" />} onClose={() => setEditingDayId(null)} wide>
-          <div className="overflow-y-auto flex-1 min-h-0"><DayBody day={editingDay} /></div>
+          <div className="overflow-y-auto flex-1 min-h-0">{DayBody({ day: editingDay })}</div>
         </ModalShell>
       )}
 
