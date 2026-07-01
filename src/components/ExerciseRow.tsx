@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Layers, Plus, Video, X } from "lucide-react";
-import { useState } from "react";
+import { startTransition, useState } from "react";
 import type { Exercise } from "../types";
 import NumField from "./NumField";
 
@@ -43,7 +43,7 @@ export default function ExerciseRow({
         </span>
         <button onClick={cycleGroup} title="Суперсет: объединить упражнения в группу" className={`shrink-0 min-w-7 h-7 px-1 rounded-md text-xs font-bold flex items-center justify-center transition ${ex.group ? "text-zinc-950" : "text-zinc-500 bg-zinc-800 hover:bg-zinc-700"}`} style={ex.group ? { background: groupColor ?? undefined } : undefined}>{label}</button>
         <div className="relative flex-1 min-w-0">
-          <input value={ex.name} onChange={(e) => { update({ name: e.target.value }); setAcOpen(true); }} onFocus={() => setAcOpen(true)} onBlur={() => setTimeout(() => setAcOpen(false), 150)} placeholder="Название упражнения" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input value={ex.name} onChange={(e) => { const v = e.target.value; startTransition(() => update({ name: v })); setAcOpen(true); }} onFocus={() => setAcOpen(true)} onBlur={() => setTimeout(() => setAcOpen(false), 150)} placeholder="Название упражнения" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
           {acOpen && q && !exactExists && (
             <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
               {matches.map((n) => (<button key={n} onMouseDown={(e) => { e.preventDefault(); update({ name: n }); setAcOpen(false); }} className="w-full text-left text-sm px-3 py-2 hover:bg-zinc-800 text-zinc-200 transition">{n}</button>))}
@@ -58,7 +58,7 @@ export default function ExerciseRow({
 
       {showVideo && (
         <div className="pl-6 space-y-1.5">
-          <input value={ex.video} onChange={(e) => update({ video: e.target.value })} placeholder="Ссылка на видео (YouTube или .mp4)" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
+          <input value={ex.video} onChange={(e) => { const v = e.target.value; startTransition(() => update({ video: v })); }} placeholder="Ссылка на видео (YouTube или .mp4)" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
           {ex.video && (
             /\.(mp4|webm|ogg)$/i.test(ex.video) ? (
               <video src={ex.video} controls className="w-full max-h-56 rounded-lg bg-black" />
@@ -81,23 +81,23 @@ export default function ExerciseRow({
                 <div className="h-5 flex items-center justify-center gap-0.5 text-xs text-zinc-400 font-medium">{i + 1}
                   <button onClick={() => removeSetRow(s.id)} className="text-zinc-600 hover:text-red-400 transition leading-none" title="Удалить подход"><X size={11} /></button>
                 </div>
-                <input value={s.weight} onChange={(e) => updateSetRow(s.id, { weight: e.target.value })} placeholder="60" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
-                <input value={s.reps} onChange={(e) => updateSetRow(s.id, { reps: e.target.value })} placeholder="8" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+                <input value={s.weight} onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="60" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+                <input value={s.reps} onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="8" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
               </div>
             ))}
             <div className="flex flex-col gap-1 shrink-0"><div className="h-5" /><button onClick={addSetRow} title="Добавить подход" style={{ height: 68 }} className="w-9 flex items-center justify-center rounded-md border border-dashed border-zinc-700 text-zinc-400 hover:text-lime-400 hover:border-lime-400/40 transition"><Plus size={15} /></button></div>
           </div>
-          <div className="flex items-center gap-2"><span className="text-[10px] uppercase tracking-wide text-zinc-500">Отдых</span><input value={ex.rest} onChange={(e) => update({ rest: e.target.value })} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" /></div>
+          <div className="flex items-center gap-2"><span className="text-[10px] uppercase tracking-wide text-zinc-500">Отдых</span><input value={ex.rest} onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" /></div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
-          <NumField label="Подходы" value={ex.sets} onChange={(e) => update({ sets: e.target.value })} placeholder="4" />
-          <NumField label="Повторы" value={ex.reps} onChange={(e) => update({ reps: e.target.value })} placeholder="8-12" />
-          <NumField label="Вес" value={ex.weight} onChange={(e) => update({ weight: e.target.value })} placeholder="60 кг" />
-          <NumField label="Отдых" value={ex.rest} onChange={(e) => update({ rest: e.target.value })} placeholder="90 с" />
+          <NumField label="Подходы" value={ex.sets} onChange={(e) => { const v = e.target.value; startTransition(() => update({ sets: v })); }} placeholder="4" />
+          <NumField label="Повторы" value={ex.reps} onChange={(e) => { const v = e.target.value; startTransition(() => update({ reps: v })); }} placeholder="8-12" />
+          <NumField label="Вес" value={ex.weight} onChange={(e) => { const v = e.target.value; startTransition(() => update({ weight: v })); }} placeholder="60 кг" />
+          <NumField label="Отдых" value={ex.rest} onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" />
         </div>
       )}
-      <input value={ex.note} onChange={(e) => update({ note: e.target.value })} placeholder="Комментарий: техника, на что обратить внимание..." className="w-full bg-transparent text-xs text-zinc-400 px-1 py-0.5 pl-6 outline-none focus:text-zinc-200" />
+      <input value={ex.note} onChange={(e) => { const v = e.target.value; startTransition(() => update({ note: v })); }} placeholder="Комментарий: техника, на что обратить внимание..." className="w-full bg-transparent text-xs text-zinc-400 px-1 py-0.5 pl-6 outline-none focus:text-zinc-200" />
     </div>
   );
 }
