@@ -22,11 +22,11 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
   return (
     <div className="space-y-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5">
           <span className="text-xs text-zinc-500 shrink-0">Период:</span>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="flex-1 min-w-[120px] bg-zinc-800 rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="flex-1 min-w-0 w-0 bg-zinc-800 rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
           <span className="text-zinc-600 shrink-0">—</span>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="flex-1 min-w-[120px] bg-zinc-800 rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="flex-1 min-w-0 w-0 bg-zinc-800 rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
         </div>
         <button onClick={() => exportAnalyticsCsv(clients, payments, from, to)} className="w-full flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-lime-300 transition">
           <Download size={14} /> Скачать Excel

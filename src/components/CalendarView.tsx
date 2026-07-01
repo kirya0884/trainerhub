@@ -29,7 +29,7 @@ const fromMin = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0"
 
 const HOUR_START = 6, HOUR_END = 24;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
-const ROW_H = 48; // px за час
+const ROW_H = 32; // px за час
 
 export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlans }: { trainerId: string; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void }) {
   const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, rescheduleOccurrence } = useBookings(trainerId);
@@ -158,11 +158,11 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
             ))}
           </div>
           <div className="flex-1 overflow-x-auto">
-            <div className="flex" style={{ minWidth: listDays.length > 1 ? listDays.length * 96 : undefined }}>
+            <div className="flex" style={{ minWidth: listDays.length > 1 ? listDays.length * 72 : undefined }}>
               {listDays.map((d, idx) => {
                 const occs = occurrences.filter((o) => o.date === d).sort((a, b) => a.time.localeCompare(b.time));
                 return (
-                  <div key={d} className={`flex-1 min-w-[96px] border-r border-zinc-800 last:border-r-0 ${dragOverDay === d ? "bg-cyan-400/5" : ""}`}>
+                  <div key={d} className={`flex-1 min-w-[68px] border-r border-zinc-800 last:border-r-0 ${dragOverDay === d ? "bg-cyan-400/5" : ""}`}>
                     <div className={`h-7 flex items-center justify-between px-1.5 border-b border-zinc-800 text-xs sticky top-0 bg-zinc-900 ${d === today ? "text-cyan-400 font-semibold" : "text-zinc-400"}`}>
                       <span className="truncate">{mode === "week" ? `${WEEKDAYS_SHORT[idx]} ${d.slice(8)}` : WEEKDAYS_FULL[(new Date(d + "T00:00:00").getDay() + 6) % 7]}</span>
                       <button onClick={() => setModal({ date: d })} className="text-zinc-600 hover:text-cyan-400 transition shrink-0"><Plus size={13} /></button>
