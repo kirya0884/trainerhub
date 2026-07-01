@@ -2,10 +2,8 @@
 @tailwind components;
 @tailwind utilities;
 
-/* iOS Safari зумирует поля с font-size < 16px — фиксируем минимум на мобильных */
-@media screen and (max-width: 768px) {
-  input, textarea, select { font-size: 16px !important; }
-}
+/* iOS Safari зумирует поля с font-size < 16px — держим минимум 16px везде */
+input, textarea, select { font-size: 16px !important; }
 
 /* Печать плана/отчёта — печатаем только .print-area, остальное скрываем (см. PlanPrintView) */
 @media print {
