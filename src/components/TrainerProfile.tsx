@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Camera, ClipboardList, Image, User, Users } from "lucide-react";
+import { Camera, ClipboardList, Image, Sparkles, User, Users } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
+import SubscriptionModal from "./SubscriptionModal";
 
 export default function TrainerProfile({ trainerId, email, onSaved }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string) => void }) {
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
@@ -10,6 +11,7 @@ export default function TrainerProfile({ trainerId, email, onSaved }: { trainerI
   const [stats, setStats] = useState<TrainerStats | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
+  const [showSubscription, setShowSubscription] = useState(false);
 
   useEffect(() => {
     trainerApi.fetchTrainerSelf(trainerId).then((s) => { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); });
@@ -112,6 +114,12 @@ export default function TrainerProfile({ trainerId, email, onSaved }: { trainerI
         </label>
         <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
       </div>
+
+      <button onClick={() => setShowSubscription(true)} className="w-full flex items-center justify-center gap-2 bg-zinc-900 border border-lime-400/30 hover:border-lime-400/60 text-lime-400 font-semibold rounded-xl py-3 text-sm transition">
+        <Sparkles size={16} /> Подписка на TrainerHub
+      </button>
+
+      {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
     </div>
   );
 }
