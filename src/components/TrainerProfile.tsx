@@ -52,11 +52,15 @@ export default function TrainerProfile({ trainerId, email, onSaved }: { trainerI
     <div className="space-y-4 max-w-2xl">
       <h2 className="text-lg font-bold flex items-center gap-1.5"><User size={18} className="text-lime-400" /> Профиль тренера</h2>
 
+      <button onClick={() => setShowSubscription(true)} className="w-full flex items-center justify-center gap-2 bg-zinc-900 border border-lime-400/30 hover:border-lime-400/60 text-lime-400 font-semibold rounded-xl py-3 text-sm transition">
+        <Sparkles size={16} /> Подписка на TrainerHub
+      </button>
+
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3"><p className="text-lg font-bold text-lime-400 flex items-center gap-1"><Users size={14} /> {stats.activeClients}</p><p className="text-[11px] text-zinc-500 mt-0.5">активных</p></div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3"><p className="text-lg font-bold text-zinc-100">{stats.totalClients}</p><p className="text-[11px] text-zinc-500 mt-0.5">всего клиентов</p></div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3"><p className="text-lg font-bold text-cyan-400 flex items-center gap-1"><ClipboardList size={14} /> {stats.plansCount}</p><p className="text-[11px] text-zinc-500 mt-0.5">планов</p></div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3"><p className="text-lg font-bold text-orange-400">{stats.sessionsDone}</p><p className="text-[11px] text-zinc-500 mt-0.5">тренировок</p></div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"><p className="text-2xl font-bold text-lime-400 flex items-center gap-1.5"><Users size={16} /> {stats.activeClients}</p><p className="text-xs text-zinc-500 mt-1">активных</p></div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"><p className="text-2xl font-bold text-zinc-100">{stats.totalClients}</p><p className="text-xs text-zinc-500 mt-1">всего клиентов</p></div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"><p className="text-2xl font-bold text-cyan-400 flex items-center gap-1.5"><ClipboardList size={16} /> {stats.plansCount}</p><p className="text-xs text-zinc-500 mt-1">планов</p></div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"><p className="text-2xl font-bold text-orange-400">{stats.sessionsDone}</p><p className="text-xs text-zinc-500 mt-1">тренировок</p></div>
       </div>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
@@ -114,10 +118,6 @@ export default function TrainerProfile({ trainerId, email, onSaved }: { trainerI
         </label>
         <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
       </div>
-
-      <button onClick={() => setShowSubscription(true)} className="w-full flex items-center justify-center gap-2 bg-zinc-900 border border-lime-400/30 hover:border-lime-400/60 text-lime-400 font-semibold rounded-xl py-3 text-sm transition">
-        <Sparkles size={16} /> Подписка на TrainerHub
-      </button>
 
       {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
     </div>

@@ -178,8 +178,8 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
                           <button key={`${o.id}-${o.occDate}`} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", JSON.stringify({ id: o.id, occDate: o.occDate }))}
                             onClick={(e) => { e.stopPropagation(); setQuickView(o); }} style={{ top, height, background: `${BOOKING_STATUS_COLOR[o.status]}26`, borderLeft: `3px solid ${BOOKING_STATUS_COLOR[o.status]}` }}
                             className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 text-left overflow-hidden cursor-grab active:cursor-grabbing">
-                            <span className="block text-[9px] font-mono text-zinc-300 leading-tight">{o.time}</span>
-                            <span className="block text-[11px] text-zinc-100 truncate leading-tight">{o.clientIds.map(clientName).join(", ")}</span>
+                            <span className="block text-[11px] font-mono text-zinc-300 leading-tight">{o.time}</span>
+                            <span className="block text-sm text-zinc-100 truncate leading-tight font-medium">{o.clientIds.map(clientName).join(", ")}</span>
                           </button>
                         );
                       })}

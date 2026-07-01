@@ -160,24 +160,24 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         </div>
         <input value={plan.note} onChange={(e) => updatePlanMeta({ note: e.target.value })} placeholder="Заметка к плану — напр. прогрессия каждые 2 недели" className="w-full mt-3 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
         <div className="flex items-center justify-between gap-2 mt-4 flex-wrap">
-          <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 w-fit overflow-x-auto">
+          <div className="flex-1 min-w-0 flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">
             <button onClick={() => setSub("workout")} className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap ${sub === "workout" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}><ClipboardList size={14} /> Тренировки</button>
             <button onClick={() => setSub("done")} className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap ${sub === "done" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}><CheckCircle2 size={14} /> Проведенные</button>
             <button onClick={() => setSub("progress")} className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap ${sub === "progress" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}><TrendingUp size={14} /> Прогрессия</button>
           </div>
-          <div className="flex items-center gap-1.5">
-            <button onClick={() => setShowTemplates(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition shrink-0" title="Шаблоны"><FileStack size={16} /></button>
-            <button onClick={() => setShowVersions(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition shrink-0" title="История версий"><History size={16} /></button>
-            <button onClick={() => setShowMeso(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition shrink-0" title="Генератор мезоцикла"><Repeat size={16} /></button>
-            <button onClick={() => setShowPrint(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition shrink-0" title="Печать / PDF"><Printer size={16} /></button>
-            {membership && (
-              <button onClick={() => setShowMembership(true)} className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 transition max-w-full">
-                <Wallet size={14} className="text-lime-400 shrink-0" />
-                <span className="truncate">{membership.type === "subscription" ? `След. платёж: ${fmtDate(membership.nextPaymentDate)}` : `Осталось тренировок: ${combinedRemaining(membership)}`}</span>
-              </button>
-            )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={() => setShowTemplates(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Шаблоны"><FileStack size={16} /></button>
+            <button onClick={() => setShowVersions(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="История версий"><History size={16} /></button>
+            <button onClick={() => setShowMeso(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Генератор мезоцикла"><Repeat size={16} /></button>
+            <button onClick={() => setShowPrint(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Печать / PDF"><Printer size={16} /></button>
           </div>
         </div>
+        {membership && (
+          <button onClick={() => setShowMembership(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 transition mt-2">
+            <Wallet size={14} className="text-lime-400 shrink-0" />
+            <span className="truncate">{membership.type === "subscription" ? `След. платёж: ${fmtDate(membership.nextPaymentDate)}` : `Абонемент: ${combinedRemaining(membership)} тр.`}</span>
+          </button>
+        )}
       </div>
 
       {showTemplates && (

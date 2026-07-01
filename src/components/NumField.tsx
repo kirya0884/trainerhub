@@ -3,7 +3,7 @@ export default function NumField({ label, value, onChange, placeholder }: { labe
   return (
     <div>
       <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-0.5 text-center">{label}</div>
-      <input value={value} onChange={onChange} placeholder={placeholder} className="w-full bg-zinc-800 rounded-md px-1 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+      <input value={value} onChange={onChange} placeholder={placeholder} className="w-full h-[38px] bg-zinc-800 rounded-md px-1 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
     </div>
   );
 }

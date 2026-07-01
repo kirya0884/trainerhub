@@ -37,7 +37,7 @@ export default function ExerciseRow({
   return (
     <div className="bg-zinc-800/40 rounded-lg p-2.5 space-y-2" style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}>
       <div className="flex items-center gap-1">
-        <span className="flex flex-col shrink-0">
+        <span className="hidden sm:flex flex-col shrink-0">
           <button onClick={onMoveUp} disabled={!canMoveUp} className="p-1.5 -my-0.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-30 disabled:hover:text-zinc-600" title="Выше"><ChevronUp size={16} /></button>
           <button onClick={onMoveDown} disabled={!canMoveDown} className="p-1.5 -my-0.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-30 disabled:hover:text-zinc-600" title="Ниже"><ChevronDown size={16} /></button>
         </span>
