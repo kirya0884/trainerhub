@@ -51,7 +51,7 @@ export default function ExerciseRow({
             </div>
           )}
         </div>
-        <button onClick={() => setShowVideo((v) => !v)} title="Видео-превью" className={`p-1.5 rounded-md transition shrink-0 ${ex.video ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Video size={15} /></button>
+        <button onClick={() => setShowVideo((v) => !v)} title="Видео-превью" className={`p-1.5 rounded-md transition shrink-0 ${showVideo ? "text-lime-400 bg-lime-400/10" : ex.video ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Video size={15} /></button>
         <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-md transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>
         <button onClick={remove} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
       </div>

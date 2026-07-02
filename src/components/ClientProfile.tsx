@@ -426,12 +426,12 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
                 {templates.map((t) => <option key={t.id} value={t.id} className="bg-zinc-900">{t.name} — {t.sessions}×{t.price}₽{t.split ? " · сплит" : ""}</option>)}
               </select>
             )}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <NumField label="Кол-во в пакете" value={m.total} onChange={(e) => patchMembership({ total: e.target.value })} placeholder="0" />
               <NumField label="Цена пакета ₽" value={m.packagePrice} onChange={(e) => patchMembership({ packagePrice: e.target.value })} placeholder="24000" />
-              <DateField label="Дата оплаты" value={m.paymentDate} onChange={(e) => patchMembership({ paymentDate: e.target.value })} />
               <NumField label="Остаток" value={m.remaining} onChange={(e) => patchMembership({ remaining: e.target.value })} placeholder="0" />
             </div>
+            <DateField label="Дата оплаты" value={m.paymentDate} onChange={(e) => patchMembership({ paymentDate: e.target.value })} />
             {Number(m.extraRemaining) > 0 && (
               <p className="text-xs text-cyan-300/80">+ {m.extraRemaining} тренировки доп. блока по {Math.round(Number(m.extraPricePerSession) || 0).toLocaleString("ru-RU")}₽/занятие (старый пакет, другая цена)</p>
             )}
