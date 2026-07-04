@@ -49,10 +49,47 @@ const loadHiddenTabs = (): TabKind[] => {
   return [];
 };
 
+function PasswordResetScreen({ onDone }: { onDone: () => void }) {
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pw.length < 6) { setMsg("Минимум 6 символов"); return; }
+    if (pw !== pw2) { setMsg("Пароли не совпадают"); return; }
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if (error) { setMsg(error.message); setBusy(false); return; }
+    setMsg("Пароль изменён!");
+    setTimeout(onDone, 1200);
+    setBusy(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm space-y-4">
+        <h1 className="text-xl font-bold text-center"><span className="text-lime-400">Trainer</span><span className="text-cyan-400">Hub</span></h1>
+        <p className="text-sm text-zinc-400 text-center">Придумай новый пароль</p>
+        <form onSubmit={submit} className="space-y-3">
+          <input type="password" required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="password" required value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Повтори пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <button disabled={busy} type="submit" className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 disabled:opacity-50">
+            {busy ? "Сохранение..." : "Сохранить новый пароль"}
+          </button>
+        </form>
+        {msg && <p className="text-xs text-center text-cyan-400">{msg}</p>}
+      </div>
+    </div>
+  );
+}
+
 // ponytail: навигация — простой стейт-стек без роутера, пока приложение состоит из 3 экранов
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRecovery, setIsRecovery] = useState(false);
   const [view, setView] = useState<View>({ kind: "dashboard" });
   const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
@@ -83,7 +120,10 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
+      if (event === "PASSWORD_RECOVERY") setIsRecovery(true);
+      setSession(s);
+    });
     return () => sub.subscription.unsubscribe();
   }, []);
 
@@ -120,6 +160,8 @@ export default function App() {
 
   if (loading) return <div className="min-h-screen bg-zinc-950" />;
   if (!session) return <AuthScreen />;
+
+  if (isRecovery) return <PasswordResetScreen onDone={() => setIsRecovery(false)} />;
   if (selfClient === undefined || isTrainer === undefined) return <div className="min-h-screen bg-zinc-950" />;
 
   if (selfClient) {

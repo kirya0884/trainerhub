@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Camera, ClipboardList, Image, Sparkles, User, Users } from "lucide-react";
+import { Camera, ClipboardList, Image, KeyRound, LogOut, Sparkles, User, Users } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
+import { supabase } from "../lib/supabase";
 import SubscriptionModal from "./SubscriptionModal";
 
 export default function TrainerProfile({ trainerId, email, onSaved }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string) => void }) {
@@ -12,6 +13,10 @@ export default function TrainerProfile({ trainerId, email, onSaved }: { trainerI
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [newPw2, setNewPw2] = useState("");
+  const [pwMsg, setPwMsg] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
 
   useEffect(() => {
     trainerApi.fetchTrainerSelf(trainerId).then((s) => { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); });
@@ -117,6 +122,41 @@ export default function TrainerProfile({ trainerId, email, onSaved }: { trainerI
           <input value={brand.brand} onChange={(e) => setBrand({ ...brand, brand: e.target.value })} placeholder="TrainerHub" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
         </label>
         <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><KeyRound size={15} className="text-orange-400" /> Аккаунт</p>
+        <p className="text-xs text-zinc-500">Email: <span className="text-zinc-300">{email}</span></p>
+        <div className="space-y-2">
+          <p className="text-xs text-zinc-500">Сменить пароль</p>
+          <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="password" value={newPw2} onChange={(e) => setNewPw2(e.target.value)} placeholder="Повтори пароль" className="w-full bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+          {pwMsg && <p className="text-xs text-cyan-400">{pwMsg}</p>}
+          <button
+            disabled={pwBusy || !newPw}
+            onClick={async () => {
+              if (newPw.length < 6) { setPwMsg("Минимум 6 символов"); return; }
+              if (newPw !== newPw2) { setPwMsg("Пароли не совпадают"); return; }
+              setPwBusy(true); setPwMsg("");
+              const { error } = await supabase.auth.updateUser({ password: newPw });
+              if (error) setPwMsg(error.message);
+              else { setPwMsg("Пароль изменён"); setNewPw(""); setNewPw2(""); }
+              setPwBusy(false);
+            }}
+            className="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium rounded-lg py-2 text-sm transition disabled:opacity-50"
+          >
+            {pwBusy ? "Сохранение..." : "Сменить пароль"}
+          </button>
+        </div>
+        <button
+          onClick={async () => {
+            if (!window.confirm("Выйти из аккаунта на всех устройствах?")) return;
+            await supabase.auth.signOut({ scope: "global" });
+          }}
+          className="w-full flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition py-1"
+        >
+          <LogOut size={14} /> Выйти на всех устройствах
+        </button>
       </div>
 
       {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
