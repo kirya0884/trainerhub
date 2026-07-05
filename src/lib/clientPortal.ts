@@ -7,13 +7,18 @@ import { today, addDays } from "./format";
 export interface SelfClient {
   id: string; trainerId: string; name: string; color: string; goal: string;
   phone: string; telegram: string; whatsapp: string; avatarUrl: string; accentColor: string;
+  health: { injuries: string; restrictions: string; notes: string };
   membership: Record<string, any>;
   activeSession: { planId: string; dayId: string; dayName: string; startedAt: number } | null;
 }
 
+export interface ClientActivity {
+  id: string; date: string; type: string; value: string; unit: string;
+}
+
 export async function fetchSelfClient(authUserId: string): Promise<SelfClient | null> {
   const { data, error } = await supabase
-    .from("clients").select("id,trainer_id,name,color,goal,phone,telegram,whatsapp,avatar_url,accent_color,membership,active_session")
+    .from("clients").select("id,trainer_id,name,color,goal,phone,telegram,whatsapp,avatar_url,accent_color,health,membership,active_session")
     .eq("auth_user_id", authUserId).maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -21,13 +26,34 @@ export async function fetchSelfClient(authUserId: string): Promise<SelfClient | 
     id: data.id, trainerId: data.trainer_id, name: data.name, color: data.color, goal: data.goal ?? "",
     phone: data.phone ?? "", telegram: data.telegram ?? "", whatsapp: data.whatsapp ?? "", avatarUrl: data.avatar_url ?? "",
     accentColor: data.accent_color || "#22d3ee",
+    health: { injuries: "", restrictions: "", notes: "", ...(data.health || {}) },
     membership: data.membership || {}, activeSession: data.active_session || null,
   };
 }
 
-// Клиент правит только свои контакты/фото/цвет — через RPC (см. update_client_self_profile), не общий update.
-export async function updateSelfProfile(clientId: string, p: { phone: string; telegram: string; whatsapp: string; avatarUrl: string; accentColor?: string }) {
-  const { error } = await supabase.rpc("update_client_self_profile", { p_client_id: clientId, p_phone: p.phone, p_telegram: p.telegram, p_whatsapp: p.whatsapp, p_avatar_url: p.avatarUrl, p_accent_color: p.accentColor ?? null });
+export async function fetchClientActivities(clientId: string): Promise<ClientActivity[]> {
+  const { data, error } = await supabase.from("client_activities").select("id,date,type,value,unit").eq("client_id", clientId).order("date", { ascending: false }).order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id, date: r.date, type: r.type, value: r.value, unit: r.unit }));
+}
+
+export async function addClientActivity(clientId: string, a: Omit<ClientActivity, "id">): Promise<ClientActivity> {
+  const { data, error } = await supabase.from("client_activities").insert({ client_id: clientId, date: a.date, type: a.type, value: a.value, unit: a.unit }).select().single();
+  if (error) throw error;
+  return { id: data.id, date: data.date, type: data.type, value: data.value, unit: data.unit };
+}
+
+export async function deleteClientActivity(id: string) {
+  const { error } = await supabase.from("client_activities").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Клиент правит свои данные — через RPC (см. update_client_self_profile), не общий update.
+export async function updateSelfProfile(clientId: string, p: { phone: string; telegram: string; whatsapp: string; avatarUrl: string; accentColor?: string; name?: string; goal?: string; health?: Record<string, string> }) {
+  const { error } = await supabase.rpc("update_client_self_profile", {
+    p_client_id: clientId, p_phone: p.phone, p_telegram: p.telegram, p_whatsapp: p.whatsapp, p_avatar_url: p.avatarUrl,
+    p_accent_color: p.accentColor ?? null, p_name: p.name ?? null, p_goal: p.goal ?? null, p_health: p.health ?? null,
+  });
   if (error) throw error;
 }
 

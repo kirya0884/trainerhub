@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { Apple, CalendarClock, CheckCircle2, CreditCard, Dumbbell, Flame, Home, Lock, LogOut, MessageSquare, Play, Ruler, Settings, TrendingUp, User } from "lucide-react";
+import { Activity, Apple, CalendarClock, CheckCircle2, CreditCard, Dumbbell, Flame, Home, Lock, LogOut, MessageSquare, Play, Ruler, Settings, TrendingUp, User } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
 import NutritionTab from "./NutritionTab";
+import ActivityTab from "./ActivityTab";
 import * as portalApi from "../lib/clientPortal";
+import type { ClientActivity } from "../lib/clientPortal";
 import * as clientsApi from "../lib/clients";
 import { combinedRemaining } from "../lib/clients";
 import * as nutritionApi from "../lib/nutrition";
@@ -19,31 +21,61 @@ import { supabase } from "../lib/supabase";
 import ClientSessionView from "./ClientSessionView";
 import ChatThread from "./ChatThread";
 
-type Tab = "overview" | "program" | "progress" | "body" | "nutrition" | "payment" | "profile" | "chat";
-const TABS: { k: Tab; label: string; icon: typeof Home }[] = [
-  { k: "program", label: "Программа", icon: Dumbbell },
-  { k: "overview", label: "Обзор", icon: Home },
-  { k: "progress", label: "Прогресс", icon: TrendingUp },
-  { k: "body", label: "Замеры", icon: Ruler },
-  { k: "nutrition", label: "Питание", icon: Apple },
-  { k: "payment", label: "Оплата", icon: CreditCard },
-  { k: "chat", label: "Чат", icon: MessageSquare },
-  { k: "profile", label: "Профиль", icon: User },
-];
+type Tab = "overview" | "program" | "progress" | "body" | "nutrition" | "payment" | "profile" | "chat" | "activity";
+const TAB_DEFS: Record<Tab, { label: string; icon: typeof Home }> = {
+  program: { label: "Программа", icon: Dumbbell },
+  overview: { label: "Обзор", icon: Home },
+  progress: { label: "Прогресс", icon: TrendingUp },
+  body: { label: "Замеры", icon: Ruler },
+  nutrition: { label: "Питание", icon: Apple },
+  activity: { label: "Активность", icon: Activity },
+  payment: { label: "Оплата", icon: CreditCard },
+  chat: { label: "Чат", icon: MessageSquare },
+  profile: { label: "Профиль", icon: User },
+};
+const DEFAULT_TAB_ORDER: Tab[] = ["overview", "program", "progress", "body", "nutrition", "activity", "payment", "chat", "profile"];
+const TAB_ORDER_KEY = "trainerhub-portal-tab-order-v1";
+const TAB_HIDDEN_KEY = "trainerhub-portal-tab-hidden-v1";
+const loadTabOrder = (): Tab[] => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TAB_ORDER_KEY) || "null") as Tab[] | null;
+    if (saved && DEFAULT_TAB_ORDER.every((k) => saved.includes(k))) return saved.filter((k) => DEFAULT_TAB_ORDER.includes(k));
+  } catch {}
+  return DEFAULT_TAB_ORDER;
+};
+const loadHiddenTabs = (): Tab[] => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TAB_HIDDEN_KEY) || "null") as Tab[] | null;
+    if (saved) return saved.filter((k) => DEFAULT_TAB_ORDER.includes(k));
+  } catch {}
+  return [];
+};
 
 export default function ClientPortal({ client }: { client: portalApi.SelfClient }) {
   const [tab, setTab] = useState<Tab>("overview");
+  const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
+  const [hiddenTabs, setHiddenTabs] = useState<Tab[]>(loadHiddenTabs);
+  const [showTabSettings, setShowTabSettings] = useState(false);
   const [brand, setBrand] = useState({ brand: "TrainerHub", logoUrl: "" });
   const [upcoming, setUpcoming] = useState<portalApi.UpcomingBooking | null>(null);
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLog[]>([]);
+  const [activities, setActivities] = useState<ClientActivity[]>([]);
   const [activeSession, setActiveSession] = useState(client.activeSession);
-  const [profile, setProfile] = useState({ phone: client.phone, telegram: client.telegram, whatsapp: client.whatsapp, avatarUrl: client.avatarUrl, accentColor: client.accentColor });
+  const [profile, setProfile] = useState({ phone: client.phone, telegram: client.telegram, whatsapp: client.whatsapp, avatarUrl: client.avatarUrl, accentColor: client.accentColor, name: client.name, goal: client.goal, health: client.health });
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
+
+  const toggleTabVisible = (kind: Tab) => {
+    const isHidden = hiddenTabs.includes(kind);
+    if (!isHidden && hiddenTabs.length >= tabOrder.length - 1) return;
+    const next = isHidden ? hiddenTabs.filter((k) => k !== kind) : [...hiddenTabs, kind];
+    setHiddenTabs(next);
+    localStorage.setItem(TAB_HIDDEN_KEY, JSON.stringify(next));
+  };
 
   useEffect(() => {
     portalApi.fetchTrainerBrand(client.trainerId).then(setBrand);
@@ -53,6 +85,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       clientsApi.fetchPayments(client.id).then(setPayments);
       clientsApi.fetchMeasurements(client.id).then(setMeasurements);
       nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs);
+      portalApi.fetchClientActivities(client.id).then(setActivities);
     };
     refresh();
     // ponytail: поллинг раз в 20с — план/оплаты/замеры/питание тоже должны подхватывать правки
@@ -101,12 +134,38 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
         <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300"><LogOut size={14} /> Выйти</button>
       </div>
 
-      <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 overflow-x-auto">
-        {TABS.map((t) => (
-          <button key={t.k} onClick={() => setTab(t.k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0 ${tab === t.k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === t.k ? { background: "var(--accent)" } : undefined}>
-            <t.icon size={15} /> {t.label}
-          </button>
-        ))}
+      <div className="flex items-center gap-1.5">
+        <div className="relative shrink-0">
+          <button onClick={() => setShowTabSettings((v) => !v)} className={`p-2 rounded-lg transition ${showTabSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}><Settings size={16} /></button>
+          {showTabSettings && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setShowTabSettings(false)} />
+              <div className="absolute left-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-2 w-52 space-y-0.5 shadow-xl">
+                <p className="text-xs text-zinc-500 px-2 pb-1">Видимые вкладки</p>
+                {tabOrder.map((kind) => {
+                  const t = TAB_DEFS[kind];
+                  const visible = !hiddenTabs.includes(kind);
+                  return (
+                    <label key={kind} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300">
+                      <input type="checkbox" checked={visible} onChange={() => toggleTabVisible(kind)} className="accent-lime-400" />
+                      <t.icon size={14} className="text-zinc-500" /> {t.label}
+                    </label>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+        <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 overflow-x-auto flex-1">
+          {tabOrder.filter((k) => !hiddenTabs.includes(k)).map((k) => {
+            const t = TAB_DEFS[k];
+            return (
+              <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0 ${tab === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { background: "var(--accent)" } : undefined}>
+                <t.icon size={15} /> {t.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {tab === "overview" && (
@@ -212,6 +271,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
 
       {tab === "nutrition" && <NutritionTab clientId={client.id} logs={nutritionLogs} setLogs={setNutritionLogs} />}
 
+      {tab === "activity" && <ActivityTab clientId={client.id} activities={activities} setActivities={setActivities} accent={profile.accentColor} />}
+
       {tab === "payment" && (
         <div className="space-y-3">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-1 text-sm">
@@ -242,24 +303,28 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {profile.avatarUrl ? (
                 <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border border-zinc-700" />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 text-xl font-bold">{client.name[0]}</div>
+                <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 text-xl font-bold">{profile.name?.[0] || "?"}</div>
               )}
-              <p className="font-semibold">{client.name}</p>
+              <div>
+                <p className="font-semibold">{profile.name || client.name}</p>
+                {profile.goal && <p className="text-xs text-zinc-500 mt-0.5">{profile.goal}</p>}
+              </div>
             </div>
-            <div className="space-y-2">
-              <p className="block text-xs text-zinc-500">Телефон</p>
-              <p className="text-zinc-200">{profile.phone || "—"}</p>
+            <div className="grid grid-cols-1 gap-1 text-sm">
+              {profile.phone && <p className="text-zinc-400">📞 {profile.phone}</p>}
+              {profile.telegram && <p className="text-zinc-400">✈️ {profile.telegram}</p>}
+              {profile.whatsapp && <p className="text-zinc-400">💬 {profile.whatsapp}</p>}
             </div>
-            <div className="space-y-2">
-              <p className="block text-xs text-zinc-500">Telegram</p>
-              <p className="text-zinc-200">{profile.telegram || "—"}</p>
-            </div>
-            <div className="space-y-2">
-              <p className="block text-xs text-zinc-500">WhatsApp</p>
-              <p className="text-zinc-200">{profile.whatsapp || "—"}</p>
-            </div>
-            <button onClick={() => setShowSettings(true)} className="w-full flex items-center justify-center gap-1.5 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:opacity-90 transition" style={{ background: "var(--accent)" }}><Settings size={15} /> Настройки</button>
+            {(profile.health.injuries || profile.health.restrictions || profile.health.notes) && (
+              <div className="bg-zinc-800/50 rounded-lg p-2.5 space-y-1 text-xs text-zinc-400">
+                {profile.health.injuries && <p><span className="text-zinc-500">Травмы:</span> {profile.health.injuries}</p>}
+                {profile.health.restrictions && <p><span className="text-zinc-500">Противопоказания:</span> {profile.health.restrictions}</p>}
+                {profile.health.notes && <p><span className="text-zinc-500">Заметки:</span> {profile.health.notes}</p>}
+              </div>
+            )}
+            <button onClick={() => setShowSettings(true)} className="w-full flex items-center justify-center gap-1.5 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:opacity-90 transition" style={{ background: "var(--accent)" }}><Settings size={15} /> Редактировать профиль</button>
             <button onClick={() => setShowPinSettings(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg py-2.5 text-sm transition"><Lock size={14} /> PIN-код на вход</button>
+            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition py-1"><LogOut size={14} /> Выйти</button>
           </div>
         </div>
       )}
@@ -270,6 +335,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           onSaved={(p) => setProfile(p)}
         />
       )}
+      {/* Убираем дублирующую кнопку выхода из шапки — она теперь в профиле */}
     </div>
   );
 }

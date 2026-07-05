@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, Trash2, Users, Wallet, Images, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, Trash2, TrendingUp, Users, Wallet, Images, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -21,8 +21,11 @@ import ProgramCatalogModal from "./ProgramCatalogModal";
 import ChatThread from "./ChatThread";
 import SessionHistoryModal from "./SessionHistoryModal";
 import RemainingBadge from "./RemainingBadge";
+import ActivityTab from "./ActivityTab";
+import * as portalApi from "../lib/clientPortal";
+import type { ClientActivity } from "../lib/clientPortal";
 
-export type Sub = "overview" | "membership" | "body" | "nutrition" | "photos" | "plans" | "chat";
+export type Sub = "overview" | "membership" | "body" | "nutrition" | "photos" | "plans" | "chat" | "activity";
 
 const SUB_DEFS: Record<Sub, { label: string; icon: typeof Users }> = {
   overview: { label: "Обзор", icon: Users },
@@ -32,8 +35,9 @@ const SUB_DEFS: Record<Sub, { label: string; icon: typeof Users }> = {
   photos: { label: "Фото", icon: Images },
   plans: { label: "Планы", icon: ClipboardList },
   chat: { label: "Чат", icon: MessageCircle },
+  activity: { label: "Активность", icon: TrendingUp },
 };
-const DEFAULT_SUB_ORDER: Sub[] = ["overview", "membership", "body", "nutrition", "photos", "plans", "chat"];
+const DEFAULT_SUB_ORDER: Sub[] = ["overview", "membership", "body", "nutrition", "photos", "plans", "chat", "activity"];
 const SUB_ORDER_KEY = "trainerhub-client-sub-order-v1";
 const SUB_HIDDEN_KEY = "trainerhub-client-sub-hidden-v1";
 // ponytail: порядок и видимость под-вкладок карточки клиента — личная настройка устройства, как в App.tsx
@@ -78,6 +82,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [notes, setNotes] = useState<ClientNote[]>([]);
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
+  const [activities, setActivities] = useState<ClientActivity[]>([]);
   const [showReport, setShowReport] = useState(false);
   const persist = useDebouncedPersist();
 
@@ -88,6 +93,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     api.fetchPhotos(clientId).then(setPhotos);
     api.fetchNotes(clientId).then(setNotes);
     api.fetchClientPlans(clientId).then(setPlans);
+    portalApi.fetchClientActivities(clientId).then(setActivities);
   }, [clientId]);
 
   if (!client) return <p className="text-zinc-500 text-sm p-4">Загрузка...</p>;
@@ -210,6 +216,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       {sub === "photos" && <PhotosTab clientId={clientId} photos={photos} setPhotos={setPhotos} />}
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
       {sub === "chat" && <ChatThread trainerId={trainerId} clientId={clientId} self="trainer" />}
+      {sub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly />}
     </div>
   );
 }

@@ -194,8 +194,21 @@ export async function fetchClient(clientId: string): Promise<ClientFull> {
 
 // Тренер выдаёт клиенту доступ: Edge Function сама генерирует пароль и шлёт письмо (см. functions/register-client).
 export async function inviteClient(clientId: string): Promise<{ ok?: boolean; warning?: string; error?: string }> {
-  const { data, error } = await supabase.functions.invoke("register-client", { body: { clientId } });
-  if (error) throw error;
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/register-client`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session?.access_token}`,
+        "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ clientId }),
+    }
+  );
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }
 
