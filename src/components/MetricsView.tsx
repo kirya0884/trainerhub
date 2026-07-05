@@ -36,8 +36,8 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-semibold flex items-center gap-1.5"><BarChart3 size={16} className="text-lime-400" /> Динамика по упражнению</h3>
-        <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-lime-300 transition shrink-0"><Plus size={15} /> Замер</button>
+        <h3 className="font-semibold flex items-center gap-1.5"><BarChart3 size={16} style={{ color: "var(--accent)" }} /> Динамика по упражнению</h3>
+        <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm transition shrink-0" style={{ background: "var(--accent)" }}><Plus size={15} /> Замер</button>
       </div>
       {showForm && (
         <div className="bg-zinc-800/40 rounded-xl p-3 space-y-2">
@@ -51,12 +51,12 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
             <NumField label="Отдых с" value={form.rest} onChange={(e) => setForm({ ...form, rest: e.target.value })} placeholder="120" />
             <NumField label="Подходы" value={form.sets} onChange={(e) => setForm({ ...form, sets: e.target.value })} placeholder="4" />
           </div>
-          <button onClick={submit} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2 text-sm hover:bg-lime-300 transition">Сохранить замер</button>
+          <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition" style={{ background: "var(--accent)" }}>Сохранить замер</button>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
-        <select value={curExercise} onChange={(e) => setSel(e.target.value)} className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-lime-400/50 max-w-full">{exercises.map((ex) => <option key={ex} value={ex}>{ex}</option>)}</select>
-        <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">{EXERCISE_METRICS.map((x) => <button key={x.key} onClick={() => setMetric(x.key)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition whitespace-nowrap ${metric === x.key ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{x.label}</button>)}</div>
+        <select value={curExercise} onChange={(e) => setSel(e.target.value)} className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-zinc-500 max-w-full">{exercises.map((ex) => <option key={ex} value={ex}>{ex}</option>)}</select>
+        <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">{EXERCISE_METRICS.map((x) => <button key={x.key} onClick={() => setMetric(x.key)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition whitespace-nowrap ${metric === x.key ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={metric === x.key ? { background: "var(--accent)" } : undefined}>{x.label}</button>)}</div>
       </div>
       <div className="bg-zinc-800/30 rounded-xl p-3 pt-4">
         {series.length === 0 ? (

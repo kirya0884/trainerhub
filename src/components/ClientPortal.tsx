@@ -109,6 +109,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
     if (!day) return <div className="text-zinc-500 text-sm p-4">Загрузка тренировки...</div>;
     return (
       <ClientSessionView
+        accent={profile.accentColor}
         day={day} startedAt={activeSession.startedAt}
         onCancel={async () => { await portalApi.cancelSession(client.id); setActiveSession(null); }}
         onFinish={async (metrics, session) => {
@@ -237,7 +238,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-semibold">{day.name}</h3>
                 {done ? (
-                  <button onClick={() => setOpenDetails(showDetails ? null : day.id)} className="flex items-center gap-1.5 bg-lime-400/15 text-lime-400 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-lime-400/25 transition shrink-0"><CheckCircle2 size={14} /> Пройдено</button>
+                  <button onClick={() => setOpenDetails(showDetails ? null : day.id)} className="flex items-center gap-1.5 font-semibold rounded-lg px-3 py-1.5 text-sm transition shrink-0" style={{ background: "var(--accent)20", color: "var(--accent)" }}><CheckCircle2 size={14} /> Пройдено</button>
                 ) : (
                   <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
                 )}
@@ -248,14 +249,14 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                   <div className="flex gap-4 text-sm flex-wrap">
                     <span className="text-zinc-400">Самочувствие <span className="text-base">{done.wellbeing ? WELL_EMOJI[done.wellbeing - 1] : "—"}</span></span>
                     <span className="text-zinc-400">Настроение <span className="text-base">{done.mood ? MOOD_EMOJI[done.mood - 1] : "—"}</span></span>
-                    {!!done.clientRating && <span className="text-zinc-400">Оценка <span className="text-lime-400 font-semibold">{done.clientRating}/5</span></span>}
+                    {!!done.clientRating && <span className="text-zinc-400">Оценка <span style={{ color: "var(--accent)" }} className="font-semibold">{done.clientRating}/5</span></span>}
                   </div>
                   {done.items?.some((i) => i.effort) && (
                     <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400">
                       {done.items.filter((i) => i.effort).map((i, idx) => <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400 inline" />)}</span>)}
                     </div>
                   )}
-                  {done.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} className="text-lime-400 shrink-0 mt-0.5" /> {done.review}</div>}
+                  {done.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} style={{ color: "var(--accent)" }} className="shrink-0 mt-0.5" /> {done.review}</div>}
                 </div>
               ) : (
                 <div className="space-y-1">
@@ -285,9 +286,9 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {[...progressHook.sessions].sort((a, b) => (a.date < b.date ? 1 : -1)).map((s) => (
                 <div key={s.id} className="bg-zinc-800/40 rounded-xl p-3">
                   <div className="flex items-center justify-between gap-2 mb-2"><p className="font-semibold text-sm truncate">{s.dayName}</p><p className="text-xs text-zinc-500">{fmtDate(s.date)} · {s.done}/{s.total} упр.{s.fromClient && " · самостоятельно"}</p></div>
-                  <div className="flex gap-4 mb-2 text-sm flex-wrap"><span className="text-zinc-400">Самочувствие <span className="text-base">{s.wellbeing ? WELL_EMOJI[s.wellbeing - 1] : "—"}</span></span><span className="text-zinc-400">Настроение <span className="text-base">{s.mood ? MOOD_EMOJI[s.mood - 1] : "—"}</span></span>{!!s.clientRating && <span className="text-zinc-400">Оценка <span className="text-lime-400 font-semibold">{s.clientRating}/5</span></span>}</div>
+                  <div className="flex gap-4 mb-2 text-sm flex-wrap"><span className="text-zinc-400">Самочувствие <span className="text-base">{s.wellbeing ? WELL_EMOJI[s.wellbeing - 1] : "—"}</span></span><span className="text-zinc-400">Настроение <span className="text-base">{s.mood ? MOOD_EMOJI[s.mood - 1] : "—"}</span></span>{!!s.clientRating && <span className="text-zinc-400">Оценка <span style={{ color: "var(--accent)" }} className="font-semibold">{s.clientRating}/5</span></span>}</div>
                   {s.items?.some((i) => i.effort) && <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400 mb-2">{s.items.filter((i) => i.effort).map((i, idx) => <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400 inline" />)}</span>)}</div>}
-                  {s.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} className="text-lime-400 shrink-0 mt-0.5" /> {s.review}</div>}
+                  {s.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} style={{ color: "var(--accent)" }} className="shrink-0 mt-0.5" /> {s.review}</div>}
                 </div>
               ))}
             </div>
@@ -328,7 +329,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {payments.map((p) => (
                 <div key={p.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm">
                   <span className="text-zinc-400">{fmtDate(p.date)}</span>
-                  <span className="font-semibold text-lime-400">{p.amount.toLocaleString("ru-RU")} ₽</span>
+                  <span style={{ color: "var(--accent)" }} className="font-semibold">{p.amount.toLocaleString("ru-RU")} ₽</span>
                 </div>
               ))}
             </div>

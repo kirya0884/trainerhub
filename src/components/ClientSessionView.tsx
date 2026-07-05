@@ -8,7 +8,7 @@ function StarRate({ value, onChange }: { value: number; onChange: (v: number) =>
     <div className="flex gap-1">
       {[1, 2, 3, 4, 5].map((n) => (
         <button key={n} onClick={() => onChange(value === n ? 0 : n)} title={`${n} из 5`}>
-          <Star size={26} className={n <= value ? "text-lime-400" : "text-zinc-700"} fill={n <= value ? "#a3e635" : "none"} />
+          <Star size={26} style={{ color: n <= value ? "var(--accent)" : "#3f3f46" }} fill={n <= value ? "currentColor" : "none"} />
         </button>
       ))}
     </div>
@@ -44,10 +44,11 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
 type SetVal = { weight: string; reps: string };
 type ExMeta = { fires: Record<number, number>; note: string };
 
-export default function ClientSessionView({ day, startedAt, onFinish, onCancel }: {
+export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635" }: {
   day: Day; startedAt: number;
   onFinish: (metrics: Omit<Metric, "id">[], session: Omit<Session, "id">) => void;
   onCancel: () => void;
+  accent?: string;
 }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -135,16 +136,17 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel }
           </div>
         </div>
         <div className="border-t border-zinc-800 bg-zinc-900 px-4 py-3 shrink-0">
-          <button onClick={sendFeedback} className="w-full max-w-md mx-auto block bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 hover:bg-cyan-300 transition flex items-center justify-center gap-1.5"><Send size={17} /> Отправить тренеру</button>
+          <button onClick={sendFeedback} className="w-full max-w-md mx-auto block text-zinc-950 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-1.5" style={{ background: "var(--accent)" }}><Send size={17} /> Отправить тренеру</button>
         </div>
       </div>
     );
   }
 
   return (
+    <div style={{ "--accent": accent } as React.CSSProperties}>
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
-        <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} className="text-cyan-400 shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs text-cyan-400 mt-0.5 font-mono">{timer}</p></div>
+        <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} style={{ color: "var(--accent)" }} className="shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs mt-0.5 font-mono" style={{ color: "var(--accent)" }}>{timer}</p></div>
         <button onClick={cancel} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0"><X size={20} /></button>
       </div>
 
@@ -157,7 +159,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel }
           const md = meta[ex.id] || { fires: {}, note: "" };
           return (
             <div key={ex.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-              <div className="flex items-center justify-between gap-2 mb-2"><h3 className="font-semibold min-w-0 truncate"><span className="text-cyan-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3><span className="text-xs text-zinc-500 shrink-0">цель: {exSummary(ex)}</span></div>
+              <div className="flex items-center justify-between gap-2 mb-2"><h3 className="font-semibold min-w-0 truncate"><span className="mr-1.5" style={{ color: "var(--accent)" }}>{exLabel(day, idx)}</span>{ex.name || "—"}</h3><span className="text-xs text-zinc-500 shrink-0">цель: {exSummary(ex)}</span></div>
               <div className="flex gap-1.5 overflow-x-auto pb-1">
                 <div className="flex flex-col gap-1 shrink-0"><div className="h-5 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">№</div><div className="h-9 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">Вес</div><div className="h-9 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">Повт.</div></div>
                 {rows.map((r, i) => (
@@ -181,8 +183,9 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel }
       </div>
 
       <div className="border-t border-zinc-800 bg-zinc-900 px-3 sm:px-4 py-3 shrink-0">
-        <div className="max-w-2xl mx-auto"><button onClick={finish} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 hover:bg-cyan-300 transition flex items-center justify-center gap-1.5"><CheckCircle2 size={18} /> Завершить тренировку</button></div>
+        <div className="max-w-2xl mx-auto"><button onClick={finish} className="w-full text-zinc-950 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-1.5" style={{ background: "var(--accent)" }}><CheckCircle2 size={18} /> Завершить тренировку</button></div>
       </div>
+    </div>
     </div>
   );
 }

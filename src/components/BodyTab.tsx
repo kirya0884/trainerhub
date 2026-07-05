@@ -31,7 +31,7 @@ export default function BodyTab({ clientId, measurements, setMeasurements }: { c
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between"><h3 className="font-semibold flex items-center gap-1.5"><Ruler size={16} className="text-lime-400" /> Замеры тела</h3><button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-lime-300 transition"><Plus size={15} /> Замер</button></div>
+      <div className="flex items-center justify-between"><h3 className="font-semibold flex items-center gap-1.5"><Ruler size={16} style={{ color: "var(--accent)" }} /> Замеры тела</h3><button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm transition shrink-0" style={{ background: "var(--accent)" }}><Plus size={15} /> Замер</button></div>
 
       {showForm && (
         <div className="bg-zinc-800/40 rounded-xl p-3 space-y-2 relative">
@@ -43,12 +43,12 @@ export default function BodyTab({ clientId, measurements, setMeasurements }: { c
             ))}
           </div>
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="заметка (необязательно)" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <button onClick={submit} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2 text-sm hover:bg-lime-300 transition">Сохранить замер</button>
+          <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition" style={{ background: "var(--accent)" }}>Сохранить замер</button>
         </div>
       )}
 
       <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 w-full overflow-x-auto">
-        {BODY_METRICS.map((x) => <button key={x.key} onClick={() => setBodyMetric(x.key)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition whitespace-nowrap shrink-0 ${bodyMetric === x.key ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{x.label}</button>)}
+        {BODY_METRICS.map((x) => <button key={x.key} onClick={() => setBodyMetric(x.key)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition whitespace-nowrap shrink-0 ${bodyMetric === x.key ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={bodyMetric === x.key ? { background: "var(--accent)" } : undefined}>{x.label}</button>)}
       </div>
 
       <div className="bg-zinc-800/30 rounded-xl p-3 pt-4">
