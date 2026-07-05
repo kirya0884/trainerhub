@@ -17,7 +17,7 @@ export default function ModalShell({ title, icon, onClose, children, footer, wid
           <h3 className="font-semibold flex items-center gap-1.5">{icon} {title}</h3>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400" title="Закрыть"><X size={18} /></button>
         </div>
-        {children}{footer}
+        <div className="overflow-y-auto flex-1 min-h-0">{children}</div>{footer}
       </div>
     </div>
   );

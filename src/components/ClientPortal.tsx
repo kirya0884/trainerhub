@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, Apple, CalendarClock, CheckCircle2, CreditCard, Dumbbell, Flame, Home, Lock, LogOut, MessageSquare, Play, Ruler, Settings, TrendingUp, User } from "lucide-react";
+import { Activity, Apple, CalendarClock, CheckCircle2, CreditCard, Dumbbell, Flame, Home, Lock, LogOut, MessageCircle, MessageSquare, Phone, Play, Ruler, Settings, TrendingUp, User } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
@@ -344,18 +344,20 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {profile.avatarUrl ? (
                 <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border border-zinc-700" />
               ) : (
-                <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 text-xl font-bold">{profile.name?.[0] || "?"}</div>
+                <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold shrink-0" style={{ background: "var(--accent)", color: "#18181b" }}>{(profile.name || "?")[0].toUpperCase()}</div>
               )}
               <div>
                 <p className="font-semibold">{profile.name || client.name}</p>
                 {profile.goal && <p className="text-xs text-zinc-500 mt-0.5">{profile.goal}</p>}
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-1 text-sm">
-              {profile.phone && <p className="text-zinc-400">📞 {profile.phone}</p>}
-              {profile.telegram && <p className="text-zinc-400">✈️ {profile.telegram}</p>}
-              {profile.whatsapp && <p className="text-zinc-400">💬 {profile.whatsapp}</p>}
-            </div>
+            {(profile.phone || profile.telegram || profile.whatsapp) && (
+              <div className="flex flex-wrap gap-2">
+                {profile.phone && <a href={`tel:${profile.phone}`} className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm transition text-zinc-300"><Phone size={14} /> {profile.phone}</a>}
+                {profile.telegram && <a href={profile.telegram.startsWith("http") ? profile.telegram : `https://t.me/${profile.telegram.replace(/^@/, "")}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 rounded-lg px-3 py-1.5 text-sm transition"><MessageSquare size={14} /> {profile.telegram}</a>}
+                {profile.whatsapp && <a href={`https://wa.me/${profile.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 bg-green-500/15 text-green-300 hover:bg-green-500/25 rounded-lg px-3 py-1.5 text-sm transition"><MessageCircle size={14} /> WhatsApp</a>}
+              </div>
+            )}
             {(profile.health.injuries || profile.health.restrictions || profile.health.notes) && (
               <div className="bg-zinc-800/50 rounded-lg p-2.5 space-y-1 text-xs text-zinc-400">
                 {profile.health.injuries && <p><span className="text-zinc-500">Травмы:</span> {profile.health.injuries}</p>}
