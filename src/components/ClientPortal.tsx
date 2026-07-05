@@ -169,19 +169,59 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       </div>
 
       {tab === "overview" && (
-        <div className="space-y-3">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <p className="text-lg font-bold">Привет, {client.name.split(" ")[0]}!</p>
-            <p className="text-sm text-zinc-500 mt-0.5">Цель: {client.goal || "не указана"}</p>
+        <div className="space-y-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+            {profile.avatarUrl
+              ? <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 shrink-0" style={{ borderColor: "var(--accent)" }} />
+              : <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-2xl font-bold border-2" style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "#18181b" }}>{(profile.name || client.name)[0]}</div>
+            }
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold tracking-widest" style={{ color: "var(--accent)" }}>ПРИВЕТ 👋</p>
+              <p className="text-xl font-bold text-zinc-50 mt-0.5 truncate">{(profile.name || client.name).split(" ")[0]}</p>
+              {profile.goal && <p className="text-xs text-zinc-500 mt-0.5 truncate">{profile.goal}</p>}
+            </div>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <h3 className="font-semibold text-sm flex items-center gap-1.5 mb-2"><CalendarClock size={15} style={{ color: "var(--accent)" }} /> Ближайшая тренировка</h3>
-            {upcoming ? <p className="text-sm text-zinc-300">{fmtDate(upcoming.date)} в {upcoming.time}</p> : <p className="text-sm text-zinc-600">Записей не найдено</p>}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 border-t-2" style={{ borderTopColor: "var(--accent)" }}>
+              <p className="text-[10px] font-semibold tracking-widest text-zinc-500 mb-2">БЛИЖАЙШАЯ</p>
+              {upcoming
+                ? <div>
+                    <p className="text-sm font-bold text-zinc-100">{fmtDate(upcoming.date)}</p>
+                    <p className="text-xs text-zinc-400 mt-0.5">в {upcoming.time}</p>
+                  </div>
+                : <p className="text-sm text-zinc-600 mt-1">Нет записей</p>
+              }
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 border-t-2 border-t-cyan-400">
+              <p className="text-[10px] font-semibold tracking-widest text-zinc-500 mb-2">АБОНЕМЕНТ</p>
+              <p className="text-sm font-bold text-zinc-100">{m.type === "subscription" ? "Подписка" : "Занятия"}</p>
+              {m.remaining !== "" && m.remaining != null
+                ? <p className="text-xs text-zinc-400 mt-0.5">осталось {combinedRemaining(m as clientsApi.Membership)}</p>
+                : <p className="text-xs text-zinc-600 mt-0.5">активен</p>
+              }
+            </div>
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-            <h3 className="font-semibold text-sm mb-2">Абонемент</h3>
-            <p className="text-sm text-zinc-300">{m.type === "subscription" ? "Подписка" : "По тренировкам"}{m.remaining !== "" && m.remaining != null && ` · осталось ${combinedRemaining(m as clientsApi.Membership)}`}</p>
-          </div>
+          {currentPlan && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold tracking-widest text-zinc-500">ПРОГРАММА</p>
+                <p className="text-sm font-semibold text-zinc-100 mt-0.5 truncate">{currentPlan.name}</p>
+              </div>
+              <button onClick={() => setTab("program")} className="shrink-0 flex items-center gap-1.5 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:opacity-90 transition" style={{ background: "var(--accent)" }}>
+                <Play size={13} /> Открыть
+              </button>
+            </div>
+          )}
+          {(profile.health.injuries || profile.health.restrictions || profile.health.notes) && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+              <p className="text-[10px] font-semibold tracking-widest text-zinc-500 mb-2">ЗДОРОВЬЕ</p>
+              <div className="space-y-1 text-xs text-zinc-400">
+                {profile.health.injuries && <p><span className="text-zinc-600">Травмы: </span>{profile.health.injuries}</p>}
+                {profile.health.restrictions && <p><span className="text-zinc-600">Противопоказания: </span>{profile.health.restrictions}</p>}
+                {profile.health.notes && <p><span className="text-zinc-600">Заметки: </span>{profile.health.notes}</p>}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

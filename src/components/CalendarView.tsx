@@ -105,29 +105,76 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
     downloadIcs(bookingsToIcs(range, clientName));
   };
 
+  // Week strip: всегда показываем 7 дней текущей недели (Пн–Вс)
+  const stripStart = startOfWeekMon(anchor);
+  const stripDays = Array.from({ length: 7 }, (_, i) => addDays(stripStart, i));
+  const STRIP_LABELS = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"];
+  const todayCount = expandBookings(bookings, today, today).length;
+  const todayLabel = todayCount === 1 ? "ЗАНЯТИЕ" : todayCount > 1 && todayCount < 5 ? "ЗАНЯТИЯ" : "ЗАНЯТИЙ";
+
   return (
-    <div className="space-y-3 max-w-2xl">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="text-lg font-bold flex items-center gap-1.5"><CalendarDays size={18} className="text-cyan-400" /> Календарь</h2>
+    <div className="space-y-4 max-w-2xl">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <p className="text-xs font-semibold tracking-widest text-zinc-500">КАЛЕНДАРЬ</p>
         <div className="flex items-center gap-2 shrink-0">
-          <button onClick={exportIcs} title="Экспорт .ics (90 дней вперёд)" className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-cyan-400 transition"><Download size={16} /></button>
-          <button onClick={() => setModal({ date: anchor })} className="flex items-center gap-1.5 bg-cyan-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 text-sm hover:bg-cyan-300 transition"><Plus size={16} /> Запись</button>
+          <button onClick={goToday} className="px-3 py-1.5 rounded-lg border border-zinc-700 text-sm text-zinc-300 hover:border-zinc-500 transition">Сегодня</button>
+          <button onClick={exportIcs} title="Экспорт .ics" className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-cyan-400 transition"><Download size={16} /></button>
+          <button onClick={() => setModal({ date: anchor })} className="flex items-center gap-1.5 bg-cyan-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-cyan-300 transition"><Plus size={15} /> Новая запись</button>
         </div>
       </div>
 
+      {/* Week/Month toggle */}
       <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
         {MODES.map(([k, l]) => (
           <button key={k} onClick={() => setMode(k)} className={`flex-1 py-1.5 rounded-lg text-sm font-medium transition ${mode === k ? "bg-cyan-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
         ))}
       </div>
 
-      <div className="flex items-center justify-between gap-1 bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-1.5">
-        <button onClick={goPrev} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0"><ChevronLeft size={18} /></button>
-        <button onClick={goToday} className="text-sm text-zinc-300 hover:text-cyan-400 transition truncate min-w-0">{navTitle}</button>
-        <button onClick={goNext} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0"><ChevronRight size={18} /></button>
+      {/* Week strip — nav + 7-day row */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
+        <div className="flex items-center justify-between mb-2.5">
+          <button onClick={goPrev} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><ChevronLeft size={18} /></button>
+          <p className="text-sm font-semibold text-zinc-200">{navTitle}</p>
+          <button onClick={goNext} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><ChevronRight size={18} /></button>
+        </div>
+        <div className="grid grid-cols-7 gap-1">
+          {stripDays.map((d, i) => {
+            const isToday = d === today;
+            const hasEvents = occurrences.some((o) => o.date === d);
+            return (
+              <button key={d} onClick={() => { setAnchor(d); mode === "month" && setMode("week"); }}
+                className="flex flex-col items-center gap-1 py-1.5 rounded-xl transition hover:bg-zinc-800">
+                <span className="text-[10px] font-medium text-zinc-500">{STRIP_LABELS[i]}</span>
+                <span className={`text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full transition ${isToday ? "bg-lime-400 text-zinc-950" : "text-zinc-300"}`}>{Number(d.slice(8))}</span>
+                <span className={`w-1 h-1 rounded-full ${hasEvents ? "bg-cyan-400" : ""}`} />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {mode === "month" ? (
+      {/* TODAY — N SESSIONS */}
+      {mode !== "month" && (
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">
+            СЕГОДНЯ — {todayCount} {todayLabel}
+          </p>
+          {todayCount === 0 && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-6 text-center mb-2">
+              <CalendarDays size={28} className="mx-auto text-zinc-700 mb-2.5" />
+              <p className="text-sm text-zinc-600 mb-3">Записей на сегодня нет</p>
+              <button onClick={() => setModal({ date: today })} className="inline-flex items-center gap-1.5 text-sm font-medium border border-zinc-700 rounded-xl px-4 py-2 text-zinc-300 hover:border-zinc-500 transition"><Plus size={14} /> Запланировать</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {mode === "month" && (
+        <p className="text-xs font-semibold tracking-widest text-zinc-500">ОБЗОР МЕСЯЦА</p>
+      )}
+
+            {mode === "month" ? (
         <div className="space-y-2">
           <div className="grid grid-cols-7 gap-1 text-center">
             {WEEKDAYS_SHORT.map((w) => <p key={w} className="text-[11px] text-zinc-500 font-medium">{w}</p>)}
