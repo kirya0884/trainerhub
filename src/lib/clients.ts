@@ -160,6 +160,7 @@ export interface ClientFull {
   phone: string; telegram: string; whatsapp: string; email: string;
   status: string; pauseReason: string; source: string; trial: boolean;
   health: Health; membership: Membership; hasAccount: boolean;
+  activeSession: { planId: string; dayId: string; dayName: string; startedAt: number } | null;
 }
 const emptyMembership: Membership = { type: "sessions", total: "", packagePrice: "", pricePerSession: "", remaining: "", paymentDate: "", nextPaymentDate: "", split: false, partnerName: "", partnerClientId: "", note: "", remainingPrice: "", extraRemaining: "", extraPricePerSession: "", remainingTotal: "" };
 
@@ -178,7 +179,7 @@ const emptyHealth: Health = { injuries: "", restrictions: "", notes: "" };
 export async function fetchClient(clientId: string): Promise<ClientFull> {
   const { data, error } = await supabase
     .from("clients")
-    .select("id,name,goal,color,avatar_url,phone,telegram,whatsapp,email,status,pause_reason,source,trial,health,membership,auth_user_id")
+    .select("id,name,goal,color,avatar_url,phone,telegram,whatsapp,email,status,pause_reason,source,trial,health,membership,auth_user_id,active_session")
     .eq("id", clientId)
     .single();
   if (error) throw error;
@@ -189,6 +190,7 @@ export async function fetchClient(clientId: string): Promise<ClientFull> {
     health: { ...emptyHealth, ...(data.health || {}) },
     membership: { ...emptyMembership, ...(data.membership || {}) },
     hasAccount: !!data.auth_user_id,
+    activeSession: data.active_session || null,
   };
 }
 

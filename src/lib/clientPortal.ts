@@ -58,8 +58,8 @@ export async function updateSelfProfile(clientId: string, p: { phone: string; te
 }
 
 export async function fetchTrainerBrand(trainerId: string) {
-  const { data } = await supabase.from("trainers").select("brand,logo_url").eq("id", trainerId).maybeSingle();
-  return { brand: data?.brand || "TrainerHub", logoUrl: data?.logo_url || "" };
+  const { data } = await supabase.from("trainers").select("brand,logo_url,profile").eq("id", trainerId).maybeSingle();
+  return { brand: data?.brand || "TrainerHub", logoUrl: data?.logo_url || "", trainingRules: (data?.profile as any)?.trainingRules || "" };
 }
 
 export interface UpcomingBooking { date: string; time: string; duration: number }

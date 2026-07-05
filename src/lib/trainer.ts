@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 
-export interface TrainerProfileData { name: string; specialization: string; bio: string; phone: string; telegram: string; whatsapp: string; avatarUrl: string }
-const EMPTY_PROFILE: TrainerProfileData = { name: "", specialization: "", bio: "", phone: "", telegram: "", whatsapp: "", avatarUrl: "" };
+export interface TrainerProfileData { name: string; specialization: string; bio: string; phone: string; telegram: string; whatsapp: string; avatarUrl: string; trainingRules: string }
+const EMPTY_PROFILE: TrainerProfileData = { name: "", specialization: "", bio: "", phone: "", telegram: "", whatsapp: "", avatarUrl: "", trainingRules: "" };
 
 export interface TrainerSelf { brand: string; logoUrl: string; profile: TrainerProfileData; createdAt: string }
 
