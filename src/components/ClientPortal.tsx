@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, Apple, CalendarClock, CheckCircle2, CreditCard, Dumbbell, Flame, Home, Lock, LogOut, MessageCircle, MessageSquare, Phone, Play, Ruler, Settings, TrendingUp, User } from "lucide-react";
+import { Activity, Apple, BarChart3, CheckCircle2, CreditCard, Dumbbell, Flame, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
@@ -21,42 +21,25 @@ import { supabase } from "../lib/supabase";
 import ClientSessionView from "./ClientSessionView";
 import ChatThread from "./ChatThread";
 
-type Tab = "overview" | "program" | "progress" | "body" | "nutrition" | "payment" | "profile" | "chat" | "activity";
-const TAB_DEFS: Record<Tab, { label: string; icon: typeof Home }> = {
-  program: { label: "Программа", icon: Dumbbell },
-  overview: { label: "Обзор", icon: Home },
-  progress: { label: "Прогресс", icon: TrendingUp },
-  body: { label: "Замеры", icon: Ruler },
-  nutrition: { label: "Питание", icon: Apple },
-  activity: { label: "Активность", icon: Activity },
-  payment: { label: "Оплата", icon: CreditCard },
-  chat: { label: "Чат", icon: MessageSquare },
+type Tab = "profile" | "program" | "reporting" | "chat";
+type ProgramSub = "active" | "completed" | "progress";
+type ReportSub = "body" | "nutrition" | "activity";
+
+const TAB_DEFS: Record<Tab, { label: string; icon: typeof User }> = {
   profile: { label: "Профиль", icon: User },
-};
-const DEFAULT_TAB_ORDER: Tab[] = ["overview", "program", "progress", "body", "nutrition", "activity", "payment", "chat", "profile"];
-const TAB_ORDER_KEY = "trainerhub-portal-tab-order-v1";
-const TAB_HIDDEN_KEY = "trainerhub-portal-tab-hidden-v1";
-const loadTabOrder = (): Tab[] => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(TAB_ORDER_KEY) || "null") as Tab[] | null;
-    if (saved && DEFAULT_TAB_ORDER.every((k) => saved.includes(k))) return saved.filter((k) => DEFAULT_TAB_ORDER.includes(k));
-  } catch {}
-  return DEFAULT_TAB_ORDER;
-};
-const loadHiddenTabs = (): Tab[] => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(TAB_HIDDEN_KEY) || "null") as Tab[] | null;
-    if (saved) return saved.filter((k) => DEFAULT_TAB_ORDER.includes(k));
-  } catch {}
-  return [];
+  program: { label: "Программа", icon: Dumbbell },
+  reporting: { label: "Отчётность", icon: BarChart3 },
+  chat: { label: "Чат", icon: MessageSquare },
 };
 
+const SUB_BTN = "px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0";
+
 export default function ClientPortal({ client }: { client: portalApi.SelfClient }) {
-  const [tab, setTab] = useState<Tab>("overview");
-  const [tabOrder, setTabOrder] = useState<Tab[]>(loadTabOrder);
-  const [hiddenTabs, setHiddenTabs] = useState<Tab[]>(loadHiddenTabs);
-  const [showTabSettings, setShowTabSettings] = useState(false);
-  const [brand, setBrand] = useState({ brand: "TrainerHub", logoUrl: "" });
+  const [tab, setTab] = useState<Tab>("profile");
+  const [programSub, setProgramSub] = useState<ProgramSub>("active");
+  const [reportSub, setReportSub] = useState<ReportSub>("body");
+  const [showNav, setShowNav] = useState(false);
+  const [brand, setBrand] = useState({ brand: "TrainerHub", logoUrl: "", trainingRules: "" });
   const [upcoming, setUpcoming] = useState<portalApi.UpcomingBooking | null>(null);
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -69,14 +52,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [showSettings, setShowSettings] = useState(false);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
 
-  const toggleTabVisible = (kind: Tab) => {
-    const isHidden = hiddenTabs.includes(kind);
-    if (!isHidden && hiddenTabs.length >= tabOrder.length - 1) return;
-    const next = isHidden ? hiddenTabs.filter((k) => k !== kind) : [...hiddenTabs, kind];
-    setHiddenTabs(next);
-    localStorage.setItem(TAB_HIDDEN_KEY, JSON.stringify(next));
-  };
-
   useEffect(() => {
     portalApi.fetchTrainerBrand(client.trainerId).then(setBrand);
     const refresh = () => {
@@ -88,8 +63,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       portalApi.fetchClientActivities(client.id).then(setActivities);
     };
     refresh();
-    // ponytail: поллинг раз в 20с — план/оплаты/замеры/питание тоже должны подхватывать правки
-    // тренера во время открытой сессии клиента, см. App.tsx (тот же паттерн для membership).
     const id = setInterval(refresh, 20000);
     return () => clearInterval(id);
   }, [client.id]);
@@ -122,55 +95,61 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
     );
   }
 
-
   const m = client.membership;
+  const sortedSessions = [...progressHook.sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   return (
     <div className="max-w-2xl mx-auto space-y-4" style={{ "--accent": profile.accentColor } as React.CSSProperties}>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-7 h-7 rounded-lg object-cover" />}
-          <p className="font-bold" style={{ color: "var(--accent)" }}>{brand.brand}</p>
+      {/* Drawer overlay */}
+      {showNav && <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setShowNav(false)} />}
+      {/* Nav drawer */}
+      <div className={`fixed top-0 right-0 h-full z-50 w-56 bg-zinc-900 border-l border-zinc-800 flex flex-col transition-transform duration-200 ${showNav ? "translate-x-0" : "translate-x-full"}`}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
+          <p className="font-semibold text-sm" style={{ color: "var(--accent)" }}>{brand.brand}</p>
+          <button onClick={() => setShowNav(false)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><XIcon size={18} /></button>
         </div>
-        <button onClick={() => supabase.auth.signOut()} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300"><LogOut size={14} /> Выйти</button>
-      </div>
-
-      <div className="flex items-center gap-1.5">
-        <div className="relative shrink-0">
-          <button onClick={() => setShowTabSettings((v) => !v)} className={`p-2 rounded-lg transition ${showTabSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}><Settings size={16} /></button>
-          {showTabSettings && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowTabSettings(false)} />
-              <div className="absolute left-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-2 w-52 space-y-0.5 shadow-xl">
-                <p className="text-xs text-zinc-500 px-2 pb-1">Видимые вкладки</p>
-                {tabOrder.map((kind) => {
-                  const t = TAB_DEFS[kind];
-                  const visible = !hiddenTabs.includes(kind);
-                  return (
-                    <label key={kind} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300">
-                      <input type="checkbox" checked={visible} onChange={() => toggleTabVisible(kind)} className="accent-lime-400" />
-                      <t.icon size={14} className="text-zinc-500" /> {t.label}
-                    </label>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-        <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 overflow-x-auto flex-1">
-          {tabOrder.filter((k) => !hiddenTabs.includes(k)).map((k) => {
+        <div className="flex-1 overflow-y-auto py-2">
+          {(Object.keys(TAB_DEFS) as Tab[]).map((k) => {
             const t = TAB_DEFS[k];
             return (
-              <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0 ${tab === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { background: "var(--accent)" } : undefined}>
-                <t.icon size={15} /> {t.label}
+              <button key={k} onClick={() => { setTab(k); setShowNav(false); }} className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition ${tab === k ? "font-semibold" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { color: "var(--accent)" } : undefined}>
+                <t.icon size={16} className="shrink-0" /> {t.label}
+                {tab === k && <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)" }} />}
               </button>
             );
           })}
         </div>
+        <div className="border-t border-zinc-800 px-4 py-3 shrink-0">
+          <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-2 text-sm text-zinc-500 hover:text-red-400 transition"><LogOut size={14} /> Выйти</button>
+        </div>
       </div>
 
-      {tab === "overview" && (
-        <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowNav(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition"><Menu size={20} /></button>
+          {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-7 h-7 rounded-lg object-cover" />}
+          <p className="font-bold" style={{ color: "var(--accent)" }}>{brand.brand}</p>
+        </div>
+        <p className="text-sm font-medium text-zinc-400">{TAB_DEFS[tab].label}</p>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 overflow-x-auto bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+        {(Object.keys(TAB_DEFS) as Tab[]).map((k) => {
+          const t = TAB_DEFS[k];
+          return (
+            <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0 ${tab === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { background: "var(--accent)" } : undefined}>
+              <t.icon size={15} /> {t.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── ПРОФИЛЬ ── */}
+      {tab === "profile" && (
+        <div className="space-y-3">
+          {/* Hero */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
             {profile.avatarUrl
               ? <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 shrink-0" style={{ borderColor: "var(--accent)" }} />
@@ -182,14 +161,12 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {profile.goal && <p className="text-xs text-zinc-500 mt-0.5 truncate">{profile.goal}</p>}
             </div>
           </div>
+          {/* Ближайшая + Абонемент */}
           <div className="grid grid-cols-2 gap-2">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 border-t-2" style={{ borderTopColor: "var(--accent)" }}>
               <p className="text-[10px] font-semibold tracking-widest text-zinc-500 mb-2">БЛИЖАЙШАЯ</p>
               {upcoming
-                ? <div>
-                    <p className="text-sm font-bold text-zinc-100">{fmtDate(upcoming.date)}</p>
-                    <p className="text-xs text-zinc-400 mt-0.5">в {upcoming.time}</p>
-                  </div>
+                ? <div><p className="text-sm font-bold text-zinc-100">{fmtDate(upcoming.date)}</p><p className="text-xs text-zinc-400 mt-0.5">в {upcoming.time}</p></div>
                 : <p className="text-sm text-zinc-600 mt-1">Нет записей</p>
               }
             </div>
@@ -202,155 +179,28 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               }
             </div>
           </div>
-          {currentPlan && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold tracking-widest text-zinc-500">ПРОГРАММА</p>
-                <p className="text-sm font-semibold text-zinc-100 mt-0.5 truncate">{currentPlan.name}</p>
-              </div>
-              <button onClick={() => setTab("program")} className="shrink-0 flex items-center gap-1.5 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:opacity-90 transition" style={{ background: "var(--accent)" }}>
-                <Play size={13} /> Открыть
-              </button>
+          {/* Платежи */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+            <p className="text-xs text-zinc-500 font-semibold tracking-widest flex items-center gap-1.5"><CreditCard size={13} /> ОПЛАТА</p>
+            <div className="text-sm space-y-0.5">
+              <p className="text-zinc-300">Тип: {m.type === "subscription" ? "Подписка" : "По тренировкам"}</p>
+              {m.remaining !== "" && m.remaining != null && <p className="text-zinc-300">Осталось: {combinedRemaining(m as clientsApi.Membership)} тр.</p>}
+              {m.pricePerSession && <p className="text-zinc-300">Цена занятия: {m.pricePerSession} ₽</p>}
+              {m.nextPaymentDate && <p className="text-zinc-300">След. оплата: {fmtDate(m.nextPaymentDate)}</p>}
             </div>
-          )}
-          {(profile.health.injuries || profile.health.restrictions || profile.health.notes) && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-              <p className="text-[10px] font-semibold tracking-widest text-zinc-500 mb-2">ЗДОРОВЬЕ</p>
-              <div className="space-y-1 text-xs text-zinc-400">
-                {profile.health.injuries && <p><span className="text-zinc-600">Травмы: </span>{profile.health.injuries}</p>}
-                {profile.health.restrictions && <p><span className="text-zinc-600">Противопоказания: </span>{profile.health.restrictions}</p>}
-                {profile.health.notes && <p><span className="text-zinc-600">Заметки: </span>{profile.health.notes}</p>}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === "program" && (
-        <div className="space-y-3">
-          {!currentPlan && <p className="text-sm text-zinc-600 text-center py-8">Тренер пока не назначил программу</p>}
-          {currentPlan && !planHook.plan && <p className="text-sm text-zinc-500">Загрузка...</p>}
-          {planHook.plan?.days.map((day) => {
-            const done = [...progressHook.sessions].sort((a, b) => (a.date < b.date ? 1 : -1)).find((s) => s.dayName === day.name);
-            const showDetails = openDetails === day.id;
-            return (
-            <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="font-semibold">{day.name}</h3>
-                {done ? (
-                  <button onClick={() => setOpenDetails(showDetails ? null : day.id)} className="flex items-center gap-1.5 font-semibold rounded-lg px-3 py-1.5 text-sm transition shrink-0" style={{ background: "var(--accent)20", color: "var(--accent)" }}><CheckCircle2 size={14} /> Пройдено</button>
-                ) : (
-                  <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
-                )}
-              </div>
-              {done && showDetails ? (
-                <div className="bg-zinc-800/40 rounded-xl p-3 space-y-2">
-                  <p className="text-xs text-zinc-500">{fmtDate(done.date)} · {done.done}/{done.total} упр.{done.fromClient && " · самостоятельно"}</p>
-                  <div className="flex gap-4 text-sm flex-wrap">
-                    <span className="text-zinc-400">Самочувствие <span className="text-base">{done.wellbeing ? WELL_EMOJI[done.wellbeing - 1] : "—"}</span></span>
-                    <span className="text-zinc-400">Настроение <span className="text-base">{done.mood ? MOOD_EMOJI[done.mood - 1] : "—"}</span></span>
-                    {!!done.clientRating && <span className="text-zinc-400">Оценка <span style={{ color: "var(--accent)" }} className="font-semibold">{done.clientRating}/5</span></span>}
+            {payments.length > 0 && (
+              <div className="space-y-1 pt-1 border-t border-zinc-800">
+                {payments.slice(0, 5).map((p) => (
+                  <div key={p.id} className="flex items-center justify-between text-sm">
+                    <span className="text-zinc-500">{fmtDate(p.date)}</span>
+                    <span style={{ color: "var(--accent)" }} className="font-semibold">{p.amount.toLocaleString("ru-RU")} ₽</span>
                   </div>
-                  {done.items?.some((i) => i.effort) && (
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400">
-                      {done.items.filter((i) => i.effort).map((i, idx) => <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400 inline" />)}</span>)}
-                    </div>
-                  )}
-                  {done.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} style={{ color: "var(--accent)" }} className="shrink-0 mt-0.5" /> {done.review}</div>}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {day.exercises.map((ex) => (
-                    <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-2.5 py-1.5 text-sm">
-                      <p className="font-medium">{ex.name || "—"}</p>
-                      <p className="text-xs text-zinc-500">{ex.detailed && ex.setRows?.length ? ex.setRows.map((s, i) => `${i + 1}) ${s.weight || "—"}×${s.reps || "—"}`).join(", ") : `${ex.sets}×${ex.reps}${ex.weight ? ` · ${ex.weight}` : ""}`}{ex.rest && ` · отдых ${ex.rest}`}</p>
-                      {ex.note && <p className="text-xs text-zinc-600 mt-0.5">{ex.note}</p>}
-                    </div>
-                  ))}
-                  {day.exercises.length === 0 && <p className="text-xs text-zinc-700">Нет упражнений</p>}
-                </div>
-              )}
-            </div>
-            );
-          })}
-        </div>
-      )}
-
-      {tab === "progress" && (
-        <div className="space-y-4">
-          {planHook.plan && <MetricsView days={planHook.plan.days} metrics={progressHook.metrics} addMetric={progressHook.addMetric} deleteMetric={progressHook.deleteMetric} />}
-          <div>
-            <p className="text-sm text-zinc-400 mb-2">История тренировок</p>
-            {progressHook.sessions.length === 0 && <p className="text-xs text-zinc-700 text-center py-4">Пока нет записей</p>}
-            <div className="space-y-2">
-              {[...progressHook.sessions].sort((a, b) => (a.date < b.date ? 1 : -1)).map((s) => (
-                <div key={s.id} className="bg-zinc-800/40 rounded-xl p-3">
-                  <div className="flex items-center justify-between gap-2 mb-2"><p className="font-semibold text-sm truncate">{s.dayName}</p><p className="text-xs text-zinc-500">{fmtDate(s.date)} · {s.done}/{s.total} упр.{s.fromClient && " · самостоятельно"}</p></div>
-                  <div className="flex gap-4 mb-2 text-sm flex-wrap"><span className="text-zinc-400">Самочувствие <span className="text-base">{s.wellbeing ? WELL_EMOJI[s.wellbeing - 1] : "—"}</span></span><span className="text-zinc-400">Настроение <span className="text-base">{s.mood ? MOOD_EMOJI[s.mood - 1] : "—"}</span></span>{!!s.clientRating && <span className="text-zinc-400">Оценка <span style={{ color: "var(--accent)" }} className="font-semibold">{s.clientRating}/5</span></span>}</div>
-                  {s.items?.some((i) => i.effort) && <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400 mb-2">{s.items.filter((i) => i.effort).map((i, idx) => <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400 inline" />)}</span>)}</div>}
-                  {s.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} style={{ color: "var(--accent)" }} className="shrink-0 mt-0.5" /> {s.review}</div>}
-                </div>
-              ))}
-            </div>
-          </div>
-          {progressHook.progress.length > 0 && (
-            <div>
-              <p className="text-sm text-zinc-400 mb-2">Заметки тренера</p>
-              <div className="space-y-1.5">
-                {progressHook.progress.map((p) => (
-                  <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm"><p className="text-xs text-zinc-500">{fmtDate(p.date)}</p><p>{p.text}</p></div>
                 ))}
               </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === "chat" && <ChatThread trainerId={client.trainerId} clientId={client.id} self="client" accent={profile.accentColor} />}
-
-      {tab === "body" && <BodyTab clientId={client.id} measurements={measurements} setMeasurements={setMeasurements} />}
-
-      {tab === "nutrition" && <NutritionTab clientId={client.id} logs={nutritionLogs} setLogs={setNutritionLogs} />}
-
-      {tab === "activity" && <ActivityTab clientId={client.id} activities={activities} setActivities={setActivities} accent={profile.accentColor} />}
-
-      {tab === "payment" && (
-        <div className="space-y-3">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-1 text-sm">
-            <p className="text-zinc-300">Тип: {m.type === "subscription" ? "Подписка" : "По тренировкам"}</p>
-            {m.remaining !== "" && m.remaining != null && <p className="text-zinc-300">Осталось тренировок: {combinedRemaining(m as clientsApi.Membership)}</p>}
-            {m.pricePerSession && <p className="text-zinc-300">Цена занятия: {m.pricePerSession} ₽</p>}
-            {m.nextPaymentDate && <p className="text-zinc-300">Следующая оплата: {fmtDate(m.nextPaymentDate)}</p>}
+            )}
           </div>
-          <div>
-            <p className="text-sm text-zinc-400 mb-2">История платежей</p>
-            {payments.length === 0 && <p className="text-xs text-zinc-700">Платежей пока нет</p>}
-            <div className="space-y-1.5">
-              {payments.map((p) => (
-                <div key={p.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm">
-                  <span className="text-zinc-400">{fmtDate(p.date)}</span>
-                  <span style={{ color: "var(--accent)" }} className="font-semibold">{p.amount.toLocaleString("ru-RU")} ₽</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {tab === "profile" && (
-        <div className="space-y-3">
+          {/* Контакты + здоровье */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-3">
-              {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border border-zinc-700" />
-              ) : (
-                <div className="w-16 h-16 rounded-full flex items-center justify-center text-xl font-bold shrink-0" style={{ background: "var(--accent)", color: "#18181b" }}>{(profile.name || "?")[0].toUpperCase()}</div>
-              )}
-              <div>
-                <p className="font-semibold">{profile.name || client.name}</p>
-                {profile.goal && <p className="text-xs text-zinc-500 mt-0.5">{profile.goal}</p>}
-              </div>
-            </div>
             {(profile.phone || profile.telegram || profile.whatsapp) && (
               <div className="flex flex-wrap gap-2">
                 {profile.phone && <a href={`tel:${profile.phone}`} className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm transition text-zinc-300"><Phone size={14} /> {profile.phone}</a>}
@@ -365,20 +215,188 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                 {profile.health.notes && <p><span className="text-zinc-500">Заметки:</span> {profile.health.notes}</p>}
               </div>
             )}
+            {brand.trainingRules && (
+              <div className="bg-zinc-800/50 rounded-lg p-3 space-y-1">
+                <p className="text-xs text-zinc-500 flex items-center gap-1.5 font-medium"><ScrollText size={13} /> Правила тренировок</p>
+                <p className="text-xs text-zinc-300 whitespace-pre-line">{brand.trainingRules}</p>
+              </div>
+            )}
             <button onClick={() => setShowSettings(true)} className="w-full flex items-center justify-center gap-1.5 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:opacity-90 transition" style={{ background: "var(--accent)" }}><Settings size={15} /> Редактировать профиль</button>
             <button onClick={() => setShowPinSettings(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg py-2.5 text-sm transition"><Lock size={14} /> PIN-код на вход</button>
             <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition py-1"><LogOut size={14} /> Выйти</button>
           </div>
         </div>
       )}
+
+      {/* ── ПРОГРАММА ── */}
+      {tab === "program" && (
+        <div className="space-y-3">
+          {/* Program sub-tabs */}
+          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+            {(["active", "completed", "progress"] as ProgramSub[]).map((k) => {
+              const labels: Record<ProgramSub, string> = { active: "Активные", completed: "Пройденные", progress: "Прогресс" };
+              return (
+                <button key={k} onClick={() => setProgramSub(k)} className={`${SUB_BTN} flex-1 ${programSub === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={programSub === k ? { background: "var(--accent)" } : undefined}>
+                  {labels[k]}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Активные — current plan days */}
+          {programSub === "active" && (
+            <div className="space-y-3">
+              {!currentPlan && <p className="text-sm text-zinc-600 text-center py-8">Тренер пока не назначил программу</p>}
+              {currentPlan && !planHook.plan && <p className="text-sm text-zinc-500">Загрузка...</p>}
+              {currentPlan && planHook.plan && (
+                <p className="text-xs text-zinc-500 font-medium">{currentPlan.name}</p>
+              )}
+              {planHook.plan?.days.map((day) => (
+                <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="font-semibold">{day.name}</h3>
+                    <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
+                  </div>
+                  <div className="space-y-1">
+                    {day.exercises.map((ex) => (
+                      <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
+                        <p className="font-medium">{ex.name || "—"}</p>
+                        {ex.detailed && ex.setRows?.length ? (
+                          <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400">
+                            {ex.setRows.map((sr, i) => (
+                              <span key={i}><span className="text-zinc-500">{i + 1})</span> <span className="text-zinc-100">{sr.weight || "—"}</span> × <span className="text-zinc-100">{sr.reps || "—"}</span></span>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs">
+                            {ex.sets && <span className="text-zinc-400"><span className="text-zinc-100">{ex.sets}</span> подх.</span>}
+                            {ex.reps && <span className="text-zinc-400">× <span className="text-zinc-100">{ex.reps}</span> повт.</span>}
+                            {ex.weight && <span className="text-zinc-400">· <span className="text-zinc-100">{ex.weight}</span></span>}
+                            {ex.rest && <span className="text-zinc-400">· отдых <span className="text-zinc-100">{ex.rest}</span></span>}
+                          </div>
+                        )}
+                        {ex.note && <p className="text-xs text-zinc-600 mt-1">{ex.note}</p>}
+                      </div>
+                    ))}
+                    {day.exercises.length === 0 && <p className="text-xs text-zinc-700">Нет упражнений</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Пройденные — session history */}
+          {programSub === "completed" && (
+            <div className="space-y-2">
+              {sortedSessions.length === 0 && <p className="text-sm text-zinc-600 text-center py-8">Пройденных тренировок пока нет</p>}
+              {sortedSessions.map((s) => {
+                const isOpen = openDetails === s.id;
+                return (
+                  <div key={s.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                    <button onClick={() => setOpenDetails(isOpen ? null : s.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-zinc-800/40 transition text-left">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{s.dayName}</p>
+                        <p className="text-xs text-zinc-500">{fmtDate(s.date)} · {s.done}/{s.total} упр.{s.fromClient && " · сам"}</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {s.wellbeing ? <span className="text-base">{WELL_EMOJI[s.wellbeing - 1]}</span> : null}
+                        {!!s.clientRating && <span style={{ color: "var(--accent)" }} className="text-xs font-semibold">{s.clientRating}/5</span>}
+                        <CheckCircle2 size={15} style={{ color: "var(--accent)" }} />
+                      </div>
+                    </button>
+                    {isOpen && (
+                      <div className="border-t border-zinc-800 px-3 py-3 space-y-3 bg-zinc-800/20">
+                        <div className="flex gap-4 text-sm flex-wrap">
+                          {s.wellbeing ? <span className="text-zinc-400">Самочувствие <span className="text-base">{WELL_EMOJI[s.wellbeing - 1]}</span></span> : null}
+                          {s.mood ? <span className="text-zinc-400">Настроение <span className="text-base">{MOOD_EMOJI[s.mood - 1]}</span></span> : null}
+                          {!!s.clientRating && <span className="text-zinc-400">Оценка <span style={{ color: "var(--accent)" }} className="font-semibold">{s.clientRating}/5</span></span>}
+                        </div>
+                        {s.items && s.items.length > 0 && (
+                          <div className="space-y-2">
+                            {s.items.map((item, idx) => {
+                              const hasActual = item.actualSets && item.actualSets.some((r) => r.weight || r.reps);
+                              return (
+                                <div key={idx} className="bg-zinc-900 rounded-lg px-3 py-2 text-xs space-y-1">
+                                  <p className="font-medium text-sm text-zinc-200">{item.name}</p>
+                                  {item.plannedSummary && (
+                                    <p className="text-zinc-500">План: {item.plannedSummary}</p>
+                                  )}
+                                  {hasActual && (
+                                    <p className="text-zinc-300">Факт: {item.actualSets!.map((r, i) => `${i + 1}) ${r.weight || "—"}×${r.reps || "—"}`).join(" · ")}</p>
+                                  )}
+                                  {item.effort > 0 && (
+                                    <p className="text-zinc-500 flex items-center gap-1">
+                                      Нагрузка: {Array.from({ length: item.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400 inline" />)}
+                                    </p>
+                                  )}
+                                  {item.note && <p className="text-zinc-500 italic">{item.note}</p>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {s.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} style={{ color: "var(--accent)" }} className="shrink-0 mt-0.5" /> {s.review}</div>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Прогресс */}
+          {programSub === "progress" && (
+            <div className="space-y-4">
+              {planHook.plan && <MetricsView days={planHook.plan.days} metrics={progressHook.metrics} addMetric={progressHook.addMetric} deleteMetric={progressHook.deleteMetric} />}
+              {progressHook.progress.length > 0 && (
+                <div>
+                  <p className="text-sm text-zinc-400 mb-2">Заметки тренера</p>
+                  <div className="space-y-1.5">
+                    {progressHook.progress.map((p) => (
+                      <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm">
+                        <p className="text-xs text-zinc-500">{fmtDate(p.date)}</p><p>{p.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {!planHook.plan && <p className="text-sm text-zinc-600 text-center py-8">Нет активного плана</p>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── ОТЧЁТНОСТЬ ── */}
+      {tab === "reporting" && (
+        <div className="space-y-3">
+          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+            {(["body", "nutrition", "activity"] as ReportSub[]).map((k) => {
+              const meta: Record<ReportSub, { label: string; icon: typeof Ruler }> = {
+                body: { label: "Замеры", icon: Ruler },
+                nutrition: { label: "Питание", icon: Apple },
+                activity: { label: "Активность", icon: Activity },
+              };
+              const t = meta[k];
+              return (
+                <button key={k} onClick={() => setReportSub(k)} className={`${SUB_BTN} flex-1 flex items-center justify-center gap-1.5 ${reportSub === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={reportSub === k ? { background: "var(--accent)" } : undefined}>
+                  <t.icon size={14} /> {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {reportSub === "body" && <BodyTab clientId={client.id} measurements={measurements} setMeasurements={setMeasurements} />}
+          {reportSub === "nutrition" && <NutritionTab clientId={client.id} logs={nutritionLogs} setLogs={setNutritionLogs} />}
+          {reportSub === "activity" && <ActivityTab clientId={client.id} activities={activities} setActivities={setActivities} accent={profile.accentColor} />}
+        </div>
+      )}
+
+      {/* ── ЧАТ ── */}
+      {tab === "chat" && <ChatThread trainerId={client.trainerId} clientId={client.id} self="client" accent={profile.accentColor} />}
+
       {showPinSettings && <PinSettingsModal id={client.id} table="clients" onClose={() => setShowPinSettings(false)} />}
       {showSettings && (
-        <ClientSettingsModal
-          clientId={client.id} initial={profile} onClose={() => setShowSettings(false)}
-          onSaved={(p) => setProfile(p)}
-        />
+        <ClientSettingsModal clientId={client.id} initial={profile} onClose={() => setShowSettings(false)} onSaved={(p) => setProfile(p)} />
       )}
-      {/* Убираем дублирующую кнопку выхода из шапки — она теперь в профиле */}
     </div>
   );
 }
