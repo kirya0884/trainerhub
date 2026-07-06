@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, Trash2, TrendingUp, Users, Wallet, Images, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, Trash2, TrendingUp, Users, Wallet, Images, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -156,6 +156,13 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         </div>
       </div>
 
+      {!!client.activeSession && (
+        <div className="w-full flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
+          <Play size={14} className="shrink-0 text-cyan-400" />
+          <span className="flex-1 font-medium">Сейчас тренируется: <span className="text-cyan-100">{client.activeSession.dayName}</span></span>
+          <span className="text-xs text-cyan-500">{(() => { const s = Math.floor((Date.now() - client.activeSession.startedAt) / 1000); const m = Math.floor(s / 60); return m > 0 ? `${m} мин` : "только начал"; })()}</span>
+        </div>
+      )}
       {(outOfStock || lowStock || overdue) && (
         <button onClick={() => setSub("membership")} className={`w-full text-left flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm transition ${outOfStock || overdue ? "bg-red-500/10 hover:bg-red-500/15 text-red-300" : "bg-amber-500/10 hover:bg-amber-500/15 text-amber-300"}`}>
           <AlertTriangle size={14} className="shrink-0" />

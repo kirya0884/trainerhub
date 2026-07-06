@@ -32,10 +32,10 @@ export function usePlan(planId: string) {
     if (!plan) return;
     const position = plan.days.length;
     const row = await api.addDay(planId, `День ${position + 1}`, position);
-    setPlan((p) => (p ? { ...p, days: [...p.days, { id: row.id, name: row.name, weekday: row.weekday, exercises: [] }] } : p));
+    setPlan((p) => (p ? { ...p, days: [...p.days, { id: row.id, name: row.name, weekday: row.weekday, dateOf: null, exercises: [] }] } : p));
   };
 
-  const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday">>) => {
+  const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf">>) => {
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, ...patch } : d)) } : p));
     persist(`day:${dayId}`, patch, (pp) => api.updateDay(dayId, pp));
   };

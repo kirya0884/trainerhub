@@ -71,7 +71,7 @@ export async function fetchUpcomingBooking(clientId: string): Promise<UpcomingBo
   if (!ids.length) return null;
   const { data } = await supabase.from("bookings").select("*").in("id", ids);
   const bookings: Booking[] = (data ?? []).map((b: any) => ({
-    id: b.id, planId: b.plan_id, date: b.date, time: b.time ?? "", duration: b.duration ?? 60,
+    id: b.id, planId: b.plan_id, dayId: b.day_id ?? null, dayName: b.day_name ?? null, date: b.date, time: b.time ?? "", duration: b.duration ?? 60,
     status: b.status ?? "scheduled", note: b.note ?? "", recurring: !!b.recurring, recurUntil: b.recur_until,
     exceptions: b.exceptions ?? {}, clientIds: [clientId],
   }));
@@ -106,4 +106,25 @@ export async function logClientSession(planId: string, metricsIn: Omit<Metric, "
     );
     if (itemsErr) throw itemsErr;
   }
+}
+
+// Отмечает запись в календаре тренера как проведённую, когда клиент завершает тренировку.
+// fire-and-forget: если RLS не разрешает — тихо игнорируем, тренер отметит вручную.
+export async function markClientBookingDone(trainerId: string, clientId: string, dayName: string, date: string) {
+  try {
+    const { data } = await supabase
+      .from("bookings")
+      .select("id, recurring, date, day_name, booking_clients(client_id)")
+      .eq("trainer_id", trainerId)
+      .eq("day_name", dayName)
+      .eq("status", "scheduled");
+    for (const b of data ?? []) {
+      const inDate = b.recurring || b.date === date;
+      const hasClient = (b.booking_clients ?? []).some((x: any) => x.client_id === clientId);
+      if (inDate && hasClient) {
+        await supabase.from("bookings").update({ status: "done" }).eq("id", b.id);
+        break;
+      }
+    }
+  } catch {}
 }

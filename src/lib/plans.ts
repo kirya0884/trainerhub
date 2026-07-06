@@ -7,7 +7,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
   const { data: plan, error } = await supabase.from("plans").select("id,name,note").eq("id", planId).single();
   if (error) throw error;
 
-  const { data: days } = await supabase.from("plan_days").select("id,name,weekday,position").eq("plan_id", planId).order("position");
+  const { data: days } = await supabase.from("plan_days").select("id,name,weekday,date_of,position").eq("plan_id", planId).order("position");
   const dayIds = (days ?? []).map((d) => d.id);
 
   const { data: exercises } = dayIds.length
@@ -32,7 +32,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
 
   return {
     id: plan.id, name: plan.name, note: plan.note ?? "",
-    days: (days ?? []).map((d) => ({ id: d.id, name: d.name, weekday: d.weekday, exercises: exByDay[d.id] ?? [] })),
+    days: (days ?? []).map((d) => ({ id: d.id, name: d.name, weekday: d.weekday, dateOf: d.date_of ?? null, exercises: exByDay[d.id] ?? [] })),
   };
 }
 
@@ -44,7 +44,11 @@ export async function addDay(planId: string, name: string, position: number) {
   if (error) throw error;
   return data;
 }
-export const updateDay = (dayId: string, patch: Record<string, any>) => supabase.from("plan_days").update(patch).eq("id", dayId);
+export const updateDay = (dayId: string, patch: Record<string, any>) => {
+  const row: Record<string, any> = { ...patch };
+  if ("dateOf" in patch) { row.date_of = patch.dateOf; delete row.dateOf; }
+  return supabase.from("plan_days").update(row).eq("id", dayId);
+};
 export const deleteDay = (dayId: string) => supabase.from("plan_days").delete().eq("id", dayId);
 export const reorderDays = (rows: { id: string; position: number }[]) =>
   Promise.all(rows.map((r) => supabase.from("plan_days").update({ position: r.position }).eq("id", r.id)));

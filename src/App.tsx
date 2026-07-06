@@ -99,6 +99,7 @@ export default function App() {
   const [showSubscription, setShowSubscription] = useState(false);
   const [trainerName, setTrainerName] = useState("");
   const [trainerAvatar, setTrainerAvatar] = useState("");
+  const [trainerAccent, setTrainerAccent] = useState("#a3e635");
   const [tabOrder, setTabOrder] = useState<TabKind[]>(loadTabOrder);
   const [hiddenTabs, setHiddenTabs] = useState<TabKind[]>(loadHiddenTabs);
   const [dragTab, setDragTab] = useState<TabKind | null>(null);
@@ -155,7 +156,7 @@ export default function App() {
   }, [session, isTrainer]);
 
   useEffect(() => {
-    if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); });
+    if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#a3e635"); });
   }, [isTrainer, session]);
 
   if (loading) return <div className="min-h-screen bg-zinc-950" />;
@@ -193,7 +194,7 @@ export default function App() {
 
   return (
     <PinGate id={session.user.id}>
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">

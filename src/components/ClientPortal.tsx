@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, Apple, BarChart3, CheckCircle2, CreditCard, Dumbbell, Flame, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
+import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
@@ -51,6 +51,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const toggleDay = (id: string) => setExpandedDays((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   useEffect(() => {
     portalApi.fetchTrainerBrand(client.trainerId).then(setBrand);
@@ -88,6 +90,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
         onFinish={async (metrics, session) => {
           await portalApi.logClientSession(activeSession.planId, metrics, session);
           await portalApi.finishClientSession(client.id);
+          portalApi.markClientBookingDone(client.trainerId, client.id, activeSession.dayName, session.date); // fire-and-forget
           setActiveSession(null);
           progressHook.reload();
         }}
@@ -251,37 +254,46 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {currentPlan && planHook.plan && (
                 <p className="text-xs text-zinc-500 font-medium">{currentPlan.name}</p>
               )}
-              {planHook.plan?.days.map((day) => (
-                <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <h3 className="font-semibold">{day.name}</h3>
+              {planHook.plan?.days.map((day) => {
+                const dayOpen = expandedDays.has(day.id);
+                return (
+                <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-3 py-2.5">
+                    <button onClick={() => toggleDay(day.id)} className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 shrink-0 transition">
+                      {dayOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+                    <h3 className="font-semibold flex-1 min-w-0 truncate">{day.name}</h3>
+                    <span className="text-xs text-zinc-600 shrink-0">{day.exercises.length} упр.</span>
                     <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
                   </div>
-                  <div className="space-y-1">
-                    {day.exercises.map((ex) => (
-                      <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
-                        <p className="font-medium">{ex.name || "—"}</p>
-                        {ex.detailed && ex.setRows?.length ? (
-                          <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400">
-                            {ex.setRows.map((sr, i) => (
-                              <span key={i}><span className="text-zinc-500">{i + 1})</span> <span className="text-zinc-100">{sr.weight || "—"}</span> × <span className="text-zinc-100">{sr.reps || "—"}</span></span>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs">
-                            {ex.sets && <span className="text-zinc-400"><span className="text-zinc-100">{ex.sets}</span> подх.</span>}
-                            {ex.reps && <span className="text-zinc-400">× <span className="text-zinc-100">{ex.reps}</span> повт.</span>}
-                            {ex.weight && <span className="text-zinc-400">· <span className="text-zinc-100">{ex.weight}</span></span>}
-                            {ex.rest && <span className="text-zinc-400">· отдых <span className="text-zinc-100">{ex.rest}</span></span>}
-                          </div>
-                        )}
-                        {ex.note && <p className="text-xs text-zinc-600 mt-1">{ex.note}</p>}
-                      </div>
-                    ))}
-                    {day.exercises.length === 0 && <p className="text-xs text-zinc-700">Нет упражнений</p>}
-                  </div>
+                  {dayOpen && (
+                    <div className="border-t border-zinc-800 p-3 space-y-1">
+                      {day.exercises.map((ex) => (
+                        <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
+                          <p className="font-medium">{ex.name || "—"}</p>
+                          {ex.detailed && ex.setRows?.length ? (
+                            <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400">
+                              {ex.setRows.map((sr, i) => (
+                                <span key={i}><span className="text-zinc-500">{i + 1})</span> <span className="text-zinc-100">{sr.weight || "—"}</span> × <span className="text-zinc-100">{sr.reps || "—"}</span></span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs">
+                              {ex.sets && <span className="text-zinc-400"><span className="text-zinc-100">{ex.sets}</span> подх.</span>}
+                              {ex.reps && <span className="text-zinc-400">× <span className="text-zinc-100">{ex.reps}</span> повт.</span>}
+                              {ex.weight && <span className="text-zinc-400">· <span className="text-zinc-100">{ex.weight}</span></span>}
+                              {ex.rest && <span className="text-zinc-400">· отдых <span className="text-zinc-100">{ex.rest}</span></span>}
+                            </div>
+                          )}
+                          {ex.note && <p className="text-xs text-zinc-600 mt-1">{ex.note}</p>}
+                        </div>
+                      ))}
+                      {day.exercises.length === 0 && <p className="text-xs text-zinc-700">Нет упражнений</p>}
+                    </div>
+                  )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 

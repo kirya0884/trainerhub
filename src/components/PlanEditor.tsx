@@ -1,6 +1,6 @@
-import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ClipboardList, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X } from "lucide-react";
+import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WEEKDAYS, WELL_EMOJI } from "../constants";
+import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
 import { useProgress } from "../hooks/useProgress";
@@ -8,6 +8,7 @@ import { decrementMembershipRemaining, incrementMembershipRemaining, fetchClient
 import { fmtDate, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
 import * as paymentsApi from "../lib/payments";
+import { markSessionDone } from "../lib/bookings";
 import * as templatesApi from "../lib/templates";
 import type { Day, Metric, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
@@ -47,6 +48,19 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [dayClipboard, setDayClipboard] = useState<{ name: string; exercises: Day["exercises"] } | null>(() => {
+    try { return JSON.parse(localStorage.getItem("th-day-clip") || "null"); } catch { return null; }
+  });
+  const copyDay = (day: { name: string; exercises: Day["exercises"] }) => {
+    const d = { name: day.name, exercises: day.exercises };
+    setDayClipboard(d);
+    localStorage.setItem("th-day-clip", JSON.stringify(d));
+  };
+  const pasteDay = async () => {
+    if (!dayClipboard) return;
+    await templatesApi.applyDayTemplate(planId, { id: "", name: dayClipboard.name + " (копия)", weekday: null, exercises: dayClipboard.exercises } as Day, (plan?.days.length ?? 0));
+    reload();
+  };
   const [libFor, setLibFor] = useState<string | null>(null);
   const [sub, setSub] = useState<"workout" | "done" | "progress">("workout");
   const [sessionDay, setSessionDay] = useState<Day | null>(null);
@@ -76,7 +90,10 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const finishSession = async (m: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => {
     await logSession(m, note, session);
     // ponytail: новая сессия за сегодня — сбрасываем флаг "вернули в Тренировки", чтобы день снова ушёл в Проведенные
-    if (sessionDay) setReturnedDayIds((s) => (s.has(sessionDay.id) ? new Set([...s].filter((id) => id !== sessionDay.id)) : s));
+    if (sessionDay) {
+      setReturnedDayIds((s) => (s.has(sessionDay.id) ? new Set([...s].filter((id) => id !== sessionDay.id)) : s));
+      markSessionDone(trainerId, clientId, sessionDay.name, today()); // fire-and-forget: mark calendar booking done
+    }
     if (membership) setMembership(await decrementMembershipRemaining(clientId, membership));
   };
 
@@ -250,7 +267,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                 <span className="flex items-center gap-1 text-[11px] font-medium text-lime-400 bg-lime-400/10 rounded-full px-2 py-1 shrink-0"><CheckCircle2 size={12} /> Проведена</span>
                 <button onClick={() => setEditingDayId(day.id)} className="p-1.5 rounded-md hover:bg-cyan-400/15 hover:text-cyan-400 text-zinc-500 transition shrink-0" title="Редактировать в отдельном окне"><Pencil size={15} /></button>
                 <button onClick={() => setReturnedDayIds((s) => new Set(s).add(day.id))} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Вернуть в Тренировки"><RotateCcw size={15} /></button>
-                <button onClick={() => deleteDay(day.id)} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={15} /></button>
+                <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={15} /></button>
               </div>
             ))}
           </div>
@@ -338,12 +355,10 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               </span>
               <input value={day.name} onChange={(e) => updateDay(day.id, { name: e.target.value })} className="flex-1 min-w-0 bg-transparent font-semibold outline-none border-b border-transparent focus:border-lime-400/50 pb-0.5" placeholder="Название дня" />
               {lastSession && <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:inline" title="Дата последнего проведения">{fmtDate(lastSession.date)}</span>}
-              <select value={day.weekday ?? ""} onChange={(e) => updateDay(day.id, { weekday: e.target.value === "" ? null : Number(e.target.value) })} className="bg-zinc-800 rounded-md text-xs px-1 py-1 outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0 text-zinc-300">
-                <option value="">—</option>
-                {WEEKDAYS.map((w, i) => <option key={i} value={i}>{w}</option>)}
-              </select>
+              <input type="date" value={day.dateOf ?? ""} onChange={(e) => updateDay(day.id, { dateOf: e.target.value || null })} className="bg-zinc-800 rounded-md text-xs px-1.5 py-1 outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0 text-zinc-300 w-36" />
               <button onClick={() => setSessionDay(day)} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Провести тренировку"><Play size={15} /></button>
-              <button onClick={() => deleteDay(day.id)} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><Trash2 size={15} /></button>
+              <button onClick={() => copyDay(day)} className="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0" title="Копировать день"><Clipboard size={15} /></button>
+              <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><Trash2 size={15} /></button>
             </div>
             {isOpen && DayBody({ day })}
           </div>
@@ -351,6 +366,9 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       })}
 
       <button onClick={addDay} className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-3 font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={17} /> Добавить день</button>
+      {dayClipboard && (
+        <button onClick={pasteDay} className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 border border-cyan-400/30 hover:border-cyan-400/60 rounded-xl py-2.5 text-sm font-medium text-cyan-400 transition"><ClipboardPaste size={15} /> Вставить: {dayClipboard.name}</button>
+      )}
       </>}
 
       {libFor && (

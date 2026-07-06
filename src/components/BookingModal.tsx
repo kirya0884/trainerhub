@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import NumField from "./NumField";
@@ -6,6 +6,7 @@ import RemainingBadge from "./RemainingBadge";
 import type { ClientListItem } from "../lib/clients";
 import type { Booking } from "../lib/bookings";
 import { today } from "../lib/format";
+import { supabase } from "../lib/supabase";
 
 const fmtDateLabel = (s: string) => {
   const str = new Date(s + "T00:00:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
@@ -33,12 +34,28 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
   const [recurUntil, setRecurUntil] = useState(booking?.recurUntil || "");
   const [clientIds, setClientIds] = useState<string[]>(booking?.clientIds || []);
 
+  const [selectedDayId, setSelectedDayId] = useState(booking?.dayId ?? "");
+  const [selectedDayName, setSelectedDayName] = useState(booking?.dayName ?? "");
+  const [clientPlans, setClientPlans] = useState<{ id: string; name: string; days: { id: string; name: string }[] }[]>([]);
+
+  useEffect(() => {
+    if (clientIds.length !== 1) { setClientPlans([]); return; }
+    const cid = clientIds[0];
+    supabase.from("plans").select("id,name").eq("client_id", cid).is("deleted_at", null).order("created_at", { ascending: false }).then(async ({ data: plans }) => {
+      if (!plans?.length) { setClientPlans([]); return; }
+      const { data: days } = await supabase.from("plan_days").select("id,name,plan_id").in("plan_id", plans.map(p => p.id)).order("position");
+      const byPlan: Record<string, { id: string; name: string }[]> = {};
+      for (const d of days ?? []) (byPlan[d.plan_id] ??= []).push({ id: d.id, name: d.name });
+      setClientPlans(plans.map(p => ({ id: p.id, name: p.name, days: byPlan[p.id] ?? [] })));
+    });
+  }, [clientIds.join(",")]);
+
   const toggleClient = (id: string) => setClientIds((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
 
   const save = () => {
     if (!clientIds.length) { alert("Выбери хотя бы одного подопечного"); return; }
     onSave({
-      planId: booking?.planId ?? null, date, time, duration: Number(duration) || 60, status, note,
+      planId: booking?.planId ?? null, dayId: selectedDayId || null, dayName: selectedDayName || null, date, time, duration: Number(duration) || 60, status, note,
       recurring, recurUntil: recurring ? recurUntil || null : null, exceptions: booking?.exceptions ?? {},
     }, clientIds);
   };
@@ -86,6 +103,25 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
           </label>
         )}
 
+        {clientPlans.length > 0 && (
+          <div>
+            <div className="text-[10px] uppercase tracking-wide text-zinc-500 mb-1">Тренировка</div>
+            <select
+              value={selectedDayId}
+              onChange={(e) => {
+                const opt = e.target.options[e.target.selectedIndex];
+                setSelectedDayId(e.target.value);
+                setSelectedDayName(opt.dataset.name || "");
+              }}
+              className="w-full bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40"
+            >
+              <option value="">— не выбрано —</option>
+              {clientPlans.flatMap((p) => p.days.map((d) => (
+                <option key={d.id} value={d.id} data-name={d.name}>{p.name} · {d.name}</option>
+              )))}
+            </select>
+          </div>
+        )}
         <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Заметка" rows={2} className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
       </div>
       <div className="px-4 py-3 border-t border-zinc-800 flex items-center gap-2 shrink-0">

@@ -25,6 +25,7 @@ export interface Day {
   id: string;
   name: string;
   weekday: number | null;
+  dateOf?: string | null;
   exercises: Exercise[];
 }
 

@@ -2,7 +2,8 @@ import { supabase } from "./supabase";
 import { addDays } from "./format";
 
 export interface Booking {
-  id: string; planId: string | null; date: string; time: string; duration: number;
+  id: string; planId: string | null; dayId: string | null; dayName: string | null;
+  date: string; time: string; duration: number;
   status: string; note: string; recurring: boolean; recurUntil: string | null;
   exceptions: Record<string, any>; clientIds: string[];
 }
@@ -16,7 +17,8 @@ export async function fetchBookings(trainerId: string): Promise<Booking[]> {
     .order("date");
   if (error) throw error;
   return (data ?? []).map((b: any) => ({
-    id: b.id, planId: b.plan_id, date: b.date, time: b.time ?? "", duration: b.duration ?? 60,
+    id: b.id, planId: b.plan_id, dayId: b.day_id ?? null, dayName: b.day_name ?? null,
+    date: b.date, time: b.time ?? "", duration: b.duration ?? 60,
     status: b.status ?? "scheduled", note: b.note ?? "", recurring: !!b.recurring, recurUntil: b.recur_until,
     exceptions: b.exceptions ?? {}, clientIds: (b.booking_clients ?? []).map((x: any) => x.client_id),
   }));
@@ -24,7 +26,8 @@ export async function fetchBookings(trainerId: string): Promise<Booking[]> {
 
 export async function addBooking(trainerId: string, patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) {
   const { data, error } = await supabase.from("bookings").insert({
-    trainer_id: trainerId, plan_id: patch.planId, date: patch.date, time: patch.time, duration: patch.duration,
+    trainer_id: trainerId, plan_id: patch.planId, day_id: patch.dayId, day_name: patch.dayName,
+    date: patch.date, time: patch.time, duration: patch.duration,
     status: patch.status, note: patch.note, recurring: patch.recurring, recur_until: patch.recurUntil,
   }).select().single();
   if (error) throw error;
@@ -38,6 +41,8 @@ export async function addBooking(trainerId: string, patch: Omit<Booking, "id" | 
 export async function updateBooking(id: string, patch: Partial<Omit<Booking, "id" | "clientIds">>) {
   const row: Record<string, any> = {};
   if ("planId" in patch) row.plan_id = patch.planId;
+  if ("dayId" in patch) row.day_id = patch.dayId;
+  if ("dayName" in patch) row.day_name = patch.dayName;
   if ("recurUntil" in patch) row.recur_until = patch.recurUntil;
   for (const k of ["date", "time", "duration", "status", "note", "recurring", "exceptions"] as const) if (k in patch) row[k] = (patch as any)[k];
   const { error } = await supabase.from("bookings").update(row).eq("id", id);
@@ -90,4 +95,15 @@ export async function fetchClientDoneSessions(trainerId: string, clientId: strin
   const mine = bookings.filter((b) => b.clientIds.includes(clientId));
   const occs = expandBookings(mine, "2000-01-01", new Date().toISOString().slice(0, 10));
   return occs.filter((o) => o.status === "done").map((o) => ({ date: o.date, time: o.time })).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
+}
+
+// Автоматически отмечает запись в календаре как «Проведена» когда тренер завершает тренировку дня.
+// Ищет запись за сегодня с совпадающим dayName для данного клиента.
+export async function markSessionDone(trainerId: string, clientId: string, dayName: string, date: string) {
+  try {
+    const bookings = await fetchBookings(trainerId);
+    const occs = expandBookings(bookings, date, date);
+    const match = occs.find((o) => o.clientIds.includes(clientId) && o.dayName === dayName && o.status === "scheduled");
+    if (match) await updateBooking(match.id, { status: "done" });
+  } catch {}
 }

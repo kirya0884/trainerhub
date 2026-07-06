@@ -25,9 +25,10 @@ const exLabel = (day: Day, idx: number) => {
 };
 const exSummary = (e: Day["exercises"][number]) => {
   if (e.detailed && e.setRows?.length) return e.setRows.map((s, i) => `${i + 1}) ${s.weight || "—"}×${s.reps || "—"}`).join(", ");
-  let base = `${e.sets}×${e.reps}`;
-  if (e.weight) base += ` · ${e.weight}`;
-  return base;
+  const parts: string[] = [];
+  if (e.sets || e.reps) parts.push(`${e.sets || "?"}×${e.reps || "?"}`);
+  if (e.weight) parts.push(e.weight);
+  return parts.length ? parts.join(" · ") : "—";
 };
 
 const SUPERSET_NAME: Record<number, string> = { 2: "Двусет", 3: "Трисет" };

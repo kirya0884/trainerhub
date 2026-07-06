@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Camera, ClipboardList, Image, KeyRound, LogOut, Sparkles, User, Users } from "lucide-react";
+import { Camera, ClipboardList, Image, KeyRound, LogOut, Palette, ScrollText, Sparkles, User, Users } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
@@ -12,6 +12,7 @@ export default function TrainerProfile({ trainerId, email, onSaved }: { trainerI
   const [stats, setStats] = useState<TrainerStats | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingBrand, setSavingBrand] = useState(false);
+  const [savingRules, setSavingRules] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
   const [newPw, setNewPw] = useState("");
   const [newPw2, setNewPw2] = useState("");
@@ -122,6 +123,29 @@ export default function TrainerProfile({ trainerId, email, onSaved }: { trainerI
           <input value={brand.brand} onChange={(e) => setBrand({ ...brand, brand: e.target.value })} placeholder="TrainerHub" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
         </label>
         <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><Palette size={15} className="text-lime-400" /> Цвет интерфейса</p>
+        <div className="flex flex-wrap gap-2">
+          {["#a3e635","#22d3ee","#fb923c","#f472b6","#a78bfa","#facc15","#34d399","#f87171","#60a5fa","#e879f9"].map((c) => (
+            <button key={c} onClick={() => setProfile({ ...profile, accentColor: c })} className="w-8 h-8 rounded-full border-2 transition" style={{ background: c, borderColor: profile.accentColor === c ? "#fff" : "transparent" }} title={c} />
+          ))}
+        </div>
+        <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2 text-sm hover:bg-lime-300 transition disabled:opacity-50">{savingRules ? "Сохранение..." : "Сохранить цвет"}</button>
+      </div>
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><ScrollText size={15} className="text-lime-400" /> Правила проведения и списания тренировок</p>
+        <p className="text-xs text-zinc-500">Эти правила видят все ваши подопечные в личном кабинете</p>
+        <textarea
+          value={profile.trainingRules}
+          onChange={(e) => setProfile({ ...profile, trainingRules: e.target.value })}
+          rows={6}
+          placeholder={"Например:\n• Тренировка списывается при отмене менее чем за 24 часа\n• Пакет действителен 3 месяца с даты оплаты\n• Перенос возможен не более 2 раз в месяц"}
+          className="w-full bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none"
+        />
+        <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2 text-sm hover:bg-lime-300 transition disabled:opacity-50">{savingRules ? "Сохранение..." : "Сохранить правила"}</button>
       </div>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
