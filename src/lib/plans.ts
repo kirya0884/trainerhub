@@ -62,10 +62,11 @@ export async function addExercise(dayId: string, position: number, name = "") {
   if (error) throw error;
   return data;
 }
-export function updateExercise(exId: string, patch: Record<string, any>) {
+export async function updateExercise(exId: string, patch: Record<string, any>) {
   const dbPatch: Record<string, any> = { ...patch };
   if ("group" in dbPatch) { dbPatch.exercise_group = dbPatch.group; delete dbPatch.group; }
-  return supabase.from("plan_exercises").update(dbPatch).eq("id", exId);
+  const { error } = await supabase.from("plan_exercises").update(dbPatch).eq("id", exId);
+  if (error) console.error("[updateExercise]", error.message, { exId, patch });
 }
 export const deleteExercise = (exId: string) => supabase.from("plan_exercises").delete().eq("id", exId);
 export const reorderExercises = (rows: { id: string; position: number }[]) =>
