@@ -109,11 +109,15 @@ export async function deletePayment(id: string, clientId: string, membership: Me
 // Разбивает один платёж на N платежей той же датой (остаток округления — в последнюю часть)
 export async function splitPayment(clientId: string, payment: Payment, parts: number) {
   if (parts < 2) return;
+  // Читаем sessions_delta до удаления, чтобы правильно откатить баланс при удалении части.
+  const { data: orig } = await supabase.from("client_payments").select("sessions_delta").eq("id", payment.id).single();
+  const sessionsDelta = Number(orig?.sessions_delta) || 0;
   await deletePaymentRow(payment.id);
   const base = Math.floor(payment.amount / parts);
   for (let i = 0; i < parts; i++) {
     const amount = i === parts - 1 ? payment.amount - base * (parts - 1) : base;
-    await addPayment(clientId, { date: payment.date, amount, type: payment.type, note: `${payment.note} (часть ${i + 1}/${parts})`.trim() });
+    // sessions_delta записывается только в первую часть; остальные — 0, чтобы не дублировать откат.
+    await addPayment(clientId, { date: payment.date, amount, type: payment.type, note: `${payment.note} (часть ${i + 1}/${parts})`.trim() }, i === 0 && sessionsDelta ? sessionsDelta : undefined);
   }
 }
 

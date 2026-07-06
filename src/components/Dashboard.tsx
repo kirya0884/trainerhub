@@ -5,7 +5,6 @@ import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { useBookings } from "../hooks/useBookings";
 import { expandBookings } from "../lib/bookings";
 import { notifyDailyDigest, requestNotifyPermission } from "../lib/notify";
-import { fetchAllPlans } from "../lib/clients";
 import AnalyticsPanel from "./AnalyticsPanel";
 import { today, addDays } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
@@ -31,7 +30,6 @@ const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Ме�
 
 export default function Dashboard({ trainerId, trainerName = "", trainerAvatar = "", onOpenClient }: { trainerId: string; trainerName?: string; trainerAvatar?: string; onOpenClient: (id: string) => void }) {
   const [data, setData] = useState<{ clients: DashboardClient[]; payments: DashboardPayment[] } | null>(null);
-  const [plansCount, setPlansCount] = useState<number | null>(null);
   const [period, setPeriod] = useState<string>("month");
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [hideRevenue, setHideRevenue] = useState(false);
@@ -40,7 +38,6 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   useEffect(() => {
     requestNotifyPermission();
     fetchDashboardData(trainerId).then(setData);
-    fetchAllPlans(trainerId).then((p) => setPlansCount(p.length));
   }, [trainerId]);
 
   if (!data) return <div className="text-zinc-500 text-sm p-4">Загрузка...</div>;
@@ -160,7 +157,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
         <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПОДОПЕЧНЫЕ</p>
         <div className="grid grid-cols-3 gap-2">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-lime-400">
-            <p className="text-2xl font-bold text-zinc-50">{activeClients.length}<span className="text-sm font-normal text-zinc-600">/{plansCount ?? "?"}</span></p>
+            <p className="text-2xl font-bold text-zinc-50">{activeClients.length}<span className="text-sm font-normal text-zinc-600">/{clients.length}</span></p>
             <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wide">Активных</p>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-cyan-400">
