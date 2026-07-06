@@ -19,6 +19,8 @@ import * as nutritionApi from "../lib/nutrition";
 import type { NutritionLog } from "../lib/nutrition";
 import ProgramCatalogModal from "./ProgramCatalogModal";
 import ChatThread from "./ChatThread";
+import * as messagesApi from "../lib/messages";
+import type { ChatMessage } from "../lib/messages";
 import SessionHistoryModal from "./SessionHistoryModal";
 import RemainingBadge from "./RemainingBadge";
 import ActivityTab from "./ActivityTab";
@@ -85,6 +87,9 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   const [showReport, setShowReport] = useState(false);
   const persist = useDebouncedPersist();
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const chatReadKey = `trainerhub-chat-read-${clientId}`;
+  const [chatLastRead, setChatLastRead] = useState(() => localStorage.getItem(chatReadKey) || "");
 
   useEffect(() => {
     api.fetchClient(clientId).then(setClient);
@@ -94,6 +99,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     api.fetchNotes(clientId).then(setNotes);
     api.fetchClientPlans(clientId).then(setPlans);
     portalApi.fetchClientActivities(clientId).then(setActivities);
+    messagesApi.fetchMessages(clientId).then(setChatMessages);
   }, [clientId]);
 
   if (!client) return <p className="text-zinc-500 text-sm p-4">Загрузка...</p>;
@@ -210,6 +216,11 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
                 className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap cursor-grab shrink-0 ${sub === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"} ${dragSub === k ? "opacity-40" : ""}`}
               >
                 <t.icon size={14} /> {t.label}
+                {k === "chat" && chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length > 0 && (
+                  <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                    {chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length}
+                  </span>
+                )}
               </button>
             );
           })}

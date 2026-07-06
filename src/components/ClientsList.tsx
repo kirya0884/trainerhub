@@ -1,4 +1,4 @@
-import { ChevronRight, HeartPulse, Play, Plus } from "lucide-react";
+import { ChevronRight, HeartPulse, Play, Plus, Search } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -10,6 +10,8 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [goal, setGoal] = useState(GOALS[0]);
+
+  const [search, setSearch] = useState("");
 
   const load = () => api.fetchClients(trainerId).then(setClients);
   useEffect(() => { load(); }, [trainerId]);
@@ -29,6 +31,10 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
         <h2 className="text-lg font-bold">Подопечные <span className="text-zinc-600 font-normal">({clients.length})</span></h2>
         <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 hover:bg-lime-300 transition text-sm"><Plus size={16} /> Добавить</button>
       </div>
+      <div className="relative mb-3">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по имени..." className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-3 py-2 text-sm outline-none focus:border-zinc-700 placeholder:text-zinc-600" />
+      </div>
       {showForm && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-4 space-y-3">
           <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Имя подопечного" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
@@ -43,7 +49,7 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
       )}
       <div className="space-y-2">
         {clients.length === 0 && <p className="text-zinc-600 text-sm text-center py-8">Добавь первого подопечного, чтобы привязывать к нему планы</p>}
-        {clients.map((c) => (
+        {clients.filter((c) => !search.trim() || c.name.toLowerCase().includes(search.toLowerCase())).map((c) => (
           <button key={c.id} onClick={() => onOpenClient(c.id)} className={`w-full text-left flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:border-zinc-700 transition ${c.status === "left" ? "opacity-50" : ""}`}>
             <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name.charAt(0).toUpperCase()}</div>
             <div className="flex-1 min-w-0">

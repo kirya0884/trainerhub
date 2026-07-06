@@ -263,6 +263,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                       {dayOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                     </button>
                     <h3 className="font-semibold flex-1 min-w-0 truncate">{day.name}</h3>
+                    {day.dateOf && <span className="text-xs text-zinc-500 shrink-0">{fmtDate(day.dateOf)}</span>}
                     <span className="text-xs text-zinc-600 shrink-0">{day.exercises.length} упр.</span>
                     <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
                   </div>

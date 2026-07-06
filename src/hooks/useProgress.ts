@@ -50,7 +50,7 @@ export function useProgress(planId: string) {
   const logSession = async (metricsIn: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => {
     const res = await api.logSession(planId, metricsIn, note, session);
     setMetrics((p) => [...p, ...res.metrics]);
-    setProgress((p) => [res.progress, ...p]);
+    if (res.progress) setProgress((p) => [res.progress!, ...p]);
     setSessions((p) => [res.session, ...p]);
   };
 

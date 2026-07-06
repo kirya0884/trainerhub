@@ -94,8 +94,9 @@ export async function logSession(planId: string, metricsIn: Omit<Metric, "id">[]
     savedMetrics = (data ?? []).map((m) => ({ id: m.id, date: m.date, exercise: m.exercise, weight: m.weight ?? "", reps: m.reps ?? "", rest: m.rest ?? "", sets: m.sets ?? "" }));
   }
 
-  const { data: noteRow, error: noteErr } = await supabase.from("plan_progress_notes").insert({ plan_id: planId, text: note }).select().single();
-  if (noteErr) throw noteErr;
+  const noteRow = note.trim()
+    ? (await supabase.from("plan_progress_notes").insert({ plan_id: planId, text: note }).select().single()).data
+    : null;
 
   const { data: sessRow, error: sessErr } = await supabase.from("plan_sessions").insert({
     plan_id: planId, date: session.date, day_name: session.dayName,
@@ -113,7 +114,7 @@ export async function logSession(planId: string, metricsIn: Omit<Metric, "id">[]
 
   return {
     metrics: savedMetrics,
-    progress: { id: noteRow.id, date: noteRow.date, text: noteRow.text } as ProgressNote,
+    progress: noteRow ? { id: noteRow.id, date: noteRow.date, text: noteRow.text } as ProgressNote : null,
     session: {
       id: sessRow.id, date: sessRow.date, dayName: sessRow.day_name ?? "", mood: sessRow.mood ?? 0, wellbeing: sessRow.wellbeing ?? 0,
       clientRating: sessRow.client_rating ?? 0, review: sessRow.review ?? "", done: sessRow.done ?? 0, total: sessRow.total ?? 0,

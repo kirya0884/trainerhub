@@ -41,6 +41,8 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
   const [groupSession, setGroupSession] = useState<Occurrence | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
+  const [confirmPending, setConfirmPending] = useState<{ text: string; onConfirm: () => void } | null>(null);
+  const askConfirm = (text: string, onConfirm: () => void) => setConfirmPending({ text, onConfirm });
 
   useEffect(() => { clientsApi.fetchClients(trainerId).then(setClients); }, [trainerId]);
 
@@ -262,7 +264,7 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
             <div className="flex gap-2 pt-1">
               <button onClick={() => { setModal({ booking: findBookingById(quickView.id) }); setQuickView(null); }} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg py-2 text-sm transition">Редактировать</button>
               {quickView.isOccurrence && (
-                <button onClick={() => { if (window.confirm("Отменить занятие на эту дату?")) { cancelOccurrence(findBookingById(quickView.id)!, quickView.occDate); setQuickView(null); } }} className="px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition">Отменить</button>
+                <button onClick={() => askConfirm("Отменить занятие на эту дату?", () => { cancelOccurrence(findBookingById(quickView.id)!, quickView.occDate); setQuickView(null); })} className="px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition">Отменить</button>
               )}
             </div>
           </div>
@@ -281,7 +283,7 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
             else await addBooking(patch, clientIds);
             setModal(null);
           }}
-          onDelete={modal.booking ? async () => { if (window.confirm("Удалить запись?")) { await deleteBooking(modal.booking!.id); setModal(null); } } : undefined}
+          onDelete={modal.booking ? () => askConfirm("Удалить запись? Это действие необратимо.", async () => { await deleteBooking(modal.booking!.id); setModal(null); }) : undefined}
         />
       )}
 
@@ -290,6 +292,18 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
           clients={groupSession.clientIds.map((id) => ({ id, name: clientName(id), color: clients.find((c) => c.id === id)?.color || "#a3e635", remaining: clients.find((c) => c.id === id)?.remaining ?? null }))}
           onClose={() => setGroupSession(null)}
         />
+      )}
+
+      {confirmPending && (
+        <ModalShell title="Подтверждение" onClose={() => setConfirmPending(null)}>
+          <div className="p-4 space-y-4">
+            <p className="text-sm text-zinc-300">{confirmPending.text}</p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmPending(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg py-2.5 text-sm transition">Отмена</button>
+              <button onClick={() => { confirmPending.onConfirm(); setConfirmPending(null); }} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-semibold rounded-lg py-2.5 text-sm transition">Подтвердить</button>
+            </div>
+          </div>
+        </ModalShell>
       )}
     </div>
   );
