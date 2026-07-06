@@ -5,6 +5,7 @@ import { downloadBackup, exportBackup, importBackup } from "../lib/backup";
 
 export default function BackupModal({ trainerId, onClose }: { trainerId: string; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const doExport = async () => {
@@ -22,12 +23,15 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
     reader.onload = async () => {
       try {
         const raw = JSON.parse(String(reader.result));
-        await importBackup(trainerId, raw);
+        setProgress({ done: 0, total: 0 });
+        await importBackup(trainerId, raw, (done, total) => setProgress({ done, total }));
+        setProgress(null);
         alert("Импорт завершён. Обновите страницу, чтобы увидеть новые данные.");
       } catch (err: any) {
         alert("Не удалось импортировать файл: " + (err?.message || "неверный формат"));
       } finally {
         setBusy(false);
+        setProgress(null);
         e.target.value = "";
       }
     };
@@ -43,7 +47,7 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
         <div className="border-t border-zinc-800 pt-3">
           <p className="text-zinc-400 mb-2">Импорт добавляет данные из файла как новые записи — ничего не перезаписывает и не удаляет.</p>
           <label className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg py-2.5 transition cursor-pointer">
-            <Upload size={16} /> {busy ? "Импорт..." : "Импортировать файл"}
+            <Upload size={16} /> {busy ? (progress ? `Импорт ${progress.done}/${progress.total}...` : "Импорт...") : "Импортировать файл"}
             <input ref={fileRef} type="file" accept="application/json" onChange={onFile} disabled={busy} className="hidden" />
           </label>
         </div>

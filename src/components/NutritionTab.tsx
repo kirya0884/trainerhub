@@ -94,7 +94,7 @@ export default function NutritionTab({ clientId, logs, setLogs, readOnly }: {
         <div className="grid grid-cols-5 gap-1 px-3 py-2 text-[11px] uppercase tracking-wide text-zinc-500 border-b border-zinc-800">
           <span>Дата</span><span>Ккал</span><span>Белки</span><span>Жиры</span><span>Углев.</span>
         </div>
-        {filtered.length === 0 ? <p className="text-sm text-zinc-600 text-center py-6">Нет записей.</p> : (
+        {filtered.length === 0 ? <p className="text-sm text-zinc-600 text-center py-6">{logs.length === 0 ? "Записей питания пока нет — добавь первую кнопкой выше." : "Нет записей за выбранный период."}</p> : (
           [...filtered].reverse().map((l) => (
             <div key={l.id} className="grid grid-cols-5 gap-1 px-3 py-1.5 text-sm border-b border-zinc-800/50 items-center group">
               <span className="text-zinc-400">{l.date.slice(5)}</span>

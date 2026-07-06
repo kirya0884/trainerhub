@@ -16,7 +16,7 @@ import { usePlan } from "../hooks/usePlan";
 import { useProgress } from "../hooks/useProgress";
 import { MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import MetricsView from "./MetricsView";
-import { fmtDate } from "../lib/format";
+import { fmtDate, today as todayFn } from "../lib/format";
 import { supabase } from "../lib/supabase";
 import ClientSessionView from "./ClientSessionView";
 import ChatThread from "./ChatThread";
@@ -254,6 +254,21 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {currentPlan && planHook.plan && (
                 <p className="text-xs text-zinc-500 font-medium">{currentPlan.name}</p>
               )}
+              {(() => {
+                const todayDay = planHook.plan?.days.find((d) => d.dateOf === todayFn());
+                return todayDay ? (
+                  <div className="border rounded-xl p-3 flex items-center gap-3" style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)" }}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold tracking-widest mb-0.5" style={{ color: "var(--accent)" }}>СЕГОДНЯ</p>
+                      <p className="font-semibold text-zinc-100 truncate">{todayDay.name}</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">{todayDay.exercises.length} упр.</p>
+                    </div>
+                    <button onClick={() => startDay(todayDay.id, todayDay.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-4 py-2 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}>
+                      <Play size={14} /> Начать
+                    </button>
+                  </div>
+                ) : null;
+              })()}
               {planHook.plan?.days.map((day) => {
                 const dayOpen = expandedDays.has(day.id);
                 return (

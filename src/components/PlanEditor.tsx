@@ -94,7 +94,9 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       setReturnedDayIds((s) => (s.has(sessionDay.id) ? new Set([...s].filter((id) => id !== sessionDay.id)) : s));
       markSessionDone(trainerId, clientId, sessionDay.name, today()); // fire-and-forget: mark calendar booking done
     }
-    if (membership) setMembership(await decrementMembershipRemaining(clientId, membership));
+    // Гард двойного списания: если клиент уже залогировал эту же сессию (fromClient=true), тренер не декрементирует повторно.
+    const alreadyLoggedByClient = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
+    if (membership && !alreadyLoggedByClient) setMembership(await decrementMembershipRemaining(clientId, membership));
   };
 
   // ponytail: ручное добавление разовой тренировки к остатку — платная пишется в журнал платежей (учитывается в статистике заработка), бесплатная — только +1 к остатку

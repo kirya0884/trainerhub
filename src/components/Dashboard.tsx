@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Cake, CalendarClock, Eye, EyeOff, TriangleAlert, Users } from "lucide-react";
+import { BarChart3, Cake, CalendarClock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { useBookings } from "../hooks/useBookings";
@@ -83,6 +83,16 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   const trainedThisWeek = expandBookings(bookings, addDays(todayStr, -6), todayStr).filter((o) => o.status === "done").length;
   const periodLabel = period === "day" ? "СЕГОДНЯ" : period === "week" ? "НЕДЕЛЯ" : new Date(todayStr + "T00:00:00").toLocaleDateString("ru-RU", { month: "long", year: "numeric" }).toUpperCase();
 
+  // Оплаты за текущий месяц из client_payments (реальные поступления, не расчётный доход)
+  const thisMonth = todayStr.slice(0, 7);
+  const paymentsThisMonth = payments.filter((p) => p.date.startsWith(thisMonth));
+  const cashReceived = paymentsThisMonth.reduce((s, p) => s + p.amount, 0);
+  // Подписки с истекающей датой в течение 7 дней
+  const upcomingRenewals = activeClients.filter((c) => {
+    const d = c.membership?.nextPaymentDate;
+    return d && d >= todayStr && d <= addDays(todayStr, 7);
+  });
+
   notifyDailyDigest(trainerId, { todayCount: todayOccurrences.length, debtNames: debt.map((c) => c.name), expiringNames: expiring.map((c) => c.name) });
 
   return (
@@ -151,6 +161,39 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
       </div>
 
       {showAnalytics && <AnalyticsPanel clients={clients} payments={payments} attendanceRate={attendanceRate} />}
+
+      {/* Payments dashboard */}
+      {(cashReceived > 0 || upcomingRenewals.length > 0) && (
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ОПЛАТЫ — {thisMonth.slice(5)}/{thisMonth.slice(0, 4)}</p>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <Wallet size={16} className="text-lime-400 shrink-0" />
+              <div className="flex-1">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Поступило</p>
+                <p className="text-lg font-bold text-zinc-50">{hideRevenue ? "• • • •" : `${cashReceived.toLocaleString("ru-RU")} ₽`}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Платежей</p>
+                <p className="text-lg font-bold text-zinc-50">{paymentsThisMonth.length}</p>
+              </div>
+            </div>
+            {upcomingRenewals.length > 0 && (
+              <div className="border-t border-zinc-800 pt-3">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1.5">Продление подписки (7 дней)</p>
+                <div className="space-y-1">
+                  {upcomingRenewals.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between text-sm">
+                      <span className="text-zinc-300">{c.name}</span>
+                      <span className="text-cyan-400 text-xs">{c.membership.nextPaymentDate}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Clients */}
       <div>

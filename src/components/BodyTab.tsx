@@ -67,6 +67,12 @@ export default function BodyTab({ clientId, measurements, setMeasurements }: { c
         )}
       </div>
 
+      {measurements.length === 0 && !showForm && (
+        <div className="text-center py-8 text-zinc-600">
+          <p className="text-sm">Замеров пока нет.</p>
+          <button onClick={() => setShowForm(true)} className="mt-2 text-sm font-medium underline underline-offset-2" style={{ color: "var(--accent)" }}>Добавить первый замер</button>
+        </div>
+      )}
       {measurements.length > 0 && (
         <div className="space-y-1.5">
           {[...measurements].reverse().map((e) => (
