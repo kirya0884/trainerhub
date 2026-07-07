@@ -14,7 +14,7 @@ import type { PlanListItem, Payment, Measurement } from "../lib/clients";
 import type { NutritionLog } from "../lib/nutrition";
 import { usePlan } from "../hooks/usePlan";
 import { useProgress } from "../hooks/useProgress";
-import { MOOD_EMOJI, WELL_EMOJI } from "../constants";
+import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import MetricsView from "./MetricsView";
 import { fmtDate, today as todayFn } from "../lib/format";
 import { supabase } from "../lib/supabase";
@@ -255,26 +255,83 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                 <p className="text-xs text-zinc-500 font-medium">{currentPlan.name}</p>
               )}
               {(() => {
-                const todayDay = planHook.plan?.days.find((d) => d.dateOf === todayFn());
-                return todayDay ? (
-                  <div className="border rounded-xl p-3 flex items-center gap-3" style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)" }}>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[10px] font-semibold tracking-widest mb-0.5" style={{ color: "var(--accent)" }}>СЕГОДНЯ</p>
-                      <p className="font-semibold text-zinc-100 truncate">{todayDay.name}</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">{todayDay.exercises.length} упр.</p>
-                    </div>
-                    <button onClick={() => startDay(todayDay.id, todayDay.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-4 py-2 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}>
-                      <Play size={14} /> Начать
-                    </button>
-                  </div>
-                ) : null;
-              })()}
-              {(() => {
-                const visibleDays = (planHook.plan?.days ?? []).filter((d) => d.visibleToClient !== false);
+                const todayStr = todayFn();
+                // Дни, завершённые сегодня — скрываем из "Активных"
+                const doneToday = new Set(progressHook.sessions.filter((s) => s.date === todayStr).map((s) => s.dayName));
                 const mesocycles = planHook.plan?.mesocycles ?? [];
-                const hasMesos = mesocycles.length > 0;
-                // Group days: with meso first (sorted by meso position), then ungrouped
-                const renderDay = (day: (typeof visibleDays)[0]) => {
+                // Видимые дни: не скрыты тренером, не принадлежат скрытому блоку, не завершены сегодня
+                const visibleDays = (planHook.plan?.days ?? []).filter((d) =>
+                  d.visibleToClient !== false &&
+                  !doneToday.has(d.name) &&
+                  !(d.mesocycleId && mesocycles.find((m) => m.id === d.mesocycleId)?.visibleToClient === false)
+                );
+                const todayDay = visibleDays.find((d) => d.dateOf === todayStr) ?? null;
+                const hasMesos = mesocycles.filter((m) => m.visibleToClient !== false).length > 0;
+
+                // Вспомогательные функции для групповых отображений
+                const exLbl = (exs: typeof visibleDays[0]["exercises"], idx: number) => {
+                  const ex = exs[idx];
+                  if (!ex.group) return String(idx + 1);
+                  let pos = 0;
+                  for (let i = 0; i <= idx; i++) if (exs[i].group === ex.group) pos++;
+                  return `${ex.group}${pos}`;
+                };
+                const groupBlks = (exs: typeof visibleDays[0]["exercises"]) => {
+                  const blocks: { group: string | null; startIdx: number; items: typeof exs }[] = [];
+                  exs.forEach((ex, idx) => {
+                    const last = blocks[blocks.length - 1];
+                    if (ex.group && last?.group === ex.group) last.items.push(ex);
+                    else blocks.push({ group: ex.group || null, startIdx: idx, items: [ex] });
+                  });
+                  return blocks;
+                };
+                const renderEx = (ex: typeof visibleDays[0]["exercises"][0], label: string) => (
+                  <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-zinc-600 font-bold w-4 shrink-0">{label}</span>
+                      <p className="font-medium flex-1 min-w-0 truncate">{ex.name || "—"}</p>
+                    </div>
+                    {ex.detailed && ex.setRows?.length ? (
+                      <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400 pl-5">
+                        {ex.setRows.map((sr, i) => (
+                          <span key={i}><span className="text-zinc-500">{i + 1})</span> <span className="text-zinc-100">{sr.weight || "—"}</span> × <span className="text-zinc-100">{sr.reps || "—"}</span></span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs pl-5">
+                        {ex.sets && <span className="text-zinc-400"><span className="text-zinc-100">{ex.sets}</span> подх.</span>}
+                        {ex.reps && <span className="text-zinc-400">× <span className="text-zinc-100">{ex.reps}</span> повт.</span>}
+                        {ex.weight && <span className="text-zinc-400">· <span className="text-zinc-100">{ex.weight}</span></span>}
+                        {ex.rest && <span className="text-zinc-400">· отдых <span className="text-zinc-100">{ex.rest}</span></span>}
+                      </div>
+                    )}
+                    {ex.note && <p className="text-xs text-zinc-600 mt-0.5 pl-5 italic">{ex.note}</p>}
+                  </div>
+                );
+                const renderDayExpanded = (day: typeof visibleDays[0]) => {
+                  const blocks = groupBlks(day.exercises);
+                  return (
+                    <div className="border-t border-zinc-800 p-3 space-y-1.5">
+                      {blocks.map((block, bi) => {
+                        const color = block.group ? (GROUP_COLORS[block.group] ?? null) : null;
+                        const rows = block.items.map((ex, k) => renderEx(ex, exLbl(day.exercises, block.startIdx + k)));
+                        if (color && block.items.length > 1) {
+                          return (
+                            <div key={bi} className="rounded-xl border-2 overflow-hidden" style={{ borderColor: color }}>
+                              <div className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide" style={{ background: `${color}26`, color }}>
+                                Суперсет {block.group} · {block.items.length} упр.
+                              </div>
+                              <div className="p-1.5 space-y-1">{rows}</div>
+                            </div>
+                          );
+                        }
+                        return <div key={bi} className="space-y-1">{rows}</div>;
+                      })}
+                      {day.exercises.length === 0 && <p className="text-xs text-zinc-700">Нет упражнений</p>}
+                    </div>
+                  );
+                };
+                const renderDay = (day: typeof visibleDays[0]) => {
                   const dayOpen = expandedDays.has(day.id);
                   return (
                     <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -287,65 +344,47 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                         <span className="text-xs text-zinc-600 shrink-0">{day.exercises.length} упр.</span>
                         <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
                       </div>
-                      {dayOpen && (
-                        <div className="border-t border-zinc-800 p-3 space-y-1">
-                          {day.exercises.map((ex) => (
-                            <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
-                              <p className="font-medium">{ex.name || "—"}</p>
-                              {ex.detailed && ex.setRows?.length ? (
-                                <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400">
-                                  {ex.setRows.map((sr, i) => (
-                                    <span key={i}><span className="text-zinc-500">{i + 1})</span> <span className="text-zinc-100">{sr.weight || "—"}</span> × <span className="text-zinc-100">{sr.reps || "—"}</span></span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs">
-                                  {ex.sets && <span className="text-zinc-400"><span className="text-zinc-100">{ex.sets}</span> подх.</span>}
-                                  {ex.reps && <span className="text-zinc-400">× <span className="text-zinc-100">{ex.reps}</span> повт.</span>}
-                                  {ex.weight && <span className="text-zinc-400">· <span className="text-zinc-100">{ex.weight}</span></span>}
-                                  {ex.rest && <span className="text-zinc-400">· отдых <span className="text-zinc-100">{ex.rest}</span></span>}
-                                </div>
-                              )}
-                              {ex.note && <p className="text-xs text-zinc-600 mt-1">{ex.note}</p>}
-                            </div>
-                          ))}
-                          {day.exercises.length === 0 && <p className="text-xs text-zinc-700">Нет упражнений</p>}
-                        </div>
-                      )}
+                      {dayOpen && renderDayExpanded(day)}
                     </div>
                   );
                 };
-                if (!hasMesos) return <>{visibleDays.map(renderDay)}</>;
-                // Render grouped by mesocycle
-                const sorted = [...mesocycles].sort((a, b) => a.position - b.position);
-                const ungrouped = visibleDays.filter((d) => !d.mesocycleId || !mesocycles.find((m) => m.id === d.mesocycleId));
+
+                const sortedMesos = [...mesocycles].sort((a, b) => a.position - b.position).filter((m) => m.visibleToClient !== false);
+
                 return (
                   <>
-                    {sorted.map((meso) => {
-                      const days = visibleDays.filter((d) => d.mesocycleId === meso.id);
-                      if (days.length === 0) return null;
-                      return (
-                        <div key={meso.id} className="space-y-2">
-                          <div className="flex items-center gap-2 px-1">
-                            <div className="h-px flex-1 bg-cyan-400/20" />
-                            <span className="text-xs font-semibold text-cyan-400/70 uppercase tracking-wider">{meso.name}</span>
-                            <div className="h-px flex-1 bg-cyan-400/20" />
-                          </div>
-                          {days.map(renderDay)}
+                    {todayDay && (
+                      <div className="border rounded-xl p-3 flex items-center gap-3" style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)" }}>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[10px] font-semibold tracking-widest mb-0.5" style={{ color: "var(--accent)" }}>СЕГОДНЯ</p>
+                          <p className="font-semibold text-zinc-100 truncate">{todayDay.name}</p>
+                          <p className="text-xs text-zinc-500 mt-0.5">{todayDay.exercises.length} упр.</p>
                         </div>
-                      );
-                    })}
-                    {ungrouped.length > 0 && (
-                      <div className="space-y-2">
-                        {mesocycles.length > 0 && (
-                          <div className="flex items-center gap-2 px-1">
-                            <div className="h-px flex-1 bg-zinc-700/50" />
-                            <span className="text-xs text-zinc-600 uppercase tracking-wider">Без блока</span>
-                            <div className="h-px flex-1 bg-zinc-700/50" />
-                          </div>
-                        )}
-                        {ungrouped.map(renderDay)}
+                        <button onClick={() => startDay(todayDay.id, todayDay.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-4 py-2 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}>
+                          <Play size={14} /> Начать
+                        </button>
                       </div>
+                    )}
+                    {!hasMesos ? (
+                      visibleDays.map(renderDay)
+                    ) : (
+                      <>
+                        {sortedMesos.map((meso) => {
+                          const days = visibleDays.filter((d) => d.mesocycleId === meso.id);
+                          if (days.length === 0) return null;
+                          return (
+                            <div key={meso.id} className="space-y-2">
+                              <div className="flex items-center gap-2 px-1">
+                                <div className="h-px flex-1 bg-cyan-400/20" />
+                                <span className="text-xs font-semibold text-cyan-400/70 uppercase tracking-wider">{meso.name}</span>
+                                <div className="h-px flex-1 bg-cyan-400/20" />
+                              </div>
+                              {days.map(renderDay)}
+                            </div>
+                          );
+                        })}
+                        {visibleDays.filter((d) => !d.mesocycleId || !mesocycles.find((m) => m.id === d.mesocycleId)).map(renderDay)}
+                      </>
                     )}
                   </>
                 );

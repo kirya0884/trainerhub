@@ -45,6 +45,7 @@ export interface Mesocycle {
   planId: string;
   name: string;
   position: number;
+  visibleToClient?: boolean;
 }
 
 export interface ProgressNote { id: string; date: string; text: string }

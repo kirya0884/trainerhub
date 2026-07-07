@@ -7,7 +7,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
   const { data: plan, error } = await supabase.from("plans").select("id,name,note,visible_to_client").eq("id", planId).single();
   if (error) throw error;
 
-  const { data: mesos } = await supabase.from("plan_mesocycles").select("id,plan_id,name,position").eq("plan_id", planId).order("position");
+  const { data: mesos } = await supabase.from("plan_mesocycles").select("id,plan_id,name,position,visible_to_client").eq("plan_id", planId).order("position");
 
   const { data: days } = await supabase.from("plan_days").select("id,name,weekday,date_of,position,visible_to_client,mesocycle_id").eq("plan_id", planId).order("position");
   const dayIds = (days ?? []).map((d) => d.id);
@@ -32,7 +32,10 @@ export async function fetchPlan(planId: string): Promise<Plan> {
       tempo: e.tempo, duration: e.duration, target: e.target, setRows: rowsByEx[e.id] ?? [],
     });
 
-  const mesocycles: Mesocycle[] = (mesos ?? []).map((m) => ({ id: m.id, planId: m.plan_id, name: m.name, position: m.position }));
+  const mesocycles: Mesocycle[] = (mesos ?? []).map((m) => ({
+    id: m.id, planId: m.plan_id, name: m.name, position: m.position,
+    visibleToClient: m.visible_to_client !== false,
+  }));
 
   return {
     id: plan.id, name: plan.name, note: plan.note ?? "", visibleToClient: plan.visible_to_client !== false,
@@ -46,14 +49,17 @@ export async function fetchPlan(planId: string): Promise<Plan> {
   };
 }
 
-export const updatePlanMeta = (planId: string, patch: Partial<Pick<Plan, "name" | "note" | "visibleToClient">>) => {
+export const updatePlanMeta = async (planId: string, patch: Partial<Pick<Plan, "name" | "note" | "visibleToClient">>) => {
   const row: Record<string, any> = { ...patch };
   if ("visibleToClient" in row) { row.visible_to_client = row.visibleToClient; delete row.visibleToClient; }
-  return supabase.from("plans").update(row).eq("id", planId);
+  const { error } = await supabase.from("plans").update(row).eq("id", planId);
+  if (error) console.error("[updatePlanMeta]", error.message, { planId, patch });
 };
 
-export async function addDay(planId: string, name: string, position: number) {
-  const { data, error } = await supabase.from("plan_days").insert({ plan_id: planId, name, position }).select().single();
+export async function addDay(planId: string, name: string, position: number, mesocycleId?: string | null) {
+  const insert: Record<string, any> = { plan_id: planId, name, position };
+  if (mesocycleId) insert.mesocycle_id = mesocycleId;
+  const { data, error } = await supabase.from("plan_days").insert(insert).select().single();
   if (error) throw error;
   return data;
 }
@@ -88,7 +94,6 @@ export const reorderExercises = (rows: { id: string; position: number }[]) =>
   Promise.all(rows.map((r) => supabase.from("plan_exercises").update({ position: r.position }).eq("id", r.id)));
 
 export async function setSetRows(exerciseId: string, rows: SetRow[]) {
-  // ponytail: проще целиком пересохранить подходы (их редко больше 12), чем дифать построчно
   await supabase.from("plan_exercise_set_rows").delete().eq("exercise_id", exerciseId);
   if (rows.length) {
     await supabase.from("plan_exercise_set_rows").insert(
@@ -101,10 +106,13 @@ export async function setSetRows(exerciseId: string, rows: SetRow[]) {
 export async function addMesocycle(planId: string, position: number): Promise<Mesocycle> {
   const { data, error } = await supabase.from("plan_mesocycles").insert({ plan_id: planId, name: `Блок ${position + 1}`, position }).select().single();
   if (error) throw error;
-  return { id: data.id, planId: data.plan_id, name: data.name, position: data.position };
+  return { id: data.id, planId: data.plan_id, name: data.name, position: data.position, visibleToClient: true };
 }
-export const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "position">>) =>
-  supabase.from("plan_mesocycles").update(patch).eq("id", mesoId);
+export const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "position" | "visibleToClient">>) => {
+  const row: Record<string, any> = { ...patch };
+  if ("visibleToClient" in row) { row.visible_to_client = row.visibleToClient; delete row.visibleToClient; }
+  return supabase.from("plan_mesocycles").update(row).eq("id", mesoId);
+};
 export const deleteMesocycle = (mesoId: string) => supabase.from("plan_mesocycles").delete().eq("id", mesoId);
 export const reorderMesocycles = (rows: { id: string; position: number }[]) =>
   Promise.all(rows.map((r) => supabase.from("plan_mesocycles").update({ position: r.position }).eq("id", r.id)));

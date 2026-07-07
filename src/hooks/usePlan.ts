@@ -31,8 +31,14 @@ export function usePlan(planId: string) {
   const addDay = async () => {
     if (!plan) return;
     const position = plan.days.length;
-    const row = await api.addDay(planId, `День ${position + 1}`, position);
-    setPlan((p) => (p ? { ...p, days: [...p.days, { id: row.id, name: row.name, weekday: row.weekday, dateOf: null, exercises: [], visibleToClient: true, mesocycleId: null }] } : p));
+    // Авто-назначаем новый день в последний видимый мезоцикл
+    const sortedMesos = [...(plan.mesocycles ?? [])].sort((a, b) => b.position - a.position);
+    const activeMeso = sortedMesos.find((m) => m.visibleToClient !== false) ?? null;
+    const row = await api.addDay(planId, `День ${position + 1}`, position, activeMeso?.id);
+    setPlan((p) => (p ? { ...p, days: [...p.days, {
+      id: row.id, name: row.name, weekday: row.weekday, dateOf: null,
+      exercises: [], visibleToClient: true, mesocycleId: activeMeso?.id ?? null,
+    }] } : p));
   };
 
   const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf" | "visibleToClient" | "mesocycleId">>) => {
@@ -101,13 +107,12 @@ export function usePlan(planId: string) {
     setPlan((p) => (p ? { ...p, mesocycles: [...(p.mesocycles ?? []), meso] } : p));
   };
 
-  const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name">>) => {
+  const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "visibleToClient">>) => {
     setPlan((p) => (p ? { ...p, mesocycles: (p.mesocycles ?? []).map((m) => (m.id === mesoId ? { ...m, ...patch } : m)) } : p));
     persist(`meso:${mesoId}`, patch as Record<string, any>, (pp) => api.updateMesocycle(mesoId, pp));
   };
 
   const deleteMesocycle = async (mesoId: string) => {
-    // Открепляем дни от удаляемого мезоцикла
     setPlan((p) => {
       if (!p) return p;
       return {
