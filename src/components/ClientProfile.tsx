@@ -28,22 +28,17 @@ import GoalsDashboard from "./GoalsDashboard";
 import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
 
-export type Sub = "overview" | "membership" | "body" | "nutrition" | "photos" | "plans" | "chat" | "activity" | "goals";
+export type Sub = "overview" | "reporting" | "plans" | "chat";
 
 const SUB_DEFS: Record<Sub, { label: string; icon: typeof Users }> = {
   overview: { label: "Обзор", icon: Users },
-  membership: { label: "Абонемент", icon: Wallet },
-  body: { label: "Замеры", icon: Ruler },
-  nutrition: { label: "Питание", icon: Apple },
-  photos: { label: "Фото", icon: Images },
+  reporting: { label: "Отчётность", icon: TrendingUp },
   plans: { label: "Планы", icon: ClipboardList },
   chat: { label: "Чат", icon: MessageCircle },
-  activity: { label: "Активность", icon: TrendingUp },
-  goals: { label: "Цели", icon: Target },
 };
-const DEFAULT_SUB_ORDER: Sub[] = ["overview", "membership", "body", "nutrition", "photos", "plans", "chat", "activity", "goals"];
-const SUB_ORDER_KEY = "trainerhub-client-sub-order-v1";
-const SUB_HIDDEN_KEY = "trainerhub-client-sub-hidden-v1";
+const DEFAULT_SUB_ORDER: Sub[] = ["overview", "reporting", "plans", "chat"];
+const SUB_ORDER_KEY = "trainerhub-client-sub-order-v2";
+const SUB_HIDDEN_KEY = "trainerhub-client-sub-hidden-v2";
 // ponytail: порядок и видимость под-вкладок карточки клиента — личная настройка устройства, как в App.tsx
 const loadSubOrder = (): Sub[] => {
   try {
@@ -172,7 +167,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         </div>
       )}
       {(outOfStock || lowStock || overdue) && (
-        <button onClick={() => setSub("membership")} className={`w-full text-left flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm transition ${outOfStock || overdue ? "bg-red-500/10 hover:bg-red-500/15 text-red-300" : "bg-amber-500/10 hover:bg-amber-500/15 text-amber-300"}`}>
+        <button onClick={() => setSub("overview")} className={`w-full text-left flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm transition ${outOfStock || overdue ? "bg-red-500/10 hover:bg-red-500/15 text-red-300" : "bg-amber-500/10 hover:bg-amber-500/15 text-amber-300"}`}>
           <AlertTriangle size={14} className="shrink-0" />
           {outOfStock ? "Тренировки закончились — оформи новый платёж" : overdue ? `Подписка просрочена с ${fmtDate(client.membership.nextPaymentDate)}` : `Осталось ${remainingNum} тренировки — предложи продление`}
         </button>
@@ -229,15 +224,10 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         </div>
       </div>
 
-      {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} />}
-      {sub === "membership" && <MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} />}
-      {sub === "body" && <BodyTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} />}
-      {sub === "nutrition" && <NutritionTab clientId={clientId} logs={nutritionLogs} setLogs={setNutritionLogs} readOnly />}
-      {sub === "photos" && <PhotosTab clientId={clientId} photos={photos} setPhotos={setPhotos} />}
+      {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
+      {sub === "reporting" && <ReportingTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
       {sub === "chat" && <ChatThread trainerId={trainerId} clientId={clientId} self="trainer" />}
-      {sub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly />}
-      {sub === "goals" && <GoalsDashboard clientId={clientId} />}
     </div>
   );
 }
@@ -271,9 +261,10 @@ function InviteBlock({ clientId, email, hasAccount }: { clientId: string; email:
   );
 }
 
-function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink }: {
+function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink, patchMembership, trainerId }: {
   client: ClientFull; patch: (p: Partial<ClientFull>, immediate?: boolean) => void; patchHealth: (p: Partial<ClientFull["health"]>) => void;
   notes: ClientNote[]; setNotes: (n: ClientNote[]) => void; clientId: string; tgLink: string; waLink: string;
+  patchMembership: (p: Partial<ClientFull["membership"]>, immediate?: boolean) => void; trainerId: string;
 }) {
   const [noteText, setNoteText] = useState("");
   const addNote = async () => {
@@ -352,6 +343,42 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
           ))}
         </div>
       </div>
+      <MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} />
+    </div>
+  );
+}
+
+function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, setNutritionLogs, photos, setPhotos, activities, setActivities }: {
+  clientId: string;
+  measurements: Measurement[]; setMeasurements: (m: Measurement[]) => void;
+  nutritionLogs: NutritionLog[]; setNutritionLogs: (l: NutritionLog[]) => void;
+  photos: Photo[]; setPhotos: (p: Photo[]) => void;
+  activities: ClientActivity[]; setActivities: (a: ClientActivity[]) => void;
+}) {
+  type ReportSub = "body" | "nutrition" | "activity" | "photos" | "goals";
+  const REPORT_TABS: { key: ReportSub; label: string; icon: typeof Ruler }[] = [
+    { key: "body", label: "Замеры", icon: Ruler },
+    { key: "nutrition", label: "Питание", icon: Apple },
+    { key: "activity", label: "Активность", icon: TrendingUp },
+    { key: "photos", label: "Фото", icon: Images },
+    { key: "goals", label: "Цели", icon: Target },
+  ];
+  const [reportSub, setReportSub] = useState<ReportSub>("body");
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">
+        {REPORT_TABS.map(({ key, label, icon: Icon }) => (
+          <button key={key} onClick={() => setReportSub(key)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap shrink-0 ${reportSub === key ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+      {reportSub === "body" && <BodyTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} />}
+      {reportSub === "nutrition" && <NutritionTab clientId={clientId} logs={nutritionLogs} setLogs={setNutritionLogs} readOnly />}
+      {reportSub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly />}
+      {reportSub === "photos" && <PhotosTab clientId={clientId} photos={photos} setPhotos={setPhotos} />}
+      {reportSub === "goals" && <GoalsDashboard clientId={clientId} />}
     </div>
   );
 }
