@@ -1,5 +1,5 @@
 import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
@@ -47,7 +47,16 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, reload } = usePlan(planId);
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
+  // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
+  const lastMetrics = Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m]));
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'>('idle');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const markSaving = () => {
+    setSaveStatus('saving');
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => setSaveStatus('saved'), 700);
+  };
   const [dayClipboard, setDayClipboard] = useState<{ name: string; exercises: Day["exercises"] } | null>(() => {
     try { return JSON.parse(localStorage.getItem("th-day-clip") || "null"); } catch { return null; }
   });
@@ -82,7 +91,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const toggleCollapse = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
   const cycleGroup = (dayId: string, exId: string, cur: string, exercises: Day["exercises"]) => {
     const i = GROUP_CYCLE.indexOf(cur || "");
-    updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
+    markSaving(); updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
   };
 
   useEffect(() => { fetchClient(clientId).then((c) => { setMembership(c.membership); setClientName(c.name); }); }, [clientId]);
@@ -140,7 +149,8 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               canMoveUp={ei > 0} canMoveDown={ei < day.exercises.length - 1}
               onMoveUp={() => reorderExercises(day.id, ei, ei - 1)} onMoveDown={() => reorderExercises(day.id, ei, ei + 1)}
               cycleGroup={() => cycleGroup(day.id, ex.id, ex.group, day.exercises)}
-              update={(patch) => updateExercise(day.id, ex.id, patch)} remove={() => deleteExercise(day.id, ex.id)} />
+              update={(patch) => { markSaving(); updateExercise(day.id, ex.id, patch); }} remove={() => deleteExercise(day.id, ex.id)}
+              lastMetric={lastMetrics[ex.name.toLowerCase()]} />
           );
         });
         if (block.group && block.items.length > 1) {
@@ -168,13 +178,16 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     <div className="space-y-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
         <div className="flex items-center gap-1.5">
-          <input value={plan.name} onChange={(e) => updatePlanMeta({ name: e.target.value })} className="flex-1 min-w-0 bg-transparent text-xl font-bold outline-none border-b border-transparent focus:border-lime-400/50 pb-1" placeholder="Название плана" />
+          <input value={plan.name} onChange={(e) => { markSaving(); updatePlanMeta({ name: e.target.value }); }} className="flex-1 min-w-0 bg-transparent text-xl font-bold outline-none border-b border-transparent focus:border-lime-400/50 pb-1" placeholder="Название плана" />
           <div className="flex items-center gap-0.5 shrink-0">
             <button onClick={() => setShowTemplates(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Шаблоны"><FileStack size={15} /></button>
             <button onClick={() => setShowVersions(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="История версий"><History size={15} /></button>
             <button onClick={() => setShowMeso(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Генератор мезоцикла"><Repeat size={15} /></button>
             <button onClick={() => setShowPrint(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Печать / PDF"><Printer size={15} /></button>
           </div>
+          <span className={`text-xs shrink-0 transition-all duration-300 ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'}`}>
+            {saveStatus === 'saving' ? <span className="text-zinc-500">Сохранение…</span> : <span className="text-lime-400">✓ Сохранено</span>}
+          </span>
           {clientName && (
             <span className="flex items-center gap-1.5 text-sm text-zinc-400 shrink-0 max-w-[100px] sm:max-w-none">
               {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />}
@@ -183,7 +196,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
             </span>
           )}
         </div>
-        <input value={plan.note} onChange={(e) => updatePlanMeta({ note: e.target.value })} placeholder="Заметка к плану — напр. прогрессия каждые 2 недели" className="w-full mt-3 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
+        <input value={plan.note} onChange={(e) => { markSaving(); updatePlanMeta({ note: e.target.value }); }} placeholder="Заметка к плану — напр. прогрессия каждые 2 недели" className="w-full mt-3 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
         <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 mt-4 overflow-x-auto">
           <button onClick={() => setSub("workout")} className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap ${sub === "workout" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}><ClipboardList size={14} /> Тренировки</button>
           <button onClick={() => setSub("done")} className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap ${sub === "done" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}><CheckCircle2 size={14} /> Проведенные</button>
@@ -355,9 +368,9 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                 <button onClick={() => reorderDays(di, di - 1)} disabled={di === 0} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronUp size={14} /></button>
                 <button onClick={() => reorderDays(di, di + 1)} disabled={di === plan.days.length - 1} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronDown size={14} /></button>
               </span>
-              <input value={day.name} onChange={(e) => updateDay(day.id, { name: e.target.value })} className="flex-1 min-w-0 bg-transparent font-semibold outline-none border-b border-transparent focus:border-lime-400/50 pb-0.5" placeholder="Название дня" />
+              <input value={day.name} onChange={(e) => { markSaving(); updateDay(day.id, { name: e.target.value }); }} className="flex-1 min-w-0 bg-transparent font-semibold outline-none border-b border-transparent focus:border-lime-400/50 pb-0.5" placeholder="Название дня" />
               {lastSession && <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:inline" title="Дата последнего проведения">{fmtDate(lastSession.date)}</span>}
-              <input type="date" value={day.dateOf ?? ""} onChange={(e) => updateDay(day.id, { dateOf: e.target.value || null })} className="bg-zinc-800 rounded-md text-xs px-1.5 py-1 outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0 text-zinc-300 w-36" />
+              <input type="date" value={day.dateOf ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { dateOf: e.target.value || null }); }} className="bg-zinc-800 rounded-md text-xs px-1.5 py-1 outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0 text-zinc-300 w-36" />
               <button onClick={() => setSessionDay(day)} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Провести тренировку"><Play size={15} /></button>
               <button onClick={() => copyDay(day)} className="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0" title="Копировать день"><Clipboard size={15} /></button>
               <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><Trash2 size={15} /></button>

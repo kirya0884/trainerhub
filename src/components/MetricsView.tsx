@@ -20,7 +20,17 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
   const series = metrics
     .filter((x) => x.exercise === curExercise)
     .sort((a, b) => (a.date < b.date ? -1 : 1))
-    .map((x) => ({ date: x.date.slice(5), value: (x as any)[metric] === "" || (x as any)[metric] == null ? null : Number((x as any)[metric]) }))
+    .map((x) => {
+      let value: number | null;
+      if (metric === "tonnage") {
+        const w = parseFloat(x.weight), r = parseFloat(x.reps), s = parseFloat(x.sets || "1");
+        value = isNaN(w) || isNaN(r) ? null : Math.round(w * r * (isNaN(s) ? 1 : s));
+      } else {
+        const raw = (x as any)[metric];
+        value = raw === "" || raw == null ? null : Number(raw);
+      }
+      return { date: x.date.slice(5), value };
+    })
     .filter((d) => d.value != null);
   const entries = metrics.filter((x) => x.exercise === curExercise).sort((a, b) => (a.date < b.date ? 1 : -1));
 

@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Layers, Plus, Video, X } from "lucide-react";
 import { startTransition, useState } from "react";
-import type { Exercise } from "../types";
+import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
 
 // Конвертирует ссылку YouTube в embed-форму; прочие ссылки (прямые .mp4 и т.п.) возвращает как есть.
@@ -9,11 +9,12 @@ function toEmbedUrl(url: string): string {
   return yt ? `https://www.youtube.com/embed/${yt[1]}` : url;
 }
 export default function ExerciseRow({
-  ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove,
+  ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove, lastMetric,
 }: {
   ex: Exercise; label: string; groupColor: string | null; suggestions: string[]; addToLibrary: (name: string) => void;
   canMoveUp: boolean; canMoveDown: boolean; onMoveUp: () => void; onMoveDown: () => void;
   cycleGroup: () => void; update: (patch: Partial<Exercise>) => void; remove: () => void;
+  lastMetric?: Metric;
 }) {
   const [acOpen, setAcOpen] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
@@ -98,6 +99,13 @@ export default function ExerciseRow({
         </div>
       )}
       <input value={ex.note} onChange={(e) => { const v = e.target.value; startTransition(() => update({ note: v })); }} placeholder="Комментарий: техника, на что обратить внимание..." className="w-full bg-transparent text-xs text-zinc-400 px-1 py-0.5 pl-6 outline-none focus:text-zinc-200" />
+      {lastMetric && (
+        <div className="pl-6 flex items-center gap-1.5 text-[11px] text-cyan-400/80">
+          <span className="text-zinc-600">Факт {lastMetric.date.slice(5).replace("-", ".")}:</span>
+          {lastMetric.sets && <span>{lastMetric.sets}×{lastMetric.reps}</span>}
+          {lastMetric.weight && <span>· {lastMetric.weight}</span>}
+        </div>
+      )}
     </div>
   );
 }

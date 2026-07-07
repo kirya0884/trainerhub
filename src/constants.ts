@@ -20,6 +20,7 @@ export const BODY_METRICS = [
 export const EXERCISE_METRICS = [
   { key: "weight", label: "Вес", unit: "кг", color: "#a3e635" },
   { key: "reps", label: "Повторы", unit: "", color: "#22d3ee" },
+  { key: "tonnage", label: "Тоннаж", unit: "кг", color: "#f59e0b" },
   { key: "rest", label: "Отдых", unit: "с", color: "#fb923c" },
   { key: "sets", label: "Подходы", unit: "", color: "#c084fc" },
 ] as const;
