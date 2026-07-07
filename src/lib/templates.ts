@@ -49,6 +49,11 @@ async function insertDayFromTemplate(planId: string, td: Day, position: number) 
   }
 }
 
+
+export async function updateDayTemplate(id: string, name: string, day: Day) {
+  const { error } = await supabase.from("day_templates").update({ name, day }).eq("id", id);
+  if (error) throw error;
+}
 export async function applyPlanTemplate(planId: string, templateDays: Day[], existingCount: number) {
   for (let i = 0; i < templateDays.length; i++) await insertDayFromTemplate(planId, templateDays[i], existingCount + i);
 }

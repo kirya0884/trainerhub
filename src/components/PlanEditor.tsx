@@ -22,6 +22,7 @@ import PlanPrintView from "./PlanPrintView";
 import PlanVersionsModal from "./PlanVersionsModal";
 import SessionModal from "./SessionModal";
 import TemplatesModal from "./TemplatesModal";
+import DayTemplateLibrary from "./DayTemplateLibrary";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -65,10 +66,16 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     setDayClipboard(d);
     localStorage.setItem("th-day-clip", JSON.stringify(d));
   };
-  const pasteDay = async () => {
-    if (!dayClipboard) return;
-    await templatesApi.applyDayTemplate(planId, { id: "", name: dayClipboard.name + " (копия)", weekday: null, exercises: dayClipboard.exercises } as Day, (plan?.days.length ?? 0));
+  const handleCreateDay = async () => {
+    if (!newDayName?.trim()) return;
+    await addDay(newDayName.trim());
+    setNewDayName(null);
+  };
+  const handlePasteDay = async () => {
+    if (!dayClipboard || !pasteInput?.trim()) return;
+    await templatesApi.applyDayTemplate(planId, { id: "", name: pasteInput.trim(), weekday: null, exercises: dayClipboard.exercises } as Day, (plan?.days.length ?? 0));
     reload();
+    setPasteInput(null);
   };
   const [libFor, setLibFor] = useState<string | null>(null);
   const [sub, setSub] = useState<"workout" | "done" | "progress">("workout");
@@ -85,6 +92,9 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [showPrint, setShowPrint] = useState(false);
   const [showMeso, setShowMeso] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [showDayLibrary, setShowDayLibrary] = useState(false);
+  const [newDayName, setNewDayName] = useState<string | null>(null);
+  const [pasteInput, setPasteInput] = useState<string | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [addingSession, setAddingSession] = useState(false);
   const [clientName, setClientName] = useState("");
@@ -228,6 +238,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       {showPrint && <PlanPrintView plan={plan} trainerId={trainerId} clientName={clientName} onClose={() => setShowPrint(false)} />}
       {showMeso && <PeriodizationModal days={plan.days} planId={plan.id} onClose={() => setShowMeso(false)} onDone={() => { setShowMeso(false); reload(); }} />}
       {showVersions && <PlanVersionsModal planId={plan.id} onClose={() => setShowVersions(false)} onRestored={() => { setShowVersions(false); reload(); }} />}
+      {showDayLibrary && plan && <DayTemplateLibrary trainerId={trainerId} planId={planId} dayCount={plan.days.length} onInserted={() => { setShowDayLibrary(false); reload(); }} onClose={() => setShowDayLibrary(false)} />}
 
       {showMembership && membership && (
         <ModalShell title="Абонемент" icon={<Wallet size={17} className="text-lime-400" />} onClose={() => setShowMembership(false)}>
@@ -435,12 +446,31 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         );
       })()}
 
-      <div className="flex gap-2">
-        <button onClick={addDay} className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-3 font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={17} /> Добавить день</button>
-        <button onClick={addMesocycle} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-3 px-4 font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><Layers size={15} /> Блок</button>
-      </div>
-      {dayClipboard && (
-        <button onClick={pasteDay} className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 border border-cyan-400/30 hover:border-cyan-400/60 rounded-xl py-2.5 text-sm font-medium text-cyan-400 transition"><ClipboardPaste size={15} /> Вставить: {dayClipboard.name}</button>
+      {newDayName !== null ? (
+        <div className="flex gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-2">
+          <input autoFocus value={newDayName} onChange={(e) => setNewDayName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && newDayName.trim()) handleCreateDay(); if (e.key === "Escape") setNewDayName(null); }}
+            placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <button onClick={handleCreateDay} disabled={!newDayName.trim()} className="px-3 py-2 text-sm rounded-lg bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40">Создать</button>
+          <button onClick={() => setNewDayName(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
+        </div>
+      ) : (
+        <div className="flex gap-2">
+          <button onClick={() => setNewDayName("")} className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-3 font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={17} /> Добавить день</button>
+          <button onClick={() => setShowDayLibrary(true)} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-3 px-4 font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><BookOpen size={15} /> Шаблоны</button>
+          <button onClick={addMesocycle} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-3 px-4 font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><Layers size={15} /> Блок</button>
+        </div>
+      )}
+      {pasteInput !== null ? (
+        <div className="flex gap-2 bg-zinc-900 border border-cyan-400/30 rounded-xl p-2">
+          <input autoFocus value={pasteInput} onChange={(e) => setPasteInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && pasteInput.trim()) handlePasteDay(); if (e.key === "Escape") setPasteInput(null); }}
+            placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
+          <button onClick={handlePasteDay} disabled={!pasteInput.trim()} className="px-3 py-2 text-sm rounded-lg bg-cyan-400 text-zinc-950 font-semibold hover:bg-cyan-300 transition disabled:opacity-40">Вставить</button>
+          <button onClick={() => setPasteInput(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
+        </div>
+      ) : (
+        dayClipboard && <button onClick={() => setPasteInput(dayClipboard.name)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 border border-cyan-400/30 hover:border-cyan-400/60 rounded-xl py-2.5 text-sm font-medium text-cyan-400 transition"><ClipboardPaste size={15} /> Вставить: {dayClipboard.name}</button>
       )}
       </>}
 
