@@ -54,10 +54,25 @@ export default function NutritionTab({ clientId, logs, setLogs, readOnly }: {
         <div className="bg-zinc-800/40 rounded-xl p-3 space-y-2 relative">
           <button onClick={() => { setShowForm(false); setForm(emptyLog()); }} className="absolute top-2 right-2 p-1 rounded-md hover:bg-zinc-700 text-zinc-400 transition" title="Закрыть"><X size={16} /></button>
           <label className="text-xs text-zinc-500 block pr-7">Дата<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent,#a3e635)]" /></label>
-          <div className="grid grid-cols-4 gap-2">
-            {FIELDS.map((f) => (
-              <NumField key={f.key} label={f.label} value={String(form[f.key] || "")} onChange={(e) => setForm({ ...form, [f.key]: Number(e.target.value) || 0 })} placeholder="0" />
-            ))}
+          <div className="grid grid-cols-2 gap-2">
+            {(["protein", "fat", "carbs"] as const).map((key) => {
+              const labels: Record<string, string> = { protein: "Белки, г", fat: "Жиры, г", carbs: "Углев., г" };
+              return (
+                <NumField key={key} label={labels[key]} value={String(form[key] || "")}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) || 0;
+                    setForm((prev) => {
+                      const next = { ...prev, [key]: val };
+                      next.calories = Math.round(next.protein * 4 + next.fat * 9 + next.carbs * 4);
+                      return next;
+                    });
+                  }} placeholder="0" />
+              );
+            })}
+            <div>
+              <p className="text-xs text-zinc-500 mb-1">Ккал (авто)</p>
+              <div className="bg-zinc-700/50 rounded-md px-2 py-1.5 text-sm text-zinc-400 h-[34px] flex items-center">{form.calories || 0}</div>
+            </div>
           </div>
           <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm hover:opacity-90 transition" style={{ background: "var(--accent, #a3e635)" }}>Сохранить запись</button>
         </div>

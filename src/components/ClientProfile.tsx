@@ -68,6 +68,20 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     setSubOrder(next);
     localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next));
   };
+  const moveSubUp = (kind: Sub) => {
+    const idx = subOrder.indexOf(kind);
+    if (idx <= 0) return;
+    const next = [...subOrder];
+    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
+    setSubOrder(next); localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next));
+  };
+  const moveSubDown = (kind: Sub) => {
+    const idx = subOrder.indexOf(kind);
+    if (idx >= subOrder.length - 1) return;
+    const next = [...subOrder];
+    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
+    setSubOrder(next); localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next));
+  };
   const toggleSubVisible = (kind: Sub) => {
     const isHidden = hiddenSubs.includes(kind);
     if (!isHidden && hiddenSubs.length >= subOrder.length - 1) return; // хотя бы одна под-вкладка должна остаться видимой
@@ -183,14 +197,19 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
               <div className="fixed inset-0 z-10" onClick={() => setShowSubSettings(false)} />
               <div className="absolute left-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-2 w-56 space-y-0.5 shadow-xl">
                 <p className="text-xs text-zinc-500 px-2 pb-1">Видимые вкладки</p>
-                {subOrder.map((kind) => {
+                {subOrder.map((kind, idx) => {
                   const t = SUB_DEFS[kind];
                   const visible = !hiddenSubs.includes(kind);
                   return (
-                    <label key={kind} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300">
-                      <input type="checkbox" checked={visible} onChange={() => toggleSubVisible(kind)} className="accent-lime-400" />
-                      <t.icon size={14} className="text-zinc-500" /> {t.label}
-                    </label>
+                    <div key={kind} className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-zinc-800 text-sm text-zinc-300">
+                      <input type="checkbox" checked={visible} onChange={() => toggleSubVisible(kind)} className="accent-lime-400 shrink-0 cursor-pointer" />
+                      <t.icon size={13} className="text-zinc-500 shrink-0" />
+                      <span className="flex-1 cursor-pointer select-none" onClick={() => toggleSubVisible(kind)}>{t.label}</span>
+                      <div className="flex gap-0.5 ml-auto">
+                        <button onClick={() => moveSubUp(kind)} disabled={idx === 0} className="w-6 h-6 rounded hover:bg-zinc-700 disabled:opacity-20 text-zinc-400 hover:text-zinc-100 transition text-xs flex items-center justify-center">↑</button>
+                        <button onClick={() => moveSubDown(kind)} disabled={idx === subOrder.length - 1} className="w-6 h-6 rounded hover:bg-zinc-700 disabled:opacity-20 text-zinc-400 hover:text-zinc-100 transition text-xs flex items-center justify-center">↓</button>
+                      </div>
+                    </div>
                   );
                 })}
               </div>
@@ -357,13 +376,13 @@ function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, 
 }) {
   type ReportSub = "body" | "nutrition" | "activity" | "photos" | "goals";
   const REPORT_TABS: { key: ReportSub; label: string; icon: typeof Ruler }[] = [
+    { key: "goals", label: "Цели", icon: Target },
     { key: "body", label: "Замеры", icon: Ruler },
     { key: "nutrition", label: "Питание", icon: Apple },
     { key: "activity", label: "Активность", icon: TrendingUp },
     { key: "photos", label: "Фото", icon: Images },
-    { key: "goals", label: "Цели", icon: Target },
   ];
-  const [reportSub, setReportSub] = useState<ReportSub>("body");
+  const [reportSub, setReportSub] = useState<ReportSub>("goals");
   return (
     <div className="space-y-3">
       <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">
