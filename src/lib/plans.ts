@@ -63,12 +63,13 @@ export async function addDay(planId: string, name: string, position: number, mes
   if (error) throw error;
   return data;
 }
-export const updateDay = (dayId: string, patch: Record<string, any>) => {
+export const updateDay = async (dayId: string, patch: Record<string, any>) => {
   const row: Record<string, any> = { ...patch };
   if ("dateOf" in patch) { row.date_of = patch.dateOf; delete row.dateOf; }
   if ("visibleToClient" in patch) { row.visible_to_client = patch.visibleToClient; delete row.visibleToClient; }
   if ("mesocycleId" in patch) { row.mesocycle_id = patch.mesocycleId; delete row.mesocycleId; }
-  return supabase.from("plan_days").update(row).eq("id", dayId);
+  const { error } = await supabase.from("plan_days").update(row).eq("id", dayId);
+  if (error) console.error("[updateDay]", error.message, { dayId, patch });
 };
 export const deleteDay = (dayId: string) => supabase.from("plan_days").delete().eq("id", dayId);
 export const reorderDays = (rows: { id: string; position: number }[]) =>
@@ -108,10 +109,11 @@ export async function addMesocycle(planId: string, position: number): Promise<Me
   if (error) throw error;
   return { id: data.id, planId: data.plan_id, name: data.name, position: data.position, visibleToClient: true };
 }
-export const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "position" | "visibleToClient">>) => {
+export const updateMesocycle = async (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "position" | "visibleToClient">>) => {
   const row: Record<string, any> = { ...patch };
   if ("visibleToClient" in row) { row.visible_to_client = row.visibleToClient; delete row.visibleToClient; }
-  return supabase.from("plan_mesocycles").update(row).eq("id", mesoId);
+  const { error } = await supabase.from("plan_mesocycles").update(row).eq("id", mesoId);
+  if (error) console.error("[updateMesocycle]", error.message, { mesoId, patch });
 };
 export const deleteMesocycle = (mesoId: string) => supabase.from("plan_mesocycles").delete().eq("id", mesoId);
 export const reorderMesocycles = (rows: { id: string; position: number }[]) =>
