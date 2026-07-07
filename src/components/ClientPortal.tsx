@@ -69,7 +69,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
     return () => clearInterval(id);
   }, [client.id]);
 
-  const currentPlan = plans?.find((p) => !p.archived) || null;
+  const currentPlan = plans?.find((p) => !p.archived && p.visibleToClient !== false) || null;
   const planHook = usePlan(currentPlan?.id || "");
   const progressHook = useProgress(currentPlan?.id || "");
 
@@ -269,47 +269,87 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                   </div>
                 ) : null;
               })()}
-              {planHook.plan?.days.map((day) => {
-                const dayOpen = expandedDays.has(day.id);
-                return (
-                <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-                  <div className="flex items-center gap-2 px-3 py-2.5">
-                    <button onClick={() => toggleDay(day.id)} className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 shrink-0 transition">
-                      {dayOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    </button>
-                    <h3 className="font-semibold flex-1 min-w-0 truncate">{day.name}</h3>
-                    {day.dateOf && <span className="text-xs text-zinc-500 shrink-0">{fmtDate(day.dateOf)}</span>}
-                    <span className="text-xs text-zinc-600 shrink-0">{day.exercises.length} упр.</span>
-                    <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
-                  </div>
-                  {dayOpen && (
-                    <div className="border-t border-zinc-800 p-3 space-y-1">
-                      {day.exercises.map((ex) => (
-                        <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
-                          <p className="font-medium">{ex.name || "—"}</p>
-                          {ex.detailed && ex.setRows?.length ? (
-                            <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400">
-                              {ex.setRows.map((sr, i) => (
-                                <span key={i}><span className="text-zinc-500">{i + 1})</span> <span className="text-zinc-100">{sr.weight || "—"}</span> × <span className="text-zinc-100">{sr.reps || "—"}</span></span>
-                              ))}
+              {(() => {
+                const visibleDays = (planHook.plan?.days ?? []).filter((d) => d.visibleToClient !== false);
+                const mesocycles = planHook.plan?.mesocycles ?? [];
+                const hasMesos = mesocycles.length > 0;
+                // Group days: with meso first (sorted by meso position), then ungrouped
+                const renderDay = (day: (typeof visibleDays)[0]) => {
+                  const dayOpen = expandedDays.has(day.id);
+                  return (
+                    <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+                      <div className="flex items-center gap-2 px-3 py-2.5">
+                        <button onClick={() => toggleDay(day.id)} className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 shrink-0 transition">
+                          {dayOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        </button>
+                        <h3 className="font-semibold flex-1 min-w-0 truncate">{day.name}</h3>
+                        {day.dateOf && <span className="text-xs text-zinc-500 shrink-0">{fmtDate(day.dateOf)}</span>}
+                        <span className="text-xs text-zinc-600 shrink-0">{day.exercises.length} упр.</span>
+                        <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
+                      </div>
+                      {dayOpen && (
+                        <div className="border-t border-zinc-800 p-3 space-y-1">
+                          {day.exercises.map((ex) => (
+                            <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
+                              <p className="font-medium">{ex.name || "—"}</p>
+                              {ex.detailed && ex.setRows?.length ? (
+                                <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400">
+                                  {ex.setRows.map((sr, i) => (
+                                    <span key={i}><span className="text-zinc-500">{i + 1})</span> <span className="text-zinc-100">{sr.weight || "—"}</span> × <span className="text-zinc-100">{sr.reps || "—"}</span></span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs">
+                                  {ex.sets && <span className="text-zinc-400"><span className="text-zinc-100">{ex.sets}</span> подх.</span>}
+                                  {ex.reps && <span className="text-zinc-400">× <span className="text-zinc-100">{ex.reps}</span> повт.</span>}
+                                  {ex.weight && <span className="text-zinc-400">· <span className="text-zinc-100">{ex.weight}</span></span>}
+                                  {ex.rest && <span className="text-zinc-400">· отдых <span className="text-zinc-100">{ex.rest}</span></span>}
+                                </div>
+                              )}
+                              {ex.note && <p className="text-xs text-zinc-600 mt-1">{ex.note}</p>}
                             </div>
-                          ) : (
-                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-1 text-xs">
-                              {ex.sets && <span className="text-zinc-400"><span className="text-zinc-100">{ex.sets}</span> подх.</span>}
-                              {ex.reps && <span className="text-zinc-400">× <span className="text-zinc-100">{ex.reps}</span> повт.</span>}
-                              {ex.weight && <span className="text-zinc-400">· <span className="text-zinc-100">{ex.weight}</span></span>}
-                              {ex.rest && <span className="text-zinc-400">· отдых <span className="text-zinc-100">{ex.rest}</span></span>}
-                            </div>
-                          )}
-                          {ex.note && <p className="text-xs text-zinc-600 mt-1">{ex.note}</p>}
+                          ))}
+                          {day.exercises.length === 0 && <p className="text-xs text-zinc-700">Нет упражнений</p>}
                         </div>
-                      ))}
-                      {day.exercises.length === 0 && <p className="text-xs text-zinc-700">Нет упражнений</p>}
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                };
+                if (!hasMesos) return <>{visibleDays.map(renderDay)}</>;
+                // Render grouped by mesocycle
+                const sorted = [...mesocycles].sort((a, b) => a.position - b.position);
+                const ungrouped = visibleDays.filter((d) => !d.mesocycleId || !mesocycles.find((m) => m.id === d.mesocycleId));
+                return (
+                  <>
+                    {sorted.map((meso) => {
+                      const days = visibleDays.filter((d) => d.mesocycleId === meso.id);
+                      if (days.length === 0) return null;
+                      return (
+                        <div key={meso.id} className="space-y-2">
+                          <div className="flex items-center gap-2 px-1">
+                            <div className="h-px flex-1 bg-cyan-400/20" />
+                            <span className="text-xs font-semibold text-cyan-400/70 uppercase tracking-wider">{meso.name}</span>
+                            <div className="h-px flex-1 bg-cyan-400/20" />
+                          </div>
+                          {days.map(renderDay)}
+                        </div>
+                      );
+                    })}
+                    {ungrouped.length > 0 && (
+                      <div className="space-y-2">
+                        {mesocycles.length > 0 && (
+                          <div className="flex items-center gap-2 px-1">
+                            <div className="h-px flex-1 bg-zinc-700/50" />
+                            <span className="text-xs text-zinc-600 uppercase tracking-wider">Без блока</span>
+                            <div className="h-px flex-1 bg-zinc-700/50" />
+                          </div>
+                        )}
+                        {ungrouped.map(renderDay)}
+                      </div>
+                    )}
+                  </>
                 );
-              })}
+              })()}
             </div>
           )}
 

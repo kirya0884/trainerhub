@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X } from "lucide-react";
+import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
@@ -44,7 +44,7 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 };
 
 export default function PlanEditor({ planId, trainerId, clientId }: { planId: string; trainerId: string; clientId: string }) {
-  const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, reload } = usePlan(planId);
+  const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, addMesocycle, updateMesocycle, deleteMesocycle, reload } = usePlan(planId);
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
@@ -184,6 +184,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
             <button onClick={() => setShowVersions(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="История версий"><History size={15} /></button>
             <button onClick={() => setShowMeso(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Генератор мезоцикла"><Repeat size={15} /></button>
             <button onClick={() => setShowPrint(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Печать / PDF"><Printer size={15} /></button>
+            <button onClick={() => { markSaving(); updatePlanMeta({ visibleToClient: plan.visibleToClient === false ? true : false }); }} className={`p-1.5 rounded-lg hover:bg-zinc-800 transition ${plan.visibleToClient === false ? "text-orange-400" : "text-zinc-400 hover:text-lime-400"}`} title={plan.visibleToClient === false ? "Скрыт от клиента — показать" : "Скрыть от клиента"}>{plan.visibleToClient === false ? <EyeOff size={15} /> : <Eye size={15} />}</button>
           </div>
           <span className={`text-xs shrink-0 transition-all duration-300 ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'}`}>
             {saveStatus === 'saving' ? <span className="text-zinc-500">Сохранение…</span> : <span className="text-lime-400">✓ Сохранено</span>}
@@ -356,6 +357,22 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       )}
 
       {sub === "workout" && <>
+      {/* ── Мезоциклы ── */}
+      {(plan.mesocycles ?? []).length > 0 && (
+        <div className="space-y-1.5">
+          {(plan.mesocycles ?? []).sort((a, b) => a.position - b.position).map((meso) => (
+            <div key={meso.id} className="flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">
+              <Layers size={14} className="text-cyan-400 shrink-0" />
+              <input value={meso.name} onChange={(e) => updateMesocycle(meso.id, { name: e.target.value })}
+                className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-cyan-300 outline-none border-b border-transparent focus:border-cyan-400/50 pb-0.5"
+                placeholder="Название блока" />
+              <span className="text-xs text-zinc-600 shrink-0">{plan.days.filter((d) => d.mesocycleId === meso.id).length} дн.</span>
+              <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
+                className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
+            </div>
+          ))}
+        </div>
+      )}
       {plan.days.map((day, di) => {
         if (isDoneToday(day)) return null;
         const isOpen = !collapsed[day.id];
@@ -368,7 +385,19 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                 <button onClick={() => reorderDays(di, di - 1)} disabled={di === 0} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronUp size={14} /></button>
                 <button onClick={() => reorderDays(di, di + 1)} disabled={di === plan.days.length - 1} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronDown size={14} /></button>
               </span>
-              <input value={day.name} onChange={(e) => { markSaving(); updateDay(day.id, { name: e.target.value }); }} className="flex-1 min-w-0 bg-transparent font-semibold outline-none border-b border-transparent focus:border-lime-400/50 pb-0.5" placeholder="Название дня" />
+              <input value={day.name} onChange={(e) => { markSaving(); updateDay(day.id, { name: e.target.value }); }} className={`flex-1 min-w-0 bg-transparent font-semibold outline-none border-b border-transparent focus:border-lime-400/50 pb-0.5 ${day.visibleToClient === false ? "text-zinc-500" : ""}`} placeholder="Название дня" />
+              {(plan.mesocycles ?? []).length > 0 && (
+                <select value={day.mesocycleId ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { mesocycleId: e.target.value || null }); }}
+                  className="bg-zinc-800 border border-zinc-700 rounded-md text-xs px-1.5 py-1 outline-none focus:border-cyan-400/40 text-zinc-300 shrink-0 max-w-[90px]">
+                  <option value="">Без блока</option>
+                  {(plan.mesocycles ?? []).sort((a, b) => a.position - b.position).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              )}
+              <button onClick={() => { markSaving(); updateDay(day.id, { visibleToClient: day.visibleToClient === false ? true : false }); }}
+                className={`p-1.5 rounded-md transition shrink-0 ${day.visibleToClient === false ? "text-orange-400 hover:bg-orange-400/15" : "text-zinc-500 hover:bg-zinc-700 hover:text-lime-400"}`}
+                title={day.visibleToClient === false ? "Скрыт от клиента — показать" : "Скрыть день от клиента"}>
+                {day.visibleToClient === false ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
               {lastSession && <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:inline" title="Дата последнего проведения">{fmtDate(lastSession.date)}</span>}
               <input type="date" value={day.dateOf ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { dateOf: e.target.value || null }); }} className="bg-zinc-800 rounded-md text-xs px-1.5 py-1 outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0 text-zinc-300 w-36" />
               <button onClick={() => setSessionDay(day)} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Провести тренировку"><Play size={15} /></button>
@@ -380,7 +409,10 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         );
       })}
 
-      <button onClick={addDay} className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-3 font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={17} /> Добавить день</button>
+      <div className="flex gap-2">
+        <button onClick={addDay} className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-3 font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={17} /> Добавить день</button>
+        <button onClick={addMesocycle} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-3 px-4 font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><Layers size={15} /> Блок</button>
+      </div>
       {dayClipboard && (
         <button onClick={pasteDay} className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 border border-cyan-400/30 hover:border-cyan-400/60 rounded-xl py-2.5 text-sm font-medium text-cyan-400 transition"><ClipboardPaste size={15} /> Вставить: {dayClipboard.name}</button>
       )}

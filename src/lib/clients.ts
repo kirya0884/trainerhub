@@ -95,17 +95,18 @@ export interface PlanListItem {
   id: string;
   name: string;
   archived: boolean;
+  visibleToClient?: boolean;
 }
 
 export async function fetchClientPlans(clientId: string): Promise<PlanListItem[]> {
   const { data, error } = await supabase
     .from("plans")
-    .select("id,name,archived")
+    .select("id,name,archived,visible_to_client")
     .eq("client_id", clientId)
     .is("deleted_at", null)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map((p) => ({ ...p, visibleToClient: p.visible_to_client !== false }));
 }
 
 export interface PlanOverviewItem extends PlanListItem {

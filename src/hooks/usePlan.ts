@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import * as api from "../lib/plans";
-import type { Day, Exercise, Plan, SetRow } from "../types";
+import type { Day, Exercise, Mesocycle, Plan, SetRow } from "../types";
 import { useDebouncedPersist } from "./useDebouncedPersist";
 
 export function usePlan(planId: string) {
@@ -23,21 +23,21 @@ export function usePlan(planId: string) {
     return () => { alive = false; };
   }, [planId]);
 
-  const updatePlanMeta = (patch: Partial<Pick<Plan, "name" | "note">>) => {
+  const updatePlanMeta = (patch: Partial<Pick<Plan, "name" | "note" | "visibleToClient">>) => {
     setPlan((p) => (p ? { ...p, ...patch } : p));
-    persist("plan", patch, (pp) => api.updatePlanMeta(planId, pp));
+    persist("plan", patch as Record<string, any>, (pp) => api.updatePlanMeta(planId, pp));
   };
 
   const addDay = async () => {
     if (!plan) return;
     const position = plan.days.length;
     const row = await api.addDay(planId, `День ${position + 1}`, position);
-    setPlan((p) => (p ? { ...p, days: [...p.days, { id: row.id, name: row.name, weekday: row.weekday, dateOf: null, exercises: [] }] } : p));
+    setPlan((p) => (p ? { ...p, days: [...p.days, { id: row.id, name: row.name, weekday: row.weekday, dateOf: null, exercises: [], visibleToClient: true, mesocycleId: null }] } : p));
   };
 
-  const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf">>) => {
+  const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf" | "visibleToClient" | "mesocycleId">>) => {
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, ...patch } : d)) } : p));
-    persist(`day:${dayId}`, patch, (pp) => api.updateDay(dayId, pp));
+    persist(`day:${dayId}`, patch as Record<string, any>, (pp) => api.updateDay(dayId, pp));
   };
 
   const deleteDay = async (dayId: string) => {
@@ -93,5 +93,37 @@ export function usePlan(planId: string) {
     await api.reorderExercises(arr.map((e, i) => ({ id: e.id, position: i })));
   };
 
-  return { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, reload: load };
+  // ── Мезоциклы ──
+  const addMesocycle = async () => {
+    if (!plan) return;
+    const position = (plan.mesocycles ?? []).length;
+    const meso = await api.addMesocycle(planId, position);
+    setPlan((p) => (p ? { ...p, mesocycles: [...(p.mesocycles ?? []), meso] } : p));
+  };
+
+  const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name">>) => {
+    setPlan((p) => (p ? { ...p, mesocycles: (p.mesocycles ?? []).map((m) => (m.id === mesoId ? { ...m, ...patch } : m)) } : p));
+    persist(`meso:${mesoId}`, patch as Record<string, any>, (pp) => api.updateMesocycle(mesoId, pp));
+  };
+
+  const deleteMesocycle = async (mesoId: string) => {
+    // Открепляем дни от удаляемого мезоцикла
+    setPlan((p) => {
+      if (!p) return p;
+      return {
+        ...p,
+        mesocycles: (p.mesocycles ?? []).filter((m) => m.id !== mesoId),
+        days: p.days.map((d) => d.mesocycleId === mesoId ? { ...d, mesocycleId: null } : d),
+      };
+    });
+    await api.deleteMesocycle(mesoId);
+  };
+
+  return {
+    plan, loading, error,
+    updatePlanMeta, addDay, updateDay, deleteDay, reorderDays,
+    addExercise, updateExercise, deleteExercise, reorderExercises,
+    addMesocycle, updateMesocycle, deleteMesocycle,
+    reload: load,
+  };
 }

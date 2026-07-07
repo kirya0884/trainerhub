@@ -27,6 +27,8 @@ export interface Day {
   weekday: number | null;
   dateOf?: string | null;
   exercises: Exercise[];
+  visibleToClient?: boolean;
+  mesocycleId?: string | null;
 }
 
 export interface Plan {
@@ -34,6 +36,15 @@ export interface Plan {
   name: string;
   note: string;
   days: Day[];
+  visibleToClient?: boolean;
+  mesocycles?: Mesocycle[];
+}
+
+export interface Mesocycle {
+  id: string;
+  planId: string;
+  name: string;
+  position: number;
 }
 
 export interface ProgressNote { id: string; date: string; text: string }
