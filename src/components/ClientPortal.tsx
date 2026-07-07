@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
+import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Layers, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
@@ -256,13 +256,13 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               )}
               {(() => {
                 const todayStr = todayFn();
-                // Дни, завершённые сегодня — скрываем из "Активных"
-                const doneToday = new Set(progressHook.sessions.filter((s) => s.date === todayStr).map((s) => s.dayName));
                 const mesocycles = planHook.plan?.mesocycles ?? [];
-                // Видимые дни: не скрыты тренером, не принадлежат скрытому блоку, не завершены сегодня
+                // Дни, для которых уже есть проведённая тренировка — скрываем из "Активных"
+                const doneEver = new Set(progressHook.sessions.map((s) => s.dayName));
+                // Видимые дни: не скрыты тренером, не принадлежат скрытому блоку, не проведены ранее
                 const visibleDays = (planHook.plan?.days ?? []).filter((d) =>
                   d.visibleToClient !== false &&
-                  !doneToday.has(d.name) &&
+                  !doneEver.has(d.name) &&
                   !(d.mesocycleId && mesocycles.find((m) => m.id === d.mesocycleId)?.visibleToClient === false)
                 );
                 const todayDay = visibleDays.find((d) => d.dateOf === todayStr) ?? null;
@@ -340,7 +340,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                           {dayOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                         </button>
                         <h3 className="font-semibold flex-1 min-w-0 truncate">{day.name}</h3>
-                        {day.dateOf && <span className="text-xs text-zinc-500 shrink-0">{fmtDate(day.dateOf)}</span>}
+                        {day.dateOf && <span className="text-xs text-zinc-500 shrink-0">{fmtDate(day.dateOf, true)}</span>}
                         <span className="text-xs text-zinc-600 shrink-0">{day.exercises.length} упр.</span>
                         <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
                       </div>
@@ -373,13 +373,14 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                           const days = visibleDays.filter((d) => d.mesocycleId === meso.id);
                           if (days.length === 0) return null;
                           return (
-                            <div key={meso.id} className="space-y-2">
-                              <div className="flex items-center gap-2 px-1">
-                                <div className="h-px flex-1 bg-cyan-400/20" />
+                            <div key={meso.id} className="rounded-xl border border-cyan-400/20 overflow-hidden">
+                              <div className="px-3 py-2 flex items-center gap-1.5 bg-cyan-400/5 border-b border-cyan-400/15">
+                                <Layers size={12} className="text-cyan-400/70 shrink-0" />
                                 <span className="text-xs font-semibold text-cyan-400/70 uppercase tracking-wider">{meso.name}</span>
-                                <div className="h-px flex-1 bg-cyan-400/20" />
                               </div>
-                              {days.map(renderDay)}
+                              <div className="p-2 space-y-2">
+                                {days.map(renderDay)}
+                              </div>
                             </div>
                           );
                         })}
@@ -403,7 +404,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                     <button onClick={() => setOpenDetails(isOpen ? null : s.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-zinc-800/40 transition text-left">
                       <div className="min-w-0">
                         <p className="font-semibold text-sm truncate">{s.dayName}</p>
-                        <p className="text-xs text-zinc-500">{fmtDate(s.date)} · {s.done}/{s.total} упр.{s.fromClient && " · сам"}</p>
+                        <p className="text-xs text-zinc-500">{fmtDate(s.date, true)} · {s.done}/{s.total} упр.{s.fromClient && " · сам"}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {s.wellbeing ? <span className="text-base">{WELL_EMOJI[s.wellbeing - 1]}</span> : null}
