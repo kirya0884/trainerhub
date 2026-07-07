@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, Trash2, TrendingUp, Users, Wallet, Images, X } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, Trash2, TrendingUp, Users, Wallet, Images, X , Target } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -24,10 +24,11 @@ import type { ChatMessage } from "../lib/messages";
 import SessionHistoryModal from "./SessionHistoryModal";
 import RemainingBadge from "./RemainingBadge";
 import ActivityTab from "./ActivityTab";
+import GoalsDashboard from "./GoalsDashboard";
 import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
 
-export type Sub = "overview" | "membership" | "body" | "nutrition" | "photos" | "plans" | "chat" | "activity";
+export type Sub = "overview" | "membership" | "body" | "nutrition" | "photos" | "plans" | "chat" | "activity" | "goals";
 
 const SUB_DEFS: Record<Sub, { label: string; icon: typeof Users }> = {
   overview: { label: "Обзор", icon: Users },
@@ -38,8 +39,9 @@ const SUB_DEFS: Record<Sub, { label: string; icon: typeof Users }> = {
   plans: { label: "Планы", icon: ClipboardList },
   chat: { label: "Чат", icon: MessageCircle },
   activity: { label: "Активность", icon: TrendingUp },
+  goals: { label: "Цели", icon: Target },
 };
-const DEFAULT_SUB_ORDER: Sub[] = ["overview", "membership", "body", "nutrition", "photos", "plans", "chat", "activity"];
+const DEFAULT_SUB_ORDER: Sub[] = ["overview", "membership", "body", "nutrition", "photos", "plans", "chat", "activity", "goals"];
 const SUB_ORDER_KEY = "trainerhub-client-sub-order-v1";
 const SUB_HIDDEN_KEY = "trainerhub-client-sub-hidden-v1";
 // ponytail: порядок и видимость под-вкладок карточки клиента — личная настройка устройства, как в App.tsx
@@ -235,6 +237,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
       {sub === "chat" && <ChatThread trainerId={trainerId} clientId={clientId} self="trainer" />}
       {sub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly />}
+      {sub === "goals" && <GoalsDashboard clientId={clientId} />}
     </div>
   );
 }
