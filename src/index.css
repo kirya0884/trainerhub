@@ -12,3 +12,51 @@ input, textarea, select { font-size: 16px !important; }
   .print-area { position: absolute; left: 0; top: 0; width: 100%; }
   .no-print { display: none !important; }
 }
+
+/* ── Светлая тема (light mode) ──────────────────────────────────────
+   CSS-каскад переопределяет Tailwind zinc-классы.
+   Применяется через html.light-theme (см. App.tsx).
+   ------------------------------------------------------------------ */
+html.light-theme {
+  color-scheme: light;
+}
+
+/* backgrounds */
+html.light-theme .bg-zinc-950 { background-color: #f8fafc !important; }
+html.light-theme .bg-zinc-900 { background-color: #ffffff !important; }
+html.light-theme .bg-zinc-800 { background-color: #f1f5f9 !important; }
+html.light-theme .bg-zinc-700 { background-color: #e2e8f0 !important; }
+
+/* opacity variants */
+html.light-theme .bg-zinc-800\/60 { background-color: rgba(241,245,249,0.6) !important; }
+html.light-theme .bg-zinc-950\/90 { background-color: rgba(248,250,252,0.9) !important; }
+
+/* text */
+html.light-theme .text-zinc-100 { color: #0f172a !important; }
+html.light-theme .text-zinc-200 { color: #1e293b !important; }
+html.light-theme .text-zinc-300 { color: #334155 !important; }
+html.light-theme .text-zinc-400 { color: #64748b !important; }
+html.light-theme .text-zinc-500 { color: #94a3b8 !important; }
+html.light-theme .text-zinc-600 { color: #94a3b8 !important; }
+html.light-theme .text-zinc-700 { color: #cbd5e1 !important; }
+html.light-theme .text-zinc-950 { color: #0f172a !important; }
+
+/* borders */
+html.light-theme .border-zinc-800 { border-color: #e2e8f0 !important; }
+html.light-theme .border-zinc-700 { border-color: #cbd5e1 !important; }
+
+/* dividers */
+html.light-theme .divide-zinc-800 > :not([hidden]) ~ :not([hidden]) { border-color: #e2e8f0 !important; }
+
+/* hover states */
+html.light-theme .hover\:bg-zinc-800:hover { background-color: #f1f5f9 !important; }
+html.light-theme .hover\:bg-zinc-700:hover { background-color: #e2e8f0 !important; }
+html.light-theme .hover\:text-zinc-100:hover { color: #0f172a !important; }
+html.light-theme .hover\:text-zinc-300:hover { color: #334155 !important; }
+
+/* inputs / placeholders */
+html.light-theme input::placeholder,
+html.light-theme textarea::placeholder { color: #94a3b8 !important; }
+
+/* ring focus visible in light mode */
+html.light-theme .focus\:ring-zinc-700:focus { --tw-ring-color: #cbd5e1 !important; }

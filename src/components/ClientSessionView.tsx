@@ -147,7 +147,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   if (step === "feedback") {
     return (
-      <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
+      <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col" style={{ "--accent": accent } as React.CSSProperties}>
         <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
           <h2 className="font-bold">Как прошла тренировка?</h2>
           <button onClick={() => setStep("training")} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={20} /></button>

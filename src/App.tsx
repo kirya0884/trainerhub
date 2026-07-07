@@ -100,6 +100,9 @@ export default function App() {
   const [trainerName, setTrainerName] = useState("");
   const [trainerAvatar, setTrainerAvatar] = useState("");
   const [trainerAccent, setTrainerAccent] = useState("#a3e635");
+  const [themeMode, setThemeMode] = useState<"dark" | "light">(
+    () => (localStorage.getItem("trainerhub-theme-v1") as "dark" | "light") || "dark"
+  );
   const [tabOrder, setTabOrder] = useState<TabKind[]>(loadTabOrder);
   const [hiddenTabs, setHiddenTabs] = useState<TabKind[]>(loadHiddenTabs);
   const [dragTab, setDragTab] = useState<TabKind | null>(null);
@@ -158,6 +161,10 @@ export default function App() {
   useEffect(() => {
     if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#a3e635"); });
   }, [isTrainer, session]);
+  useEffect(() => {
+    document.documentElement.classList.toggle("light-theme", themeMode === "light");
+    localStorage.setItem("trainerhub-theme-v1", themeMode);
+  }, [themeMode]);
 
   if (loading) return <div className="min-h-screen bg-zinc-950" />;
   if (!session) return <AuthScreen />;
@@ -260,7 +267,8 @@ export default function App() {
                     onDragEnd={() => setDragTab(null)}
                     onClick={() => setView({ kind })}
                     title="Зажмите и перетащите, чтобы изменить порядок"
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0 cursor-grab ${view.kind === kind ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"} ${dragTab === kind ? "opacity-40" : ""}`}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0 cursor-grab ${view.kind === kind ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"} ${dragTab === kind ? "opacity-40" : ""}`}
+                    style={view.kind === kind ? { background: "var(--accent)" } : undefined}
                   >
                     <t.icon size={15} /> {t.label}
                   </button>
@@ -285,7 +293,7 @@ export default function App() {
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
-          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} onSaved={(name, avatarUrl) => { setTrainerName(name); setTrainerAvatar(avatarUrl); }} />
+          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
           <div>
