@@ -18,7 +18,7 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<"trainer" | "client">("trainer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignup, setIsSignup] = useState(false);
+  const [isSignup, setIsSignup] = useState(true);
   const [useLink, setUseLink] = useState(false);
   const [forgotPw, setForgotPw] = useState(false);
   const [msg, setMsg] = useState("");
@@ -63,6 +63,7 @@ export default function AuthScreen() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-4">
         <h1 className="text-xl font-bold text-center"><span className="text-lime-400">Trainer</span><span className="text-cyan-400">Hub</span></h1>
+        <p className="text-xs text-zinc-500 text-center -mt-2">Платформа для персональных тренеров</p>
 
         {forgotPw ? (
           <>
@@ -82,6 +83,12 @@ export default function AuthScreen() {
               <button type="button" onClick={() => { setMode("client"); resetMsg(); }} className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${mode === "client" ? "bg-cyan-400 text-zinc-950" : "text-zinc-400"}`}>Я клиент</button>
             </div>
 
+            {mode === "trainer" && (
+              <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-1">
+                <button type="button" onClick={() => { setIsSignup(false); resetMsg(); setPassword(""); }} className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${!isSignup ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>Войти</button>
+                <button type="button" onClick={() => { setIsSignup(true); resetMsg(); setPassword(""); }} className={`flex-1 py-1.5 rounded-md text-sm font-medium transition ${isSignup ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>Регистрация</button>
+              </div>
+            )}
             <form onSubmit={submit} className="space-y-3">
               <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
               {(mode === "trainer" || (mode === "client" && !useLink)) && (
@@ -106,11 +113,7 @@ export default function AuthScreen() {
                   Забыл пароль?
                 </button>
               )}
-              {mode === "trainer" && (
-                <button type="button" onClick={() => { setIsSignup((v) => !v); resetMsg(); setPassword(""); }} className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300">
-                  {isSignup ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Зарегистрироваться"}
-                </button>
-              )}
+
               {mode === "client" && (
                 <button type="button" onClick={() => { setUseLink((v) => !v); resetMsg(); }} className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300">
                   {useLink ? "У меня есть пароль" : "Нет пароля? Войти по ссылке на почту"}
