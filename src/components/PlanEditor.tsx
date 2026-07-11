@@ -69,18 +69,33 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       clipTimerRef.current = null;
     }, 20_000);
   };
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2000); };
   const copySessionAsDay = (s: Session) => {
+    const hasActual = s.items?.some((i) => i.actualSets?.length);
+    if (hasActual) {
+      const exercises: Day["exercises"] = (s.items ?? []).map((item) => ({
+        id: crypto.randomUUID(), name: item.name,
+        sets: String(item.actualSets?.length || 3),
+        reps: item.actualSets?.[0]?.reps || "",
+        weight: item.actualSets?.[0]?.weight || "",
+        rest: "", note: item.note || "", video: "", group: "",
+        detailed: true, tempo: "", duration: "", target: "",
+        setRows: (item.actualSets ?? []).map((r) => ({ id: crypto.randomUUID(), weight: r.weight, reps: r.reps })),
+      }));
+      copyDay({ name: s.dayName || "Тренировка", exercises });
+      showToast("Скопировано в буфер обмена");
+      return;
+    }
     const day = plan?.days.find((d) => d.name === s.dayName);
-    if (day) { copyDay(day); return; }
-    // День не найден в плане — строим синтетический из фактических подходов
+    if (day) { copyDay(day); showToast("Скопировано в буфер обмена"); return; }
+    // Fallback: exercise names only
     const exercises: Day["exercises"] = (s.items ?? []).map((item) => ({
-      id: crypto.randomUUID(), name: item.name, sets: item.actualSets ? String(item.actualSets.length) : "3",
-      reps: item.actualSets?.[0]?.reps || "", weight: item.actualSets?.[0]?.weight || "",
-      rest: "", note: item.note || "", video: "", group: null,
-      detailed: !!(item.actualSets?.length), weekday: null, dateOf: null, visibleToClient: true, mesocycleId: null, tempo: "", duration: "", target: "",
-      setRows: (item.actualSets ?? []).map((r) => ({ id: crypto.randomUUID(), weight: r.weight, reps: r.reps })),
+      id: crypto.randomUUID(), name: item.name, sets: "3", reps: "", weight: "",
+      rest: "", note: "", video: "", group: "", detailed: false, tempo: "", duration: "", target: "", setRows: [],
     }));
     copyDay({ name: s.dayName || "Тренировка", exercises });
+    showToast("Скопировано в буфер обмена");
   };
   const handleCreateDay = async () => {
     if (!newDayName?.trim()) return;
@@ -321,20 +336,6 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
           </div>
 
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl">
-            <button onClick={() => setOpenJournal((v) => !v)} className="w-full flex items-center justify-between gap-2 p-4">
-              <h3 className="font-semibold flex items-center gap-1.5"><MessageSquare size={16} className="text-lime-400" /> Журнал {progress.length > 0 && <span className="text-zinc-500 font-normal">({progress.length})</span>}</h3>
-              {openJournal ? <ChevronDown size={18} className="text-zinc-400" /> : <ChevronRight size={18} className="text-zinc-400" />}
-            </button>
-            {openJournal && (
-              <div className="px-4 pb-4 space-y-2">
-                <button onClick={addProgress} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-2.5 py-1.5 text-xs hover:bg-lime-300 transition"><Plus size={13} /> Запись</button>
-                {progress.length === 0 && <p className="text-sm text-zinc-600 text-center py-4">Записей в журнале пока нет.</p>}
-                {progress.map((entry) => (<div key={entry.id} className="flex gap-2 items-start bg-zinc-800/40 rounded-lg p-2.5 flex-wrap sm:flex-nowrap"><input type="date" value={entry.date} onChange={(e) => updateProgress(entry.id, { date: e.target.value })} className="bg-zinc-800 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" /><input value={entry.text} onChange={(e) => updateProgress(entry.id, { text: e.target.value })} autoFocus={entry.text === ""} placeholder="напр. добавили подход, сменили упражнение" className="flex-1 min-w-[140px] bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" /><button onClick={() => deleteProgress(entry.id)} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button></div>))}
-              </div>
-            )}
-          </div>
-
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl">
             <button onClick={() => setOpenHistory((v) => !v)} className="w-full flex items-center justify-between gap-2 p-4">
               <h3 className="font-semibold flex items-center gap-1.5"><HeartPulse size={16} className="text-lime-400" /> История тренировок {sortedSessions.length > 0 && <span className="text-zinc-500 font-normal">({sortedSessions.length})</span>}</h3>
               {openHistory ? <ChevronDown size={18} className="text-zinc-400" /> : <ChevronRight size={18} className="text-zinc-400" />}
@@ -525,6 +526,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       )}
 
       {sessionDay && <SessionModal day={sessionDay} onFinish={finishSession} onClose={() => setSessionDay(null)} />}
+      {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 text-zinc-100 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg border border-zinc-700 pointer-events-none">{toast}</div>}
     </div>
   );
 }
