@@ -71,24 +71,20 @@ export default function ExerciseRow({
       )}
       {ex.detailed ? (
         <div className="pl-6 space-y-1.5">
-          <div className="flex gap-1.5 overflow-x-auto pb-1">
-            <div className="flex flex-col gap-1 shrink-0">
-              <div className="h-5 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">№</div>
-              <div className="h-8 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">Вес</div>
-              <div className="h-8 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">Повт.</div>
+          {ex.setRows.map((s, i) => (
+            <div key={s.id} className="flex items-center gap-2">
+              <span className="text-xs text-zinc-400 w-5 text-center shrink-0 font-medium">{i + 1}</span>
+              <input value={s.weight} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="вес" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+              <span className="text-xs text-zinc-500">×</span>
+              <input value={s.reps} inputMode="numeric" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+              <button onClick={() => removeSetRow(s.id)} className="ml-auto p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition" title="Удалить подход"><X size={13} /></button>
             </div>
-            {ex.setRows.map((s, i) => (
-              <div key={s.id} className="flex flex-col gap-1 shrink-0 w-14">
-                <div className="h-5 flex items-center justify-center gap-0.5 text-xs text-zinc-400 font-medium">{i + 1}
-                  <button onClick={() => removeSetRow(s.id)} className="text-zinc-600 hover:text-red-400 transition leading-none" title="Удалить подход"><X size={11} /></button>
-                </div>
-                <input value={s.weight} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="60" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
-                <input value={s.reps} inputMode="numeric" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="8" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
-              </div>
-            ))}
-            <div className="flex flex-col gap-1 shrink-0"><div className="h-5" /><button onClick={addSetRow} title="Добавить подход" style={{ height: 68 }} className="w-9 flex items-center justify-center rounded-md border border-dashed border-zinc-700 text-zinc-400 hover:text-lime-400 hover:border-lime-400/40 transition"><Plus size={15} /></button></div>
+          ))}
+          <div className="flex items-center gap-3 mt-0.5">
+            <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-lime-400 transition"><Plus size={13} /> подход</button>
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500 ml-auto">Отдых</span>
+            <input value={ex.rest} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
           </div>
-          <div className="flex items-center gap-2"><span className="text-[10px] uppercase tracking-wide text-zinc-500">Отдых</span><input value={ex.rest} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" /></div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">

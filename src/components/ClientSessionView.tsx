@@ -69,7 +69,7 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
 }
 
 type SetVal = { weight: string; reps: string };
-type ExMeta = { fires: Record<number, number>; note: string; done: boolean };
+type ExMeta = { fires: Record<number, number>; note: string; done: boolean; setsDone?: Record<number, boolean> };
 
 export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635" }: {
   day: Day; startedAt: number;
@@ -96,12 +96,19 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   });
   const [meta, setMeta] = useState<Record<string, ExMeta>>(() => {
     const m: Record<string, ExMeta> = {};
-    day.exercises.forEach((ex) => { m[ex.id] = { fires: {}, note: "", done: false }; });
+    day.exercises.forEach((ex) => { m[ex.id] = { fires: {}, note: "", done: false, setsDone: {} }; });
     return m;
   });
   const setVal = (exId: string, i: number, patch: Partial<SetVal>) => setVals((a) => ({ ...a, [exId]: a[exId].map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
   const setMetaFor = (exId: string, patch: Partial<ExMeta>) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], ...patch } }));
   const setFire = (exId: string, idx: number, v: number) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], fires: { ...m[exId].fires, [idx]: v } } }));
+  const toggleSetDone = (exId: string, setIdx: number, total: number) =>
+    setMeta((m) => {
+      const cur = m[exId] || { fires: {}, note: "", done: false, setsDone: {} };
+      const sd = { ...(cur.setsDone || {}), [setIdx]: !cur.setsDone?.[setIdx] };
+      const allDone = Array.from({ length: total }, (_, i) => i).every((i) => sd[i]);
+      return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
+    });
 
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
   const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
@@ -193,28 +200,32 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             const tonnage = tonnageOf(rows);
             return (
               <div key={ex.id} className={block.items.length > 1 ? `p-3 transition ${md.done ? "opacity-60" : ""}` : `bg-zinc-900 border rounded-xl p-3 transition ${md.done ? "border-[var(--accent)]/40 opacity-60" : "border-zinc-800"}`}>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <h3 className="font-semibold min-w-0 truncate"><span className="mr-1.5" style={{ color: "var(--accent)" }}>{exLabel(day, idx)}</span>{ex.name || "—"}</h3>
-                  <span className="text-xs text-zinc-500 shrink-0 text-right">цель: {exSummary(ex)}{tonnage > 0 && <><br />тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></>}</span>
-                </div>
-                <div className="flex gap-1.5 overflow-x-auto pb-1">
-                  <div className="flex flex-col gap-1 shrink-0"><div className="h-5 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">№</div><div className="h-9 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">Вес</div><div className="h-9 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">Повт.</div></div>
-                  {rows.map((r, i) => (
-                    <div key={i} className="flex flex-col gap-1 shrink-0 w-16">
-                      <div className="h-5 flex items-center justify-center text-xs text-zinc-400 font-medium">{i + 1}</div>
-                      <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="—" className="h-9 w-full bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-[var(--accent)]/40" />
-                      <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="—" className="h-9 w-full bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-[var(--accent)]/40" />
-                    </div>
-                  ))}
-                </div>
-                {fireIdx.length > 0 && (
-                  <div className="mt-2 space-y-1">
-                    <p className="text-[10px] uppercase tracking-wide text-zinc-500">Интенсивность (последние подходы)</p>
-                    {fireIdx.map((i) => (<div key={i} className="flex items-center gap-2"><span className="text-xs text-zinc-400 w-16 shrink-0">Подход {i + 1}</span><FlameRate value={md.fires[i] || 0} onChange={(v) => setFire(ex.id, i, v)} /></div>))}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h3 className="font-semibold min-w-0 leading-snug"><span className="mr-1.5" style={{ color: "var(--accent)" }}>{exLabel(day, idx)}</span>{ex.name || "—"}</h3>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {tonnage > 0 && <span className="text-xs text-zinc-500">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></span>}
+                    <button onClick={() => setMetaFor(ex.id, { done: !md.done })} className="text-xs px-2 py-1 rounded-lg font-medium transition bg-zinc-800 text-zinc-400 hover:text-zinc-100" style={md.done ? { color: "var(--accent)" } : undefined}>{md.done ? "✓ Готово" : "Готово"}</button>
                   </div>
-                )}
+                </div>
+                <div className="space-y-1.5">
+                  {rows.map((r, i) => {
+                    const isDone = md.setsDone?.[i] ?? false;
+                    return (
+                      <div key={i} className={`flex items-center gap-2 transition ${isDone ? "opacity-50" : ""}`}>
+                        <button onClick={() => toggleSetDone(ex.id, i, rows.length)} className="shrink-0 p-0.5">
+                          {isDone ? <CheckCircle2 size={18} style={{ color: "var(--accent)" }} /> : <Circle size={18} className="text-zinc-600" />}
+                        </button>
+                        <span className="text-xs text-zinc-400 w-4 text-center shrink-0">{i + 1}</span>
+                        <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="—" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-[var(--accent)]/40 shrink-0" />
+                        <span className="text-xs text-zinc-500">×</span>
+                        <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="—" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-[var(--accent)]/40 shrink-0" />
+                        <span className="text-xs text-zinc-500 shrink-0">кг</span>
+                        {fireIdx.includes(i) && <FlameRate value={md.fires[i] || 0} onChange={(v) => setFire(ex.id, i, v)} />}
+                      </div>
+                    );
+                  })}
+                </div>
                 <input value={md.note} onChange={(e) => setMetaFor(ex.id, { note: e.target.value })} placeholder="Примечание: как прошло, ощущения..." className="w-full mt-2 bg-zinc-800/60 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-[var(--accent)]/40" />
-                <button onClick={() => setMetaFor(ex.id, { done: !md.done })} className={`mt-2 w-full flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium transition ${md.done ? "text-zinc-950" : "bg-zinc-800 text-zinc-400 hover:text-zinc-100"}`} style={md.done ? { background: "var(--accent)" } : undefined}>{md.done ? <CheckCircle2 size={16} /> : <Circle size={16} />} {md.done ? "Выполнено" : "Отметить выполненным"}</button>
               </div>
             );
           });
@@ -233,7 +244,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         })}
       </div>
 
-      <div className="border-t border-zinc-800 bg-zinc-900 px-3 sm:px-4 py-3 shrink-0"><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-sm text-zinc-400 shrink-0">Упр.: <span className="font-semibold" style={{ color: "var(--accent)" }}>{doneEx}/{day.exercises.length}</span></span>{totalTonnage > 0 && <span className="text-sm text-zinc-400 shrink-0">Тоннаж: <span className="text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span></span>}<button onClick={finish} className="flex-1 text-zinc-950 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-1.5" style={{ background: "var(--accent)" }}><CheckCircle2 size={18} /> Завершить тренировку</button></div></div>
+      <div className="border-t border-zinc-800 bg-zinc-900 px-3 py-2.5 shrink-0"><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-xs text-zinc-500"><span className="font-semibold" style={{ color: "var(--accent)" }}>{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="ml-2 text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} className="ml-auto text-zinc-950 font-bold rounded-xl px-5 py-2 text-sm transition flex items-center gap-1.5" style={{ background: "var(--accent)" }}><CheckCircle2 size={16} /> Завершить</button></div></div>
     </div>
     </div>
   );
