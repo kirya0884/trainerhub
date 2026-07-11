@@ -69,6 +69,19 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       clipTimerRef.current = null;
     }, 20_000);
   };
+  const copySessionAsDay = (s: Session) => {
+    const day = plan?.days.find((d) => d.name === s.dayName);
+    if (day) { copyDay(day); return; }
+    // День не найден в плане — строим синтетический из фактических подходов
+    const exercises: Day["exercises"] = (s.items ?? []).map((item) => ({
+      id: crypto.randomUUID(), name: item.name, sets: item.actualSets ? String(item.actualSets.length) : "3",
+      reps: item.actualSets?.[0]?.reps || "", weight: item.actualSets?.[0]?.weight || "",
+      rest: "", note: item.note || "", video: "", group: null,
+      detailed: !!(item.actualSets?.length), weekday: null, dateOf: null, visibleToClient: true, mesocycleId: null, tempo: "", duration: "", target: "",
+      setRows: (item.actualSets ?? []).map((r) => ({ id: crypto.randomUUID(), weight: r.weight, reps: r.reps })),
+    }));
+    copyDay({ name: s.dayName || "Тренировка", exercises });
+  };
   const handleCreateDay = async () => {
     if (!newDayName?.trim()) return;
     await addDay(newDayName.trim());
@@ -349,21 +362,43 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                 <div className="space-y-2">
                   {sortedSessions.map((s) => {
                     const editing = editingSessionId === s.id;
+                    const hasEmoji = s.wellbeing || s.mood || !!s.clientRating;
                     return (
-                      <div key={s.id} className="bg-zinc-800/40 rounded-xl p-3">
-                        <div className="flex items-center justify-between gap-2 mb-2">
-                          <div className="min-w-0"><p className="font-semibold text-sm truncate">{s.dayName}</p><p className="text-xs text-zinc-500">{fmtDate(s.date)} · {s.done}/{s.total} упр.</p></div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button onClick={() => setEditingSessionId(editing ? null : s.id)} className={`p-1 rounded transition ${editing ? "bg-cyan-400/20 text-cyan-400" : "hover:bg-zinc-700 text-zinc-500"}`} title="Редактировать отзыв"><Pencil size={14} /></button>
-                            <button onClick={() => setDeletingSessionId(s.id)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><X size={14} /></button>
+                      <div key={s.id} className="bg-zinc-800/40 rounded-xl p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm leading-snug">{s.dayName || "Тренировка"}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                              <span className="text-xs text-zinc-500">{fmtDate(s.date)}</span>
+                              <span className="text-zinc-700">·</span>
+                              <span className="text-xs text-zinc-500">{s.done}/{s.total} упр.</span>
+                              {s.fromClient && <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-0.5 shrink-0">
+                            <button onClick={() => copySessionAsDay(s)} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition" title="Копировать тренировку как день"><Clipboard size={13} /></button>
+                            <button onClick={() => setEditingSessionId(editing ? null : s.id)} className={`p-1.5 rounded transition ${editing ? "bg-cyan-400/20 text-cyan-400" : "hover:bg-zinc-700 text-zinc-500"}`} title="Редактировать отзыв"><Pencil size={13} /></button>
+                            <button onClick={() => setDeletingSessionId(s.id)} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><X size={13} /></button>
                           </div>
                         </div>
-                        <div className="flex gap-4 mb-2 text-sm flex-wrap"><span className="text-zinc-400">Самочувствие <span className="text-base">{s.wellbeing ? WELL_EMOJI[s.wellbeing - 1] : "—"}</span></span><span className="text-zinc-400">Настроение <span className="text-base">{s.mood ? MOOD_EMOJI[s.mood - 1] : "—"}</span></span>{!!s.clientRating && <span className="text-zinc-400">Оценка <span className="text-lime-400 font-semibold">{s.clientRating}/5</span></span>}</div>
-                        {s.items?.some((i) => i.effort) && <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-400 mb-2">{s.items.filter((i) => i.effort).map((i, idx) => <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400 inline" />)}</span>)}</div>}
+                        {hasEmoji && (
+                          <div className="flex items-center gap-3 text-xs text-zinc-400 flex-wrap">
+                            {s.wellbeing && <span>Самочувствие <span className="text-base">{WELL_EMOJI[s.wellbeing - 1]}</span></span>}
+                            {s.mood && <span>Настроение <span className="text-base">{MOOD_EMOJI[s.mood - 1]}</span></span>}
+                            {!!s.clientRating && <span>Оценка <span className="text-lime-400 font-semibold">{s.clientRating}/5</span></span>}
+                          </div>
+                        )}
+                        {s.items?.some((i) => i.effort) && (
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                            {s.items.filter((i) => i.effort).map((i, idx) => (
+                              <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400" />)}</span>
+                            ))}
+                          </div>
+                        )}
                         {editing ? (
                           <textarea value={s.review} onChange={(e) => updateSessionReview(s.id, e.target.value)} rows={2} placeholder="Отзыв клиента..." className="w-full text-sm bg-zinc-900/60 rounded-lg p-2 outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
                         ) : (
-                          s.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} className="text-lime-400 shrink-0 mt-0.5" /> {s.review}</div>
+                          s.review && <p className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2.5 whitespace-pre-wrap">{s.review}</p>
                         )}
                       </div>
                     );
@@ -459,9 +494,9 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         </div>
       ) : (
         <div className="flex gap-2">
-          <button onClick={() => setNewDayName("")} className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-3 font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={17} /> Добавить день</button>
-          <button onClick={() => setShowDayLibrary(true)} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-3 px-4 font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><BookOpen size={15} /> Шаблоны</button>
-          <button onClick={addMesocycle} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-3 px-4 font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><Layers size={15} /> Блок</button>
+          <button onClick={() => setNewDayName("")} className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-2 text-sm font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={15} /> Добавить день</button>
+          <button onClick={() => setShowDayLibrary(true)} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-2 px-3 text-sm font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><BookOpen size={14} /> Шаблоны</button>
+          <button onClick={addMesocycle} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-2 px-3 text-sm font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><Layers size={14} /> Блок</button>
         </div>
       )}
       {pasteInput !== null ? (
