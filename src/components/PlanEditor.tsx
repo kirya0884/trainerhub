@@ -58,13 +58,16 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => setSaveStatus('saved'), 700);
   };
-  const [dayClipboard, setDayClipboard] = useState<{ name: string; exercises: Day["exercises"] } | null>(() => {
-    try { return JSON.parse(localStorage.getItem("th-day-clip") || "null"); } catch { return null; }
-  });
+  const [dayClipboard, setDayClipboard] = useState<{ name: string; exercises: Day["exercises"] } | null>(null);
+  const clipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyDay = (day: { name: string; exercises: Day["exercises"] }) => {
     const d = { name: day.name, exercises: day.exercises };
     setDayClipboard(d);
-    localStorage.setItem("th-day-clip", JSON.stringify(d));
+    if (clipTimerRef.current) clearTimeout(clipTimerRef.current);
+    clipTimerRef.current = setTimeout(() => {
+      setDayClipboard(null);
+      clipTimerRef.current = null;
+    }, 20_000);
   };
   const handleCreateDay = async () => {
     if (!newDayName?.trim()) return;

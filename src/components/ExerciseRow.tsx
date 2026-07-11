@@ -82,13 +82,13 @@ export default function ExerciseRow({
                 <div className="h-5 flex items-center justify-center gap-0.5 text-xs text-zinc-400 font-medium">{i + 1}
                   <button onClick={() => removeSetRow(s.id)} className="text-zinc-600 hover:text-red-400 transition leading-none" title="Удалить подход"><X size={11} /></button>
                 </div>
-                <input value={s.weight} onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="60" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
-                <input value={s.reps} onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="8" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+                <input value={s.weight} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="60" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+                <input value={s.reps} inputMode="numeric" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="8" className="h-8 w-full bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
               </div>
             ))}
             <div className="flex flex-col gap-1 shrink-0"><div className="h-5" /><button onClick={addSetRow} title="Добавить подход" style={{ height: 68 }} className="w-9 flex items-center justify-center rounded-md border border-dashed border-zinc-700 text-zinc-400 hover:text-lime-400 hover:border-lime-400/40 transition"><Plus size={15} /></button></div>
           </div>
-          <div className="flex items-center gap-2"><span className="text-[10px] uppercase tracking-wide text-zinc-500">Отдых</span><input value={ex.rest} onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" /></div>
+          <div className="flex items-center gap-2"><span className="text-[10px] uppercase tracking-wide text-zinc-500">Отдых</span><input value={ex.rest} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" /></div>
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
