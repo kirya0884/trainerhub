@@ -78,8 +78,10 @@ export function applyPromotion(basePrice: number, promotions: Promotion[], appli
 // ===================== Платежи (журнал) =====================
 // sessionsDelta — сколько тренировок этот платёж добавил в остаток (см. markPaid) — нужно, чтобы при
 // удалении платежа (deletePayment) корректно откатить остаток назад, а не оставлять его "зависшим".
-export async function addPayment(clientId: string, p: { date: string; amount: number; type: string; note: string; promoApplied?: string }, sessionsDelta?: number) {
-  const { error } = await supabase.from("client_payments").insert({ client_id: clientId, date: p.date, amount: p.amount, type: p.type, note: p.note, promo_applied: p.promoApplied ?? "", sessions_delta: sessionsDelta ?? null });
+export type PayStatus = 'paid' | 'deferred' | 'installment';
+
+export async function addPayment(clientId: string, p: { date: string; amount: number; type: string; note: string; promoApplied?: string; payStatus?: PayStatus }, sessionsDelta?: number) {
+  const { error } = await supabase.from("client_payments").insert({ client_id: clientId, date: p.date, amount: p.amount, type: p.type, note: p.note, promo_applied: p.promoApplied ?? "", sessions_delta: sessionsDelta ?? null, pay_status: p.payStatus ?? 'paid' });
   if (error) throw error;
 }
 
@@ -128,7 +130,7 @@ export async function splitPayment(clientId: string, payment: Payment, parts: nu
 
 // Отметка «оплачено»: запись в журнал + обновление абонемента (остаток/дата следующего платежа).
 // Если включён сплит с привязанным партнёром — сумма делится 50/50, платёж пишется обоим, остаток/даты зеркалятся.
-export async function markPaid(clientId: string, membership: Membership, promotions: Promotion[]) {
+export async function markPaid(clientId: string, membership: Membership, promotions: Promotion[], payStatus: PayStatus = 'paid') {
   const today = todayFn();
   const isSplit = membership.split && !!membership.partnerClientId;
   const type = membership.type === "subscription" ? "subscription" : "sessions";
@@ -170,13 +172,19 @@ export async function markPaid(clientId: string, membership: Membership, promoti
 
   if (isSplit) {
     const half = Math.round(amount / 2);
-    await addPayment(clientId, { date: today, amount: half, type, note: "сплит 50/50", promoApplied: label }, sessionsDelta);
-    await addPayment(membership.partnerClientId, { date: today, amount: amount - half, type, note: "сплит 50/50 (партнёр)", promoApplied: label }, sessionsDelta);
+    await addPayment(clientId, { date: today, amount: half, type, note: "сплит 50/50", promoApplied: label, payStatus }, sessionsDelta);
+    await addPayment(membership.partnerClientId, { date: today, amount: amount - half, type, note: "сплит 50/50 (партнёр)", promoApplied: label, payStatus }, sessionsDelta);
     await updateClient(clientId, { membership: merged });
     await syncMembershipToPartner(membership.partnerClientId, { paymentDate: merged.paymentDate, ...dateFields });
   } else {
-    await addPayment(clientId, { date: today, amount, type, note: "", promoApplied: label }, sessionsDelta);
+    await addPayment(clientId, { date: today, amount, type, note: "", promoApplied: label, payStatus }, sessionsDelta);
     await updateClient(clientId, { membership: merged });
   }
   return merged;
+}
+
+// Конвертирует deferred/installment → paid (клиент погасил долг).
+export async function markPaymentPaid(id: string) {
+  const { error } = await supabase.from("client_payments").update({ pay_status: 'paid' }).eq("id", id);
+  if (error) throw error;
 }

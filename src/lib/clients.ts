@@ -334,12 +334,12 @@ export async function deletePhoto(id: string) {
   if (error) throw error;
 }
 
-export interface Payment { id: string; date: string; amount: number; type: string; note: string; promoApplied: string }
+export interface Payment { id: string; date: string; amount: number; type: string; note: string; promoApplied: string; payStatus: 'paid' | 'deferred' | 'installment' }
 
 export async function fetchPayments(clientId: string): Promise<Payment[]> {
-  const { data, error } = await supabase.from("client_payments").select("id,date,amount,type,note,promo_applied").eq("client_id", clientId).order("date", { ascending: false });
+  const { data, error } = await supabase.from("client_payments").select("id,date,amount,type,note,promo_applied,pay_status").eq("client_id", clientId).order("date", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((p) => ({ id: p.id, date: p.date, amount: Number(p.amount) || 0, type: p.type ?? "", note: p.note ?? "", promoApplied: p.promo_applied ?? "" }));
+  return (data ?? []).map((p) => ({ id: p.id, date: p.date, amount: Number(p.amount) || 0, type: p.type ?? "", note: p.note ?? "", promoApplied: p.promo_applied ?? "", payStatus: (p.pay_status as Payment["payStatus"]) || "paid" }));
 }
 
 export interface ClientNote { id: string; date: string; text: string }

@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, Trash2, TrendingUp, Users, Wallet, Images, X , Target } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -449,9 +449,13 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates);
   };
 
-  const markPaid = async () => {
-    const merged = await paymentsApi.markPaid(clientId, m, promotions);
+  const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
+    const merged = await paymentsApi.markPaid(clientId, m, promotions, payStatus);
     patchMembership(merged, true);
+    api.fetchPayments(clientId).then(setPayments);
+  };
+  const doMarkPaymentPaid = async (id: string) => {
+    await paymentsApi.markPaymentPaid(id);
     api.fetchPayments(clientId).then(setPayments);
   };
 
@@ -532,9 +536,17 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
         )}
         <input value={m.note} onChange={(e) => patchMembership({ note: e.target.value })} placeholder="заметка по абонементу (необязательно)" className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
 
-        <button onClick={markPaid} disabled={!basePrice} className="w-full flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-lime-300 transition disabled:opacity-40">
-          <CheckCircle2 size={16} /> Отметить оплачено{preview && preview.amount !== basePrice ? ` — ${preview.amount.toLocaleString("ru-RU")}₽ (${preview.label})` : basePrice ? ` — ${basePrice.toLocaleString("ru-RU")}₽` : ""}
-        </button>
+        <div className={`grid gap-1.5 ${!basePrice ? "opacity-40 pointer-events-none" : ""}`} style={{ gridTemplateColumns: "1fr auto auto" }}>
+          <button onClick={() => doMarkPaid("paid")} disabled={!basePrice} className="flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-lime-300 transition">
+            <CheckCircle2 size={15} /> Оплачено{preview && preview.amount !== basePrice ? ` — ${preview.amount.toLocaleString("ru-RU")}₽ (${preview.label})` : basePrice ? ` — ${basePrice.toLocaleString("ru-RU")}₽` : ""}
+          </button>
+          <button onClick={() => doMarkPaid("deferred")} disabled={!basePrice} title="Оплатит позже — блок начислен, оплата ожидается" className="flex items-center justify-center gap-1 bg-orange-400/20 text-orange-300 font-semibold rounded-lg py-2.5 px-3 text-sm hover:bg-orange-400/30 transition">
+            <Clock size={15} /> Позже
+          </button>
+          <button onClick={() => doMarkPaid("installment")} disabled={!basePrice} title="Оплата частями — блок начислен, оплата разбита" className="flex items-center justify-center gap-1 bg-cyan-400/20 text-cyan-300 font-semibold rounded-lg py-2.5 px-3 text-sm hover:bg-cyan-400/30 transition">
+            <SplitSquareVertical size={15} /> Частями
+          </button>
+        </div>
       </div>
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
@@ -543,7 +555,15 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
         {payments.map((p) => (
           <div key={p.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
             <span className="text-zinc-400 shrink-0 w-20">{fmtDate(p.date)}</span>
-            <span className="flex-1 truncate">{p.amount.toLocaleString("ru-RU")}₽ <span className="text-zinc-500">· {p.type === "subscription" ? "подписка" : "пакет"}</span>{p.promoApplied && <span className="text-orange-400"> · {p.promoApplied}</span>}{p.note && <span className="text-zinc-500"> · {p.note}</span>}</span>
+            <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              <span className="font-medium">{p.amount.toLocaleString("ru-RU")}₽</span>
+              <span className="text-zinc-500 text-xs">{p.type === "subscription" ? "подписка" : "пакет"}</span>
+              {p.payStatus === "deferred" && <span className="text-[10px] font-semibold bg-orange-400/20 text-orange-300 rounded px-1.5 py-0.5">ожидается</span>}
+              {p.payStatus === "installment" && <span className="text-[10px] font-semibold bg-cyan-400/20 text-cyan-300 rounded px-1.5 py-0.5">частями</span>}
+              {p.promoApplied && <span className="text-orange-400 text-xs">· {p.promoApplied}</span>}
+              {p.note && <span className="text-zinc-500 text-xs truncate">· {p.note}</span>}
+            </span>
+            {p.payStatus !== "paid" && <button onClick={() => doMarkPaymentPaid(p.id)} className="p-1 rounded hover:bg-lime-400/20 text-zinc-500 hover:text-lime-400 transition shrink-0" title="Отметить оплаченным"><CheckCircle2 size={14} /></button>}
             <button onClick={() => setReceipt(p)} className="p-1 rounded hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Чек"><Printer size={14} /></button>
             <button onClick={() => splitPayment(p)} className="p-1 rounded hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Разделить"><Scissors size={14} /></button>
             <button onClick={() => editPayment(p)} className="p-1 rounded hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Редактировать"><Pencil size={14} /></button>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Cake, CalendarClock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
+import { BarChart3, Cake, CalendarClock, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { useBookings } from "../hooks/useBookings";
@@ -86,7 +86,8 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   // Оплаты за текущий месяц из client_payments (реальные поступления, не расчётный доход)
   const thisMonth = todayStr.slice(0, 7);
   const paymentsThisMonth = payments.filter((p) => p.date.startsWith(thisMonth));
-  const cashReceived = paymentsThisMonth.reduce((s, p) => s + p.amount, 0);
+  const cashReceived = paymentsThisMonth.filter((p) => p.payStatus === "paid").reduce((s, p) => s + p.amount, 0);
+  const cashPending = paymentsThisMonth.filter((p) => p.payStatus !== "paid").reduce((s, p) => s + p.amount, 0);
   // Подписки с истекающей датой в течение 7 дней
   const upcomingRenewals = activeClients.filter((c) => {
     const d = c.membership?.nextPaymentDate;
@@ -178,6 +179,15 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
                 <p className="text-lg font-bold text-zinc-50">{paymentsThisMonth.length}</p>
               </div>
             </div>
+            {cashPending > 0 && (
+              <div className="border-t border-zinc-800 pt-3 flex items-center gap-3">
+                <Clock size={16} className="text-orange-400 shrink-0" />
+                <div className="flex-1">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Ожидается оплата</p>
+                  <p className="text-base font-bold text-orange-300">{hideRevenue ? "• • • •" : `${cashPending.toLocaleString("ru-RU")} ₽`}</p>
+                </div>
+              </div>
+            )}
             {upcomingRenewals.length > 0 && (
               <div className="border-t border-zinc-800 pt-3">
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1.5">Продление подписки (7 дней)</p>
