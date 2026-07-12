@@ -42,6 +42,7 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
   const [groupSession, setGroupSession] = useState<Occurrence | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [confirmPending, setConfirmPending] = useState<{ text: string; onConfirm: () => void } | null>(null);
+  const [finishedSessionClients, setFinishedSessionClients] = useState<Set<string>>(new Set());
   const askConfirm = (text: string, onConfirm: () => void) => setConfirmPending({ text, onConfirm });
 
   useEffect(() => { clientsApi.fetchClients(trainerId).then(setClients); }, [trainerId]);
@@ -279,8 +280,17 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
           defaultTime={modal.time}
           onClose={() => setModal(null)}
           onSave={async (patch, clientIds) => {
+            const wasAlreadyDone = modal.booking?.status === "done";
             if (modal.booking) await updateBooking(modal.booking.id, patch, clientIds);
             else await addBooking(patch, clientIds);
+            // Автосписание: декремент remaining при ручной отметке «проведено» (если статус только что стал done)
+            if (patch.status === "done" && !wasAlreadyDone && clientIds.length > 0) {
+              await Promise.all(clientIds.map(async (cid) => {
+                const cf = await clientsApi.fetchClient(cid);
+                if (cf.membership.type === "sessions") await clientsApi.decrementMembershipRemaining(cid, cf.membership);
+              }));
+              clientsApi.fetchClients(trainerId).then(setClients);
+            }
             setModal(null);
           }}
           onDelete={modal.booking ? () => askConfirm("Удалить запись? Это действие необратимо.", async () => { await deleteBooking(modal.booking!.id); setModal(null); }) : undefined}
@@ -290,7 +300,17 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
       {groupSession && (
         <GroupSessionModal
           clients={groupSession.clientIds.map((id) => ({ id, name: clientName(id), color: clients.find((c) => c.id === id)?.color || "#a3e635", remaining: clients.find((c) => c.id === id)?.remaining ?? null }))}
-          onClose={() => setGroupSession(null)}
+          onClientFinished={async (clientId) => {
+            const next = new Set([...finishedSessionClients, clientId]);
+            setFinishedSessionClients(next);
+            // Когда все клиенты этой записи завершили тренировку — помечаем букинг проведённым
+            if (groupSession.clientIds.every((id) => next.has(id))) {
+              await updateBooking(groupSession.id, { status: "done" }, groupSession.clientIds);
+              setFinishedSessionClients(new Set());
+              clientsApi.fetchClients(trainerId).then(setClients);
+            }
+          }}
+          onClose={() => { setGroupSession(null); setFinishedSessionClients(new Set()); }}
         />
       )}
 

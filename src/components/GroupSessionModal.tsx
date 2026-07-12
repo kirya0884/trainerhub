@@ -256,7 +256,7 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
 
 // Тренировка 2-4 подопечных одновременно: вкладки сверху переключают активного,
 // но все слоты остаются смонтированными (скрыты через "hidden"), поэтому введённые веса/повторы не теряются.
-export default function GroupSessionModal({ clients, onClose }: { clients: SlotClient[]; onClose: () => void }) {
+export default function GroupSessionModal({ clients, onClose, onClientFinished }: { clients: SlotClient[]; onClose: () => void; onClientFinished?: (clientId: string) => void }) {
   const [activeId, setActiveId] = useState(clients[0]?.id || "");
   const [finishedIds, setFinishedIds] = useState<string[]>([]);
 
@@ -277,7 +277,7 @@ export default function GroupSessionModal({ clients, onClose }: { clients: SlotC
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 max-w-2xl w-full mx-auto">
         {clients.map((c) => (
-          <ClientSlot key={c.id} client={c} active={c.id === activeId} onFinished={() => setFinishedIds((arr) => (arr.includes(c.id) ? arr : [...arr, c.id]))} />
+          <ClientSlot key={c.id} client={c} active={c.id === activeId} onFinished={() => { setFinishedIds((arr) => (arr.includes(c.id) ? arr : [...arr, c.id])); onClientFinished?.(c.id); }} />
         ))}
       </div>
     </div>

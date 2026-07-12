@@ -1,7 +1,11 @@
-import { ChevronRight, HeartPulse, Play, Plus, Search } from "lucide-react";
+import { ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
+import type { Membership } from "../lib/clients";
+import { fetchPackageTemplates, markPaid } from "../lib/payments";
+import type { PackageTemplate } from "../lib/payments";
+import ModalShell from "./ModalShell";
 import type { ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
@@ -12,6 +16,34 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
   const [goal, setGoal] = useState(GOALS[0]);
 
   const [search, setSearch] = useState("");
+  const [renewing, setRenewing] = useState<{ clientId: string; name: string; membership: Membership } | null>(null);
+  const [templates, setTemplates] = useState<PackageTemplate[]>([]);
+  const [selectedTplId, setSelectedTplId] = useState("");
+  const [renewBusy, setRenewBusy] = useState(false);
+
+  const openRenew = async (e: React.MouseEvent, c: { id: string; name: string }) => {
+    e.stopPropagation();
+    const [cf, tpls] = await Promise.all([api.fetchClient(c.id), fetchPackageTemplates(trainerId)]);
+    setTemplates(tpls);
+    setSelectedTplId(tpls[0]?.id ?? "");
+    setRenewing({ clientId: c.id, name: c.name, membership: cf.membership });
+  };
+
+  const doRenew = async () => {
+    if (!renewing || renewBusy) return;
+    const tpl = templates.find((t) => t.id === selectedTplId);
+    if (!tpl) return;
+    setRenewBusy(true);
+    try {
+      const finalPrice = tpl.discount ? Math.round(tpl.price * (1 - tpl.discount / 100)) : tpl.price;
+      const m: Membership = { ...renewing.membership, type: "sessions", total: String(tpl.sessions), packagePrice: String(finalPrice), split: tpl.split };
+      await markPaid(renewing.clientId, m, []);
+      setRenewing(null);
+      load();
+    } finally {
+      setRenewBusy(false);
+    }
+  };
 
   const load = () => api.fetchClients(trainerId).then(setClients);
   useEffect(() => { load(); }, [trainerId]);
@@ -63,10 +95,44 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
               </p>
               <p className="text-xs text-zinc-500">{c.goal}</p>
             </div>
-            <ChevronRight size={18} className="text-zinc-600 shrink-0" />
+            <div className="flex items-center gap-1 shrink-0">
+              {c.remaining !== null && c.remaining !== "" && Number(c.remaining) <= 2 && (
+                <button
+                  onClick={(e) => openRenew(e, c)}
+                  className="flex items-center gap-1 text-[11px] font-semibold bg-orange-400/15 text-orange-400 hover:bg-orange-400/25 rounded-full px-2 py-0.5 transition"
+                  title="Быстрое продление пакета"
+                >
+                  <RefreshCw size={10} /> Продлить
+                </button>
+              )}
+              <ChevronRight size={18} className="text-zinc-600" />
+            </div>
           </button>
         ))}
       </div>
+      {renewing && (
+        <ModalShell title={`Продлить пакет — ${renewing.name}`} onClose={() => setRenewing(null)}>
+          <div className="p-4 space-y-3">
+            <p className="text-xs text-zinc-500">Выберите шаблон пакета и нажмите «Оплачено» — тренировки добавятся в остаток автоматически.</p>
+            {templates.length === 0 ? (
+              <p className="text-xs text-zinc-500">Нет шаблонов. Создайте их в Профиле тренера → Шаблоны пакетов.</p>
+            ) : (
+              <select value={selectedTplId} onChange={(e) => setSelectedTplId(e.target.value)} className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none">
+                {templates.map((t) => {
+                  const fp = t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price;
+                  return <option key={t.id} value={t.id} className="bg-zinc-900">{t.name} · {t.sessions} тр.{fp ? ` — ${fp.toLocaleString("ru-RU")}₽` : ""}{t.split ? " · сплит" : ""}</option>;
+                })}
+              </select>
+            )}
+            <div className="flex gap-2">
+              <button onClick={() => setRenewing(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg py-2.5 text-sm transition">Отмена</button>
+              <button onClick={doRenew} disabled={renewBusy || !selectedTplId} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-lime-300 transition disabled:opacity-50">
+                {renewBusy ? "Оформление..." : "✓ Оплачено"}
+              </button>
+            </div>
+          </div>
+        </ModalShell>
+      )}
     </div>
   );
 }
