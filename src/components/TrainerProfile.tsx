@@ -63,7 +63,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
       <h2 className="text-lg font-bold flex items-center gap-1.5"><User size={18} className="text-lime-400" /> Профиль тренера</h2>
 
       <button onClick={() => setShowSubscription(true)} className="w-full flex items-center justify-center gap-2 bg-zinc-900 border border-lime-400/30 hover:border-lime-400/60 text-lime-400 font-semibold rounded-xl py-3 text-sm transition">
-        <Sparkles size={16} /> Подписка на TrainerHub
+        <Sparkles size={16} /> Подписка на Reps
       </button>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -124,7 +124,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           </label>
         </div>
         <label className="text-xs text-zinc-500 block">Название бренда
-          <input value={brand.brand} onChange={(e) => setBrand({ ...brand, brand: e.target.value })} placeholder="TrainerHub" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
+          <input value={brand.brand} onChange={(e) => setBrand({ ...brand, brand: e.target.value })} placeholder="Reps" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
         </label>
         <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
       </div>

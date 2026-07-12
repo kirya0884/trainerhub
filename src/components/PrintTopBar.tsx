@@ -5,7 +5,7 @@ import * as portalApi from "../lib/clientPortal";
 // Шапка окна предпросмотра печати — кнопки «Печать/PDF» и «Закрыть» + загрузка бренда тренера.
 // Используется в PlanPrintView, ReceiptPrintView, ClientProgressPrintView.
 export function usePrintBrand(trainerId: string) {
-  const [brand, setBrand] = useState({ brand: "TrainerHub", logoUrl: "" });
+  const [brand, setBrand] = useState({ brand: "Reps", logoUrl: "" });
   useEffect(() => { portalApi.fetchTrainerBrand(trainerId).then(setBrand); }, [trainerId]);
   return brand;
 }

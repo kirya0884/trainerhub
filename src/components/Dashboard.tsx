@@ -103,7 +103,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
         <div className="min-w-0">
           <p className="text-xs font-semibold tracking-widest text-lime-400">{greeting()}</p>
           <h1 className="text-3xl font-bold text-zinc-50 mt-0.5 truncate">{trainerName || "Тренер"}</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">TrainerHub</p>
+          <p className="text-sm text-zinc-500 mt-0.5">Reps</p>
         </div>
         <div className="relative shrink-0">
           <DonutChart pct={attendanceRate} color="#a3e635" size={76} />

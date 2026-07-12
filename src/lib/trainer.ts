@@ -9,7 +9,7 @@ export async function fetchTrainerSelf(trainerId: string): Promise<TrainerSelf> 
   const { data, error } = await supabase.from("trainers").select("brand,logo_url,profile,created_at").eq("id", trainerId).maybeSingle();
   if (error) throw error;
   return {
-    brand: data?.brand || "TrainerHub", logoUrl: data?.logo_url || "",
+    brand: data?.brand || "Reps", logoUrl: data?.logo_url || "",
     profile: { ...EMPTY_PROFILE, ...(data?.profile || {}) },
     createdAt: data?.created_at || "",
   };

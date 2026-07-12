@@ -11,12 +11,12 @@ export function notifyDailyDigest(trainerId: string, items: { todayCount: number
   localStorage.setItem(key, "1");
 
   if (items.todayCount > 0) {
-    new Notification("TrainerHub", { body: `Сегодня ${items.todayCount} тренировк${items.todayCount === 1 ? "а" : "и"} по записи` });
+    new Notification("Reps", { body: `Сегодня ${items.todayCount} тренировк${items.todayCount === 1 ? "а" : "и"} по записи` });
   }
   if (items.debtNames.length > 0) {
-    new Notification("TrainerHub — остаток исчерпан", { body: items.debtNames.join(", ") });
+    new Notification("Reps — остаток исчерпан", { body: items.debtNames.join(", ") });
   }
   if (items.expiringNames.length > 0) {
-    new Notification("TrainerHub — мало тренировок осталось", { body: items.expiringNames.join(", ") });
+    new Notification("Reps — мало тренировок осталось", { body: items.expiringNames.join(", ") });
   }
 }

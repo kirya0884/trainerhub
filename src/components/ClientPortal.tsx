@@ -39,7 +39,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [programSub, setProgramSub] = useState<ProgramSub>("active");
   const [reportSub, setReportSub] = useState<ReportSub>("body");
   const [showNav, setShowNav] = useState(false);
-  const [brand, setBrand] = useState({ brand: "TrainerHub", logoUrl: "", trainingRules: "" });
+  const [brand, setBrand] = useState({ brand: "Reps", logoUrl: "", trainingRules: "" });
   const [upcoming, setUpcoming] = useState<portalApi.UpcomingBooking | null>(null);
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);

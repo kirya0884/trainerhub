@@ -76,7 +76,7 @@ export default function SubscriptionModal({ onClose }: { onClose: () => void }) 
   const [period, setPeriod] = useState<Period>(1);
 
   return (
-    <ModalShell title="Подписка на TrainerHub" icon={<Sparkles size={17} className="text-lime-400" />} onClose={onClose} wide>
+    <ModalShell title="Подписка на Reps" icon={<Sparkles size={17} className="text-lime-400" />} onClose={onClose} wide>
       <div className="overflow-y-auto p-4 space-y-4">
         {/* Period switcher */}
         <div className="flex gap-1 bg-zinc-800 rounded-xl p-1 w-fit mx-auto">

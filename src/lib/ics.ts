@@ -14,14 +14,14 @@ const addMinutes = (date: string, time: string, minutes: number) => {
 };
 
 export function bookingsToIcs(occurrences: Occurrence[], clientName: (id: string) => string): string {
-  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//TrainerHub//RU"];
+  const lines = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Reps//RU"];
   for (const o of occurrences) {
     if (o.status === "cancelled") continue;
     const end = addMinutes(o.occDate, o.time, Number(o.duration) || 60);
     const names = o.clientIds.map(clientName).join(", ");
     lines.push(
       "BEGIN:VEVENT",
-      `UID:${o.id}-${o.occDate}@trainerhub`,
+      `UID:${o.id}-${o.occDate}@reps`,
       `DTSTART:${toIcsDate(o.occDate, o.time)}`,
       `DTEND:${toIcsDate(end.date, end.time)}`,
       `SUMMARY:Тренировка${names ? " — " + names : ""}`,
@@ -37,7 +37,7 @@ export function downloadIcs(ics: string) {
   const blob = new Blob([ics], { type: "text/calendar" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `trainerhub-bookings-${new Date().toISOString().slice(0, 10)}.ics`;
+  a.href = url; a.download = `reps-bookings-${new Date().toISOString().slice(0, 10)}.ics`;
   a.click();
   URL.revokeObjectURL(url);
 }
