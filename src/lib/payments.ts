@@ -4,20 +4,20 @@ import { updateClient, syncMembershipToPartner, sessionPrice } from "./clients";
 import { today as todayFn, addMonths } from "./format";
 
 // ===================== Шаблоны пакетов =====================
-export interface PackageTemplate { id: string; name: string; sessions: number; price: number; split: boolean }
+export interface PackageTemplate { id: string; name: string; sessions: number; price: number; discount: number; split: boolean }
 
 // Типовые пакеты из прототипа — заводим один раз для нового тренера, цену он проставляет сам.
 // ponytail: флаг "уже сидили" держим в localStorage (не в БД), чтобы не плодить лишнюю таблицу настроек;
 // если тренер удалит все шаблоны, на этом устройстве они не появятся снова.
 const DEFAULT_PACKAGE_TEMPLATES: Omit<PackageTemplate, "id">[] = [
-  { name: "4 тренировки", sessions: 4, price: 0, split: false },
-  { name: "8 тренировок", sessions: 8, price: 0, split: false },
-  { name: "12 тренировок", sessions: 12, price: 0, split: false },
-  { name: "8 тренировок (сплит)", sessions: 8, price: 0, split: true },
+  { name: "4 тренировки", sessions: 4, price: 0, discount: 0, split: false },
+  { name: "8 тренировок", sessions: 8, price: 0, discount: 0, split: false },
+  { name: "12 тренировок", sessions: 12, price: 0, discount: 0, split: false },
+  { name: "8 тренировок (сплит)", sessions: 8, price: 0, discount: 0, split: true },
 ];
 
 export async function fetchPackageTemplates(trainerId: string): Promise<PackageTemplate[]> {
-  const { data, error } = await supabase.from("package_templates").select("id,name,sessions,price,split").eq("trainer_id", trainerId).order("position");
+  const { data, error } = await supabase.from("package_templates").select("id,name,sessions,price,discount,split").eq("trainer_id", trainerId).order("position");
   if (error) throw error;
   const seededKey = `trainerhub-seeded-templates-${trainerId}`;
   if ((data ?? []).length === 0 && !localStorage.getItem(seededKey)) {
@@ -25,16 +25,21 @@ export async function fetchPackageTemplates(trainerId: string): Promise<PackageT
     await Promise.all(DEFAULT_PACKAGE_TEMPLATES.map((t) => savePackageTemplate(trainerId, t)));
     return fetchPackageTemplates(trainerId);
   }
-  return (data ?? []).map((t) => ({ id: t.id, name: t.name, sessions: t.sessions, price: Number(t.price), split: !!t.split }));
+  return (data ?? []).map((t) => ({ id: t.id, name: t.name, sessions: t.sessions, price: Number(t.price), discount: Number(t.discount) || 0, split: !!t.split }));
 }
 
 export async function savePackageTemplate(trainerId: string, t: Omit<PackageTemplate, "id">) {
-  const { error } = await supabase.from("package_templates").insert({ trainer_id: trainerId, name: t.name, sessions: t.sessions, price: t.price, split: t.split });
+  const { error } = await supabase.from("package_templates").insert({ trainer_id: trainerId, name: t.name, sessions: t.sessions, price: t.price, discount: t.discount ?? 0, split: t.split });
   if (error) throw error;
 }
 
 export async function deletePackageTemplate(id: string) {
   const { error } = await supabase.from("package_templates").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function updatePackageTemplate(id: string, t: Omit<PackageTemplate, "id">) {
+  const { error } = await supabase.from("package_templates").update({ name: t.name, sessions: t.sessions, price: t.price, discount: t.discount ?? 0, split: t.split }).eq("id", id);
   if (error) throw error;
 }
 

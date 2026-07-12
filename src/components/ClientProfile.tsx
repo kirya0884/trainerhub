@@ -439,12 +439,13 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   const applyTemplate = (id: string) => {
     const t = templates.find((x) => x.id === id);
     if (!t) return;
-    patchMembership({ total: String(t.sessions), packagePrice: String(t.price), split: t.split }, true);
+    const finalPrice = t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price;
+    patchMembership({ total: String(t.sessions), packagePrice: String(finalPrice), split: t.split }, true);
   };
   const saveAsTemplate = async () => {
     const name = window.prompt("Название шаблона:");
     if (!name) return;
-    await paymentsApi.savePackageTemplate(trainerId, { name, sessions: Number(m.total) || 0, price: Number(m.packagePrice) || 0, split: m.split });
+    await paymentsApi.savePackageTemplate(trainerId, { name, sessions: Number(m.total) || 0, price: Number(m.packagePrice) || 0, discount: 0, split: m.split });
     paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates);
   };
 
@@ -497,7 +498,11 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
             {templates.length > 0 && (
               <select onChange={(e) => e.target.value && applyTemplate(e.target.value)} defaultValue="" className="w-full bg-zinc-800 rounded-lg px-2.5 py-2 text-sm outline-none">
                 <option value="" className="bg-zinc-900">Применить шаблон пакета...</option>
-                {templates.map((t) => <option key={t.id} value={t.id} className="bg-zinc-900">{t.name} — {t.sessions}×{t.price}₽{t.split ? " · сплит" : ""}</option>)}
+                {templates.map((t) => {
+                  const finalPrice = t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price;
+                  const discountLabel = t.discount ? ` −${t.discount}%→${finalPrice.toLocaleString("ru-RU")}₽` : t.price ? ` — ${t.price.toLocaleString("ru-RU")}₽` : "";
+                  return <option key={t.id} value={t.id} className="bg-zinc-900">{t.name} · {t.sessions}тр{discountLabel}{t.split ? " · сплит" : ""}</option>;
+                })}
               </select>
             )}
             <div className="grid grid-cols-2 gap-2">

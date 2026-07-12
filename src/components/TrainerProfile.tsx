@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Camera, ClipboardList, Image, KeyRound, LogOut, Moon, Palette, ScrollText, Sparkles, Sun, User, Users } from "lucide-react";
+import { Camera, ClipboardList, Image, KeyRound, LogOut, Moon, Package, Palette, Plus, ScrollText, Sparkles, Sun, Trash2, User, Users } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
 import { supabase } from "../lib/supabase";
 import SubscriptionModal from "./SubscriptionModal";
+import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 
 export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void }) {
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
@@ -14,6 +15,8 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   const [savingBrand, setSavingBrand] = useState(false);
   const [savingRules, setSavingRules] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
+  const [templates, setTemplates] = useState<PackageTemplate[]>([]);
+  const [editingTpl, setEditingTpl] = useState<Record<string, PackageTemplate>>({});
   const [newPw, setNewPw] = useState("");
   const [newPw2, setNewPw2] = useState("");
   const [pwMsg, setPwMsg] = useState("");
@@ -22,6 +25,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   useEffect(() => {
     trainerApi.fetchTrainerSelf(trainerId).then((s) => { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); });
     trainerApi.fetchTrainerStats(trainerId).then(setStats);
+    fetchPackageTemplates(trainerId).then(setTemplates);
   }, [trainerId]);
 
   const onPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,6 +193,58 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           className="w-full flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition py-1"
         >
           <LogOut size={14} /> Выйти на всех устройствах
+        </button>
+      </div>
+
+
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><Package size={15} className="text-lime-400" /> Шаблоны пакетов тренировок</p>
+        <p className="text-xs text-zinc-500">Создайте шаблоны один раз — применяйте в карточке подопечного одним кликом</p>
+        {templates.map((t) => {
+          const draft = editingTpl[t.id] ?? t;
+          const setDraft = (p: Partial<PackageTemplate>) => setEditingTpl((prev) => ({ ...prev, [t.id]: { ...draft, ...p } }));
+          const save = async () => {
+            await updatePackageTemplate(t.id, draft);
+            setTemplates((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...draft } : x)));
+            setEditingTpl((prev) => { const n = { ...prev }; delete n[t.id]; return n; });
+          };
+          return (
+            <div key={t.id} className="bg-zinc-800/60 rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <input value={draft.name} onChange={(e) => setDraft({ name: e.target.value })} onBlur={save} className="flex-1 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" placeholder="Название" />
+                <button onClick={() => deletePackageTemplate(t.id).then(() => setTemplates((p) => p.filter((x) => x.id !== t.id)))} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <label className="text-xs text-zinc-500">Тренировок
+                  <input type="number" value={draft.sessions} onChange={(e) => setDraft({ sessions: Number(e.target.value) })} onBlur={save} min={1} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                </label>
+                <label className="text-xs text-zinc-500">Цена пакета ₽
+                  <input type="number" value={draft.price} onChange={(e) => setDraft({ price: Number(e.target.value) })} onBlur={save} min={0} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                </label>
+                <label className="text-xs text-zinc-500">Скидка %
+                  <input type="number" value={draft.discount} onChange={(e) => setDraft({ discount: Number(e.target.value) })} onBlur={save} min={0} max={100} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                </label>
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
+                  <input type="checkbox" checked={draft.split} onChange={(e) => { setDraft({ split: e.target.checked }); setTimeout(save, 0); }} className="accent-cyan-400" />
+                  Сплит на двоих
+                </label>
+                {draft.discount > 0 && draft.price > 0 && (
+                  <span className="text-xs text-lime-400">{Math.round(draft.price * (1 - draft.discount / 100)).toLocaleString("ru-RU")}₽ после скидки</span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        <button
+          onClick={async () => {
+            await savePackageTemplate(trainerId, { name: "Новый пакет", sessions: 8, price: 0, discount: 0, split: false });
+            fetchPackageTemplates(trainerId).then(setTemplates);
+          }}
+          className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg py-2 text-sm transition"
+        >
+          <Plus size={14} /> Добавить шаблон
         </button>
       </div>
 
