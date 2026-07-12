@@ -85,7 +85,7 @@ export function usePlan(planId: string) {
     setPlan((p) =>
       p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: d.exercises.map((e) => (e.id === exId ? { ...e, ...patch } : e)) } : d)) } : p
     );
-    if ("setRows" in patch) api.setSetRows(exId, patch.setRows as SetRow[]);
+    if ("setRows" in patch) persist(`setRows:${exId}`, { r: patch.setRows }, (pp) => api.setSetRows(exId, pp.r as SetRow[]));
     const rest = { ...patch } as Record<string, any>;
     delete rest.setRows;
     if (Object.keys(rest).length) persist(`ex:${exId}`, rest, (pp) => api.updateExercise(exId, pp));
