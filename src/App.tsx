@@ -18,6 +18,7 @@ import TrashModal from "./components/TrashModal";
 import TrainerProfile from "./components/TrainerProfile";
 import * as portalApi from "./lib/clientPortal";
 import * as trainerApi from "./lib/trainer";
+import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
 
@@ -105,6 +106,7 @@ export default function App() {
   );
   const [tabOrder, setTabOrder] = useState<TabKind[]>(loadTabOrder);
   const [hiddenTabs, setHiddenTabs] = useState<TabKind[]>(loadHiddenTabs);
+  const [splash, setSplash] = useState(true);
   const [dragTab, setDragTab] = useState<TabKind | null>(null);
   const [showTabSettings, setShowTabSettings] = useState(false);
   const reorderTabs = (target: TabKind) => {
@@ -200,6 +202,8 @@ export default function App() {
   }
 
   return (
+    <>
+    {splash && <SplashScreen onDone={() => setSplash(false)} />}
     <PinGate id={session.user.id}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4">
@@ -298,11 +302,12 @@ export default function App() {
         {view.kind === "plan" && (
           <div>
             <button onClick={() => setView(view.from === "plans" ? { kind: "plans" } : { kind: "client", clientId: view.clientId })} className="text-sm text-zinc-400 hover:text-zinc-100 mb-4 transition">{view.from === "plans" ? "← К планам" : "← К подопечному"}</button>
-            <PlanEditor planId={view.planId} trainerId={session.user.id} clientId={view.clientId} />
+               <PlanEditor planId={view.planId} trainerId={session.user.id} clientId={view.clientId} />
           </div>
         )}
       </div>
     </div>
     </PinGate>
+    </>
   );
 }
