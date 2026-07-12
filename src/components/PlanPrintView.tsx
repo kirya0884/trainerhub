@@ -1,31 +1,16 @@
-import { useEffect, useState } from "react";
-import { Printer, X } from "lucide-react";
-import * as portalApi from "../lib/clientPortal";
+import { usePrintBrand, PrintTopBar, PrintBrandHeader } from "./PrintTopBar";
 import type { Plan } from "../types";
 
 // Печать плана через native window.print() + @media print в index.css (.print-area) — без PDF-библиотек.
 export default function PlanPrintView({ plan, trainerId, clientName, onClose }: { plan: Plan; trainerId: string; clientName: string; onClose: () => void }) {
-  const [brand, setBrand] = useState({ brand: "TrainerHub", logoUrl: "" });
-  useEffect(() => { portalApi.fetchTrainerBrand(trainerId).then(setBrand); }, [trainerId]);
+  const brand = usePrintBrand(trainerId);
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950 overflow-y-auto">
-      <div className="no-print sticky top-0 bg-zinc-900 border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
-        <p className="font-semibold text-sm">Предпросмотр печати</p>
-        <div className="flex gap-2">
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-lime-300 transition"><Printer size={15} /> Печать / PDF</button>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={18} /></button>
-        </div>
-      </div>
+      <PrintTopBar title="Предпросмотр печати" onClose={onClose} />
 
       <div className="print-area max-w-2xl mx-auto bg-white text-zinc-900 p-6 my-4 rounded-xl">
-        <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-300">
-          <div className="flex items-center gap-2">
-            {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-8 h-8 rounded object-cover" />}
-            <span className="font-bold">{brand.brand}</span>
-          </div>
-          <span className="text-sm text-zinc-500">{new Date().toLocaleDateString("ru-RU")}</span>
-        </div>
+        <PrintBrandHeader brand={brand} date={new Date().toLocaleDateString("ru-RU")} />
         <h1 className="text-xl font-bold mb-1">{plan.name}</h1>
         <p className="text-sm text-zinc-600 mb-4">Подопечный: {clientName}</p>
         {plan.note && <p className="text-sm text-zinc-700 bg-zinc-100 rounded-lg p-2 mb-4">{plan.note}</p>}

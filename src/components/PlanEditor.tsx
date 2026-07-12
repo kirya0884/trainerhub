@@ -396,6 +396,16 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                             ))}
                           </div>
                         )}
+                        {s.items?.some((i) => i.rpe > 0) && (
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                            {s.items.filter((i) => i.rpe > 0).map((i, idx) => (
+                              <span key={idx} className="flex items-center gap-1 bg-zinc-700/40 rounded px-1.5 py-0.5">
+                                <span className="text-zinc-400 truncate max-w-[80px]">{i.name}:</span>
+                                <span className="text-cyan-400 font-semibold">RPE {i.rpe}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                         {editing ? (
                           <textarea value={s.review} onChange={(e) => updateSessionReview(s.id, e.target.value)} rows={2} placeholder="Отзыв клиента..." className="w-full text-sm bg-zinc-900/60 rounded-lg p-2 outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
                         ) : (

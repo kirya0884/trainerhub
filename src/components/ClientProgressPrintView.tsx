@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
-import { Printer, X } from "lucide-react";
-import * as portalApi from "../lib/clientPortal";
+import { usePrintBrand, PrintTopBar, PrintBrandHeader } from "./PrintTopBar";
 import * as clientsApi from "../lib/clients";
 import { fetchClientSessionsSummary } from "../lib/progress";
 import { BODY_METRICS } from "../constants";
@@ -11,12 +10,11 @@ import type { Session } from "../types";
 export default function ClientProgressPrintView({ clientId, planIds, clientName, trainerId, onClose }: {
   clientId: string; planIds: string[]; clientName: string; trainerId: string; onClose: () => void;
 }) {
-  const [brand, setBrand] = useState({ brand: "TrainerHub", logoUrl: "" });
+  const brand = usePrintBrand(trainerId);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
 
   useEffect(() => {
-    portalApi.fetchTrainerBrand(trainerId).then(setBrand);
     clientsApi.fetchMeasurements(clientId).then(setMeasurements);
     fetchClientSessionsSummary(planIds).then((r) => setSessions(r.sessions));
   }, [clientId, trainerId, planIds]);
@@ -27,13 +25,7 @@ export default function ClientProgressPrintView({ clientId, planIds, clientName,
 
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950 overflow-y-auto">
-      <div className="no-print sticky top-0 bg-zinc-900 border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
-        <p className="font-semibold text-sm">Предпросмотр печати</p>
-        <div className="flex gap-2">
-          <button onClick={() => window.print()} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-lime-300 transition"><Printer size={15} /> Печать / PDF</button>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={18} /></button>
-        </div>
-      </div>
+      <PrintTopBar title="Предпросмотр печати" onClose={onClose} />
 
       <div className="print-area max-w-2xl mx-auto bg-white text-zinc-900 p-6 my-4 rounded-xl">
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-300">

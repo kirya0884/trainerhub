@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Plus, Ruler, X } from "lucide-react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import TrendChart from "./TrendChart";
 import { BODY_METRICS } from "../constants";
 import { today } from "../lib/format";
 import * as api from "../lib/clients";
@@ -52,19 +52,7 @@ export default function BodyTab({ clientId, measurements, setMeasurements }: { c
       </div>
 
       <div className="bg-zinc-800/30 rounded-xl p-3 pt-4">
-        {series.length === 0 ? <p className="text-sm text-zinc-600 text-center py-10">Нет данных по «{bm.label}». Добавь замер кнопкой выше.</p> : (
-          <div style={{ width: "100%", height: 220 }}>
-            <ResponsiveContainer>
-              <LineChart data={series} margin={{ top: 5, right: 12, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} width={36} domain={["auto", "auto"]} />
-                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#a1a1aa" }} formatter={(v: any) => [`${v} ${bm.unit}`, bm.label]} />
-                <Line type="monotone" dataKey="value" stroke={bm.color} strokeWidth={2.5} dot={{ r: 3, fill: bm.color }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        <TrendChart data={series} color={bm.color} height={220} formatter={(v) => `${v} ${bm.unit}`} emptyText={`Нет данных по «${bm.label}». Добавь замер кнопкой выше.`} />
       </div>
 
       {measurements.length === 0 && !showForm && (

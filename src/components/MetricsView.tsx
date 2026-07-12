@@ -1,6 +1,6 @@
 import { BarChart3, Plus, X } from "lucide-react";
 import { useState } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import TrendChart from "./TrendChart";
 import { EXERCISE_METRICS } from "../constants";
 import { today } from "../lib/format";
 import type { Day, Metric } from "../types";
@@ -69,21 +69,7 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
         <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">{EXERCISE_METRICS.map((x) => <button key={x.key} onClick={() => setMetric(x.key)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition whitespace-nowrap ${metric === x.key ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={metric === x.key ? { background: "var(--accent)" } : undefined}>{x.label}</button>)}</div>
       </div>
       <div className="bg-zinc-800/30 rounded-xl p-3 pt-4">
-        {series.length === 0 ? (
-          <p className="text-sm text-zinc-600 text-center py-10">Нет данных по «{m.label}». Добавь замер или проведи тренировку.</p>
-        ) : (
-          <div style={{ width: "100%", height: 230 }}>
-            <ResponsiveContainer>
-              <LineChart data={series} margin={{ top: 5, right: 12, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} width={36} />
-                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#a1a1aa" }} formatter={(v: any) => [`${v}${m.unit ? " " + m.unit : ""}`, m.label]} />
-                <Line type="monotone" dataKey="value" stroke={m.color} strokeWidth={2.5} dot={{ r: 3, fill: m.color }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        <TrendChart data={series} color={m.color} height={230} formatter={(v) => `${v}${m.unit ? " " + m.unit : ""}`} emptyText={`Нет данных по «${m.label}». Добавь замер или проведи тренировку.`} />
       </div>
       {entries.length > 0 && (
         <div>

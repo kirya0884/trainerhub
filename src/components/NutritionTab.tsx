@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Apple, Plus, X } from "lucide-react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import TrendChart from "./TrendChart";
 import { today } from "../lib/format";
 import * as api from "../lib/nutrition";
 import type { NutritionLog } from "../lib/nutrition";
@@ -90,19 +90,7 @@ export default function NutritionTab({ clientId, logs, setLogs, readOnly }: {
       </div>
 
       <div className="bg-zinc-800/30 rounded-xl p-3 pt-4">
-        {series.length === 0 ? <p className="text-sm text-zinc-600 text-center py-10">Нет данных за выбранный период.</p> : (
-          <div style={{ width: "100%", height: 200 }}>
-            <ResponsiveContainer>
-              <LineChart data={series} margin={{ top: 5, right: 12, left: -8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" />
-                <XAxis dataKey="date" stroke="#71717a" fontSize={11} tickLine={false} />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} width={36} domain={["auto", "auto"]} />
-                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#a1a1aa" }} formatter={(v: any) => [v, fm.label]} />
-                <Line type="monotone" dataKey="value" stroke={fm.color} strokeWidth={2.5} dot={{ r: 3, fill: fm.color }} activeDot={{ r: 5 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )}
+        <TrendChart data={series} color={fm.color} height={200} formatter={(v) => String(v)} emptyText="Нет данных за выбранный период." />
       </div>
 
       <div className="bg-zinc-800/30 rounded-xl overflow-hidden">

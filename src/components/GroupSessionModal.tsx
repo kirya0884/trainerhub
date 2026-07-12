@@ -2,6 +2,7 @@ import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Users, X } from "lu
 import { useEffect, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { parseNum, today } from "../lib/format";
+import { buildMetrics } from "../lib/sessionUtils";
 import * as plansApi from "../lib/plans";
 import * as clientsApi from "../lib/clients";
 import { combinedRemaining } from "../lib/clients";
@@ -131,20 +132,7 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
 
   const finish = async () => {
     if (!day || !plan) return;
-    const metrics: Omit<Metric, "id">[] = [];
-    day.exercises.forEach((ex) => {
-      if (!ex.name) return;
-      const rows = (vals[ex.id] || []).filter((r) => parseNum(r.weight) != null || (r.reps !== "" && r.reps != null));
-      if (!rows.length) return;
-      let best: { w: number; reps: string } | null = null;
-      rows.forEach((r) => { const w = parseNum(r.weight); if (w != null && (best == null || w > best.w)) best = { w, reps: r.reps }; });
-      const rest = parseNum(ex.rest);
-      metrics.push({
-        date: today(), exercise: ex.name, weight: best ? String(best.w) : "",
-        reps: best ? String(parseNum(best.reps) ?? "") : String(parseNum(rows[0].reps) ?? ""),
-        rest: rest == null ? "" : String(rest), sets: String(rows.length),
-      });
-    });
+    const metrics = buildMetrics(day, vals);
     const items = day.exercises.filter((ex) => ex.name).map((ex) => {
       const f = meta[ex.id]?.fires || {};
       const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
