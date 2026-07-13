@@ -54,7 +54,7 @@ export default function SplashScreen({ onDone }: Props) {
         src="/splash.mp4"
         muted
         playsInline
-        style={{ width: "min(400px, 80vw)", height: "auto" }}
+        style={{ width: "100%", height: "100%", objectFit: "cover" }}
       />
     </div>
   );
