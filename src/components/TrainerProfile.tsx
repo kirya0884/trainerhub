@@ -17,6 +17,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   const [showSubscription, setShowSubscription] = useState(false);
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   const [editingTpl, setEditingTpl] = useState<Record<string, PackageTemplate>>({});
+  const [rawTpl, setRawTpl] = useState<Record<string, Record<string, string>>>({}); // raw strings while typing numeric fields
   const [newPw, setNewPw] = useState("");
   const [newPw2, setNewPw2] = useState("");
   const [pwMsg, setPwMsg] = useState("");
@@ -216,13 +217,13 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <label className="text-xs text-zinc-500">Тренировок
-                  <input type="number" value={draft.sessions} onChange={(e) => setDraft({ sessions: Number(e.target.value) })} onBlur={save} min={1} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.sessions ?? String(draft.sessions || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: e.target.value}}))} onBlur={() => { const v = Math.max(1, parseInt(rawTpl[t.id]?.sessions ?? "") || draft.sessions); setDraft({ sessions: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Цена пакета ₽
-                  <input type="number" value={draft.price} onChange={(e) => setDraft({ price: Number(e.target.value) })} onBlur={save} min={0} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.price ?? String(draft.price || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: e.target.value}}))} onBlur={() => { const v = parseInt(rawTpl[t.id]?.price ?? "") || 0; setDraft({ price: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Скидка %
-                  <input type="number" value={draft.discount} onChange={(e) => setDraft({ discount: Number(e.target.value) })} onBlur={save} min={0} max={100} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.discount ?? String(draft.discount || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: e.target.value}}))} onBlur={() => { const v = Math.min(100, Math.max(0, parseInt(rawTpl[t.id]?.discount ?? "") || 0)); setDraft({ discount: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
               </div>
               <div className="flex items-center justify-between">

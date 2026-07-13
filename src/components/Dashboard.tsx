@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BarChart3, Cake, CalendarClock, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
+import { BarChart3, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { useBookings } from "../hooks/useBookings";
@@ -32,6 +32,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   const [data, setData] = useState<{ clients: DashboardClient[]; payments: DashboardPayment[] } | null>(null);
   const [period, setPeriod] = useState<string>("month");
   const [showAnalytics, setShowAnalytics] = useState(false);
+  const [showPayments, setShowPayments] = useState(false);
   const [hideRevenue, setHideRevenue] = useState(false);
   const { bookings } = useBookings(trainerId);
 
@@ -42,6 +43,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
 
   if (!data) return <div className="text-zinc-500 text-sm p-4">Загрузка...</div>;
   const { clients, payments } = data;
+  const clientById = Object.fromEntries(clients.map((c) => [c.id, c]));
   const todayStr = today();
   const weekAgo = addDays(todayStr, -6);
   const inPeriod = (d: string) => {
@@ -166,7 +168,11 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
       {/* Payments dashboard */}
       {(cashReceived > 0 || upcomingRenewals.length > 0) && (
         <div>
-          <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ОПЛАТЫ — {thisMonth.slice(5)}/{thisMonth.slice(0, 4)}</p>
+          <button onClick={() => setShowPayments(p => !p)}
+            className="flex items-center justify-between w-full mb-2">
+            <p className="text-xs font-semibold tracking-widest text-zinc-500">ОПЛАТЫ — {thisMonth.slice(5)}/{thisMonth.slice(0, 4)}</p>
+            {showPayments ? <ChevronDown size={14} className="text-zinc-600" /> : <ChevronRight size={14} className="text-zinc-600" />}
+          </button>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <Wallet size={16} className="text-lime-400 shrink-0" />
@@ -202,6 +208,31 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Payments expanded list */}
+      {showPayments && paymentsThisMonth.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-1.5">
+          <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Все платежи за месяц</p>
+          {[...paymentsThisMonth].sort((a, b) => b.date.localeCompare(a.date)).map((p, i) => {
+            const cName = clientById[p.clientId]?.name ?? "—";
+            const badge = p.payStatus === "deferred"
+              ? <span className="text-[10px] text-orange-400 bg-orange-400/10 rounded px-1 shrink-0">ожидание</span>
+              : p.payStatus === "installment"
+              ? <span className="text-[10px] text-yellow-400 bg-yellow-400/10 rounded px-1 shrink-0">рассрочка</span>
+              : null;
+            return (
+              <div key={i} className="flex items-center gap-2 text-sm">
+                <span className="text-zinc-500 text-xs w-[44px] shrink-0">{p.date.slice(5).replace("-", ".")}</span>
+                <span className="flex-1 text-zinc-300 truncate">{cName}</span>
+                {badge}
+                <span className={`font-semibold shrink-0 ${p.payStatus === "paid" ? "text-lime-400" : "text-orange-300"}`}>
+                  {hideRevenue ? "•••" : `${p.amount.toLocaleString("ru-RU")} ₽`}
+                </span>
+              </div>
+            );
+          })}
         </div>
       )}
 
