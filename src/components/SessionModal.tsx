@@ -1,5 +1,5 @@
-import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Play, X } from "lucide-react";
-import { useState } from "react";
+import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Minimize2, Play, X } from "lucide-react";
+import { useEffect, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { parseNum, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
@@ -81,6 +81,15 @@ export default function SessionModal({ day, onFinish, onClose }: {
   const [wellbeing, setWellbeing] = useState(0);
   const [review, setReview] = useState("");
   const [clientRating, setClientRating] = useState(0);
+  const [minimized, setMinimized] = useState(false);
+  const [startedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
+  const hh = Math.floor(elapsed / 3600), mm = Math.floor((elapsed % 3600) / 60), ss = elapsed % 60;
+  const timer = `${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
+  // Блокируем скролл страницы когда сессия открыта
+  useEffect(() => { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }, []);
 
   const setVal = (exId: string, i: number, patch: Partial<SetVal>) =>
     setVals((a) => ({ ...a, [exId]: a[exId].map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
@@ -115,18 +124,36 @@ export default function SessionModal({ day, onFinish, onClose }: {
       const f = meta[ex.id]?.fires || {};
       const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
       const exVals = (vals[ex.id] ?? []).filter((r) => r.weight || r.reps);
-      return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "", ...(exVals.length ? { actualSets: exVals } : {}) };
+      const plannedSets: Array<{weight: string; reps: string}> = ex.detailed && ex.setRows?.length
+        ? ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }))
+        : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
+      return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "", plannedSets, ...(exVals.length ? { actualSets: exVals } : {}) };
     });
     const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
     onFinish(metrics, `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`, session);
     onClose();
   };
 
+  if (minimized) {
+    return (
+      <button onClick={() => setMinimized(false)}
+        className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
+        <Play size={15} className="text-lime-400 shrink-0" />
+        <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>
+        <span className="font-mono text-lime-400 text-sm shrink-0">{timer}</span>
+        <span className="text-xs text-zinc-500 shrink-0">{doneEx}/{day.exercises.length} упр.</span>
+      </button>
+    );
+  }
+
   return (
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
-        <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs text-zinc-500 mt-0.5">Отмечай факт по подходам, ставь огонёчки на последних подходах и примечания</p></div>
-        <button onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0"><X size={20} /></button>
+        <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs text-zinc-500 mt-0.5"><span className="font-mono text-lime-400 mr-2">{timer}</span>Отмечай факт по подходам, ставь огонёчки на последних подходах</p></div>
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => setMinimized(true)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400" title="Свернуть"><Minimize2 size={18} /></button>
+          <button onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={20} /></button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 max-w-2xl w-full mx-auto space-y-3">
@@ -151,9 +178,9 @@ export default function SessionModal({ day, onFinish, onClose }: {
                           {isDone ? <CheckCircle2 size={18} className="text-lime-400" /> : <Circle size={18} className="text-zinc-600" />}
                         </button>
                         <span className="text-xs text-zinc-400 w-4 text-center shrink-0">{i + 1}</span>
-                        <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="—" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                        <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
                         <span className="text-xs text-zinc-500">×</span>
-                        <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="—" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                        <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
                         <span className="text-xs text-zinc-500 shrink-0">кг</span>
                         {fireIdx.includes(i) && <FlameRate value={md.fires[i] || 0} onChange={(v) => setFire(ex.id, i, v)} />}
                       </div>

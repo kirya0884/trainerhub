@@ -50,7 +50,7 @@ export interface Mesocycle {
 
 export interface ProgressNote { id: string; date: string; text: string }
 export interface Metric { id: string; date: string; exercise: string; weight: string; reps: string; rest: string; sets: string }
-export interface SessionItem { name: string; effort: number; rpe: number; note: string; actualSets?: Array<{weight: string; reps: string}>; plannedSummary?: string }
+export interface SessionItem { name: string; effort: number; rpe: number; note: string; actualSets?: Array<{weight: string; reps: string}>; plannedSets?: Array<{weight: string; reps: string}>; plannedSummary?: string }
 export interface Session {
   id: string; date: string; dayName: string; mood: number; wellbeing: number; clientRating: number;
   review: string; done: number; total: number; fromClient: boolean; items: SessionItem[];

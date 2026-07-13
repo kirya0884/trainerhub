@@ -21,6 +21,7 @@ import PeriodizationModal from "./PeriodizationModal";
 import PlanPrintView from "./PlanPrintView";
 import PlanVersionsModal from "./PlanVersionsModal";
 import SessionModal from "./SessionModal";
+import SessionReadModal from "./SessionReadModal";
 import TemplatesModal from "./TemplatesModal";
 import DayTemplateLibrary from "./DayTemplateLibrary";
 
@@ -50,7 +51,10 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
   const lastMetrics = Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m]));
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const COLLAPSED_KEY = `trainerhub-collapsed-${planId}`;
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
+    () => { try { return JSON.parse(localStorage.getItem(`trainerhub-collapsed-${planId}`) || "{}"); } catch { return {}; } }
+  );
   const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'>('idle');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const markSaving = () => {
@@ -58,16 +62,24 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => setSaveStatus('saved'), 700);
   };
-  const [dayClipboard, setDayClipboard] = useState<{ name: string; exercises: Day["exercises"] } | null>(null);
-  const clipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const CLIP_KEY = "trainerhub-day-clipboard";
+  const CLIP_TTL = 40_000;
+  const loadClip = (): { name: string; exercises: Day["exercises"] } | null => {
+    try {
+      const raw = sessionStorage.getItem(CLIP_KEY);
+      if (!raw) return null;
+      const { day, copiedAt } = JSON.parse(raw);
+      if (Date.now() - copiedAt > CLIP_TTL) { sessionStorage.removeItem(CLIP_KEY); return null; }
+      return day;
+    } catch { return null; }
+  };
+  const [dayClipboard, setDayClipboard] = useState<{ name: string; exercises: Day["exercises"] } | null>(() => loadClip());
   const copyDay = (day: { name: string; exercises: Day["exercises"] }) => {
     const d = { name: day.name, exercises: day.exercises };
+    sessionStorage.setItem(CLIP_KEY, JSON.stringify({ day: d, copiedAt: Date.now() }));
     setDayClipboard(d);
-    if (clipTimerRef.current) clearTimeout(clipTimerRef.current);
-    clipTimerRef.current = setTimeout(() => {
-      setDayClipboard(null);
-      clipTimerRef.current = null;
-    }, 20_000);
+    // Expire UI state after TTL (sessionStorage already has timestamp-based check)
+    setTimeout(() => setDayClipboard(loadClip()), CLIP_TTL + 100);
   };
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2000); };
@@ -116,6 +128,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [showMembership, setShowMembership] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [viewingSession, setViewingSession] = useState<typeof sessions[0] | null>(null);
   const [showSessionTrash, setShowSessionTrash] = useState(false);
   const [openJournal, setOpenJournal] = useState(false);
   const [openHistory, setOpenHistory] = useState(false);
@@ -129,7 +142,11 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [membership, setMembership] = useState<Membership | null>(null);
   const [addingSession, setAddingSession] = useState(false);
   const [clientName, setClientName] = useState("");
-  const toggleCollapse = (id: string) => setCollapsed((c) => ({ ...c, [id]: !c[id] }));
+  const toggleCollapse = (id: string) => setCollapsed((c) => {
+    const next = { ...c, [id]: !c[id] };
+    localStorage.setItem(`trainerhub-collapsed-${planId}`, JSON.stringify(next));
+    return next;
+  });
   const cycleGroup = (dayId: string, exId: string, cur: string, exercises: Day["exercises"]) => {
     const i = GROUP_CYCLE.indexOf(cur || "");
     markSaving(); updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
@@ -377,6 +394,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                             </div>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
+                            <button onClick={() => setViewingSession(s)} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-lime-400 transition" title="Просмотреть тренировку"><Eye size={13} /></button>
                             <button onClick={() => copySessionAsDay(s)} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition" title="Копировать тренировку как день"><Clipboard size={13} /></button>
                             <button onClick={() => setEditingSessionId(editing ? null : s.id)} className={`p-1.5 rounded transition ${editing ? "bg-cyan-400/20 text-cyan-400" : "hover:bg-zinc-700 text-zinc-500"}`} title="Редактировать отзыв"><Pencil size={13} /></button>
                             <button onClick={() => setDeletingSessionId(s.id)} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><X size={13} /></button>
@@ -535,6 +553,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         </ModalShell>
       )}
 
+      {viewingSession && <SessionReadModal session={viewingSession} onClose={() => setViewingSession(null)} />}
       {sessionDay && <SessionModal day={sessionDay} onFinish={finishSession} onClose={() => setSessionDay(null)} />}
       {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 text-zinc-100 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg border border-zinc-700 pointer-events-none">{toast}</div>}
     </div>

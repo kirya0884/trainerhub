@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Flame, Layers, Play, Send, Star, X } from "lucide-react";
+import { CheckCircle2, Circle, Flame, Layers, Minimize2, Play, Send, Star, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { parseNum, today } from "../lib/format";
 import { buildMetrics } from "../lib/sessionUtils";
@@ -113,6 +113,9 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
   const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
+  const [minimized, setMinimized] = useState(false);
+  // Блокируем скролл страницы когда сессия открыта
+  useEffect(() => { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }, []);
   const [step, setStep] = useState<"training" | "feedback">("training");
   const [draft, setDraft] = useState<{ metrics: Omit<Metric, "id">[]; session: Omit<Session, "id"> } | null>(null);
   const [mood, setMood] = useState(0);
@@ -127,7 +130,10 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
       const plannedSummary = exSummary(ex) + (ex.rest ? ` · отдых ${ex.rest}` : "");
       const actualSets = (vals[ex.id] || []).map((r) => ({ weight: r.weight, reps: r.reps }));
-      return { name: ex.name, effort, rpe: 0, note: meta[ex.id]?.note || "", actualSets, plannedSummary };
+      const plannedSets: Array<{weight: string; reps: string}> = ex.detailed && ex.setRows?.length
+        ? ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }))
+        : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
+      return { name: ex.name, effort, rpe: 0, note: meta[ex.id]?.note || "", actualSets, plannedSets, plannedSummary };
     });
     const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood: 0, wellbeing: 0, clientRating: 0, review: "", done: day.exercises.length, total: day.exercises.length, fromClient: true, items };
     setDraft({ metrics, session });
@@ -169,12 +175,28 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     );
   }
 
+  if (minimized) {
+    return (
+      <button onClick={() => setMinimized(false)}
+        style={{ "--accent": accent } as React.CSSProperties}
+        className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
+        <Play size={15} style={{ color: "var(--accent)" }} className="shrink-0" />
+        <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>
+        <span className="font-mono text-sm shrink-0" style={{ color: "var(--accent)" }}>{timer}</span>
+        <span className="text-xs text-zinc-500 shrink-0">{doneEx}/{day.exercises.length} упр.</span>
+      </button>
+    );
+  }
+
   return (
     <div style={{ "--accent": accent } as React.CSSProperties}>
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} style={{ color: "var(--accent)" }} className="shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs mt-0.5 font-mono" style={{ color: "var(--accent)" }}>{timer}</p></div>
-        <button onClick={cancel} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0"><X size={20} /></button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button onClick={() => setMinimized(true)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400" title="Свернуть"><Minimize2 size={18} /></button>
+          <button onClick={cancel} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={20} /></button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 max-w-2xl w-full mx-auto space-y-3">
@@ -205,9 +227,9 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                           {isDone ? <CheckCircle2 size={18} style={{ color: "var(--accent)" }} /> : <Circle size={18} className="text-zinc-600" />}
                         </button>
                         <span className="text-xs text-zinc-400 w-4 text-center shrink-0">{i + 1}</span>
-                        <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="—" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-[var(--accent)]/40 shrink-0" />
+                        <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-[var(--accent)]/40 shrink-0" />
                         <span className="text-xs text-zinc-500">×</span>
-                        <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="—" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-[var(--accent)]/40 shrink-0" />
+                        <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-[var(--accent)]/40 shrink-0" />
                         <span className="text-xs text-zinc-500 shrink-0">кг</span>
                         {fireIdx.includes(i) && <FlameRate value={md.fires[i] || 0} onChange={(v) => setFire(ex.id, i, v)} />}
                       </div>
