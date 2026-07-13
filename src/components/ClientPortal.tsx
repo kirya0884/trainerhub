@@ -91,8 +91,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           await portalApi.logClientSession(activeSession.planId, metrics, session);
           await portalApi.finishClientSession(client.id);
           portalApi.markClientBookingDone(client.trainerId, client.id, activeSession.dayName, session.date); // fire-and-forget
+          await progressHook.reload(); // ждём обновления сессий, чтобы день не мелькал в "Активных"
           setActiveSession(null);
-          progressHook.reload();
         }}
       />
     );
