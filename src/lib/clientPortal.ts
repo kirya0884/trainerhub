@@ -102,7 +102,7 @@ export async function logClientSession(planId: string, metricsIn: Omit<Metric, "
   if (sessErr) throw sessErr;
   if (session.items.length) {
     const { error: itemsErr } = await supabase.from("plan_session_items").insert(
-      session.items.map((i) => ({ session_id: sessRow.id, name: i.name, effort: i.effort, rpe: i.rpe || 0, note: i.note }))
+      session.items.map((i) => ({ session_id: sessRow.id, name: i.name, effort: i.effort, rpe: i.rpe || 0, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null }))
     );
     if (itemsErr) throw itemsErr;
   }

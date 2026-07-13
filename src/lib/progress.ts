@@ -12,7 +12,7 @@ export async function fetchProgress(planId: string): Promise<ProgressData> {
     ? await supabase.from("plan_session_items").select("*").in("session_id", sessIds)
     : { data: [] as any[] };
   const itemsBySession: Record<string, SessionItem[]> = {};
-  for (const it of items ?? []) (itemsBySession[it.session_id] ??= []).push({ name: it.name, effort: it.effort ?? 0, rpe: it.rpe ?? 0, note: it.note ?? "" });
+  for (const it of items ?? []) (itemsBySession[it.session_id] ??= []).push({ name: it.name, effort: it.effort ?? 0, rpe: it.rpe ?? 0, note: it.note ?? "", actualSets: it.actual_sets ?? undefined, plannedSets: it.planned_sets ?? undefined, plannedSummary: it.planned_summary ?? undefined });
 
   return {
     progress: (progress ?? []).map((p) => ({ id: p.id, date: p.date, text: p.text })),
@@ -107,7 +107,7 @@ export async function logSession(planId: string, metricsIn: Omit<Metric, "id">[]
 
   if (session.items.length) {
     const { error: itemsErr } = await supabase.from("plan_session_items").insert(
-      session.items.map((i) => ({ session_id: sessRow.id, name: i.name, effort: i.effort, rpe: i.rpe, note: i.note }))
+      session.items.map((i) => ({ session_id: sessRow.id, name: i.name, effort: i.effort, rpe: i.rpe, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null }))
     );
     if (itemsErr) throw itemsErr;
   }
