@@ -83,7 +83,10 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
         {clients.length === 0 && <p className="text-zinc-600 text-sm text-center py-8">Добавь первого подопечного, чтобы привязывать к нему планы</p>}
         {clients.filter((c) => !search.trim() || c.name.toLowerCase().includes(search.toLowerCase())).map((c) => (
           <button key={c.id} onClick={() => onOpenClient(c.id)} className={`w-full text-left flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:border-zinc-700 transition ${c.status === "left" ? "opacity-50" : ""}`}>
-            <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name.charAt(0).toUpperCase()}</div>
+            {c.avatarUrl
+              ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 border border-zinc-700" />
+              : <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name.charAt(0).toUpperCase()}</div>
+            }
             <div className="flex-1 min-w-0">
               <p className="font-medium truncate flex items-center gap-1.5">
                 <RemainingBadge remaining={c.remaining} />

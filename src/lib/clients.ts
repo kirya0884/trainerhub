@@ -10,6 +10,7 @@ export interface ClientListItem {
   activeSession: unknown;
   hasHealthFlags: boolean;
   remaining: string | null;
+  avatarUrl: string;
 }
 
 // remaining — остаток тренировок из абонемента (только для типа "sessions"); для подписки/без абонемента — null (бейдж не рисуем).
@@ -23,7 +24,7 @@ const remainingOf = (membership: any) => {
 export async function fetchClients(trainerId: string): Promise<ClientListItem[]> {
   const { data, error } = await supabase
     .from("clients")
-    .select("id,name,goal,color,status,active_session,health,membership")
+    .select("id,name,goal,color,status,active_session,health,membership,avatar_url")
     .eq("trainer_id", trainerId)
     .is("deleted_at", null)
     .order("created_at");
@@ -32,6 +33,7 @@ export async function fetchClients(trainerId: string): Promise<ClientListItem[]>
     id: c.id, name: c.name, goal: c.goal ?? "", color: c.color, status: c.status,
     activeSession: c.active_session, hasHealthFlags: !!(c.health?.injuries || c.health?.restrictions),
     remaining: remainingOf(c.membership),
+    avatarUrl: c.avatar_url ?? "",
   }));
 }
 
