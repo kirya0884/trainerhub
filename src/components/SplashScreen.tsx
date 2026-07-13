@@ -18,7 +18,7 @@ export default function SplashScreen({ onDone }: Props) {
     if (!v) return;
 
     // Fallback: если видео не стартовало через 3с — пропускаем
-    const fallback = setTimeout(finish, 3000);
+    const fallback = setTimeout(finish, 17000); // видео ~16с + запас
 
     const onEnded = () => {
       clearTimeout(fallback);
@@ -54,7 +54,7 @@ export default function SplashScreen({ onDone }: Props) {
         src="/splash.mp4"
         muted
         playsInline
-        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+        style={{ width: "100%", height: "100%", objectFit: "contain" }}
       />
     </div>
   );
