@@ -13,6 +13,43 @@ input, textarea, select { font-size: 16px !important; }
   .no-print { display: none !important; }
 }
 
+
+/* ── Акцентный цвет тренера (--accent) ─────────────────────────────
+   Tailwind-классы lime-400 переопределяются через CSS, чтобы все
+   кнопки и элементы реагировали на выбранный цвет без правки TSX.
+   color-mix() поддерживается Chrome 111+, FF 113+, Safari 16.2+.
+   ------------------------------------------------------------------ */
+
+/* solid */
+.bg-lime-400          { background-color: var(--accent, #a3e635) !important; }
+.text-lime-400        { color: var(--accent, #a3e635) !important; }
+.border-lime-400      { border-color: var(--accent, #a3e635) !important; }
+.border-t-lime-400    { border-top-color: var(--accent, #a3e635) !important; }
+.ring-lime-400        { --tw-ring-color: var(--accent, #a3e635) !important; }
+.accent-lime-400      { accent-color: var(--accent, #a3e635) !important; }
+
+/* opacity variants */
+.bg-lime-400\/5      { background-color: color-mix(in srgb, var(--accent, #a3e635)  5%, transparent) !important; }
+.bg-lime-400\/10     { background-color: color-mix(in srgb, var(--accent, #a3e635) 10%, transparent) !important; }
+.bg-lime-400\/15     { background-color: color-mix(in srgb, var(--accent, #a3e635) 15%, transparent) !important; }
+.bg-lime-400\/20     { background-color: color-mix(in srgb, var(--accent, #a3e635) 20%, transparent) !important; }
+.bg-lime-400\/25     { background-color: color-mix(in srgb, var(--accent, #a3e635) 25%, transparent) !important; }
+.bg-lime-400\/30     { background-color: color-mix(in srgb, var(--accent, #a3e635) 30%, transparent) !important; }
+.bg-lime-400\/40     { background-color: color-mix(in srgb, var(--accent, #a3e635) 40%, transparent) !important; }
+.bg-lime-400\/50     { background-color: color-mix(in srgb, var(--accent, #a3e635) 50%, transparent) !important; }
+.bg-lime-400\/60     { background-color: color-mix(in srgb, var(--accent, #a3e635) 60%, transparent) !important; }
+
+/* hover states */
+.hover\:bg-lime-400:hover   { background-color: var(--accent, #a3e635) !important; }
+.hover\:bg-lime-300:hover   { background-color: color-mix(in srgb, var(--accent, #a3e635) 82%, white) !important; }
+.hover\:text-lime-400:hover { color: var(--accent, #a3e635) !important; }
+.hover\:text-lime-300:hover { color: color-mix(in srgb, var(--accent, #a3e635) 80%, white) !important; }
+.hover\:border-lime-400\/40:hover { border-color: color-mix(in srgb, var(--accent, #a3e635) 40%, transparent) !important; }
+
+/* focus states */
+.focus\:border-lime-400\/50:focus { border-color: color-mix(in srgb, var(--accent, #a3e635) 50%, transparent) !important; }
+.focus\:ring-lime-400\/40:focus   { --tw-ring-color: color-mix(in srgb, var(--accent, #a3e635) 40%, transparent) !important; }
+
 /* ── Светлая тема (light mode) ──────────────────────────────────────
    CSS-каскад переопределяет Tailwind zinc-классы.
    Применяется через html.light-theme (см. App.tsx).
