@@ -1,5 +1,5 @@
 import { CheckCircle2, Circle, Flame, Layers, Minimize2, Play, Send, Star, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { parseNum, today } from "../lib/format";
 import { buildMetrics } from "../lib/sessionUtils";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
@@ -72,11 +72,12 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
 type SetVal = { weight: string; reps: string };
 type ExMeta = { fires: Record<number, number>; note: string; done: boolean; setsDone?: Record<number, boolean> };
 
-export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635" }: {
+export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635", onProgress }: {
   day: Day; startedAt: number;
   onFinish: (metrics: Omit<Metric, "id">[], session: Omit<Session, "id">) => void;
   onCancel: () => void;
   accent?: string;
+  onProgress?: (p: Record<string, { done: boolean; setsDone?: Record<number, boolean>; note?: string }>) => void;
 }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -112,6 +113,19 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     });
 
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
+
+  // Live progress: debounced write so trainer sees exercise status in real time
+  const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevMeta = useRef(meta);
+  if (onProgress && prevMeta.current !== meta) {
+    prevMeta.current = meta;
+    if (progressTimer.current) clearTimeout(progressTimer.current);
+    progressTimer.current = setTimeout(() => {
+      const p: Record<string, { done: boolean; setsDone?: Record<number, boolean>; note?: string }> = {};
+      day.exercises.forEach((ex) => { const m = meta[ex.id]; if (m) p[ex.id] = { done: m.done, setsDone: m.setsDone ?? {}, note: m.note }; });
+      onProgress(p);
+    }, 1500);
+  }
   const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
   const [minimized, setMinimized] = useState(false);
   // Блокируем скролл страницы когда сессия открыта
@@ -135,7 +149,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
       return { name: ex.name, effort, rpe: 0, note: meta[ex.id]?.note || "", actualSets, plannedSets, plannedSummary };
     });
-    const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood: 0, wellbeing: 0, clientRating: 0, review: "", done: day.exercises.length, total: day.exercises.length, fromClient: true, items };
+    const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood: 0, wellbeing: 0, clientRating: 0, review: "", done: doneEx, total: day.exercises.length, fromClient: true, items };
     setDraft({ metrics, session });
     setStep("feedback");
   };

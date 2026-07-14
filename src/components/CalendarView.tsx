@@ -32,12 +32,12 @@ const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_S
 const ROW_H = 32; // px за час
 
 export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlans }: { trainerId: string; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void }) {
-  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, rescheduleOccurrence } = useBookings(trainerId);
+  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload } = useBookings(trainerId);
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [mode, setMode] = useState<Mode>("week");
   const today = todayFn();
   const [anchor, setAnchor] = useState(today);
-  const [modal, setModal] = useState<{ booking?: Booking; date?: string; time?: string } | null>(null);
+  const [modal, setModal] = useState<{ booking?: Booking; date?: string; time?: string; occDate?: string } | null>(null);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
   const [groupSession, setGroupSession] = useState<Occurrence | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
@@ -263,7 +263,7 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
               ))}
             </div>
             <div className="flex gap-2 pt-1">
-              <button onClick={() => { setModal({ booking: findBookingById(quickView.id) }); setQuickView(null); }} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg py-2 text-sm transition">Редактировать</button>
+              <button onClick={() => { setModal({ booking: findBookingById(quickView.id), occDate: quickView.occDate }); setQuickView(null); }} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg py-2 text-sm transition">Редактировать</button>
               {quickView.isOccurrence && (
                 <button onClick={() => askConfirm("Отменить занятие на эту дату?", () => { cancelOccurrence(findBookingById(quickView.id)!, quickView.occDate); setQuickView(null); })} className="px-3 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm transition">Отменить</button>
               )}
@@ -281,8 +281,17 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
           onClose={() => setModal(null)}
           onSave={async (patch, clientIds) => {
             const wasAlreadyDone = modal.booking?.status === "done";
-            if (modal.booking) await updateBooking(modal.booking.id, patch, clientIds);
-            else await addBooking(patch, clientIds);
+            if (modal.booking) {
+              const base = findBookingById(modal.booking.id);
+              if (base?.recurring && modal.occDate && patch.status) {
+                // Status change on recurring occurrence → exception, not base record
+                const { status, ...basePatch } = patch;
+                await doneOccurrence({ ...base, status }, modal.occDate);
+                if (Object.keys(basePatch).length || clientIds) await updateBooking(modal.booking.id, basePatch, clientIds);
+              } else {
+                await updateBooking(modal.booking.id, patch, clientIds);
+              }
+            } else await addBooking(patch, clientIds);
             // Автосписание: декремент remaining при ручной отметке «проведено» (если статус только что стал done)
             if (patch.status === "done" && !wasAlreadyDone && clientIds.length > 0) {
               await Promise.all(clientIds.map(async (cid) => {
@@ -305,7 +314,12 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
             setFinishedSessionClients(next);
             // Когда все клиенты этой записи завершили тренировку — помечаем букинг проведённым
             if (groupSession.clientIds.every((id) => next.has(id))) {
-              await updateBooking(groupSession.id, { status: "done" }, groupSession.clientIds);
+              if (groupSession.isOccurrence) {
+                const base = findBookingById(groupSession.id);
+                if (base) await doneOccurrence(base, groupSession.occDate);
+              } else {
+                await updateBooking(groupSession.id, { status: "done" }, groupSession.clientIds);
+              }
               setFinishedSessionClients(new Set());
               clientsApi.fetchClients(trainerId).then(setClients);
             }

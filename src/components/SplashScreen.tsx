@@ -2,37 +2,37 @@ import { useEffect, useRef, useState } from "react";
 
 interface Props {
   onDone: () => void;
+  ready?: boolean; // true when auth/app finished loading
 }
 
-export default function SplashScreen({ onDone }: Props) {
+export default function SplashScreen({ onDone, ready = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [fading, setFading] = useState(false);
+  const doneCalled = useRef(false);
 
   const finish = () => {
+    if (doneCalled.current) return;
+    doneCalled.current = true;
     setFading(true);
-    setTimeout(onDone, 400); // wait for fade-out
+    setTimeout(onDone, 400);
   };
 
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-
-    // Fallback: если видео не стартовало через 3с — пропускаем
-    const fallback = setTimeout(finish, 17000); // видео ~16с + запас
-
-    const onEnded = () => {
-      clearTimeout(fallback);
-      finish();
-    };
-
+    const fallback = setTimeout(finish, 8000);
+    const onEnded = () => { clearTimeout(fallback); finish(); };
     v.addEventListener("ended", onEnded);
-    v.play().catch(finish); // autoplay blocked → skip
-
-    return () => {
-      v.removeEventListener("ended", onEnded);
-      clearTimeout(fallback);
-    };
+    v.play().catch(finish);
+    return () => { v.removeEventListener("ended", onEnded); clearTimeout(fallback); };
   }, []);
+
+  // Close 600ms after app signals it is ready (looks smooth)
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(finish, 600);
+    return () => clearTimeout(t);
+  }, [ready]);
 
   return (
     <div

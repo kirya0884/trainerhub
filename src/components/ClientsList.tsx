@@ -6,6 +6,7 @@ import type { Membership } from "../lib/clients";
 import { fetchPackageTemplates, markPaid } from "../lib/payments";
 import type { PackageTemplate } from "../lib/payments";
 import ModalShell from "./ModalShell";
+import LiveWorkoutModal from "./LiveWorkoutModal";
 import type { ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
@@ -20,6 +21,7 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   const [selectedTplId, setSelectedTplId] = useState("");
   const [renewBusy, setRenewBusy] = useState(false);
+  const [liveClient, setLiveClient] = useState<ClientListItem | null>(null);
 
   const openRenew = async (e: React.MouseEvent, c: { id: string; name: string }) => {
     e.stopPropagation();
@@ -94,7 +96,13 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
                 {c.hasHealthFlags && <HeartPulse size={13} className="text-amber-400 shrink-0" />}
                 {c.status === "paused" && <span className="text-[10px] uppercase tracking-wide bg-amber-500/15 text-amber-400 rounded px-1.5 py-0.5 shrink-0">пауза</span>}
                 {c.status === "left" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">ушёл</span>}
-                {!!c.activeSession && <span className="text-[10px] uppercase tracking-wide bg-cyan-400/15 text-cyan-400 rounded px-1.5 py-0.5 shrink-0 flex items-center gap-1"><Play size={10} /> тренируется</span>}
+                {!!c.activeSession && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setLiveClient(c); }}
+                    className="text-[10px] uppercase tracking-wide bg-cyan-400/15 text-cyan-400 hover:bg-cyan-400/30 rounded px-1.5 py-0.5 shrink-0 flex items-center gap-1 transition"
+                    title="Смотреть тренировку онлайн"
+                  ><Play size={10} /> тренируется</button>
+                )}
               </p>
               <p className="text-xs text-zinc-500">{c.goal}</p>
             </div>
@@ -113,6 +121,15 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
           </button>
         ))}
       </div>
+      {liveClient && liveClient.activeSession && (
+        <LiveWorkoutModal
+          clientId={liveClient.id}
+          clientName={liveClient.name}
+          clientColor={liveClient.color}
+          activeSession={liveClient.activeSession as any}
+          onClose={() => setLiveClient(null)}
+        />
+      )}
       {renewing && (
         <ModalShell title={`Продлить пакет — ${renewing.name}`} onClose={() => setRenewing(null)}>
           <div className="p-4 space-y-3">

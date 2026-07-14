@@ -15,6 +15,7 @@ export function usePlan(planId: string) {
       .catch((e) => { setError(e.message); setLoading(false); });
 
   useEffect(() => {
+    if (!planId) { setPlan(null); setLoading(false); return; }
     let alive = true;
     setLoading(true);
     api.fetchPlan(planId)

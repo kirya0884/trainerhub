@@ -203,7 +203,7 @@ export default function App() {
 
   return (
     <>
-    {splash && <SplashScreen onDone={() => setSplash(false)} />}
+    {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && (selfClient !== undefined && isTrainer !== undefined || !session)} />}
     <PinGate id={session.user.id}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4">

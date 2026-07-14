@@ -53,7 +53,7 @@ export const updatePlanMeta = async (planId: string, patch: Partial<Pick<Plan, "
   const row: Record<string, any> = { ...patch };
   if ("visibleToClient" in row) { row.visible_to_client = row.visibleToClient; delete row.visibleToClient; }
   const { error } = await supabase.from("plans").update(row).eq("id", planId);
-  if (error) console.error("[updatePlanMeta]", error.message, { planId, patch });
+  if (error) throw error;
 };
 
 export async function addDay(planId: string, name: string, position: number, mesocycleId?: string | null) {
@@ -69,7 +69,7 @@ export const updateDay = async (dayId: string, patch: Record<string, any>) => {
   if ("visibleToClient" in patch) { row.visible_to_client = patch.visibleToClient; delete row.visibleToClient; }
   if ("mesocycleId" in patch) { row.mesocycle_id = patch.mesocycleId; delete row.mesocycleId; }
   const { error } = await supabase.from("plan_days").update(row).eq("id", dayId);
-  if (error) console.error("[updateDay]", error.message, { dayId, patch });
+  if (error) throw error;
 };
 export const deleteDay = (dayId: string) => supabase.from("plan_days").delete().eq("id", dayId);
 export const reorderDays = (rows: { id: string; position: number }[]) =>
@@ -88,7 +88,7 @@ export async function updateExercise(exId: string, patch: Record<string, any>) {
   const dbPatch: Record<string, any> = { ...patch };
   if ("group" in dbPatch) { dbPatch.exercise_group = dbPatch.group; delete dbPatch.group; }
   const { error } = await supabase.from("plan_exercises").update(dbPatch).eq("id", exId);
-  if (error) console.error("[updateExercise]", error.message, { exId, patch });
+  if (error) throw error;
 }
 export const deleteExercise = (exId: string) => supabase.from("plan_exercises").delete().eq("id", exId);
 export const reorderExercises = (rows: { id: string; position: number }[]) =>
@@ -113,7 +113,7 @@ export const updateMesocycle = async (mesoId: string, patch: Partial<Pick<Mesocy
   const row: Record<string, any> = { ...patch };
   if ("visibleToClient" in row) { row.visible_to_client = row.visibleToClient; delete row.visibleToClient; }
   const { error } = await supabase.from("plan_mesocycles").update(row).eq("id", mesoId);
-  if (error) console.error("[updateMesocycle]", error.message, { mesoId, patch });
+  if (error) throw error;
 };
 export const deleteMesocycle = (mesoId: string) => supabase.from("plan_mesocycles").delete().eq("id", mesoId);
 export const reorderMesocycles = (rows: { id: string; position: number }[]) =>

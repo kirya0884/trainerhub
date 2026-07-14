@@ -104,6 +104,9 @@ export async function markSessionDone(trainerId: string, clientId: string, dayNa
     const bookings = await fetchBookings(trainerId);
     const occs = expandBookings(bookings, date, date);
     const match = occs.find((o) => o.clientIds.includes(clientId) && o.dayName === dayName && o.status === "scheduled");
-    if (match) await updateBooking(match.id, { status: "done" });
-  } catch {}
+    if (match) {
+      if (match.isOccurrence) await setException(match, date, { status: "done" });
+      else await updateBooking(match.id, { status: "done" });
+    }
+  } catch (e) { console.error("[markSessionDone]", e); }
 }

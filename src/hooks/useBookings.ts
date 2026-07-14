@@ -17,6 +17,7 @@ export function useBookings(trainerId: string) {
   };
   const deleteBooking = async (id: string) => { await api.deleteBooking(id); await load(); };
   const cancelOccurrence = async (b: Booking, date: string) => { await api.cancelOccurrence(b, date); await load(); };
+  const doneOccurrence = async (b: Booking, occDate: string) => { await api.setException(b, occDate, { status: "done" }); await load(); };
   // Перенос одного занятия (drag-and-drop в неделе): для разовой записи двигаем дату/время, для повторяющейся — точечная exception на эту дату.
   const rescheduleOccurrence = async (b: Booking, occDate: string, newDate: string, newTime?: string) => {
     const patch: Partial<Booking> = { date: newDate, ...(newTime ? { time: newTime } : {}) };
@@ -25,5 +26,5 @@ export function useBookings(trainerId: string) {
     await load();
   };
 
-  return { bookings, loading, addBooking, updateBooking, deleteBooking, cancelOccurrence, rescheduleOccurrence, reload: load };
+  return { bookings, loading, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload: load };
 }

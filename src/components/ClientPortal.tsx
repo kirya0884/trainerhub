@@ -86,6 +86,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       <ClientSessionView
         accent={profile.accentColor}
         day={day} startedAt={activeSession.startedAt}
+        onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch(() => {})}
         onCancel={async () => { await portalApi.cancelSession(client.id); setActiveSession(null); }}
         onFinish={async (metrics, session) => {
           await portalApi.logClientSession(activeSession.planId, metrics, session);

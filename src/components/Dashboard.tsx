@@ -65,8 +65,8 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   const trainingsDone = doneOccurrences.length;
 
   const activeClients = clients.filter((c) => c.status !== "left");
-  const debt = activeClients.filter((c) => c.membership.remaining !== "" && c.membership.remaining != null && Number(c.membership.remaining) <= 0);
-  const expiring = activeClients.filter((c) => { const r = Number(c.membership.remaining); return c.membership.remaining !== "" && c.membership.remaining != null && (r === 1 || r === 2); });
+  const debt = activeClients.filter((c) => c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && Number(c.membership.remaining) <= 0);
+  const expiring = activeClients.filter((c) => { const r = Number(c.membership.remaining); return c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && (r === 1 || r === 2); });
   const birthdays = activeClients.map((c) => {
     if (!c.birthday) return null;
     const parts = c.birthday.split("-");
@@ -96,7 +96,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
     return d && d >= todayStr && d <= addDays(todayStr, 7);
   });
 
-  notifyDailyDigest(trainerId, { todayCount: todayOccurrences.length, debtNames: debt.map((c) => c.name), expiringNames: expiring.map((c) => c.name) });
+  useEffect(() => { notifyDailyDigest(trainerId, { todayCount: todayOccurrences.length, debtNames: debt.map((c) => c.name), expiringNames: expiring.map((c) => c.name) }); }, [trainerId, todayOccurrences.length, debt.length, expiring.length]);
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -106,7 +106,11 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
         <div className="min-w-0">
           <p className="text-xs font-semibold tracking-widest text-lime-400">{greeting()}</p>
           <h1 className="text-3xl font-bold text-zinc-50 mt-0.5 truncate">{trainerName || "Тренер"}</h1>
-          <p className="text-sm text-zinc-500 mt-0.5">Reps</p>
+          <video
+            src="/logo.mp4"
+            autoPlay muted loop playsInline
+            style={{ width: 72, height: 72, objectFit: "contain", marginTop: 2, marginLeft: -6, opacity: 0.9 }}
+          />
         </div>
         <div className="relative shrink-0">
           <DonutChart pct={attendanceRate} color="#a3e635" size={76} />

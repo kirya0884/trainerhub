@@ -76,6 +76,18 @@ export async function importBackup(trainerId: string, raw: any, onProgress?: (do
     if (error) throw error;
     idMap[id] = data.id;
   }
+  // Remap partnerClientId inside membership JSONB now that all client IDs are known
+  for (const c of raw.clients ?? []) {
+    const partnerId = c.membership?.partnerClientId;
+    if (partnerId && idMap[partnerId]) {
+      const newId = idMap[c.id];
+      if (!newId) continue;
+      const { data: existing } = await supabase.from("clients").select("membership").eq("id", newId).single();
+      if (!existing) continue;
+      const membership = { ...(existing.membership ?? {}), partnerClientId: idMap[partnerId] };
+      await supabase.from("clients").update({ membership }).eq("id", newId);
+    }
+  }
   for (const m of raw.measurements ?? []) {
     const { id, client_id, ...rest } = m;
     await supabase.from("client_measurements").insert({ ...rest, client_id: remap(client_id) });

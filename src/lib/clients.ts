@@ -247,10 +247,10 @@ export async function incrementMembershipRemaining(clientId: string, membership:
   if (membership.type === "subscription" || membership.remaining === "" || membership.remaining == null) return membership;
   const left = Number(membership.remaining);
   if (Number.isNaN(left)) return membership;
-  const newTotal = String((Number(membership.remainingTotal) || Number(membership.total) || 0) + 1);
-  const next = { ...membership, remaining: String(left + 1), remainingTotal: newTotal };
+  // remainingTotal is the denominator for "X of Y" display — it should NOT change when returning a session
+  const next = { ...membership, remaining: String(left + 1) };
   await updateClient(clientId, { membership: next });
-  if (membership.split && membership.partnerClientId) await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining, remainingTotal: next.remainingTotal });
+  if (membership.split && membership.partnerClientId) await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining });
   return next;
 }
 

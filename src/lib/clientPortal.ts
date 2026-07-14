@@ -82,6 +82,10 @@ export async function fetchUpcomingBooking(clientId: string): Promise<UpcomingBo
   return next ? { date: next.date, time: next.time, duration: next.duration } : null;
 }
 
+export async function updateSessionProgress(clientId: string, progress: Record<string, { done: boolean; setsDone?: Record<number, boolean>; note?: string }>) {
+  await supabase.rpc("update_session_progress", { p_client_id: clientId, p_progress: progress });
+}
+
 export const startSession = (clientId: string, planId: string, dayId: string, dayName: string) =>
   supabase.rpc("start_client_session", { p_client_id: clientId, p_plan_id: planId, p_day_id: dayId, p_day_name: dayName }).then(({ error }) => { if (error) throw error; });
 export const cancelSession = (clientId: string) =>
@@ -114,17 +118,24 @@ export async function markClientBookingDone(trainerId: string, clientId: string,
   try {
     const { data } = await supabase
       .from("bookings")
-      .select("id, recurring, date, day_name, booking_clients(client_id)")
+      .select("id, recurring, date, day_name, status, exceptions, booking_clients(client_id)")
       .eq("trainer_id", trainerId)
-      .eq("day_name", dayName)
-      .eq("status", "scheduled");
+      .eq("day_name", dayName);
     for (const b of data ?? []) {
       const inDate = b.recurring || b.date === date;
       const hasClient = (b.booking_clients ?? []).some((x: any) => x.client_id === clientId);
+      // skip already-done/cancelled base records for non-recurring
+      if (!b.recurring && (b.status === "done" || b.status === "cancelled")) continue;
       if (inDate && hasClient) {
-        await supabase.from("bookings").update({ status: "done" }).eq("id", b.id);
+        if (b.recurring) {
+          const ex = b.exceptions ?? {};
+          const exceptions = { ...ex, [date]: { ...(ex[date] ?? {}), status: "done" } };
+          await supabase.from("bookings").update({ exceptions }).eq("id", b.id);
+        } else {
+          await supabase.from("bookings").update({ status: "done" }).eq("id", b.id);
+        }
         break;
       }
     }
-  } catch {}
+  } catch (e) { console.error('[markClientBookingDone]', e); }
 }

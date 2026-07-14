@@ -102,11 +102,15 @@ export async function deletePayment(id: string, clientId: string, membership: Me
   await deletePaymentRow(id);
   const delta = Number(row?.sessions_delta) || 0;
   if (!delta || membership.type === "subscription") return membership;
-  const next: Membership = {
+  let next: Membership = {
     ...membership,
     remaining: String(Math.max(0, (Number(membership.remaining) || 0) - delta)),
     remainingTotal: String(Math.max(0, (Number(membership.remainingTotal) || Number(membership.total) || 0) - delta)),
   };
+  // If rollback zeroed remaining but extraRemaining pool still exists, promote it back
+  if (Number(next.remaining) <= 0 && Number(next.extraRemaining) > 0) {
+    next = { ...next, remaining: next.extraRemaining, remainingPrice: next.extraPricePerSession, remainingTotal: next.extraRemaining, extraRemaining: "", extraPricePerSession: "" };
+  }
   await updateClient(clientId, { membership: next });
   if (membership.split && membership.partnerClientId)
     await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining, remainingTotal: next.remainingTotal });
@@ -124,7 +128,7 @@ export async function splitPayment(clientId: string, payment: Payment, parts: nu
   for (let i = 0; i < parts; i++) {
     const amount = i === parts - 1 ? payment.amount - base * (parts - 1) : base;
     // sessions_delta записывается только в первую часть; остальные — 0, чтобы не дублировать откат.
-    await addPayment(clientId, { date: payment.date, amount, type: payment.type, note: `${payment.note} (часть ${i + 1}/${parts})`.trim() }, i === 0 && sessionsDelta ? sessionsDelta : undefined);
+    await addPayment(clientId, { date: payment.date, amount, type: payment.type, note: `${payment.note} (часть ${i + 1}/${parts})`.trim(), promoApplied: payment.promoApplied, payStatus: payment.payStatus }, i === 0 && sessionsDelta ? sessionsDelta : undefined);
   }
 }
 
@@ -173,7 +177,7 @@ export async function markPaid(clientId: string, membership: Membership, promoti
   if (isSplit) {
     const half = Math.round(amount / 2);
     await addPayment(clientId, { date: today, amount: half, type, note: "сплит 50/50", promoApplied: label, payStatus }, sessionsDelta);
-    await addPayment(membership.partnerClientId, { date: today, amount: amount - half, type, note: "сплит 50/50 (партнёр)", promoApplied: label, payStatus }, sessionsDelta);
+    await addPayment(membership.partnerClientId, { date: today, amount: amount - half, type, note: "сплит 50/50 (партнёр)", promoApplied: label, payStatus }, undefined);
     await updateClient(clientId, { membership: merged });
     await syncMembershipToPartner(membership.partnerClientId, { paymentDate: merged.paymentDate, ...dateFields });
   } else {
