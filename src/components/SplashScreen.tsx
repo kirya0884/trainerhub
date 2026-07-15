@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 
 interface Props {
   onDone: () => void;
-  ready?: boolean; // true when auth + role check resolved
+  ready?: boolean;
 }
 
-const MIN_MS = 2500; // минимальное время показа — даём анимации прокрутиться и данным загрузиться
+const MIN_MS = 2500;
 
 export default function SplashScreen({ onDone, ready = false }: Props) {
   const [fading, setFading] = useState(false);
@@ -16,10 +16,9 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
     if (doneCalled.current) return;
     doneCalled.current = true;
     setFading(true);
-    setTimeout(onDone, 400);
+    setTimeout(onDone, 500);
   };
 
-  // Закрыть когда auth готов И прошло не менее MIN_MS
   useEffect(() => {
     if (!ready) return;
     const elapsed = Date.now() - startRef.current;
@@ -28,7 +27,6 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
     return () => clearTimeout(t);
   }, [ready]);
 
-  // Жёсткий fallback на случай зависания
   useEffect(() => {
     const t = setTimeout(finish, 10000);
     return () => clearTimeout(t);
@@ -42,21 +40,52 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
         zIndex: 9999,
         background: "#04030F",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        transition: "opacity 0.4s ease",
+        gap: 0,
+        transition: "opacity 0.5s ease",
         opacity: fading ? 0 : 1,
         pointerEvents: fading ? "none" : "all",
       }}
     >
+      {/* Видео занимает весь экран — если воспроизводится, закрывает фон */}
       <video
         src="/splash.mp4"
         autoPlay
         muted
-        loop
         playsInline
-        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          objectFit: "contain",
+        }}
       />
+      {/* Fallback-контент: всегда видим, пока/если видео не загрузилось */}
+      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+        <img
+          src="/icon-512.png"
+          alt=""
+          style={{ width: 100, height: 100, borderRadius: 22, objectFit: "cover" }}
+        />
+        <p style={{ color: "#a3e635", fontWeight: 800, fontSize: 22, letterSpacing: "0.1em", margin: 0 }}>REPS</p>
+        <Spinner />
+      </div>
+    </div>
+  );
+}
+
+function Spinner() {
+  return (
+    <div style={{ width: 32, height: 32, position: "relative" }}>
+      <svg viewBox="0 0 32 32" style={{ animation: "spin 1s linear infinite", width: 32, height: 32 }}>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <circle cx="16" cy="16" r="13" fill="none" stroke="#27272a" strokeWidth="3" />
+        <circle cx="16" cy="16" r="13" fill="none" stroke="#a3e635" strokeWidth="3"
+          strokeDasharray="20 62" strokeLinecap="round" />
+      </svg>
     </div>
   );
 }
