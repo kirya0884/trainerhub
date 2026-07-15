@@ -9,6 +9,8 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [fading, setFading] = useState(false);
   const doneCalled = useRef(false);
+  const readyRef = useRef(ready);
+  const videoEndedRef = useRef(false);
 
   const finish = () => {
     if (doneCalled.current) return;
@@ -17,21 +19,45 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
     setTimeout(onDone, 400);
   };
 
+  // Keep readyRef in sync so the video onEnded handler always sees the latest value
+  useEffect(() => {
+    readyRef.current = ready;
+  });
+
   useEffect(() => {
     const v = videoRef.current;
-    if (!v) return;
-    const fallback = setTimeout(finish, 8000);
-    const onEnded = () => { clearTimeout(fallback); finish(); };
+    // Fallback: force-close after 10s in case video stalls
+    const fallback = setTimeout(finish, 10000);
+
+    if (!v) return () => clearTimeout(fallback);
+
+    const onEnded = () => {
+      clearTimeout(fallback);
+      videoEndedRef.current = true;
+      if (readyRef.current) finish(); // auth is already done → close now
+      // else: wait for the ready useEffect below to close us
+    };
     v.addEventListener("ended", onEnded);
-    v.play().catch(finish);
+
+    // If autoplay is blocked → show at least 1 s then close
+    v.play().catch(() => {
+      clearTimeout(fallback);
+      videoEndedRef.current = true;
+      setTimeout(finish, 1000);
+    });
+
     return () => { v.removeEventListener("ended", onEnded); clearTimeout(fallback); };
   }, []);
 
-  // Close 600ms after app signals it is ready (looks smooth)
+  // Called when auth resolves; only close if the video has already finished
   useEffect(() => {
     if (!ready) return;
-    const t = setTimeout(finish, 600);
-    return () => clearTimeout(t);
+    if (videoEndedRef.current) {
+      // Video is done, auth is now done too → close smoothly
+      const t = setTimeout(finish, 300);
+      return () => clearTimeout(t);
+    }
+    // Video still playing → let it finish; onEnded will call finish()
   }, [ready]);
 
   return (
