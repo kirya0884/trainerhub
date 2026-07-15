@@ -112,6 +112,10 @@ export async function deletePayment(id: string, clientId: string, membership: Me
     next = { ...next, remaining: next.extraRemaining, remainingPrice: next.extraPricePerSession, remainingTotal: next.extraRemaining, extraRemaining: "", extraPricePerSession: "" };
   }
   await updateClient(clientId, { membership: next });
+  // split: откат синхронизируется в партнёра через syncMembershipToPartner.
+  // Платёж партнёра (note "сплит 50/50 (партнёр)") хранит sessions_delta=null — это осознанно:
+  // он финансовая запись, счётчик сессий принадлежит первичному клиенту.
+  // Для полного отката сплита удаляй платёж ПЕРВИЧНОГО клиента — он откатит обоих.
   if (membership.split && membership.partnerClientId)
     await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining, remainingTotal: next.remainingTotal });
   return next;

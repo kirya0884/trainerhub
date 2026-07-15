@@ -72,7 +72,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
     requestNotifyPermission();
     const m = client.membership as any;
     if (m?.type === "sessions" && m.remaining !== "" && m.remaining != null) {
-      const rem = Number(m.remaining);
+      const rem = (Number(m.remaining) || 0) + (Number(m.extraRemaining) || 0);
       if (rem >= 1 && rem <= 2) notifyLowBalance(client.id, rem);
     }
     if (m?.type === "subscription" && m.nextPaymentDate) {

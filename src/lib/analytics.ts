@@ -9,13 +9,13 @@ export function monthlyRevenue(payments: DashboardPayment[], months = 6) {
     return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("ru-RU", { month: "short" }), total: 0 };
   });
   const byKey = Object.fromEntries(buckets.map((b) => [b.key, b]));
-  for (const p of payments) { const b = byKey[p.date?.slice(0, 7)]; if (b) b.total += p.amount; }
+  for (const p of payments) { if (p.payStatus !== "paid") continue; const b = byKey[p.date?.slice(0, 7)]; if (b) b.total += p.amount; }
   return buckets;
 }
 
 export function topClientsByRevenue(clients: DashboardClient[], payments: DashboardPayment[], n = 5) {
   const totals: Record<string, number> = {};
-  for (const p of payments) totals[p.clientId] = (totals[p.clientId] || 0) + p.amount;
+  for (const p of payments) { if (p.payStatus === "paid") totals[p.clientId] = (totals[p.clientId] || 0) + p.amount; }
   return clients.map((c) => ({ c, total: totals[c.id] || 0 })).filter((x) => x.total > 0).sort((a, b) => b.total - a.total).slice(0, n);
 }
 
@@ -46,7 +46,7 @@ export function revenueBySource(clients: DashboardClient[], payments: DashboardP
   const sourceByClient: Record<string, string> = {};
   for (const c of clients) sourceByClient[c.id] = c.source || "Не указан";
   const totals: Record<string, number> = {};
-  for (const p of payments) { const s = sourceByClient[p.clientId] || "Не указан"; totals[s] = (totals[s] || 0) + p.amount; }
+  for (const p of payments) { if (p.payStatus !== "paid") continue; const s = sourceByClient[p.clientId] || "Не указан"; totals[s] = (totals[s] || 0) + p.amount; }
   return Object.entries(totals).map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
 }
 
