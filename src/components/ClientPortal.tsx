@@ -18,6 +18,7 @@ import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import MetricsView from "./MetricsView";
 import { fmtDate, today as todayFn } from "../lib/format";
 import { supabase } from "../lib/supabase";
+import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
 import ChatThread from "./ChatThread";
 
@@ -66,6 +67,31 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
     };
     refresh();
     const id = setInterval(refresh, 20000);
+
+    // Уведомления клиенту
+    requestNotifyPermission();
+    const m = client.membership as any;
+    if (m?.type === "sessions" && m.remaining !== "" && m.remaining != null) {
+      const rem = Number(m.remaining);
+      if (rem >= 1 && rem <= 2) notifyLowBalance(client.id, rem);
+    }
+    if (m?.type === "subscription" && m.nextPaymentDate) {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const due = new Date(m.nextPaymentDate + "T00:00:00");
+      const days = Math.round((due.getTime() - today.getTime()) / 86400000);
+      if (days >= 0 && days <= 2) notifyRenewalSoon(client.id, days, m.nextPaymentDate);
+    }
+    // Напомнить за 2 часа до тренировки
+    portalApi.fetchUpcomingBooking(client.id).then((ub) => {
+      if (!ub) return;
+      const todayStr = new Date().toISOString().slice(0, 10);
+      if (ub.date !== todayStr || !ub.time) return;
+      const [hh, mm] = ub.time.split(":").map(Number);
+      const occMs = new Date(todayStr + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;
+      const diffMin = (occMs - Date.now()) / 60000;
+      if (diffMin >= 110 && diffMin <= 130) notifyUpcomingBooking("client", client.id, todayStr, ub.time);
+    });
+
     return () => clearInterval(id);
   }, [client.id]);
 

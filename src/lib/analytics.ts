@@ -49,3 +49,26 @@ export function revenueBySource(clients: DashboardClient[], payments: DashboardP
   for (const p of payments) { const s = sourceByClient[p.clientId] || "Не указан"; totals[s] = (totals[s] || 0) + p.amount; }
   return Object.entries(totals).map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
 }
+
+// Клиенты с исчерпанным пакетом (долг)
+export function debtClients(clients: DashboardClient[]) {
+  return clients.filter((c) => {
+    if (c.status === "left") return false;
+    const m = c.membership;
+    return m?.type === "sessions" && m.remaining !== "" && m.remaining != null && Number(m.remaining) <= 0;
+  });
+}
+
+// Сумма отложенных/рассрочных платежей (ещё не оплачено)
+export function pendingPaymentsTotal(payments: DashboardPayment[]) {
+  return payments.filter((p) => p.payStatus !== "paid").reduce((s, p) => s + p.amount, 0);
+}
+
+// Клиенты с отложенными платежами
+export function pendingPaymentClients(clients: DashboardClient[], payments: DashboardPayment[]) {
+  const pending: Record<string, number> = {};
+  for (const p of payments) {
+    if (p.payStatus !== "paid") pending[p.clientId] = (pending[p.clientId] || 0) + p.amount;
+  }
+  return clients.filter((c) => pending[c.id]).map((c) => ({ c, amount: pending[c.id] })).sort((a, b) => b.amount - a.amount);
+}

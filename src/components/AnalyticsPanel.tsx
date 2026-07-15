@@ -1,8 +1,8 @@
-import { Download } from "lucide-react";
+import { AlertTriangle, Download } from "lucide-react";
 import { useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
-import { cohortRetention, monthlyRevenue, revenueBySource, topClientsByRevenue, trialConversionRate } from "../lib/analytics";
+import { cohortRetention, debtClients, monthlyRevenue, pendingPaymentClients, revenueBySource, topClientsByRevenue, trialConversionRate } from "../lib/analytics";
 import { exportAnalyticsCsv } from "../lib/exportAnalytics";
 import RemainingBadge from "./RemainingBadge";
 
@@ -16,6 +16,9 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
   const conversion = trialConversionRate(clients);
   const cohorts = cohortRetention(clients);
   const bySource = revenueBySource(clients, payments);
+  const debt = debtClients(clients);
+  const pendingClients = pendingPaymentClients(clients, payments);
+  const hasRevenue = revenue.some((b) => b.total > 0);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
@@ -36,17 +39,21 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
         <p className="text-xs text-zinc-500 mb-2">Доход по месяцам</p>
-        <div style={{ height: 140 }}>
-          <ResponsiveContainer>
-            <BarChart data={revenue} margin={{ top: 5, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
-              <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} />
-              <YAxis stroke="#71717a" fontSize={11} tickLine={false} width={40} />
-              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#a1a1aa" }} formatter={(v: any) => [`${v.toLocaleString("ru-RU")} ₽`, "Доход"]} />
-              <Bar dataKey="total" fill="#a3e635" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        {hasRevenue ? (
+          <div style={{ height: 140 }}>
+            <ResponsiveContainer>
+              <BarChart data={revenue} margin={{ top: 5, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
+                <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} />
+                <YAxis stroke="#71717a" fontSize={11} tickLine={false} width={40} />
+                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#a1a1aa" }} formatter={(v: any) => [`${v.toLocaleString("ru-RU")} ₽`, "Доход"]} />
+                <Bar dataKey="total" fill="#a3e635" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        ) : (
+          <p className="text-xs text-zinc-600 text-center py-8">Нет данных об оплатах за этот период</p>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -59,6 +66,39 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
           <p className="text-2xl font-bold text-cyan-400 mt-0.5">{attendanceRate != null ? `${attendanceRate}%` : "—"}</p>
         </div>
       </div>
+
+      {debt.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+          <div className="flex items-center gap-1.5 mb-2">
+            <AlertTriangle size={13} className="text-orange-400 shrink-0" />
+            <p className="text-xs text-zinc-500">Исчерпан пакет ({debt.length})</p>
+          </div>
+          <div className="space-y-1.5">
+            {debt.map((c) => (
+              <div key={c.id} className="flex items-center gap-2 text-sm">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
+                <span className="flex-1 truncate text-orange-300">{c.name}</span>
+                <span className="text-zinc-500 text-xs">0 тр.</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {pendingClients.length > 0 && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+          <p className="text-xs text-zinc-500 mb-2">Ожидают оплаты</p>
+          <div className="space-y-1.5">
+            {pendingClients.map(({ c, amount }) => (
+              <div key={c.id} className="flex items-center gap-2 text-sm">
+                <span className="w-2 h-2 rounded-full shrink-0" style={{ background: c.color }} />
+                <span className="flex-1 truncate">{c.name}</span>
+                <span className="text-cyan-400 shrink-0">{amount.toLocaleString("ru-RU")} ₽</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {top.length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">

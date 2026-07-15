@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BarChart3, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { useBookings } from "../hooks/useBookings";
 import { expandBookings } from "../lib/bookings";
-import { notifyDailyDigest, requestNotifyPermission } from "../lib/notify";
+import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
+import { supabase } from "../lib/supabase";
 import AnalyticsPanel from "./AnalyticsPanel";
 import { today, addDays } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
@@ -40,6 +41,26 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
     requestNotifyPermission();
     fetchDashboardData(trainerId).then(setData);
   }, [trainerId]);
+
+  // Real-time: detect when a client starts/finishes a workout
+  const prevActiveRef = useRef<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!data) return;
+    const channel = supabase.channel(`trainer-clients-${trainerId}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "clients", filter: `trainer_id=eq.${trainerId}` }, (payload) => {
+        const c = payload.new as any;
+        const isNowActive = !!(c.active_session && c.active_session.status === "active");
+        const wasActive = prevActiveRef.current[c.id] ?? false;
+        const name = data.clients.find((x) => x.id === c.id)?.name ?? "Клиент";
+        if (!wasActive && isNowActive) notifyClientStarted(name);
+        if (wasActive && !isNowActive && c.active_session?.status === "done") notifyClientFinished(name);
+        prevActiveRef.current[c.id] = isNowActive;
+        // Refresh data to update isTraining badge
+        fetchDashboardData(trainerId).then(setData);
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [trainerId, data]);
 
   if (!data) return <div className="text-zinc-500 text-sm p-4">Загрузка...</div>;
   const { clients, payments } = data;
@@ -81,7 +102,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   const todayOccurrences = expandBookings(bookings, todayStr, todayStr).sort((a, b) => a.time.localeCompare(b.time));
   const weekUpcoming = expandBookings(bookings, todayStr, addDays(todayStr, 6)).filter((o) => o.status === "scheduled");
   const last30 = expandBookings(bookings, addDays(todayStr, -29), todayStr).filter((o) => o.status === "done" || o.status === "no-show");
-  const attendanceRate = last30.length ? Math.round((last30.filter((o) => o.status === "done").length / last30.length) * 100) : 0;
+  const attendanceRate = last30.length ? Math.round((last30.filter((o) => o.status === "done").length / last30.length) * 100) : null;
   const trainedThisWeek = expandBookings(bookings, addDays(todayStr, -6), todayStr).filter((o) => o.status === "done").length;
   const periodLabel = period === "day" ? "СЕГОДНЯ" : period === "week" ? "НЕДЕЛЯ" : new Date(todayStr + "T00:00:00").toLocaleDateString("ru-RU", { month: "long", year: "numeric" }).toUpperCase();
 
@@ -96,7 +117,18 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
     return d && d >= todayStr && d <= addDays(todayStr, 7);
   });
 
-  useEffect(() => { notifyDailyDigest(trainerId, { todayCount: todayOccurrences.length, debtNames: debt.map((c) => c.name), expiringNames: expiring.map((c) => c.name) }); }, [trainerId, todayOccurrences.length, debt.length, expiring.length]);
+  useEffect(() => {
+    notifyDailyDigest(trainerId, { todayCount: todayOccurrences.length, debtNames: debt.map((c) => c.name), expiringNames: expiring.map((c) => c.name) });
+    // Тренеру: напомнить за 1 час до тренировки
+    const nowMs = Date.now();
+    for (const occ of todayOccurrences) {
+      if (!occ.time) continue;
+      const [hh, mm] = occ.time.split(":").map(Number);
+      const occMs = new Date(todayStr + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;
+      const diffMin = (occMs - nowMs) / 60000;
+      if (diffMin >= 50 && diffMin <= 70) notifyUpcomingBooking("trainer", trainerId, todayStr, occ.time);
+    }
+  }, [trainerId, todayOccurrences.length, debt.length, expiring.length]);
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -113,7 +145,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
           />
         </div>
         <div className="relative shrink-0">
-          <DonutChart pct={attendanceRate} color="#a3e635" size={76} />
+          <DonutChart pct={attendanceRate ?? 0} color="#a3e635" size={76} />
           <div className="absolute inset-0 flex items-center justify-center">
             {trainerAvatar
               ? <img src={trainerAvatar} alt="" className="w-11 h-11 rounded-full object-cover" />
@@ -135,9 +167,9 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
           <div className="flex items-center gap-4">
             <div className="relative shrink-0">
-              <DonutChart pct={income > 0 ? Math.min(100, attendanceRate) : 0} color="#a3e635" size={68} />
+              <DonutChart pct={income > 0 ? Math.min(100, attendanceRate ?? 0) : 0} color="#a3e635" size={68} />
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-[11px] font-bold text-zinc-300">{attendanceRate}%</span>
+                <span className="text-[11px] font-bold text-zinc-300">{attendanceRate != null ? `${attendanceRate}%` : "—"}</span>
               </div>
             </div>
             <div className="flex-1 grid grid-cols-3 gap-2">
