@@ -24,12 +24,18 @@ export function notifyDailyDigest(trainerId: string, items: { todayCount: number
 // Тренеру: подопечный начал тренировку
 export function notifyClientStarted(clientName: string) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const key = `trainerhub-started-${clientName}-${new Date().toISOString().slice(0, 13)}`;
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, "1");
   new Notification("Reps — Тренировка началась", { body: `${clientName} начал тренировку` });
 }
 
 // Тренеру: подопечный завершил тренировку
 export function notifyClientFinished(clientName: string) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const key = `trainerhub-finished-${clientName}-${new Date().toISOString().slice(0, 13)}`;
+  if (localStorage.getItem(key)) return;
+  localStorage.setItem(key, "1");
   new Notification("Reps — Тренировка завершена", { body: `${clientName} завершил тренировку` });
 }
 

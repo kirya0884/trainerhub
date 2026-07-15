@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "../lib/bookings";
 import type { Booking } from "../lib/bookings";
 
 export function useBookings(trainerId: string) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const reqRef = useRef(0);
 
-  const load = () => api.fetchBookings(trainerId).then((b) => { setBookings(b); setLoading(false); });
+  const load = () => { const req = ++reqRef.current; api.fetchBookings(trainerId).then((b) => { if (req === reqRef.current) { setBookings(b); setLoading(false); } }); };
   useEffect(() => { load(); }, [trainerId]);
 
   const addBooking = async (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => { await api.addBooking(trainerId, patch, clientIds); await load(); };

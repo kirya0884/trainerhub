@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Layers, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
@@ -55,18 +55,36 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const toggleDay = (id: string) => setExpandedDays((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+  const activeSessionRef = useRef<typeof activeSession>(null);
+  useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
+
   useEffect(() => {
     portalApi.fetchTrainerBrand(client.trainerId).then(setBrand);
-    const refresh = () => {
-      portalApi.fetchUpcomingBooking(client.id).then(setUpcoming);
+    // #6 merged notify check into first fetch; #8+#9 pause when hidden or active session
+    const refresh = (notifyOnLoad = false) => {
+      portalApi.fetchUpcomingBooking(client.id).then((ub) => {
+        setUpcoming(ub);
+        if (notifyOnLoad && ub) {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          if (ub.date === todayStr && ub.time) {
+            const [hh, mm] = ub.time.split(":").map(Number);
+            const occMs = new Date(todayStr + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;
+            const diffMin = (occMs - Date.now()) / 60000;
+            if (diffMin >= 110 && diffMin <= 130) notifyUpcomingBooking("client", client.id, todayStr, ub.time);
+          }
+        }
+      });
       clientsApi.fetchClientPlans(client.id).then(setPlans);
       clientsApi.fetchPayments(client.id).then(setPayments);
       clientsApi.fetchMeasurements(client.id).then(setMeasurements);
       nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs);
       portalApi.fetchClientActivities(client.id).then(setActivities);
     };
-    refresh();
-    const id = setInterval(refresh, 20000);
+    refresh(true);
+    const id = setInterval(() => {
+      if (document.hidden || activeSessionRef.current) return;
+      refresh();
+    }, 20000);
 
     // Уведомления клиенту
     requestNotifyPermission();
@@ -81,16 +99,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       const days = Math.round((due.getTime() - today.getTime()) / 86400000);
       if (days >= 0 && days <= 2) notifyRenewalSoon(client.id, days, m.nextPaymentDate);
     }
-    // Напомнить за 2 часа до тренировки
-    portalApi.fetchUpcomingBooking(client.id).then((ub) => {
-      if (!ub) return;
-      const todayStr = new Date().toISOString().slice(0, 10);
-      if (ub.date !== todayStr || !ub.time) return;
-      const [hh, mm] = ub.time.split(":").map(Number);
-      const occMs = new Date(todayStr + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;
-      const diffMin = (occMs - Date.now()) / 60000;
-      if (diffMin >= 110 && diffMin <= 130) notifyUpcomingBooking("client", client.id, todayStr, ub.time);
-    });
 
     return () => clearInterval(id);
   }, [client.id]);

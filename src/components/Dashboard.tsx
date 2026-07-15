@@ -35,11 +35,12 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
   const [hideRevenue, setHideRevenue] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { bookings } = useBookings(trainerId);
 
   useEffect(() => {
     requestNotifyPermission();
-    fetchDashboardData(trainerId).then(setData);
+    fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message));
   }, [trainerId]);
 
   // Real-time: detect when a client starts/finishes a workout
@@ -57,7 +58,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
         if (wasActive && !isNowActive && c.active_session?.status === "done") notifyClientFinished(name);
         prevActiveRef.current[c.id] = isNowActive;
         // Refresh data to update isTraining badge
-        fetchDashboardData(trainerId).then(setData);
+        fetchDashboardData(trainerId).then(setData).catch(console.error);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -85,11 +86,16 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
 
   if (!data) return (
     <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#09090b" }}>
-      <svg viewBox="0 0 32 32" style={{ animation: "spin 1s linear infinite", width: 40, height: 40 }}>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <circle cx="16" cy="16" r="13" fill="none" stroke="#27272a" strokeWidth="3" />
-        <circle cx="16" cy="16" r="13" fill="none" stroke="#a3e635" strokeWidth="3" strokeDasharray="20 62" strokeLinecap="round" />
-      </svg>
+      {loadError
+        ? <div style={{ textAlign: "center" }}>
+            <p style={{ color: "#f87171", fontSize: 14, marginBottom: 12 }}>Ошибка загрузки: {loadError}</p>
+            <button onClick={() => { setLoadError(null); fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message)); }} style={{ color: "#a3e635", background: "none", border: "1px solid #a3e635", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Повторить</button>
+          </div>
+        : <svg viewBox="0 0 32 32" style={{ animation: "spin 1s linear infinite", width: 40, height: 40 }}>
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            <circle cx="16" cy="16" r="13" fill="none" stroke="#27272a" strokeWidth="3" />
+            <circle cx="16" cy="16" r="13" fill="none" stroke="#a3e635" strokeWidth="3" strokeDasharray="20 62" strokeLinecap="round" />
+          </svg>}
     </div>
   );
   const { clients, payments } = data;
