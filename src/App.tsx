@@ -168,11 +168,11 @@ export default function App() {
     localStorage.setItem("trainerhub-theme-v1", themeMode);
   }, [themeMode]);
 
-  if (loading) return <div className="min-h-screen bg-zinc-950" />;
+  if (loading) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
   if (!session) return <AuthScreen />;
 
   if (isRecovery) return <PasswordResetScreen onDone={() => setIsRecovery(false)} />;
-  if (selfClient === undefined || isTrainer === undefined) return <div className="min-h-screen bg-zinc-950" />;
+  if (selfClient === undefined || isTrainer === undefined) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
 
   if (selfClient) {
     return (
@@ -203,7 +203,7 @@ export default function App() {
 
   return (
     <>
-    {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && (selfClient !== undefined && isTrainer !== undefined || !session)} />}
+    {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined} />}
     <PinGate id={session.user.id}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4">
