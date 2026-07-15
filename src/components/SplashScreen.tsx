@@ -2,15 +2,15 @@ import { useEffect, useRef, useState } from "react";
 
 interface Props {
   onDone: () => void;
-  ready?: boolean; // true when auth/app finished loading
+  ready?: boolean; // true when auth + role check resolved
 }
 
+const MIN_MS = 2500; // минимальное время показа — даём анимации прокрутиться и данным загрузиться
+
 export default function SplashScreen({ onDone, ready = false }: Props) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const [fading, setFading] = useState(false);
   const doneCalled = useRef(false);
-  const readyRef = useRef(ready);
-  const videoEndedRef = useRef(false);
+  const startRef = useRef(Date.now());
 
   const finish = () => {
     if (doneCalled.current) return;
@@ -19,46 +19,20 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
     setTimeout(onDone, 400);
   };
 
-  // Keep readyRef in sync so the video onEnded handler always sees the latest value
-  useEffect(() => {
-    readyRef.current = ready;
-  });
-
-  useEffect(() => {
-    const v = videoRef.current;
-    // Fallback: force-close after 10s in case video stalls
-    const fallback = setTimeout(finish, 10000);
-
-    if (!v) return () => clearTimeout(fallback);
-
-    const onEnded = () => {
-      clearTimeout(fallback);
-      videoEndedRef.current = true;
-      if (readyRef.current) finish(); // auth is already done → close now
-      // else: wait for the ready useEffect below to close us
-    };
-    v.addEventListener("ended", onEnded);
-
-    // If autoplay is blocked → show at least 1 s then close
-    v.play().catch(() => {
-      clearTimeout(fallback);
-      videoEndedRef.current = true;
-      setTimeout(finish, 1000);
-    });
-
-    return () => { v.removeEventListener("ended", onEnded); clearTimeout(fallback); };
-  }, []);
-
-  // Called when auth resolves; only close if the video has already finished
+  // Закрыть когда auth готов И прошло не менее MIN_MS
   useEffect(() => {
     if (!ready) return;
-    if (videoEndedRef.current) {
-      // Video is done, auth is now done too → close smoothly
-      const t = setTimeout(finish, 300);
-      return () => clearTimeout(t);
-    }
-    // Video still playing → let it finish; onEnded will call finish()
+    const elapsed = Date.now() - startRef.current;
+    const wait = Math.max(0, MIN_MS - elapsed);
+    const t = setTimeout(finish, wait);
+    return () => clearTimeout(t);
   }, [ready]);
+
+  // Жёсткий fallback на случай зависания
+  useEffect(() => {
+    const t = setTimeout(finish, 10000);
+    return () => clearTimeout(t);
+  }, []);
 
   return (
     <div
@@ -76,9 +50,10 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
       }}
     >
       <video
-        ref={videoRef}
         src="/splash.mp4"
+        autoPlay
         muted
+        loop
         playsInline
         style={{ width: "100%", height: "100%", objectFit: "contain" }}
       />
