@@ -49,22 +49,7 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
         pointerEvents: fading ? "none" : "all",
       }}
     >
-      {/* Видео занимает весь экран — если воспроизводится, закрывает фон */}
-      <video
-        src="/splash.mp4"
-        autoPlay
-        muted
-        playsInline
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "contain",
-        }}
-      />
-      {/* Fallback-контент: всегда видим, пока/если видео не загрузилось */}
-      <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
         <img
           src="/icon-512.png"
           alt=""

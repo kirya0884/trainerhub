@@ -44,14 +44,15 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
 
   // Real-time: detect when a client starts/finishes a workout
   const prevActiveRef = useRef<Record<string, boolean>>({});
+  const dataRef = useRef(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
   useEffect(() => {
-    if (!data) return;
     const channel = supabase.channel(`trainer-clients-${trainerId}`)
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "clients", filter: `trainer_id=eq.${trainerId}` }, (payload) => {
         const c = payload.new as any;
         const isNowActive = !!(c.active_session && c.active_session.status === "active");
         const wasActive = prevActiveRef.current[c.id] ?? false;
-        const name = data.clients.find((x) => x.id === c.id)?.name ?? "Клиент";
+        const name = dataRef.current?.clients.find((x) => x.id === c.id)?.name ?? "Клиент";
         if (!wasActive && isNowActive) notifyClientStarted(name);
         if (wasActive && !isNowActive && c.active_session?.status === "done") notifyClientFinished(name);
         prevActiveRef.current[c.id] = isNowActive;
@@ -60,9 +61,37 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [trainerId, data]);
+  }, [trainerId]);
 
-  if (!data) return <div className="text-zinc-500 text-sm p-4">Загрузка...</div>;
+  // ⚠️ Rules of Hooks — ALL hooks must appear before any early return
+  useEffect(() => {
+    if (!data) return;
+    const ts = today();
+    const act = data.clients.filter((c) => c.status !== "left");
+    const dbt = act.filter((c) => c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && Number(c.membership.remaining) <= 0);
+    const exp = act.filter((c) => { const r = Number(c.membership.remaining); return c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && (r === 1 || r === 2); });
+    const todayOccs = expandBookings(bookings, ts, ts).sort((a, b) => a.time.localeCompare(b.time));
+    notifyDailyDigest(trainerId, { todayCount: todayOccs.length, debtNames: dbt.map((c) => c.name), expiringNames: exp.map((c) => c.name) });
+    const nowMs = Date.now();
+    for (const occ of todayOccs) {
+      if (!occ.time) continue;
+      const [hh, mm] = occ.time.split(":").map(Number);
+      const occMs = new Date(ts + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;
+      const diffMin = (occMs - nowMs) / 60000;
+      if (diffMin >= 50 && diffMin <= 70) notifyUpcomingBooking("trainer", trainerId, ts, occ.time);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trainerId, data?.clients?.length, bookings.length]);
+
+  if (!data) return (
+    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#09090b" }}>
+      <svg viewBox="0 0 32 32" style={{ animation: "spin 1s linear infinite", width: 40, height: 40 }}>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        <circle cx="16" cy="16" r="13" fill="none" stroke="#27272a" strokeWidth="3" />
+        <circle cx="16" cy="16" r="13" fill="none" stroke="#a3e635" strokeWidth="3" strokeDasharray="20 62" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
   const { clients, payments } = data;
   const clientById = Object.fromEntries(clients.map((c) => [c.id, c]));
   const todayStr = today();
@@ -117,18 +146,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
     return d && d >= todayStr && d <= addDays(todayStr, 7);
   });
 
-  useEffect(() => {
-    notifyDailyDigest(trainerId, { todayCount: todayOccurrences.length, debtNames: debt.map((c) => c.name), expiringNames: expiring.map((c) => c.name) });
-    // Тренеру: напомнить за 1 час до тренировки
-    const nowMs = Date.now();
-    for (const occ of todayOccurrences) {
-      if (!occ.time) continue;
-      const [hh, mm] = occ.time.split(":").map(Number);
-      const occMs = new Date(todayStr + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;
-      const diffMin = (occMs - nowMs) / 60000;
-      if (diffMin >= 50 && diffMin <= 70) notifyUpcomingBooking("trainer", trainerId, todayStr, occ.time);
-    }
-  }, [trainerId, todayOccurrences.length, debt.length, expiring.length]);
+
 
   return (
     <div className="space-y-5 max-w-2xl">
@@ -138,11 +156,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
         <div className="min-w-0">
           <p className="text-xs font-semibold tracking-widest text-lime-400">{greeting()}</p>
           <h1 className="text-3xl font-bold text-zinc-50 mt-0.5 truncate">{trainerName || "Тренер"}</h1>
-          <video
-            src="/logo.mp4"
-            autoPlay muted loop playsInline
-            style={{ width: 72, height: 72, objectFit: "contain", marginTop: 2, marginLeft: -6, opacity: 0.9 }}
-          />
+
         </div>
         <div className="relative shrink-0">
           <DonutChart pct={attendanceRate ?? 0} color="#a3e635" size={76} />
