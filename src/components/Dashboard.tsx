@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { BarChart3, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
+import { BarChart3, Bell, BellOff, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { useBookings } from "../hooks/useBookings";
 import { expandBookings } from "../lib/bookings";
 import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import { supabase } from "../lib/supabase";
+import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, isPushSupported } from "../lib/pushSubscribe";
 import AnalyticsPanel from "./AnalyticsPanel";
 import { today, addDays } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
@@ -36,12 +37,18 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   const [showPayments, setShowPayments] = useState(false);
   const [hideRevenue, setHideRevenue] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
   const { bookings } = useBookings(trainerId);
 
   useEffect(() => {
     requestNotifyPermission();
     fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message));
   }, [trainerId]);
+
+  useEffect(() => {
+    if (isPushSupported()) isPushSubscribed().then(setPushEnabled);
+  }, []);
 
   // Real-time: detect when a client starts/finishes a workout
   const prevActiveRef = useRef<Record<string, boolean>>({});
@@ -160,9 +167,32 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
       {/* Greeting */}
       <div className="flex items-start justify-between gap-3 pt-1">
         <div className="min-w-0">
-          <p className="text-xs font-semibold tracking-widest text-lime-400">{greeting()}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-semibold tracking-widest text-lime-400">{greeting()}</p>
+            {isPushSupported() && (
+              <button
+                onClick={async () => {
+                  setPushLoading(true);
+                  if (pushEnabled) {
+                    await unsubscribeFromPush(trainerId);
+                    setPushEnabled(false);
+                  } else {
+                    const ok = await subscribeToPush(trainerId);
+                    setPushEnabled(ok);
+                  }
+                  setPushLoading(false);
+                }}
+                disabled={pushLoading}
+                title={pushEnabled ? "Push включены — нажми чтобы отключить" : "Включить push-уведомления"}
+                className="ml-1 p-1 rounded-lg transition text-zinc-500 hover:text-zinc-200"
+              >
+                {pushEnabled
+                  ? <Bell size={13} className="text-lime-400" />
+                  : <BellOff size={13} />}
+              </button>
+            )}
+          </div>
           <h1 className="text-3xl font-bold text-zinc-50 mt-0.5 truncate">{trainerName || "Тренер"}</h1>
-
         </div>
         <div className="relative shrink-0">
           <DonutChart pct={attendanceRate ?? 0} color="#a3e635" size={76} />
