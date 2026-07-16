@@ -140,6 +140,8 @@ export async function splitPayment(clientId: string, payment: Payment, parts: nu
 // Если включён сплит с привязанным партнёром — сумма делится 50/50, платёж пишется обоим, остаток/даты зеркалятся.
 export async function markPaid(clientId: string, membership: Membership, promotions: Promotion[], payStatus: PayStatus = 'paid') {
   const today = todayFn();
+  // Используем дату, которую тренер указал в форме; если не указана — сегодня
+  const payDate = membership.paymentDate && membership.paymentDate.length === 10 ? membership.paymentDate : today;
   const isSplit = membership.split && !!membership.partnerClientId;
   const type = membership.type === "subscription" ? "subscription" : "sessions";
   const base = Number(membership.type === "subscription" ? membership.pricePerSession : membership.packagePrice) || 0;
@@ -149,7 +151,7 @@ export async function markPaid(clientId: string, membership: Membership, promoti
   // Отличается → старый остаток уходит во "доп. блок" (см. Membership.extraRemaining), чтобы не терять тренировки.
   let dateFields: Partial<Membership>;
   if (membership.type === "subscription") {
-    dateFields = { nextPaymentDate: addMonths(today, 1) };
+    dateFields = { nextPaymentDate: addMonths(payDate, 1) };
   } else {
     const newPrice = sessionPrice(membership);
     const newTotal = Number(membership.total) || 0;
@@ -173,19 +175,19 @@ export async function markPaid(clientId: string, membership: Membership, promoti
       };
     }
   }
-  const merged: Membership = { ...membership, paymentDate: today, ...dateFields };
+  const merged: Membership = { ...membership, paymentDate: payDate, ...dateFields };
   // Во всех трёх веток выше новые тренировки пакета попадают в "remaining" — значит откат при
   // удалении платежа (deletePayment) всегда должен вычитать ровно membership.total из текущего остатка.
   const sessionsDelta = membership.type === "subscription" ? undefined : Number(membership.total) || 0;
 
   if (isSplit) {
     const half = Math.round(amount / 2);
-    await addPayment(clientId, { date: today, amount: half, type, note: "сплит 50/50", promoApplied: label, payStatus }, sessionsDelta);
-    await addPayment(membership.partnerClientId, { date: today, amount: amount - half, type, note: "сплит 50/50 (партнёр)", promoApplied: label, payStatus }, undefined);
+    await addPayment(clientId, { date: payDate, amount: half, type, note: "сплит 50/50", promoApplied: label, payStatus }, sessionsDelta);
+    await addPayment(membership.partnerClientId, { date: payDate, amount: amount - half, type, note: "сплит 50/50 (партнёр)", promoApplied: label, payStatus }, undefined);
     await updateClient(clientId, { membership: merged });
     await syncMembershipToPartner(membership.partnerClientId, { paymentDate: merged.paymentDate, ...dateFields });
   } else {
-    await addPayment(clientId, { date: today, amount, type, note: "", promoApplied: label, payStatus }, sessionsDelta);
+    await addPayment(clientId, { date: payDate, amount, type, note: "", promoApplied: label, payStatus }, sessionsDelta);
     await updateClient(clientId, { membership: merged });
   }
   return merged;
