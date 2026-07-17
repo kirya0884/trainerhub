@@ -38,15 +38,15 @@ export async function deleteDayTemplate(id: string) {
 async function insertDayFromTemplate(planId: string, td: Day, position: number) {
   const dayRow = await addDay(planId, td.name, position);
   if (td.weekday != null) await supabase.from("plan_days").update({ weekday: td.weekday }).eq("id", dayRow.id);
-  for (let j = 0; j < td.exercises.length; j++) {
-    const te = td.exercises[j];
+  // Parallel insert: all exercises run concurrently (each still serialised internally by setSetRows queue)
+  await Promise.all(td.exercises.map(async (te, j) => {
     const exRow = await addExercise(dayRow.id, j, te.name);
     await updateExercise(exRow.id, {
       sets: te.sets, reps: te.reps, weight: te.weight, rest: te.rest, note: te.note,
       video: te.video, detailed: te.detailed, group: te.group, tempo: te.tempo, duration: te.duration, target: te.target,
     });
     if (te.setRows?.length) await setSetRows(exRow.id, te.setRows);
-  }
+  }));
 }
 
 

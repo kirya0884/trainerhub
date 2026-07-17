@@ -63,7 +63,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     saveTimer.current = setTimeout(() => setSaveStatus('saved'), 700);
   };
   const CLIP_KEY = "trainerhub-day-clipboard";
-  const CLIP_TTL = 40_000;
+  const CLIP_TTL = 600_000; // 10 min
   const loadClip = (): { name: string; exercises: Day["exercises"] } | null => {
     try {
       const raw = sessionStorage.getItem(CLIP_KEY);
@@ -93,7 +93,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         weight: item.actualSets?.[0]?.weight || "",
         rest: "", note: item.note || "", video: "", group: "",
         detailed: true, tempo: "", duration: "", target: "",
-        setRows: (item.actualSets ?? []).map((r) => ({ id: crypto.randomUUID(), weight: r.weight, reps: r.reps })),
+        setRows: (item.actualSets ?? []).map((r) => ({ id: crypto.randomUUID(), weight: String(r.weight ?? ""), reps: String(r.reps ?? "") })),
       }));
       copyDay({ name: s.dayName || "Тренировка", exercises });
       showToast("Скопировано в буфер обмена");
@@ -116,9 +116,14 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   };
   const handlePasteDay = async () => {
     if (!dayClipboard || !pasteInput?.trim()) return;
-    await templatesApi.applyDayTemplate(planId, { id: "", name: pasteInput.trim(), weekday: null, exercises: dayClipboard.exercises } as Day, (plan?.days.length ?? 0));
-    reload();
-    setPasteInput(null);
+    try {
+      await templatesApi.applyDayTemplate(planId, { id: "", name: pasteInput.trim(), weekday: null, exercises: dayClipboard.exercises } as Day, (plan?.days.length ?? 0));
+      reload();
+      setPasteInput(null);
+    } catch (e) {
+      console.error("Paste day failed:", e);
+      showToast("Ошибка при вставке дня");
+    }
   };
   const [libFor, setLibFor] = useState<string | null>(null);
   const [sub, setSub] = useState<"workout" | "done" | "progress">("workout");
