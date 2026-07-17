@@ -304,10 +304,18 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
               <option value="active" className="bg-zinc-900">Активен</option>
               <option value="paused" className="bg-zinc-900">Приостановил</option>
               <option value="left" className="bg-zinc-900">Ушёл</option>
+              <option value="archived" className="bg-zinc-900">Архив</option>
             </select>
           </label>
           <label className="text-xs text-zinc-500">Источник (как нашёл)
             <input value={client.source} onChange={(e) => patch({ source: e.target.value })} placeholder="реклама, рекомендация, соцсети..." className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+          </label>
+          <label className="text-xs text-zinc-500">Формат
+            <select value={client.format ?? ""} onChange={(e) => patch({ format: e.target.value }, true)} className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40">
+              <option value="" className="bg-zinc-900">Не указан</option>
+              <option value="online" className="bg-zinc-900">Онлайн</option>
+              <option value="offline" className="bg-zinc-900">Офлайн</option>
+            </select>
           </label>
         </div>
         {client.status === "paused" && (

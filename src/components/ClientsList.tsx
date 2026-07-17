@@ -1,4 +1,4 @@
-import { ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -22,6 +22,8 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
   const [selectedTplId, setSelectedTplId] = useState("");
   const [renewBusy, setRenewBusy] = useState(false);
   const [liveClient, setLiveClient] = useState<ClientListItem | null>(null);
+  const [showArchive, setShowArchive] = useState(false);
+  const [fmtFilter, setFmtFilter] = useState("");
 
   const openRenew = async (e: React.MouseEvent, c: { id: string; name: string }) => {
     e.stopPropagation();
@@ -62,12 +64,24 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold">Подопечные <span className="text-zinc-600 font-normal">({clients.length})</span></h2>
-        <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 hover:bg-lime-300 transition text-sm"><Plus size={16} /> Добавить</button>
+        <h2 className="text-lg font-bold">Подопечные <span className="text-zinc-600 font-normal">({clients.filter((c) => c.status !== "archived").length})</span></h2>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setShowArchive((v) => !v); setShowForm(false); }} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition ${showArchive ? "bg-zinc-700 text-zinc-200" : "bg-zinc-800 text-zinc-400 hover:text-zinc-100"}`} title="Архив клиентов"><Archive size={15} /></button>
+          {!showArchive && <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 hover:bg-lime-300 transition text-sm"><Plus size={16} /> Добавить</button>}
+        </div>
       </div>
-      <div className="relative mb-3">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по имени..." className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-3 py-2 text-sm outline-none focus:border-zinc-700 placeholder:text-zinc-600" />
+      <div className="flex gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по имени..." className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-3 py-2 text-sm outline-none focus:border-zinc-700 placeholder:text-zinc-600" />
+        </div>
+        {!showArchive && (
+          <select value={fmtFilter} onChange={(e) => setFmtFilter(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl px-2.5 py-2 text-sm outline-none focus:border-zinc-700 text-zinc-300 shrink-0">
+            <option value="">Все</option>
+            <option value="online">Онлайн</option>
+            <option value="offline">Офлайн</option>
+          </select>
+        )}
       </div>
       {showForm && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-4 space-y-3">
@@ -82,8 +96,15 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
         </div>
       )}
       <div className="space-y-2">
-        {clients.length === 0 && <p className="text-zinc-600 text-sm text-center py-8">Добавь первого подопечного, чтобы привязывать к нему планы</p>}
-        {clients.filter((c) => !search.trim() || c.name.toLowerCase().includes(search.toLowerCase())).map((c) => (
+        {showArchive && (
+          <p className="text-xs text-zinc-500 font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Archive size={12} /> АРХИВ — клиенты скрыты из основного списка</p>
+        )}
+        {clients.filter((c) => c.status !== "archived").length === 0 && !showArchive && <p className="text-zinc-600 text-sm text-center py-8">Добавь первого подопечного, чтобы привязывать к нему планы</p>}
+        {clients
+          .filter((c) => showArchive ? c.status === "archived" : c.status !== "archived")
+          .filter((c) => !search.trim() || c.name.toLowerCase().includes(search.toLowerCase()))
+          .filter((c) => !fmtFilter || c.format === fmtFilter)
+          .map((c) => (
           <button key={c.id} onClick={() => onOpenClient(c.id)} className={`w-full text-left flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:border-zinc-700 transition ${c.status === "left" ? "opacity-50" : ""}`}>
             {c.avatarUrl
               ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 border border-zinc-700" />
@@ -96,6 +117,9 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
                 {c.hasHealthFlags && <HeartPulse size={13} className="text-amber-400 shrink-0" />}
                 {c.status === "paused" && <span className="text-[10px] uppercase tracking-wide bg-amber-500/15 text-amber-400 rounded px-1.5 py-0.5 shrink-0">пауза</span>}
                 {c.status === "left" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">ушёл</span>}
+                {c.status === "archived" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-500 rounded px-1.5 py-0.5 shrink-0">архив</span>}
+                {c.format === "online" && <span className="text-[10px] uppercase tracking-wide bg-cyan-400/10 text-cyan-400 rounded px-1.5 py-0.5 shrink-0">онлайн</span>}
+                {c.format === "offline" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700/50 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">офлайн</span>}
                 {!!c.activeSession && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setLiveClient(c); }}

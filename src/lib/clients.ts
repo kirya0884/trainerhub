@@ -11,6 +11,7 @@ export interface ClientListItem {
   hasHealthFlags: boolean;
   remaining: string | null;
   avatarUrl: string;
+  format: string;
 }
 
 // remaining — остаток тренировок из абонемента (только для типа "sessions"); для подписки/без абонемента — null (бейдж не рисуем).
@@ -24,13 +25,13 @@ const remainingOf = (membership: any) => {
 export async function fetchClients(trainerId: string): Promise<ClientListItem[]> {
   const { data, error } = await supabase
     .from("clients")
-    .select("id,name,goal,color,status,active_session,health,membership,avatar_url")
+    .select("id,name,goal,color,status,format,active_session,health,membership,avatar_url")
     .eq("trainer_id", trainerId)
     .is("deleted_at", null)
     .order("created_at");
   if (error) throw error;
   return (data ?? []).map((c) => ({
-    id: c.id, name: c.name, goal: c.goal ?? "", color: c.color, status: c.status,
+    id: c.id, name: c.name, goal: c.goal ?? "", color: c.color, status: c.status, format: c.format ?? "",
     activeSession: c.active_session, hasHealthFlags: !!(c.health?.injuries || c.health?.restrictions),
     remaining: remainingOf(c.membership),
     avatarUrl: c.avatar_url ?? "",
@@ -161,7 +162,7 @@ export interface Health { injuries: string; restrictions: string; notes: string 
 export interface ClientFull {
   id: string; name: string; goal: string; color: string; avatarUrl: string;
   phone: string; telegram: string; whatsapp: string; email: string;
-  status: string; pauseReason: string; source: string; trial: boolean;
+  status: string; format: string; pauseReason: string; source: string; trial: boolean;
   health: Health; membership: Membership; hasAccount: boolean;
   activeSession: { planId: string; dayId: string; dayName: string; startedAt: number } | null;
 }
@@ -182,14 +183,14 @@ const emptyHealth: Health = { injuries: "", restrictions: "", notes: "" };
 export async function fetchClient(clientId: string): Promise<ClientFull> {
   const { data, error } = await supabase
     .from("clients")
-    .select("id,name,goal,color,avatar_url,phone,telegram,whatsapp,email,status,pause_reason,source,trial,health,membership,auth_user_id,active_session")
+    .select("id,name,goal,color,avatar_url,phone,telegram,whatsapp,email,status,format,pause_reason,source,trial,health,membership,auth_user_id,active_session")
     .eq("id", clientId)
     .single();
   if (error) throw error;
   return {
     id: data.id, name: data.name, goal: data.goal ?? "", color: data.color, avatarUrl: data.avatar_url ?? "",
     phone: data.phone ?? "", telegram: data.telegram ?? "", whatsapp: data.whatsapp ?? "", email: data.email ?? "",
-    status: data.status, pauseReason: data.pause_reason ?? "", source: data.source ?? "", trial: !!data.trial,
+    status: data.status, format: data.format ?? "", pauseReason: data.pause_reason ?? "", source: data.source ?? "", trial: !!data.trial,
     health: { ...emptyHealth, ...(data.health || {}) },
     membership: { ...emptyMembership, ...(data.membership || {}) },
     hasAccount: !!data.auth_user_id,

@@ -94,13 +94,21 @@ export const deleteExercise = (exId: string) => supabase.from("plan_exercises").
 export const reorderExercises = (rows: { id: string; position: number }[]) =>
   Promise.all(rows.map((r) => supabase.from("plan_exercises").update({ position: r.position }).eq("id", r.id)));
 
-export async function setSetRows(exerciseId: string, rows: SetRow[]) {
-  await supabase.from("plan_exercise_set_rows").delete().eq("exercise_id", exerciseId);
-  if (rows.length) {
-    await supabase.from("plan_exercise_set_rows").insert(
-      rows.map((r, i) => ({ exercise_id: exerciseId, position: i, weight: r.weight, reps: r.reps }))
-    );
-  }
+// ponytail: serialise per-exercise to prevent concurrent DELETE+INSERT duplication
+const _srQ = new Map<string, Promise<void>>();
+export function setSetRows(exerciseId: string, rows: SetRow[]): Promise<void> {
+  const run = async () => {
+    await supabase.from("plan_exercise_set_rows").delete().eq("exercise_id", exerciseId);
+    if (rows.length) {
+      await supabase.from("plan_exercise_set_rows").insert(
+        rows.map((r, i) => ({ exercise_id: exerciseId, position: i, weight: r.weight, reps: r.reps }))
+      );
+    }
+  };
+  const prev = _srQ.get(exerciseId) ?? Promise.resolve();
+  const next = prev.catch(() => {}).then(run);
+  _srQ.set(exerciseId, next);
+  return next;
 }
 
 // ── Мезоциклы ──

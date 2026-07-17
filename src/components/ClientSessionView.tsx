@@ -72,12 +72,15 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
 type SetVal = { weight: string; reps: string };
 type ExMeta = { fires: Record<number, number>; note: string; done: boolean; setsDone?: Record<number, boolean> };
 
-export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635", onProgress }: {
+export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635", onProgress, minimized = false, onMinimize, onExpand }: {
   day: Day; startedAt: number;
   onFinish: (metrics: Omit<Metric, "id">[], session: Omit<Session, "id">) => void;
   onCancel: () => void;
   accent?: string;
   onProgress?: (p: Record<string, { done: boolean; setsDone?: Record<number, boolean>; note?: string }>) => void;
+  minimized?: boolean;
+  onMinimize?: () => void;
+  onExpand?: () => void;
 }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -85,7 +88,12 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const hh = Math.floor(elapsed / 3600), mm = Math.floor((elapsed % 3600) / 60), ss = elapsed % 60;
   const timer = `${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 
+  const SK = `th-sess-${day.id}`;
   const [vals, setVals] = useState<Record<string, SetVal[]>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`${SK}-vals`) || "null");
+      if (saved && typeof saved === "object") return saved as Record<string, SetVal[]>;
+    } catch {}
     const init: Record<string, SetVal[]> = {};
     day.exercises.forEach((ex) => {
       if (ex.detailed && ex.setRows?.length) init[ex.id] = ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }));
@@ -97,6 +105,10 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     return init;
   });
   const [meta, setMeta] = useState<Record<string, ExMeta>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(`${SK}-meta`) || "null");
+      if (saved && typeof saved === "object") return saved as Record<string, ExMeta>;
+    } catch {}
     const m: Record<string, ExMeta> = {};
     day.exercises.forEach((ex) => { m[ex.id] = { fires: {}, note: "", done: false, setsDone: {} }; });
     return m;
@@ -112,6 +124,19 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
     });
 
+  // #7 Save vals/meta to localStorage so progress survives app close
+  const _vt = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (_vt.current) clearTimeout(_vt.current);
+    _vt.current = setTimeout(() => localStorage.setItem(`${SK}-vals`, JSON.stringify(vals)), 500);
+    return () => { if (_vt.current) clearTimeout(_vt.current); };
+  }, [vals]); // eslint-disable-line react-hooks/exhaustive-deps
+  const _mt = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (_mt.current) clearTimeout(_mt.current);
+    _mt.current = setTimeout(() => localStorage.setItem(`${SK}-meta`, JSON.stringify(meta)), 500);
+    return () => { if (_mt.current) clearTimeout(_mt.current); };
+  }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
 
   // Live progress: debounced write so trainer sees exercise status in real time
@@ -127,9 +152,11 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     }, 1500);
   }
   const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
-  const [minimized, setMinimized] = useState(false);
   // Блокируем скролл страницы когда сессия открыта
-  useEffect(() => { document.body.style.overflow = "hidden"; return () => { document.body.style.overflow = ""; }; }, []);
+  useEffect(() => {
+    document.body.style.overflow = minimized ? "" : "hidden";
+    return () => { document.body.style.overflow = ""; };
+  }, [minimized]);
   const [step, setStep] = useState<"training" | "feedback">("training");
   const [draft, setDraft] = useState<{ metrics: Omit<Metric, "id">[]; session: Omit<Session, "id"> } | null>(null);
   const [mood, setMood] = useState(0);
@@ -137,6 +164,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const [review, setReview] = useState("");
 
   const finish = () => {
+    localStorage.removeItem(`${SK}-vals`);
+    localStorage.removeItem(`${SK}-meta`);
     const metrics = buildMetrics(day, vals);
 
     const items = day.exercises.filter((ex) => ex.name).map((ex) => {
@@ -159,7 +188,13 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     onFinish(draft.metrics, { ...draft.session, mood, wellbeing, clientRating: mood, review });
   };
 
-  const cancel = () => { if (window.confirm("Прервать тренировку? Несохранённые отметки будут потеряны.")) onCancel(); };
+  const cancel = () => {
+    if (window.confirm("Прервать тренировку? Несохранённые отметки будут потеряны.")) {
+      localStorage.removeItem(`${SK}-vals`);
+      localStorage.removeItem(`${SK}-meta`);
+      onCancel();
+    }
+  };
 
   if (step === "feedback") {
     return (
@@ -191,7 +226,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   if (minimized) {
     return (
-      <button onClick={() => setMinimized(false)}
+      <button onClick={() => onExpand?.()}
         style={{ "--accent": accent } as React.CSSProperties}
         className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Play size={15} style={{ color: "var(--accent)" }} className="shrink-0" />
@@ -208,7 +243,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} style={{ color: "var(--accent)" }} className="shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs mt-0.5 font-mono" style={{ color: "var(--accent)" }}>{timer}</p></div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => setMinimized(true)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400" title="Свернуть"><Minimize2 size={18} /></button>
+          <button onClick={() => onMinimize?.()} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400" title="Свернуть"><Minimize2 size={18} /></button>
           <button onClick={cancel} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={20} /></button>
         </div>
       </div>

@@ -51,6 +51,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [profile, setProfile] = useState({ phone: client.phone, telegram: client.telegram, whatsapp: client.whatsapp, avatarUrl: client.avatarUrl, accentColor: client.accentColor, name: client.name, goal: client.goal, health: client.health });
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [sessionMinimized, setSessionMinimized] = useState(false);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const toggleDay = (id: string) => setExpandedDays((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -113,31 +114,14 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
     setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now() });
   };
 
-  if (activeSession) {
-    const day = planHook.plan?.days.find((d) => d.id === activeSession.dayId);
-    if (!day) return <div className="text-zinc-500 text-sm p-4">Загрузка тренировки...</div>;
-    return (
-      <ClientSessionView
-        accent={profile.accentColor}
-        day={day} startedAt={activeSession.startedAt}
-        onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch(() => {})}
-        onCancel={async () => { await portalApi.cancelSession(client.id); setActiveSession(null); }}
-        onFinish={async (metrics, session) => {
-          await portalApi.logClientSession(activeSession.planId, metrics, session);
-          await portalApi.finishClientSession(client.id);
-          portalApi.markClientBookingDone(client.trainerId, client.id, activeSession.dayName, session.date); // fire-and-forget
-          await progressHook.reload(); // ждём обновления сессий, чтобы день не мелькал в "Активных"
-          setActiveSession(null);
-        }}
-      />
-    );
-  }
+  // #6 activeDay derived here so portal always renders; CSV renders on top when not minimized
+  const activeDay = activeSession ? (planHook.plan?.days.find((d) => d.id === activeSession.dayId) ?? null) : null;
 
   const m = client.membership;
   const sortedSessions = [...progressHook.sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   return (
-    <div className="max-w-2xl mx-auto space-y-4" style={{ "--accent": profile.accentColor } as React.CSSProperties}>
+    <div className={`max-w-2xl mx-auto space-y-4${activeSession && sessionMinimized ? " pb-20" : ""}`} style={{ "--accent": profile.accentColor } as React.CSSProperties}>
       {/* Drawer overlay */}
       {showNav && <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setShowNav(false)} />}
       {/* Nav drawer */}
@@ -292,6 +276,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {(() => {
                 const todayStr = todayFn();
                 const mesocycles = planHook.plan?.mesocycles ?? [];
+                // #5 Wait for sessions to load before computing doneEver — prevents flash of all days
+                if (progressHook.loading) return null;
                 // Дни, для которых уже есть проведённая тренировка — скрываем из "Активных"
                 const doneEver = new Set(progressHook.sessions.map((s) => s.dayName));
                 // Видимые дни: не скрыты тренером, не принадлежат скрытому блоку, не проведены ранее
@@ -536,6 +522,32 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       {/* ── ЧАТ ── */}
       {tab === "chat" && <ChatThread trainerId={client.trainerId} clientId={client.id} self="client" accent={profile.accentColor} />}
 
+      {/* #6 Session overlay — renders on top; minimized shows bottom bar only */}
+      {activeSession && activeDay && (
+        <ClientSessionView
+          minimized={sessionMinimized}
+          onMinimize={() => setSessionMinimized(true)}
+          onExpand={() => setSessionMinimized(false)}
+          accent={profile.accentColor}
+          day={activeDay}
+          startedAt={activeSession.startedAt}
+          onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch(() => {})}
+          onCancel={async () => { await portalApi.cancelSession(client.id); setActiveSession(null); setSessionMinimized(false); }}
+          onFinish={async (metrics, session) => {
+            await portalApi.logClientSession(activeSession.planId, metrics, session);
+            await portalApi.finishClientSession(client.id);
+            portalApi.markClientBookingDone(client.trainerId, client.id, activeSession.dayName, session.date);
+            await progressHook.reload();
+            setActiveSession(null);
+            setSessionMinimized(false);
+          }}
+        />
+      )}
+      {activeSession && !activeDay && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-sm text-zinc-400">
+          Загрузка тренировки…
+        </div>
+      )}
       {showPinSettings && <PinSettingsModal id={client.id} table="clients" onClose={() => setShowPinSettings(false)} />}
       {showSettings && (
         <ClientSettingsModal clientId={client.id} initial={profile} onClose={() => setShowSettings(false)} onSaved={(p) => setProfile(p)} />
