@@ -46,19 +46,18 @@ export async function addProgress(planId: string) {
   if (error) throw error;
   return { id: data.id, date: data.date, text: data.text };
 }
-export const updateProgress = (id: string, patch: Partial<{ date: string; text: string }>) =>
-  supabase.from("plan_progress_notes").update(patch).eq("id", id);
-export const deleteProgress = (id: string) => supabase.from("plan_progress_notes").delete().eq("id", id);
+export const updateProgress = async (id: string, patch: Partial<{ date: string; text: string }>) => { const { error } = await supabase.from("plan_progress_notes").update(patch).eq("id", id); if (error) throw error; };
+export const deleteProgress = async (id: string) => { const { error } = await supabase.from("plan_progress_notes").delete().eq("id", id); if (error) throw error; };
 
 export async function addMetric(planId: string, m: Omit<Metric, "id">) {
   const { data, error } = await supabase.from("plan_metrics").insert({ plan_id: planId, ...m }).select().single();
   if (error) throw error;
   return { id: data.id, date: data.date, exercise: data.exercise, weight: data.weight ?? "", reps: data.reps ?? "", rest: data.rest ?? "", sets: data.sets ?? "" };
 }
-export const deleteMetric = (id: string) => supabase.from("plan_metrics").delete().eq("id", id);
+export const deleteMetric = async (id: string) => { const { error } = await supabase.from("plan_metrics").delete().eq("id", id); if (error) throw error; };
 
 // Правка отзыва после фиксации факта тренировки (карточка по умолчанию read-only, см. карандаш в PlanEditor).
-export const updateSessionReview = (id: string, review: string) => supabase.from("plan_sessions").update({ review }).eq("id", id);
+export const updateSessionReview = async (id: string, review: string) => { const { error } = await supabase.from("plan_sessions").update({ review }).eq("id", id); if (error) throw error; };
 
 // ===================== Корзина тренировок (soft-delete) =====================
 export type DeleteReason = "Уважительная" | "Проспал" | "Забыл" | "Ошибка";

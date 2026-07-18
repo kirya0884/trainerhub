@@ -71,7 +71,7 @@ export const updateDay = async (dayId: string, patch: Record<string, any>) => {
   const { error } = await supabase.from("plan_days").update(row).eq("id", dayId);
   if (error) throw error;
 };
-export const deleteDay = (dayId: string) => supabase.from("plan_days").delete().eq("id", dayId);
+export const deleteDay = async (dayId: string) => { const { error } = await supabase.from("plan_days").delete().eq("id", dayId); if (error) throw error; };
 export const reorderDays = (rows: { id: string; position: number }[]) =>
   Promise.all(rows.map((r) => supabase.from("plan_days").update({ position: r.position }).eq("id", r.id)));
 
@@ -90,7 +90,7 @@ export async function updateExercise(exId: string, patch: Record<string, any>) {
   const { error } = await supabase.from("plan_exercises").update(dbPatch).eq("id", exId);
   if (error) throw error;
 }
-export const deleteExercise = (exId: string) => supabase.from("plan_exercises").delete().eq("id", exId);
+export const deleteExercise = async (exId: string) => { const { error } = await supabase.from("plan_exercises").delete().eq("id", exId); if (error) throw error; };
 export const reorderExercises = (rows: { id: string; position: number }[]) =>
   Promise.all(rows.map((r) => supabase.from("plan_exercises").update({ position: r.position }).eq("id", r.id)));
 
@@ -123,6 +123,6 @@ export const updateMesocycle = async (mesoId: string, patch: Partial<Pick<Mesocy
   const { error } = await supabase.from("plan_mesocycles").update(row).eq("id", mesoId);
   if (error) throw error;
 };
-export const deleteMesocycle = (mesoId: string) => supabase.from("plan_mesocycles").delete().eq("id", mesoId);
+export const deleteMesocycle = async (mesoId: string) => { const { error } = await supabase.from("plan_mesocycles").delete().eq("id", mesoId); if (error) throw error; };
 export const reorderMesocycles = (rows: { id: string; position: number }[]) =>
   Promise.all(rows.map((r) => supabase.from("plan_mesocycles").update({ position: r.position }).eq("id", r.id)));

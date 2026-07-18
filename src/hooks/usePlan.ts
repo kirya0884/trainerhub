@@ -11,10 +11,13 @@ export function usePlan(planId: string) {
   // temp-id → real-id map for optimistic exercise creation
   const tempIdMap = useRef<Map<string, string>>(new Map());
 
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
+
   const load = () =>
     api.fetchPlan(planId)
-      .then((p) => { setPlan(p); setLoading(false); })
-      .catch((e) => { setError(e.message); setLoading(false); });
+      .then((p) => { if (!mountedRef.current) return; setPlan(p); setLoading(false); })
+      .catch((e) => { if (!mountedRef.current) return; setError(e.message); setLoading(false); });
 
   useEffect(() => {
     if (!planId) { setPlan(null); setLoading(false); return; }

@@ -30,12 +30,12 @@ export function useProgress(planId: string) {
   const addProgress = async () => { const row = await api.addProgress(planId); setProgress((p) => [row, ...p]); };
   const updateProgress = (id: string, patch: Partial<Pick<ProgressNote, "date" | "text">>) => {
     setProgress((p) => p.map((x) => (x.id === id ? { ...x, ...patch } : x)));
-    api.updateProgress(id, patch);
+    api.updateProgress(id, patch).catch((e) => console.error("[useProgress] updateProgress:", e));
   };
-  const deleteProgress = (id: string) => { setProgress((p) => p.filter((x) => x.id !== id)); api.deleteProgress(id); };
+  const deleteProgress = async (id: string) => { const snap = progress.find((x) => x.id === id); setProgress((p) => p.filter((x) => x.id !== id)); try { await api.deleteProgress(id); } catch (e) { if (snap) setProgress((p) => [...p, snap]); console.error("[useProgress] deleteProgress:", e); } };
 
   const addMetric = async (m: Omit<Metric, "id">) => { const row = await api.addMetric(planId, m); setMetrics((p) => [...p, row]); };
-  const deleteMetric = (id: string) => { setMetrics((p) => p.filter((x) => x.id !== id)); api.deleteMetric(id); };
+  const deleteMetric = async (id: string) => { const snap = metrics.find((x) => x.id === id); setMetrics((p) => p.filter((x) => x.id !== id)); try { await api.deleteMetric(id); } catch (e) { if (snap) setMetrics((p) => [...p, snap]); console.error("[useProgress] deleteMetric:", e); } };
 
   const deleteSession = async (id: string, reason: DeleteReason) => {
     const session = sessions.find((x) => x.id === id);
@@ -46,7 +46,7 @@ export function useProgress(planId: string) {
   const restoreSession = async (id: string) => { await api.restoreSession(id); await load(); };
   const updateSessionReview = (id: string, review: string) => {
     setSessions((p) => p.map((x) => (x.id === id ? { ...x, review } : x)));
-    api.updateSessionReview(id, review);
+    api.updateSessionReview(id, review).catch((e) => console.error("[useProgress] updateSessionReview:", e));
   };
   const purgeSession = async (id: string) => { setDeletedSessions((p) => p.filter((x) => x.id !== id)); await api.permanentlyDeleteSession(id); };
 
