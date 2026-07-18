@@ -10,7 +10,7 @@ export default function PinSettingsModal({ id, table = "trainers", onClose }: { 
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { fetchPinHash(id, table).then((h) => setHasPin(!!h)); }, [id, table]);
+  useEffect(() => { fetchPinHash(id, table).then((h) => setHasPin(!!h)).catch(() => {}); }, [id, table]);
 
   const save = async () => {
     if (pin.length < 4) { setErr("PIN должен быть не короче 4 цифр"); return; }

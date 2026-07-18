@@ -47,7 +47,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   }, [trainerId]);
 
   useEffect(() => {
-    if (isPushSupported()) isPushSubscribed().then(setPushEnabled);
+    if (isPushSupported()) isPushSubscribed().then(setPushEnabled).catch(() => {});
   }, []);
 
   // Real-time: detect when a client starts/finishes a workout

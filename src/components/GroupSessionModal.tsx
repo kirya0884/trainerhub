@@ -106,13 +106,13 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
       setPlans(list);
       const first = list.find((p) => !p.archived) || list[0];
       if (first) setPlanId(first.id);
-    });
-    clientsApi.fetchClient(client.id).then((c) => setMembership(c.membership));
+    }).catch((e) => console.error("[GroupSessionModal] fetchPlans:", e));
+    clientsApi.fetchClient(client.id).then((c) => setMembership(c.membership)).catch((e) => console.error("[GroupSessionModal] fetchClient:", e));
   }, [client.id]);
 
   useEffect(() => {
     if (!planId) { setPlan(null); setDayId(""); return; }
-    plansApi.fetchPlan(planId).then((p) => { setPlan(p); setDayId(p.days[0]?.id || ""); });
+    plansApi.fetchPlan(planId).then((p) => { setPlan(p); setDayId(p.days[0]?.id || ""); }).catch((e) => console.error("[GroupSessionModal] fetchPlan:", e));
   }, [planId]);
 
   const day = plan?.days.find((d) => d.id === dayId) || null;

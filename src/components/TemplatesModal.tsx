@@ -20,13 +20,15 @@ export default function TemplatesModal({ trainerId, currentDays, onApplyPlan, on
 
   const saveAsTemplate = async () => {
     if (!name.trim()) return;
-    if (tab === "plan") await api.savePlanAsTemplate(trainerId, name.trim(), currentDays as any);
-    else {
-      const day = currentDays.find((d) => d.id === saveDayId) as any;
-      if (day) await api.saveDayAsTemplate(trainerId, name.trim(), day);
-    }
-    setName("");
-    load();
+    try {
+      if (tab === "plan") await api.savePlanAsTemplate(trainerId, name.trim(), currentDays as any);
+      else {
+        const day = currentDays.find((d) => d.id === saveDayId) as any;
+        if (day) await api.saveDayAsTemplate(trainerId, name.trim(), day);
+      }
+      setName("");
+      load();
+    } catch (e) { console.error("[TemplatesModal] saveAsTemplate:", e); alert("Не удалось сохранить шаблон."); }
   };
 
   return (

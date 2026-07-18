@@ -12,7 +12,7 @@ export default function PinGate({ id, table = "trainers", children }: { id: stri
   const [pin, setPin] = useState("");
   const [err, setErr] = useState("");
 
-  useEffect(() => { fetchPinHash(id, table).then((h) => setHash(h || null)); }, [id, table]);
+  useEffect(() => { fetchPinHash(id, table).then((h) => setHash(h || null)).catch(() => {}); }, [id, table]);
 
   if (hash === "loading" || unlocked || !hash) return <>{children}</>;
 

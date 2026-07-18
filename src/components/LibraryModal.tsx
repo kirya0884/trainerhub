@@ -25,8 +25,10 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
   useEffect(() => { setMediaUrlInput(detail ? media[detail.name] || "" : ""); }, [detail, media]);
 
   const saveMedia = async (name: string, url: string) => {
-    await libraryApi.setExerciseMedia(trainerId, name, url);
-    setMedia((m) => ({ ...m, [name]: url }));
+    try {
+      await libraryApi.setExerciseMedia(trainerId, name, url);
+      setMedia((m) => ({ ...m, [name]: url }));
+    } catch (e) { console.error("[LibraryModal] saveMedia:", e); alert("Не удалось сохранить медиа."); }
   };
   const onMediaFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -34,9 +36,11 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
     if (!file || !detail) return;
     if (!file.type.startsWith("image/")) { alert("Нужен файл изображения."); return; }
     if (file.size > 8 * 1024 * 1024) { alert("Файл слишком большой (макс. 8 МБ)."); return; }
-    const thumb = await fileToThumb(file);
-    setMediaUrlInput(thumb);
-    await saveMedia(detail.name, thumb);
+    try {
+      const thumb = await fileToThumb(file);
+      setMediaUrlInput(thumb);
+      await saveMedia(detail.name, thumb);
+    } catch (e) { console.error("[LibraryModal] onMediaFile:", e); }
   };
 
   const groups = ["Все", ...LIB_GROUP_ORDER, ...(customNames.length ? ["Мои"] : [])];

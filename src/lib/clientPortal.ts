@@ -83,7 +83,8 @@ export async function fetchUpcomingBooking(clientId: string): Promise<UpcomingBo
 }
 
 export async function updateSessionProgress(clientId: string, progress: Record<string, { done: boolean; setsDone?: Record<number, boolean>; note?: string }>) {
-  await supabase.rpc("update_session_progress", { p_client_id: clientId, p_progress: progress });
+  const { error } = await supabase.rpc("update_session_progress", { p_client_id: clientId, p_progress: progress });
+  if (error) throw error;
 }
 
 export const startSession = (clientId: string, planId: string, dayId: string, dayName: string) =>

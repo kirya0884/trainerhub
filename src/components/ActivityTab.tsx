@@ -38,8 +38,8 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
   };
 
   const remove = async (id: string) => {
-    await portalApi.deleteClientActivity(id);
-    setActivities((prev) => prev.filter((a) => a.id !== id));
+    try { await portalApi.deleteClientActivity(id); setActivities((prev) => prev.filter((a) => a.id !== id)); }
+    catch (e) { console.error("[ActivityTab] remove:", e); }
   };
 
   // Группируем по дате

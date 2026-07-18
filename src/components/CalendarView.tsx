@@ -81,7 +81,8 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
     const moved = { ...b, date: targetDate, occDate: targetDate, isOccurrence: true };
     const conflict = occurrences.some((o) => o.date === targetDate && o.id !== id && bookingsOverlap(moved as any, o));
     if (conflict && !window.confirm("На эту дату уже есть запись в это же время. Перенести всё равно?")) return;
-    await rescheduleOccurrence(b, occDate, targetDate);
+    try { await rescheduleOccurrence(b, occDate, targetDate); }
+    catch (e) { console.error("[CalendarView] onDropDay:", e); alert("Не удалось перенести запись."); }
   };
 
   // Перенос занятия в сетке «День»/«Неделя» — день и время определяются позицией отпускания в ячейке.
@@ -100,7 +101,8 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
     const moved = { ...b, date: targetDate, time: newTime, occDate: targetDate, isOccurrence: true };
     const conflict = occurrences.some((o) => o.date === targetDate && o.id !== id && bookingsOverlap(moved as any, o));
     if (conflict && !window.confirm("На это время уже есть запись. Перенести всё равно?")) return;
-    await rescheduleOccurrence(b, occDate, targetDate, newTime);
+    try { await rescheduleOccurrence(b, occDate, targetDate, newTime); }
+    catch (e) { console.error("[CalendarView] onDropAt:", e); alert("Не удалось перенести запись."); }
   };
 
   const exportIcs = () => {

@@ -19,9 +19,11 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
   const submit = async () => {
     const v = Number(value);
     if (!v || v <= 0) return;
-    await api.addPromotion(clientId, { label, type, value: v, appliesTo, active: true });
-    setLabel(""); setValue("");
-    load();
+    try {
+      await api.addPromotion(clientId, { label, type, value: v, appliesTo, active: true });
+      setLabel(""); setValue("");
+      load();
+    } catch (e) { console.error("[PromotionsModal] submit:", e); alert("Не удалось добавить акцию."); }
   };
 
   return (
