@@ -534,12 +534,18 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch(() => {})}
           onCancel={async () => { await portalApi.cancelSession(client.id); setActiveSession(null); setSessionMinimized(false); }}
           onFinish={async (metrics, session) => {
-            await portalApi.logClientSession(activeSession.planId, metrics, session);
-            await portalApi.finishClientSession(client.id);
-            portalApi.markClientBookingDone(client.trainerId, client.id, activeSession.dayName, session.date);
-            await progressHook.reload();
-            setActiveSession(null);
-            setSessionMinimized(false);
+            try {
+              await portalApi.logClientSession(activeSession.planId, metrics, session);
+              await portalApi.finishClientSession(client.id);
+              portalApi.markClientBookingDone(client.trainerId, client.id, activeSession.dayName, session.date);
+              await progressHook.reload();
+              setActiveSession(null);
+              setSessionMinimized(false);
+            } catch (e) {
+              console.error("[ClientPortal] finish session:", e);
+              alert("Не удалось сохранить тренировку. Проверь соединение и попробуй ещё раз.");
+              throw e;
+            }
           }}
         />
       )}

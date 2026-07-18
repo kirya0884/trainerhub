@@ -187,10 +187,14 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     setStep("feedback");
   };
 
-  const sendFeedback = () => {
+  const sendFeedback = async () => {
     if (!draft || submitting) return;
     setSubmitting(true);
-    onFinish(draft.metrics, { ...draft.session, mood, wellbeing, clientRating: mood, review });
+    try {
+      await Promise.resolve(onFinish(draft.metrics, { ...draft.session, mood, wellbeing, clientRating: mood, review }));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const cancel = () => {

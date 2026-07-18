@@ -53,22 +53,33 @@ export function usePlan(planId: string) {
     if ("visibleToClient" in patch) {
       api.updateDay(dayId, patch as Record<string, any>); // немедленно — переключатель видимости
     } else {
-      persist(`day:${dayId}`, patch as Record<string, any>, (pp) => api.updateDay(dayId, pp));
+      persist(`day:${dayId}`, patch as Record<string, any>, (pp) => api.updateDay(dayId, pp).catch((e) => console.error("[usePlan] updateDay failed:", e)));
     }
   };
 
   const deleteDay = async (dayId: string) => {
+    if (!plan) return;
+    const snapshot = plan.days;
     setPlan((p) => (p ? { ...p, days: p.days.filter((d) => d.id !== dayId) } : p));
-    await api.deleteDay(dayId);
+    try {
+      await api.deleteDay(dayId);
+    } catch {
+      setPlan((p) => (p ? { ...p, days: snapshot } : p));
+    }
   };
 
   const reorderDays = async (from: number, to: number) => {
     if (!plan || from === to) return;
+    const snapshot = plan.days;
     const arr = [...plan.days];
     const [m] = arr.splice(from, 1);
     arr.splice(Math.max(0, Math.min(arr.length, to)), 0, m);
     setPlan((p) => (p ? { ...p, days: arr } : p));
-    await api.reorderDays(arr.map((d, i) => ({ id: d.id, position: i })));
+    try {
+      await api.reorderDays(arr.map((d, i) => ({ id: d.id, position: i })));
+    } catch {
+      setPlan((p) => (p ? { ...p, days: snapshot } : p));
+    }
   };
 
   const addExercise = async (dayId: string, name = "") => {
@@ -119,20 +130,35 @@ export function usePlan(planId: string) {
   };
 
   const deleteExercise = async (dayId: string, exId: string) => {
+    // Отменить pending debounce для этого упражнения, иначе update прилетит после delete
+    persist.cancel(`ex:${exId}`);
+    persist.cancel(`setRows:${exId}`);
+    const snapshot = plan?.days.find((d) => d.id === dayId)?.exercises;
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: d.exercises.filter((e) => e.id !== exId) } : d)) } : p));
     const realId = tempIdMap.current.get(exId) ?? exId;
-    if (!realId.startsWith("temp-")) await api.deleteExercise(realId);
+    if (!realId.startsWith("temp-")) {
+      try {
+        await api.deleteExercise(realId);
+      } catch {
+        if (snapshot) setPlan((p) => (p ? { ...p, days: p.days.map((d) => d.id === dayId ? { ...d, exercises: snapshot } : d) } : p));
+      }
+    }
   };
 
   const reorderExercises = async (dayId: string, from: number, to: number) => {
     if (!plan || from === to) return;
     const day = plan.days.find((d) => d.id === dayId);
     if (!day) return;
+    const snapshot = day.exercises;
     const arr = [...day.exercises];
     const [m] = arr.splice(from, 1);
     arr.splice(Math.max(0, Math.min(arr.length, to)), 0, m);
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: arr } : d)) } : p));
-    await api.reorderExercises(arr.map((e, i) => ({ id: e.id, position: i })));
+    try {
+      await api.reorderExercises(arr.map((e, i) => ({ id: e.id, position: i })));
+    } catch {
+      setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: snapshot } : d)) } : p));
+    }
   };
 
   // ── Мезоциклы ──
