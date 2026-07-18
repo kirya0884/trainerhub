@@ -72,6 +72,14 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
 type SetVal = { weight: string; reps: string };
 type ExMeta = { fires: Record<number, number>; note: string; done: boolean; setsDone?: Record<number, boolean> };
 
+function SessionTimer({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
+  const hh = Math.floor(elapsed / 3600), mm = Math.floor((elapsed % 3600) / 60), ss = elapsed % 60;
+  return <>{`${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`}</>;
+}
+
 export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635", onProgress, minimized = false, onMinimize, onExpand }: {
   day: Day; startedAt: number;
   onFinish: (metrics: Omit<Metric, "id">[], session: Omit<Session, "id">) => void;
@@ -82,11 +90,6 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   onMinimize?: () => void;
   onExpand?: () => void;
 }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
-  const elapsed = Math.max(0, Math.floor((now - startedAt) / 1000));
-  const hh = Math.floor(elapsed / 3600), mm = Math.floor((elapsed % 3600) / 60), ss = elapsed % 60;
-  const timer = `${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
 
   const SK = `th-sess-${day.id}`;
   const [vals, setVals] = useState<Record<string, SetVal[]>>(() => {
@@ -158,6 +161,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     return () => { document.body.style.overflow = ""; };
   }, [minimized]);
   const [step, setStep] = useState<"training" | "feedback">("training");
+  const [submitting, setSubmitting] = useState(false);
   const [draft, setDraft] = useState<{ metrics: Omit<Metric, "id">[]; session: Omit<Session, "id"> } | null>(null);
   const [mood, setMood] = useState(0);
   const [wellbeing, setWellbeing] = useState(0);
@@ -184,7 +188,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   };
 
   const sendFeedback = () => {
-    if (!draft) return;
+    if (!draft || submitting) return;
+    setSubmitting(true);
     onFinish(draft.metrics, { ...draft.session, mood, wellbeing, clientRating: mood, review });
   };
 
@@ -218,7 +223,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
           </div>
         </div>
         <div className="border-t border-zinc-800 bg-zinc-900 px-4 py-3 shrink-0">
-          <button onClick={sendFeedback} className="w-full max-w-md mx-auto block text-zinc-950 font-semibold rounded-lg py-2.5 transition flex items-center justify-center gap-1.5" style={{ background: "var(--accent)" }}><Send size={17} /> Отправить тренеру</button>
+          <button onClick={sendFeedback} disabled={submitting} className="w-full max-w-md mx-auto block text-zinc-950 font-semibold rounded-lg py-2.5 transition disabled:opacity-60 flex items-center justify-center gap-1.5" style={{ background: "var(--accent)" }}><Send size={17} />{submitting ? "Отправка…" : "Отправить тренеру"}</button>
         </div>
       </div>
     );
@@ -231,7 +236,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Play size={15} style={{ color: "var(--accent)" }} className="shrink-0" />
         <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>
-        <span className="font-mono text-sm shrink-0" style={{ color: "var(--accent)" }}>{timer}</span>
+        <span className="font-mono text-sm shrink-0" style={{ color: "var(--accent)" }}><SessionTimer startedAt={startedAt} /></span>
         <span className="text-xs text-zinc-500 shrink-0">{doneEx}/{day.exercises.length} упр.</span>
       </button>
     );
@@ -241,7 +246,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     <div style={{ "--accent": accent } as React.CSSProperties}>
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
-        <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} style={{ color: "var(--accent)" }} className="shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs mt-0.5 font-mono" style={{ color: "var(--accent)" }}>{timer}</p></div>
+        <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} style={{ color: "var(--accent)" }} className="shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs mt-0.5 font-mono" style={{ color: "var(--accent)" }}><SessionTimer startedAt={startedAt} /></p></div>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => onMinimize?.()} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400" title="Свернуть"><Minimize2 size={18} /></button>
           <button onClick={cancel} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={20} /></button>

@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp, Layers, Plus, Video, X } from "lucide-react";
-import { startTransition, useState } from "react";
+import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
 
@@ -8,7 +8,7 @@ function toEmbedUrl(url: string): string {
   const yt = url.match(/(?:youtu\.be\/|[?&]v=|embed\/)([\w-]{11})/);
   return yt ? `https://www.youtube.com/embed/${yt[1]}` : url;
 }
-export default function ExerciseRow({
+function ExerciseRow({
   ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove, lastMetric,
 }: {
   ex: Exercise; label: string; groupColor: string | null; suggestions: string[]; addToLibrary: (name: string) => void;
@@ -105,3 +105,13 @@ export default function ExerciseRow({
     </div>
   );
 }
+
+export default memo(ExerciseRow, (prev, next) =>
+  prev.ex === next.ex &&
+  prev.label === next.label &&
+  prev.canMoveUp === next.canMoveUp &&
+  prev.canMoveDown === next.canMoveDown &&
+  prev.lastMetric === next.lastMetric &&
+  prev.groupColor === next.groupColor &&
+  prev.suggestions === next.suggestions
+);

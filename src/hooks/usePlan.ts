@@ -85,13 +85,20 @@ export function usePlan(planId: string) {
     setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
       d.id === dayId ? { ...d, exercises: [...d.exercises, blank] } : d
     )} : p));
-    const row = await api.addExercise(dayId, day.exercises.length, name);
-    tempIdMap.current.set(tempId, row.id);
-    setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
-      d.id === dayId ? { ...d, exercises: d.exercises.map((e) =>
-        e.id === tempId ? { ...blank, id: row.id } : e
-      )} : d
-    )} : p));
+    try {
+      const row = await api.addExercise(dayId, day.exercises.length, name);
+      tempIdMap.current.set(tempId, row.id);
+      setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
+        d.id === dayId ? { ...d, exercises: d.exercises.map((e) =>
+          e.id === tempId ? { ...blank, id: row.id } : e
+        )} : d
+      )} : p));
+    } catch {
+      // Rollback optimistic add
+      setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
+        d.id === dayId ? { ...d, exercises: d.exercises.filter((e) => e.id !== tempId) } : d
+      )} : p));
+    }
   };
 
   const updateExercise = (dayId: string, exId: string, patch: Partial<Exercise>) => {
@@ -101,13 +108,13 @@ export function usePlan(planId: string) {
     // Разрешаем temp ID в реальный в момент срабатывания debounce (не в момент вызова)
     if ("setRows" in patch) persist(`setRows:${exId}`, { r: patch.setRows }, (pp) => {
       const id = tempIdMap.current.get(exId) ?? exId;
-      if (!id.startsWith("temp-")) api.setSetRows(id, pp.r as SetRow[]);
+      if (!id.startsWith("temp-")) api.setSetRows(id, pp.r as SetRow[]).catch((e) => console.error("[usePlan] setSetRows failed:", e));
     });
     const rest = { ...patch } as Record<string, any>;
     delete rest.setRows;
     if (Object.keys(rest).length) persist(`ex:${exId}`, rest, (pp) => {
       const id = tempIdMap.current.get(exId) ?? exId;
-      if (!id.startsWith("temp-")) api.updateExercise(id, pp);
+      if (!id.startsWith("temp-")) api.updateExercise(id, pp).catch((e) => console.error("[usePlan] updateExercise failed:", e));
     });
   };
 
