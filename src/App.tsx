@@ -156,12 +156,12 @@ export default function App() {
   // подхватывать правки тренера без перезахода, см. ChatThread (тот же паттерн для чата).
   useEffect(() => {
     if (!session || isTrainer) return;
-    const id = setInterval(() => { portalApi.fetchSelfClient(session.user.id).then(setSelfClient); }, 15000);
+    const id = setInterval(() => { portalApi.fetchSelfClient(session.user.id).then(setSelfClient).catch((e) => console.error("[App] pollSelfClient:", e)); }, 15000);
     return () => clearInterval(id);
   }, [session, isTrainer]);
 
   useEffect(() => {
-    if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#a3e635"); });
+    if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#a3e635"); }).catch((e) => console.error("[App] fetchTrainerSelf:", e));
   }, [isTrainer, session]);
   useEffect(() => {
     document.documentElement.classList.toggle("light-theme", themeMode === "light");

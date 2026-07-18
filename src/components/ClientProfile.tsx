@@ -103,14 +103,16 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const [chatLastRead, setChatLastRead] = useState(() => localStorage.getItem(chatReadKey) || "");
 
   useEffect(() => {
-    api.fetchClient(clientId).then(setClient);
-    api.fetchMeasurements(clientId).then(setMeasurements);
-    nutritionApi.fetchNutritionLogs(clientId).then(setNutritionLogs);
-    api.fetchPhotos(clientId).then(setPhotos);
-    api.fetchNotes(clientId).then(setNotes);
-    api.fetchClientPlans(clientId).then(setPlans);
-    portalApi.fetchClientActivities(clientId).then(setActivities);
-    messagesApi.fetchMessages(clientId).then(setChatMessages);
+    let alive = true;
+    api.fetchClient(clientId).then((v) => { if (alive) setClient(v); }).catch((e) => console.error("[ClientProfile] fetchClient:", e));
+    api.fetchMeasurements(clientId).then((v) => { if (alive) setMeasurements(v); }).catch((e) => console.error("[ClientProfile] fetchMeasurements:", e));
+    nutritionApi.fetchNutritionLogs(clientId).then((v) => { if (alive) setNutritionLogs(v); }).catch(() => {});
+    api.fetchPhotos(clientId).then((v) => { if (alive) setPhotos(v); }).catch(() => {});
+    api.fetchNotes(clientId).then((v) => { if (alive) setNotes(v); }).catch(() => {});
+    api.fetchClientPlans(clientId).then((v) => { if (alive) setPlans(v); }).catch(() => {});
+    portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch(() => {});
+    messagesApi.fetchMessages(clientId).then((v) => { if (alive) setChatMessages(v); }).catch(() => {});
+    return () => { alive = false; };
   }, [clientId]);
 
   if (!client) return <p className="text-zinc-500 text-sm p-4">Загрузка...</p>;
@@ -141,8 +143,8 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const overdue = client.membership.type === "subscription" && client.membership.nextPaymentDate && client.membership.nextPaymentDate < today();
   const deleteClient = async () => {
     if (!window.confirm(`Удалить «${client.name}»? Карточка переместится в корзину — её можно восстановить позже.`)) return;
-    await api.deleteClient(clientId);
-    onBack();
+    try { await api.deleteClient(clientId); onBack(); }
+    catch (e) { console.error("[ClientProfile] deleteClient:", e); alert("Не удалось удалить карточку. Попробуй ещё раз."); }
   };
 
   return (
@@ -421,23 +423,23 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   const [showHistory, setShowHistory] = useState(false);
 
   const load = () => {
-    paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates);
-    paymentsApi.fetchPromotions(clientId).then(setPromotions);
-    api.fetchPayments(clientId).then(setPayments);
-    api.fetchClients(trainerId).then((cs) => setOtherClients(cs.filter((c) => c.id !== clientId)));
+    paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[PaymentsTab] fetchTemplates:", e));
+    paymentsApi.fetchPromotions(clientId).then(setPromotions).catch(() => {});
+    api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
+    api.fetchClients(trainerId).then((cs) => setOtherClients(cs.filter((c) => c.id !== clientId))).catch(() => {});
   };
   useEffect(load, [clientId, trainerId]);
 
   const linkPartner = async (partnerId: string) => {
     const partner = otherClients.find((c) => c.id === partnerId);
     if (!partner) return;
-    const merged = await api.linkSplitPartner(clientId, client.name, partnerId, partner.name, m);
-    patchMembership(merged, true);
+    try { const merged = await api.linkSplitPartner(clientId, client.name, partnerId, partner.name, m); patchMembership(merged, true); }
+    catch (e) { console.error("[PaymentsTab] linkPartner:", e); alert("Не удалось привязать партнёра."); }
   };
   const unlinkPartner = async () => {
     if (!window.confirm("Отвязать сплит-партнёра?")) return;
-    const merged = await api.unlinkSplitPartner(clientId, m);
-    patchMembership(merged, true);
+    try { const merged = await api.unlinkSplitPartner(clientId, m); patchMembership(merged, true); }
+    catch (e) { console.error("[PaymentsTab] unlinkPartner:", e); alert("Не удалось отвязать партнёра."); }
   };
 
   const activePromo = promotions.find((p) => p.active && p.appliesTo === (m.type === "subscription" ? "subscription" : "sessions"));
@@ -458,33 +460,31 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   };
 
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
-    const merged = await paymentsApi.markPaid(clientId, m, promotions, payStatus);
-    patchMembership(merged, true);
-    api.fetchPayments(clientId).then(setPayments);
+    try { const merged = await paymentsApi.markPaid(clientId, m, promotions, payStatus); patchMembership(merged, true); api.fetchPayments(clientId).then(setPayments); }
+    catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); alert("Не удалось записать оплату."); }
   };
   const doMarkPaymentPaid = async (id: string) => {
-    await paymentsApi.markPaymentPaid(id);
-    api.fetchPayments(clientId).then(setPayments);
+    try { await paymentsApi.markPaymentPaid(id); api.fetchPayments(clientId).then(setPayments); }
+    catch (e) { console.error("[PaymentsTab] markPaymentPaid:", e); alert("Не удалось обновить платёж."); }
   };
 
   const editPayment = async (p: Payment) => {
     const amount = window.prompt("Сумма ₽:", String(p.amount));
     if (amount == null) return;
     const note = window.prompt("Примечание:", p.note) ?? p.note;
-    await paymentsApi.updatePayment(p.id, { amount: Number(amount) || p.amount, note });
-    api.fetchPayments(clientId).then(setPayments);
+    try { await paymentsApi.updatePayment(p.id, { amount: Number(amount) || p.amount, note }); api.fetchPayments(clientId).then(setPayments); }
+    catch (e) { console.error("[PaymentsTab] editPayment:", e); alert("Не удалось обновить платёж."); }
   };
   const splitPayment = async (p: Payment) => {
     const parts = Number(window.prompt("Разбить на сколько платежей?", "2"));
     if (!parts || parts < 2) return;
-    await paymentsApi.splitPayment(clientId, p, parts);
-    api.fetchPayments(clientId).then(setPayments);
+    try { await paymentsApi.splitPayment(clientId, p, parts); api.fetchPayments(clientId).then(setPayments); }
+    catch (e) { console.error("[PaymentsTab] splitPayment:", e); alert("Не удалось разбить платёж."); }
   };
   const deletePayment = async (id: string) => {
     if (!window.confirm("Удалить платёж из журнала? Если он добавлял тренировки в остаток, остаток тоже уменьшится обратно.")) return;
-    const next = await paymentsApi.deletePayment(id, clientId, m);
-    patchMembership(next, true);
-    api.fetchPayments(clientId).then(setPayments);
+    try { const next = await paymentsApi.deletePayment(id, clientId, m); patchMembership(next, true); api.fetchPayments(clientId).then(setPayments); }
+    catch (e) { console.error("[PaymentsTab] deletePayment:", e); alert("Не удалось удалить платёж."); }
   };
 
   return (
@@ -642,16 +642,18 @@ function PlansTab({ trainerId, clientId, plans, setPlans, onOpenPlan }: { traine
   const [showCatalog, setShowCatalog] = useState(false);
   const createPlan = async () => {
     if (!name.trim()) return;
-    const row = await api.addPlan(trainerId, clientId, name.trim());
-    setName("");
-    api.fetchClientPlans(clientId).then(setPlans);
-    onOpenPlan(row.id);
+    try {
+      const row = await api.addPlan(trainerId, clientId, name.trim());
+      setName("");
+      api.fetchClientPlans(clientId).then(setPlans);
+      onOpenPlan(row.id);
+    } catch (e) { console.error("[ClientProfile] createPlan:", e); alert("Не удалось создать план."); }
   };
   const deletePlan = async (id: string, planName: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm(`Удалить план «${planName}»? Его можно восстановить из корзины.`)) return;
-    await api.deletePlan(id);
-    api.fetchClientPlans(clientId).then(setPlans);
+    try { await api.deletePlan(id); api.fetchClientPlans(clientId).then(setPlans); }
+    catch (err) { console.error("[ClientProfile] deletePlan:", err); alert("Не удалось удалить план."); }
   };
 
   return (

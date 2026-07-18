@@ -21,15 +21,17 @@ export default function PlansOverview({ trainerId, onOpenPlan }: {
 
   const createPlan = async () => {
     if (!newClientId || !newName.trim()) return;
-    const row = await api.addPlan(trainerId, newClientId, newName.trim());
-    setNewName("");
-    onOpenPlan(row.id, newClientId);
+    try {
+      const row = await api.addPlan(trainerId, newClientId, newName.trim());
+      setNewName("");
+      onOpenPlan(row.id, newClientId);
+    } catch (e) { console.error("[PlansOverview] createPlan:", e); alert("Не удалось создать план."); }
   };
   const deletePlan = async (id: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm(`Удалить план «${name}»? Его можно восстановить из корзины.`)) return;
-    await api.deletePlan(id);
-    load();
+    try { await api.deletePlan(id); load(); }
+    catch (err) { console.error("[PlansOverview] deletePlan:", err); alert("Не удалось удалить план."); }
   };
 
   const q = query.trim().toLowerCase();

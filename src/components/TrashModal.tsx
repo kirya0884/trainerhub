@@ -10,18 +10,19 @@ export default function TrashModal({ trainerId, onClose }: { trainerId: string; 
   const [loading, setLoading] = useState(true);
 
   const load = () => Promise.all([api.fetchDeletedClients(trainerId), api.fetchDeletedPlans(trainerId)])
-    .then(([c, p]) => { setClients(c); setPlans(p); setLoading(false); });
+    .then(([c, p]) => { setClients(c); setPlans(p); setLoading(false); })
+    .catch((e) => { setLoading(false); console.error("[TrashModal] load:", e); });
   useEffect(() => { load(); }, [trainerId]);
 
-  const restoreClient = async (id: string) => { await api.restoreClient(id); load(); };
+  const restoreClient = async (id: string) => { try { await api.restoreClient(id); load(); } catch (e) { console.error("[TrashModal] restoreClient:", e); alert("Не удалось восстановить."); } };
   const purgeClient = async (id: string, name: string) => {
     if (!window.confirm(`Удалить «${name}» навсегда? Это действие необратимо — пропадут все планы, замеры, фото и платежи.`)) return;
-    await api.permanentlyDeleteClient(id); load();
+    try { await api.permanentlyDeleteClient(id); load(); } catch (e) { console.error("[TrashModal] purgeClient:", e); alert("Не удалось удалить."); }
   };
-  const restorePlan = async (id: string) => { await api.restorePlan(id); load(); };
+  const restorePlan = async (id: string) => { try { await api.restorePlan(id); load(); } catch (e) { console.error("[TrashModal] restorePlan:", e); alert("Не удалось восстановить."); } };
   const purgePlan = async (id: string, name: string) => {
     if (!window.confirm(`Удалить план «${name}» навсегда? Это действие необратимо.`)) return;
-    await api.permanentlyDeletePlan(id); load();
+    try { await api.permanentlyDeletePlan(id); load(); } catch (e) { console.error("[TrashModal] purgePlan:", e); alert("Не удалось удалить."); }
   };
 
   return (

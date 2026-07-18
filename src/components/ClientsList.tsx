@@ -27,10 +27,12 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
 
   const openRenew = async (e: React.MouseEvent, c: { id: string; name: string }) => {
     e.stopPropagation();
-    const [cf, tpls] = await Promise.all([api.fetchClient(c.id), fetchPackageTemplates(trainerId)]);
-    setTemplates(tpls);
-    setSelectedTplId(tpls[0]?.id ?? "");
-    setRenewing({ clientId: c.id, name: c.name, membership: cf.membership });
+    try {
+      const [cf, tpls] = await Promise.all([api.fetchClient(c.id), fetchPackageTemplates(trainerId)]);
+      setTemplates(tpls);
+      setSelectedTplId(tpls[0]?.id ?? "");
+      setRenewing({ clientId: c.id, name: c.name, membership: cf.membership });
+    } catch (e) { console.error("[ClientsList] openRenew:", e); alert("Не удалось загрузить данные."); }
   };
 
   const doRenew = async () => {
@@ -44,19 +46,20 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
       await markPaid(renewing.clientId, m, []);
       setRenewing(null);
       load();
-    } finally {
-      setRenewBusy(false);
-    }
+    } catch (e) { console.error("[ClientsList] doRenew:", e); alert("Не удалось продлить абонемент."); }
+    finally { setRenewBusy(false); }
   };
 
-  const load = () => api.fetchClients(trainerId).then(setClients);
+  const load = () => api.fetchClients(trainerId).then(setClients).catch((e) => console.error("[ClientsList] load:", e));
   useEffect(() => { load(); }, [trainerId]);
 
   const submit = async () => {
     if (!name.trim()) return;
-    await api.addClient(trainerId, name.trim(), goal, clients?.length ?? 0);
-    setName(""); setGoal(GOALS[0]); setShowForm(false);
-    load();
+    try {
+      await api.addClient(trainerId, name.trim(), goal, clients?.length ?? 0);
+      setName(""); setGoal(GOALS[0]); setShowForm(false);
+      load();
+    } catch (e) { console.error("[ClientsList] submit:", e); alert("Не удалось добавить подопечного."); }
   };
 
   if (!clients) return <div className="text-zinc-500 text-sm p-4">Загрузка...</div>;

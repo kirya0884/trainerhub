@@ -24,9 +24,11 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   const [pwBusy, setPwBusy] = useState(false);
 
   useEffect(() => {
-    trainerApi.fetchTrainerSelf(trainerId).then((s) => { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); });
-    trainerApi.fetchTrainerStats(trainerId).then(setStats);
-    fetchPackageTemplates(trainerId).then(setTemplates);
+    let alive = true;
+    trainerApi.fetchTrainerSelf(trainerId).then((s) => { if (alive) { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); } }).catch((e) => console.error("[TrainerProfile] fetchSelf:", e));
+    trainerApi.fetchTrainerStats(trainerId).then((s) => { if (alive) setStats(s); }).catch((e) => console.error("[TrainerProfile] fetchStats:", e));
+    fetchPackageTemplates(trainerId).then((t) => { if (alive) setTemplates(t); }).catch((e) => console.error("[TrainerProfile] fetchTemplates:", e));
+    return () => { alive = false; };
   }, [trainerId]);
 
   const onPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {

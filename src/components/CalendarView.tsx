@@ -45,7 +45,7 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
   const [finishedSessionClients, setFinishedSessionClients] = useState<Set<string>>(new Set());
   const askConfirm = (text: string, onConfirm: () => void) => setConfirmPending({ text, onConfirm });
 
-  useEffect(() => { clientsApi.fetchClients(trainerId).then(setClients); }, [trainerId]);
+  useEffect(() => { clientsApi.fetchClients(trainerId).then(setClients).catch((e) => console.error("[CalendarView] fetchClients:", e)); }, [trainerId]);
 
   const weekStart = startOfWeekMon(anchor);
   const weekEnd = addDays(weekStart, 6);

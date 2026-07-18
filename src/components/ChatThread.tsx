@@ -9,11 +9,16 @@ export default function ChatThread({ trainerId, clientId, self, accent = "#a3e63
   const [text, setText] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const load = () => messagesApi.fetchMessages(clientId).then(setMessages);
+  const loadRef = useRef<() => void>(() => {});
   useEffect(() => {
+    let alive = true;
+    const load = () => messagesApi.fetchMessages(clientId)
+      .then((m) => { if (alive) setMessages(m); })
+      .catch((e) => console.error("[ChatThread] load:", e));
+    loadRef.current = load;
     load();
     const t = setInterval(load, 10000);
-    return () => clearInterval(t);
+    return () => { alive = false; clearInterval(t); };
   }, [clientId]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ block: "nearest" }); }, [messages.length]);
 
@@ -22,7 +27,7 @@ export default function ChatThread({ trainerId, clientId, self, accent = "#a3e63
     if (!t) return;
     setText("");
     await messagesApi.sendMessage(trainerId, clientId, self, t);
-    load();
+    loadRef.current();
   };
 
   return (
