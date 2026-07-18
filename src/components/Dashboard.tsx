@@ -26,7 +26,7 @@ function DonutChart({ pct, color = "#a3e635", size = 72 }: { pct: number; color?
   );
 }
 
-const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions" && m.remaining !== "" && m.remaining != null ? String(m.remaining) : null);
+const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions" && m.remaining !== "" && m.remaining != null ? String((Number(m.remaining) || 0) + (Number((m as any).extraRemaining) || 0)) : null);
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
 

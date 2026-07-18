@@ -15,8 +15,8 @@ export default function ClientProgressPrintView({ clientId, planIds, clientName,
   const [sessions, setSessions] = useState<Session[]>([]);
 
   useEffect(() => {
-    clientsApi.fetchMeasurements(clientId).then(setMeasurements);
-    fetchClientSessionsSummary(planIds).then((r) => setSessions(r.sessions));
+    clientsApi.fetchMeasurements(clientId).then(setMeasurements).catch((e) => console.error("[PrintView] fetchMeasurements:", e));
+    fetchClientSessionsSummary(planIds).then((r) => setSessions(r.sessions)).catch((e) => console.error("[PrintView] fetchSessions:", e));
   }, [clientId, trainerId, planIds]);
 
   const usedMetrics = BODY_METRICS.filter((m) => measurements.some((x) => (x as any)[m.key] !== "" && (x as any)[m.key] != null));

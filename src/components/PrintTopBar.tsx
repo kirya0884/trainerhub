@@ -6,7 +6,7 @@ import * as portalApi from "../lib/clientPortal";
 // Используется в PlanPrintView, ReceiptPrintView, ClientProgressPrintView.
 export function usePrintBrand(trainerId: string) {
   const [brand, setBrand] = useState({ brand: "Reps", logoUrl: "" });
-  useEffect(() => { portalApi.fetchTrainerBrand(trainerId).then(setBrand); }, [trainerId]);
+  useEffect(() => { portalApi.fetchTrainerBrand(trainerId).then(setBrand).catch((e) => console.error("[PrintTopBar]:", e)); }, [trainerId]);
   return brand;
 }
 

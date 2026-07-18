@@ -17,12 +17,17 @@ export default function BodyTab({ clientId, measurements, setMeasurements }: { c
   const [bodyMetric, setBodyMetric] = useState<string>(BODY_METRICS[0].key);
 
   const submit = async () => {
-    await api.addMeasurement(clientId, form);
-    setForm(emptyMeasurement());
-    setShowForm(false);
-    api.fetchMeasurements(clientId).then(setMeasurements);
+    try {
+      await api.addMeasurement(clientId, form);
+      setForm(emptyMeasurement());
+      setShowForm(false);
+      api.fetchMeasurements(clientId).then(setMeasurements).catch((e) => console.error("[BodyTab] fetchMeasurements:", e));
+    } catch (e) { console.error("[BodyTab] submit:", e); alert("Не удалось сохранить замер."); }
   };
-  const remove = async (id: string) => { await api.deleteMeasurement(id); setMeasurements(measurements.filter((m) => m.id !== id)); };
+  const remove = async (id: string) => {
+    try { await api.deleteMeasurement(id); setMeasurements(measurements.filter((m) => m.id !== id)); }
+    catch (e) { console.error("[BodyTab] remove:", e); }
+  };
 
   const bm = BODY_METRICS.find((x) => x.key === bodyMetric)!;
   const series = measurements

@@ -290,11 +290,16 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
   const [noteText, setNoteText] = useState("");
   const addNote = async () => {
     if (!noteText.trim()) return;
-    await api.addNote(clientId, noteText.trim());
-    setNoteText("");
-    api.fetchNotes(clientId).then(setNotes);
+    try {
+      await api.addNote(clientId, noteText.trim());
+      setNoteText("");
+      api.fetchNotes(clientId).then(setNotes).catch((e) => console.error("[ClientProfile] fetchNotes:", e));
+    } catch (e) { console.error("[ClientProfile] addNote:", e); }
   };
-  const deleteNote = async (id: string) => { await api.deleteNote(id); setNotes(notes.filter((n) => n.id !== id)); };
+  const deleteNote = async (id: string) => {
+    try { await api.deleteNote(id); setNotes(notes.filter((n) => n.id !== id)); }
+    catch (e) { console.error("[ClientProfile] deleteNote:", e); }
+  };
 
   return (
     <div className="space-y-4">
@@ -455,16 +460,18 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   const saveAsTemplate = async () => {
     const name = window.prompt("Название шаблона:");
     if (!name) return;
-    await paymentsApi.savePackageTemplate(trainerId, { name, sessions: Number(m.total) || 0, price: Number(m.packagePrice) || 0, discount: 0, split: m.split });
-    paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates);
+    try {
+      await paymentsApi.savePackageTemplate(trainerId, { name, sessions: Number(m.total) || 0, price: Number(m.packagePrice) || 0, discount: 0, split: m.split });
+      paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[PaymentsTab] fetchTemplates:", e));
+    } catch (e) { console.error("[PaymentsTab] saveAsTemplate:", e); alert("Не удалось сохранить шаблон."); }
   };
 
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
-    try { const merged = await paymentsApi.markPaid(clientId, m, promotions, payStatus); patchMembership(merged, true); api.fetchPayments(clientId).then(setPayments); }
+    try { const merged = await paymentsApi.markPaid(clientId, m, promotions, payStatus); patchMembership(merged, true); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); alert("Не удалось записать оплату."); }
   };
   const doMarkPaymentPaid = async (id: string) => {
-    try { await paymentsApi.markPaymentPaid(id); api.fetchPayments(clientId).then(setPayments); }
+    try { await paymentsApi.markPaymentPaid(id); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] markPaymentPaid:", e); alert("Не удалось обновить платёж."); }
   };
 
@@ -472,18 +479,18 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     const amount = window.prompt("Сумма ₽:", String(p.amount));
     if (amount == null) return;
     const note = window.prompt("Примечание:", p.note) ?? p.note;
-    try { await paymentsApi.updatePayment(p.id, { amount: Number(amount) || p.amount, note }); api.fetchPayments(clientId).then(setPayments); }
+    try { await paymentsApi.updatePayment(p.id, { amount: Number(amount) || p.amount, note }); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] editPayment:", e); alert("Не удалось обновить платёж."); }
   };
   const splitPayment = async (p: Payment) => {
     const parts = Number(window.prompt("Разбить на сколько платежей?", "2"));
     if (!parts || parts < 2) return;
-    try { await paymentsApi.splitPayment(clientId, p, parts); api.fetchPayments(clientId).then(setPayments); }
+    try { await paymentsApi.splitPayment(clientId, p, parts); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] splitPayment:", e); alert("Не удалось разбить платёж."); }
   };
   const deletePayment = async (id: string) => {
     if (!window.confirm("Удалить платёж из журнала? Если он добавлял тренировки в остаток, остаток тоже уменьшится обратно.")) return;
-    try { const next = await paymentsApi.deletePayment(id, clientId, m); patchMembership(next, true); api.fetchPayments(clientId).then(setPayments); }
+    try { const next = await paymentsApi.deletePayment(id, clientId, m); patchMembership(next, true); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] deletePayment:", e); alert("Не удалось удалить платёж."); }
   };
 
@@ -590,7 +597,7 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
   const [photoUrl, setPhotoUrl] = useState("");
   const sorted = [...photos].sort((a, b) => (a.date < b.date ? -1 : 1));
 
-  const reload = () => api.fetchPhotos(clientId).then(setPhotos);
+  const reload = () => api.fetchPhotos(clientId).then(setPhotos).catch((e) => console.error("[PhotosTab] fetchPhotos:", e));
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -598,8 +605,8 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
     catch { alert("Не удалось обработать изображение"); }
     e.target.value = "";
   };
-  const addByUrl = async () => { const u = photoUrl.trim(); if (!u) return; await api.addPhoto(clientId, u); setPhotoUrl(""); reload(); };
-  const remove = async (id: string) => { await api.deletePhoto(id); setPhotos(photos.filter((p) => p.id !== id)); };
+  const addByUrl = async () => { const u = photoUrl.trim(); if (!u) return; try { await api.addPhoto(clientId, u); setPhotoUrl(""); reload(); } catch (e) { console.error("[PhotosTab] addByUrl:", e); alert("Не удалось добавить фото."); } };
+  const remove = async (id: string) => { try { await api.deletePhoto(id); setPhotos(photos.filter((p) => p.id !== id)); } catch (e) { console.error("[PhotosTab] remove:", e); } };
 
   return (
     <div className="space-y-4">
@@ -645,14 +652,14 @@ function PlansTab({ trainerId, clientId, plans, setPlans, onOpenPlan }: { traine
     try {
       const row = await api.addPlan(trainerId, clientId, name.trim());
       setName("");
-      api.fetchClientPlans(clientId).then(setPlans);
+      api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e));
       onOpenPlan(row.id);
     } catch (e) { console.error("[ClientProfile] createPlan:", e); alert("Не удалось создать план."); }
   };
   const deletePlan = async (id: string, planName: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm(`Удалить план «${planName}»? Его можно восстановить из корзины.`)) return;
-    try { await api.deletePlan(id); api.fetchClientPlans(clientId).then(setPlans); }
+    try { await api.deletePlan(id); api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e)); }
     catch (err) { console.error("[ClientProfile] deletePlan:", err); alert("Не удалось удалить план."); }
   };
 
@@ -668,7 +675,7 @@ function PlansTab({ trainerId, clientId, plans, setPlans, onOpenPlan }: { traine
       </div>
       {showCatalog && (
         <ProgramCatalogModal trainerId={trainerId} clientId={clientId} onClose={() => setShowCatalog(false)}
-          onCloned={(planId) => { setShowCatalog(false); api.fetchClientPlans(clientId).then(setPlans); onOpenPlan(planId); }} />
+          onCloned={(planId) => { setShowCatalog(false); api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e)); onOpenPlan(planId); }} />
       )}
 
       {plans === null ? (

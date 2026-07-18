@@ -60,7 +60,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
 
   useEffect(() => {
-    portalApi.fetchTrainerBrand(client.trainerId).then(setBrand);
+    portalApi.fetchTrainerBrand(client.trainerId).then(setBrand).catch((e) => console.error("[ClientPortal] fetchBrand:", e));
     // #6 merged notify check into first fetch; #8+#9 pause when hidden or active session
     const refresh = (notifyOnLoad = false) => {
       portalApi.fetchUpcomingBooking(client.id).then((ub) => {
@@ -74,12 +74,12 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             if (diffMin >= 110 && diffMin <= 130) notifyUpcomingBooking("client", client.id, todayStr, ub.time);
           }
         }
-      });
-      clientsApi.fetchClientPlans(client.id).then(setPlans);
-      clientsApi.fetchPayments(client.id).then(setPayments);
-      clientsApi.fetchMeasurements(client.id).then(setMeasurements);
-      nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs);
-      portalApi.fetchClientActivities(client.id).then(setActivities);
+      }).catch((e) => console.error("[ClientPortal] fetchUpcoming:", e));
+      clientsApi.fetchClientPlans(client.id).then(setPlans).catch((e) => console.error("[ClientPortal] fetchPlans:", e));
+      clientsApi.fetchPayments(client.id).then(setPayments).catch((e) => console.error("[ClientPortal] fetchPayments:", e));
+      clientsApi.fetchMeasurements(client.id).then(setMeasurements).catch((e) => console.error("[ClientPortal] fetchMeasurements:", e));
+      nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
+      portalApi.fetchClientActivities(client.id).then(setActivities).catch((e) => console.error("[ClientPortal] fetchActivities:", e));
     };
     refresh(true);
     const id = setInterval(() => {

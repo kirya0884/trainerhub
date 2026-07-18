@@ -15,7 +15,7 @@ export function useProgress(planId: string) {
   const load = () => Promise.all([api.fetchProgress(planId), api.fetchDeletedSessions(planId)]).then(([d, del]) => {
     if (!mountedRef.current) return;
     setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setLoading(false);
-  });
+  }).catch((e) => { if (!mountedRef.current) return; console.error("[useProgress] load:", e); setLoading(false); });
 
   useEffect(() => {
     let alive = true;
@@ -23,18 +23,18 @@ export function useProgress(planId: string) {
     Promise.all([api.fetchProgress(planId), api.fetchDeletedSessions(planId)]).then(([d, del]) => {
       if (!alive) return;
       setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setLoading(false);
-    });
+    }).catch((e) => { if (!alive) return; console.error("[useProgress] init:", e); setLoading(false); });
     return () => { alive = false; };
   }, [planId]);
 
-  const addProgress = async () => { const row = await api.addProgress(planId); setProgress((p) => [row, ...p]); };
+  const addProgress = async () => { try { const row = await api.addProgress(planId); setProgress((p) => [row, ...p]); } catch (e) { console.error("[useProgress] addProgress:", e); } };
   const updateProgress = (id: string, patch: Partial<Pick<ProgressNote, "date" | "text">>) => {
     setProgress((p) => p.map((x) => (x.id === id ? { ...x, ...patch } : x)));
     api.updateProgress(id, patch).catch((e) => console.error("[useProgress] updateProgress:", e));
   };
   const deleteProgress = async (id: string) => { const snap = progress.find((x) => x.id === id); setProgress((p) => p.filter((x) => x.id !== id)); try { await api.deleteProgress(id); } catch (e) { if (snap) setProgress((p) => [...p, snap]); console.error("[useProgress] deleteProgress:", e); } };
 
-  const addMetric = async (m: Omit<Metric, "id">) => { const row = await api.addMetric(planId, m); setMetrics((p) => [...p, row]); };
+  const addMetric = async (m: Omit<Metric, "id">) => { try { const row = await api.addMetric(planId, m); setMetrics((p) => [...p, row]); } catch (e) { console.error("[useProgress] addMetric:", e); } };
   const deleteMetric = async (id: string) => { const snap = metrics.find((x) => x.id === id); setMetrics((p) => p.filter((x) => x.id !== id)); try { await api.deleteMetric(id); } catch (e) { if (snap) setMetrics((p) => [...p, snap]); console.error("[useProgress] deleteMetric:", e); } };
 
   const deleteSession = async (id: string, reason: DeleteReason) => {
@@ -48,7 +48,7 @@ export function useProgress(planId: string) {
       console.error("[useProgress] deleteSession:", e);
     }
   };
-  const restoreSession = async (id: string) => { await api.restoreSession(id); await load(); };
+  const restoreSession = async (id: string) => { try { await api.restoreSession(id); await load(); } catch (e) { console.error("[useProgress] restoreSession:", e); } };
   const updateSessionReview = (id: string, review: string) => {
     setSessions((p) => p.map((x) => (x.id === id ? { ...x, review } : x)));
     api.updateSessionReview(id, review).catch((e) => console.error("[useProgress] updateSessionReview:", e));
@@ -61,10 +61,12 @@ export function useProgress(planId: string) {
   };
 
   const logSession = async (metricsIn: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => {
-    const res = await api.logSession(planId, metricsIn, note, session);
-    setMetrics((p) => [...p, ...res.metrics]);
-    if (res.progress) setProgress((p) => [res.progress!, ...p]);
-    setSessions((p) => [res.session, ...p]);
+    try {
+      const res = await api.logSession(planId, metricsIn, note, session);
+      setMetrics((p) => [...p, ...res.metrics]);
+      if (res.progress) setProgress((p) => [res.progress!, ...p]);
+      setSessions((p) => [res.session, ...p]);
+    } catch (e) { console.error("[useProgress] logSession:", e); throw e; }
   };
 
   return { progress, metrics, sessions, deletedSessions, loading, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession, reload: load };

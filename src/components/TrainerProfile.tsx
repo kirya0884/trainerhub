@@ -215,7 +215,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             <div key={t.id} className="bg-zinc-800/60 rounded-lg p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <input value={draft.name} onChange={(e) => setDraft({ name: e.target.value })} onBlur={save} className="flex-1 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" placeholder="Название" />
-                <button onClick={() => deletePackageTemplate(t.id).then(() => setTemplates((p) => p.filter((x) => x.id !== t.id)))} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
+                <button onClick={() => deletePackageTemplate(t.id).then(() => setTemplates((p) => p.filter((x) => x.id !== t.id))).catch((e) => console.error("[TrainerProfile] deleteTemplate:", e))} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <label className="text-xs text-zinc-500">Тренировок
@@ -243,7 +243,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         <button
           onClick={async () => {
             await savePackageTemplate(trainerId, { name: "Новый пакет", sessions: 8, price: 0, discount: 0, split: false });
-            fetchPackageTemplates(trainerId).then(setTemplates);
+            fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[TrainerProfile] fetchTemplates:", e));
           }}
           className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg py-2 text-sm transition"
         >

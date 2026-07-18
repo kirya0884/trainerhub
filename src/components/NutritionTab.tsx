@@ -25,12 +25,17 @@ export default function NutritionTab({ clientId, logs, setLogs, readOnly }: {
   const [to, setTo] = useState("");
 
   const submit = async () => {
-    await api.addNutritionLog(clientId, form);
-    setForm(emptyLog());
-    setShowForm(false);
-    api.fetchNutritionLogs(clientId).then(setLogs);
+    try {
+      await api.addNutritionLog(clientId, form);
+      setForm(emptyLog());
+      setShowForm(false);
+      api.fetchNutritionLogs(clientId).then(setLogs).catch((e) => console.error("[NutritionTab] fetchLogs:", e));
+    } catch (e) { console.error("[NutritionTab] submit:", e); alert("Не удалось сохранить запись."); }
   };
-  const remove = async (id: string) => { await api.deleteNutritionLog(id); setLogs(logs.filter((l) => l.id !== id)); };
+  const remove = async (id: string) => {
+    try { await api.deleteNutritionLog(id); setLogs(logs.filter((l) => l.id !== id)); }
+    catch (e) { console.error("[NutritionTab] remove:", e); }
+  };
 
   const filtered = useMemo(
     () => logs.filter((l) => (!from || l.date >= from) && (!to || l.date <= to)),

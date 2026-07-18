@@ -132,18 +132,20 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
 
   const finish = async () => {
     if (!day || !plan) return;
-    const metrics = buildMetrics(day, vals);
-    const items = day.exercises.filter((ex) => ex.name).map((ex) => {
-      const f = meta[ex.id]?.fires || {};
-      const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
-      return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "" };
-    });
-    const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
-    const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`;
-    await progressApi.logSession(plan.id, metrics, note, session);
-    if (membership) setMembership(await clientsApi.decrementMembershipRemaining(client.id, membership));
-    setFinished(true);
-    onFinished();
+    try {
+      const metrics = buildMetrics(day, vals);
+      const items = day.exercises.filter((ex) => ex.name).map((ex) => {
+        const f = meta[ex.id]?.fires || {};
+        const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
+        return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "" };
+      });
+      const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
+      const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`;
+      await progressApi.logSession(plan.id, metrics, note, session);
+      if (membership) setMembership(await clientsApi.decrementMembershipRemaining(client.id, membership));
+      setFinished(true);
+      onFinished();
+    } catch (e) { console.error("[GroupSessionModal] finish:", e); alert("Не удалось сохранить тренировку. Попробуй ещё раз."); }
   };
 
   return (

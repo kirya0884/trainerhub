@@ -41,13 +41,16 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
   useEffect(() => {
     if (clientIds.length !== 1) { setClientPlans([]); return; }
     const cid = clientIds[0];
-    supabase.from("plans").select("id,name").eq("client_id", cid).is("deleted_at", null).order("created_at", { ascending: false }).then(async ({ data: plans }) => {
-      if (!plans?.length) { setClientPlans([]); return; }
-      const { data: days } = await supabase.from("plan_days").select("id,name,plan_id").in("plan_id", plans.map(p => p.id)).order("position");
-      const byPlan: Record<string, { id: string; name: string }[]> = {};
-      for (const d of days ?? []) (byPlan[d.plan_id] ??= []).push({ id: d.id, name: d.name });
-      setClientPlans(plans.map(p => ({ id: p.id, name: p.name, days: byPlan[p.id] ?? [] })));
-    });
+    (async () => {
+      try {
+        const { data: plans } = await supabase.from("plans").select("id,name").eq("client_id", cid).is("deleted_at", null).order("created_at", { ascending: false });
+        if (!plans?.length) { setClientPlans([]); return; }
+        const { data: days } = await supabase.from("plan_days").select("id,name,plan_id").in("plan_id", plans.map(p => p.id)).order("position");
+        const byPlan: Record<string, { id: string; name: string }[]> = {};
+        for (const d of days ?? []) (byPlan[d.plan_id] ??= []).push({ id: d.id, name: d.name });
+        setClientPlans(plans.map(p => ({ id: p.id, name: p.name, days: byPlan[p.id] ?? [] })));
+      } catch (e) { console.error("[BookingModal] fetchPlans:", e); }
+    })();
   }, [clientIds.join(",")]);
 
   const toggleClient = (id: string) => setClientIds((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));

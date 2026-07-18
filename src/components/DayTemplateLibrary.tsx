@@ -42,7 +42,7 @@ export default function DayTemplateLibrary({
 
   const load = () => {
     setLoading(true);
-    api.fetchDayTemplates(trainerId).then(setTemplates).finally(() => setLoading(false));
+    api.fetchDayTemplates(trainerId).then(setTemplates).catch((e) => console.error("[DayTemplateLibrary]:", e)).finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, [trainerId]);
 

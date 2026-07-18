@@ -13,7 +13,7 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
   const [value, setValue] = useState("");
   const [appliesTo, setAppliesTo] = useState<string>("sessions");
 
-  const load = () => api.fetchPromotions(clientId).then(setPromos);
+  const load = () => api.fetchPromotions(clientId).then(setPromos).catch((e) => console.error("[PromotionsModal] load:", e));
   useEffect(() => { load(); }, [clientId]);
 
   const submit = async () => {
@@ -47,9 +47,9 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
           {promos?.length === 0 && <p className="text-zinc-600 text-xs">Акций пока нет</p>}
           {promos?.map((p) => (
             <div key={p.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 ${p.active ? "bg-orange-500/10" : "bg-zinc-800/30 opacity-60"}`}>
-              <button onClick={() => api.togglePromotion(p.id, !p.active).then(load)} className={`text-xs font-medium px-2 py-1 rounded shrink-0 ${p.active ? "bg-orange-400 text-zinc-950" : "bg-zinc-700 text-zinc-400"}`}>{p.active ? "Активна" : "Выкл"}</button>
+              <button onClick={() => api.togglePromotion(p.id, !p.active).then(load).catch((e) => console.error("[PromotionsModal] toggle:", e))} className={`text-xs font-medium px-2 py-1 rounded shrink-0 ${p.active ? "bg-orange-400 text-zinc-950" : "bg-zinc-700 text-zinc-400"}`}>{p.active ? "Активна" : "Выкл"}</button>
               <span className="flex-1 truncate">{p.label || (p.type === "percent" ? `${p.value}%` : `${p.value}₽`)} <span className="text-zinc-500">· {APPLIES.find((a) => a[0] === p.appliesTo)?.[1]}</span></span>
-              <button onClick={() => api.deletePromotion(p.id).then(load)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
+              <button onClick={() => api.deletePromotion(p.id).then(load).catch((e) => console.error("[PromotionsModal] delete:", e))} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
             </div>
           ))}
         </div>

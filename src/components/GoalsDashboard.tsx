@@ -102,16 +102,18 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
 
   const loadAll = async () => {
     setLoading(true);
-    const { from, to } = periodRange(period);
-    const [g, n, a, s] = await Promise.all([
-      fetchClientGoals(clientId),
-      fetchNutritionByDay(clientId, from, to),
-      fetchActivityByDay(clientId, from, to),
-      fetchSessionsInPeriod(clientId, from, to),
-    ]);
-    setGoals(g); setDraft(goalsToDraft(g));
-    setNutrition(n); setActivities(a); setSessions(s);
-    setLoading(false);
+    try {
+      const { from, to } = periodRange(period);
+      const [g, n, a, s] = await Promise.all([
+        fetchClientGoals(clientId),
+        fetchNutritionByDay(clientId, from, to),
+        fetchActivityByDay(clientId, from, to),
+        fetchSessionsInPeriod(clientId, from, to),
+      ]);
+      setGoals(g); setDraft(goalsToDraft(g));
+      setNutrition(n); setActivities(a); setSessions(s);
+    } catch (e) { console.error("[GoalsDashboard] loadAll:", e); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => { loadAll(); }, [clientId, period]);

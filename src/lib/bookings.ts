@@ -50,11 +50,18 @@ export async function updateBooking(id: string, patch: Partial<Omit<Booking, "id
 }
 
 export async function setBookingClients(bookingId: string, clientIds: string[]) {
-  await supabase.from("booking_clients").delete().eq("booking_id", bookingId);
-  if (clientIds.length) await supabase.from("booking_clients").insert(clientIds.map((id) => ({ booking_id: bookingId, client_id: id })));
+  const { error: delErr } = await supabase.from("booking_clients").delete().eq("booking_id", bookingId);
+  if (delErr) throw delErr;
+  if (clientIds.length) {
+    const { error: insErr } = await supabase.from("booking_clients").insert(clientIds.map((id) => ({ booking_id: bookingId, client_id: id })));
+    if (insErr) throw insErr;
+  }
 }
 
-export const deleteBooking = (id: string) => supabase.from("bookings").delete().eq("id", id);
+export async function deleteBooking(id: string) {
+  const { error } = await supabase.from("bookings").delete().eq("id", id);
+  if (error) throw error;
+}
 
 // Запись одного занятия серии — пишем точечную правку в exceptions, саму серию не трогаем
 export async function setException(booking: Booking, date: string, patch: Record<string, any>) {

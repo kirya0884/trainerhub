@@ -21,7 +21,7 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
   const [media, setMedia] = useState<Record<string, string>>({});
   const [mediaUrlInput, setMediaUrlInput] = useState("");
 
-  useEffect(() => { libraryApi.fetchExerciseMedia(trainerId).then(setMedia); }, [trainerId]);
+  useEffect(() => { libraryApi.fetchExerciseMedia(trainerId).then(setMedia).catch((e) => console.error("[LibraryModal]:", e)); }, [trainerId]);
   useEffect(() => { setMediaUrlInput(detail ? media[detail.name] || "" : ""); }, [detail, media]);
 
   const saveMedia = async (name: string, url: string) => {

@@ -7,7 +7,7 @@ import ModalShell from "./ModalShell";
 export default function SessionHistoryModal({ trainerId, clientId, onClose }: { trainerId: string; clientId: string; onClose: () => void }) {
   const [sessions, setSessions] = useState<{ date: string; time: string }[] | null>(null);
 
-  useEffect(() => { bookingsApi.fetchClientDoneSessions(trainerId, clientId).then(setSessions); }, [trainerId, clientId]);
+  useEffect(() => { bookingsApi.fetchClientDoneSessions(trainerId, clientId).then(setSessions).catch((e) => console.error("[SessionHistoryModal]:", e)); }, [trainerId, clientId]);
 
   return (
     <ModalShell title="История тренировок" icon={<CalendarCheck size={16} className="text-lime-400" />} onClose={onClose}>
