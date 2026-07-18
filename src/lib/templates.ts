@@ -1,5 +1,4 @@
 import { supabase } from "./supabase";
-import { addDay, addExercise, updateExercise, setSetRows } from "./plans";
 import type { Day } from "../types";
 
 export interface PlanTemplate { id: string; name: string; days: Day[] }
@@ -33,20 +32,42 @@ export async function deleteDayTemplate(id: string) {
   if (error) throw error;
 }
 
-// Применение шаблона — построчная вставка через lib/plans.ts (а не bulk insert),
-// чтобы id/position проставлялись той же логикой, что и при ручном редактировании.
+// Bulk insert: день + все упражнения + все подходы за 3 запроса (было N×3+1)
 async function insertDayFromTemplate(planId: string, td: Day, position: number) {
-  const dayRow = await addDay(planId, td.name, position);
-  if (td.weekday != null) await supabase.from("plan_days").update({ weekday: td.weekday }).eq("id", dayRow.id);
-  // Parallel insert: all exercises run concurrently (each still serialised internally by setSetRows queue)
-  await Promise.all(td.exercises.map(async (te, j) => {
-    const exRow = await addExercise(dayRow.id, j, te.name);
-    await updateExercise(exRow.id, {
-      sets: te.sets, reps: te.reps, weight: te.weight, rest: te.rest, note: te.note,
-      video: te.video, detailed: te.detailed, group: te.group, tempo: te.tempo, duration: te.duration, target: te.target,
-    });
-    if (te.setRows?.length) await setSetRows(exRow.id, te.setRows);
-  }));
+  // 1 запрос: создаём день (включая weekday сразу, чтобы не делать отдельный UPDATE)
+  const { data: dayRow, error: dayErr } = await supabase
+    .from("plan_days")
+    .insert({ plan_id: planId, name: td.name, position, weekday: td.weekday ?? null })
+    .select()
+    .single();
+  if (dayErr) throw dayErr;
+
+  if (!td.exercises.length) return;
+
+  // 1 запрос: bulk insert всех упражнений с полными данными
+  const { data: exRows, error: exErr } = await supabase
+    .from("plan_exercises")
+    .insert(td.exercises.map((te, j) => ({
+      day_id: dayRow.id, position: j, name: te.name,
+      sets: te.sets ?? "", reps: te.reps ?? "", weight: te.weight ?? "",
+      rest: te.rest ?? "", note: te.note ?? "", video: te.video ?? "",
+      detailed: te.detailed ?? false, exercise_group: te.group ?? "",
+      tempo: te.tempo ?? "", duration: te.duration ?? "", target: te.target ?? "",
+    })))
+    .select();
+  if (exErr) throw exErr;
+
+  // 1 запрос: bulk insert всех подходов
+  const setRowInserts = (exRows ?? []).flatMap((exRow, j) =>
+    (td.exercises[j].setRows ?? []).map((r, i) => ({
+      exercise_id: exRow.id, position: i,
+      weight: String(r.weight ?? ""), reps: String(r.reps ?? ""),
+    }))
+  );
+  if (setRowInserts.length) {
+    const { error: srErr } = await supabase.from("plan_exercise_set_rows").insert(setRowInserts);
+    if (srErr) throw srErr;
+  }
 }
 
 

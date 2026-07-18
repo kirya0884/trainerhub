@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "../lib/plans";
 import type { Day, Exercise, Mesocycle, Plan, SetRow } from "../types";
 import { useDebouncedPersist } from "./useDebouncedPersist";
@@ -8,6 +8,8 @@ export function usePlan(planId: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const persist = useDebouncedPersist();
+  // temp-id → real-id map for optimistic exercise creation
+  const tempIdMap = useRef<Map<string, string>>(new Map());
 
   const load = () =>
     api.fetchPlan(planId)
@@ -73,28 +75,46 @@ export function usePlan(planId: string) {
     if (!plan) return;
     const day = plan.days.find((d) => d.id === dayId);
     if (!day) return;
-    const row = await api.addExercise(dayId, day.exercises.length, name);
-    const ex: Exercise = {
-      id: row.id, name: row.name, sets: row.sets, reps: row.reps, weight: row.weight, rest: row.rest,
-      note: row.note, video: row.video, detailed: row.detailed, group: row.exercise_group,
-      tempo: row.tempo, duration: row.duration, target: row.target, setRows: [],
+    // Optimistic: показываем сразу с temp ID, потом заменяем на реальный
+    const tempId = `temp-${crypto.randomUUID()}`;
+    const blank: Exercise = {
+      id: tempId, name, sets: "", reps: "", weight: "", rest: "",
+      note: "", video: "", detailed: false, group: "",
+      tempo: "", duration: "", target: "", setRows: [],
     };
-    setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: [...d.exercises, ex] } : d)) } : p));
+    setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
+      d.id === dayId ? { ...d, exercises: [...d.exercises, blank] } : d
+    )} : p));
+    const row = await api.addExercise(dayId, day.exercises.length, name);
+    tempIdMap.current.set(tempId, row.id);
+    setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
+      d.id === dayId ? { ...d, exercises: d.exercises.map((e) =>
+        e.id === tempId ? { ...blank, id: row.id } : e
+      )} : d
+    )} : p));
   };
 
   const updateExercise = (dayId: string, exId: string, patch: Partial<Exercise>) => {
     setPlan((p) =>
       p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: d.exercises.map((e) => (e.id === exId ? { ...e, ...patch } : e)) } : d)) } : p
     );
-    if ("setRows" in patch) persist(`setRows:${exId}`, { r: patch.setRows }, (pp) => api.setSetRows(exId, pp.r as SetRow[]));
+    // Разрешаем temp ID в реальный в момент срабатывания debounce (не в момент вызова)
+    if ("setRows" in patch) persist(`setRows:${exId}`, { r: patch.setRows }, (pp) => {
+      const id = tempIdMap.current.get(exId) ?? exId;
+      if (!id.startsWith("temp-")) api.setSetRows(id, pp.r as SetRow[]);
+    });
     const rest = { ...patch } as Record<string, any>;
     delete rest.setRows;
-    if (Object.keys(rest).length) persist(`ex:${exId}`, rest, (pp) => api.updateExercise(exId, pp));
+    if (Object.keys(rest).length) persist(`ex:${exId}`, rest, (pp) => {
+      const id = tempIdMap.current.get(exId) ?? exId;
+      if (!id.startsWith("temp-")) api.updateExercise(id, pp);
+    });
   };
 
   const deleteExercise = async (dayId: string, exId: string) => {
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: d.exercises.filter((e) => e.id !== exId) } : d)) } : p));
-    await api.deleteExercise(exId);
+    const realId = tempIdMap.current.get(exId) ?? exId;
+    if (!realId.startsWith("temp-")) await api.deleteExercise(realId);
   };
 
   const reorderExercises = async (dayId: string, from: number, to: number) => {
