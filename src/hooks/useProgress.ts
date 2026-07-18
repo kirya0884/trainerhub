@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as api from "../lib/progress";
 import type { DeletedSession, DeleteReason } from "../lib/progress";
 import type { Metric, ProgressNote, Session } from "../types";
@@ -9,8 +9,11 @@ export function useProgress(planId: string) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [deletedSessions, setDeletedSessions] = useState<DeletedSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const mountedRef = useRef(true);
+  useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const load = () => Promise.all([api.fetchProgress(planId), api.fetchDeletedSessions(planId)]).then(([d, del]) => {
+    if (!mountedRef.current) return;
     setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setLoading(false);
   });
 

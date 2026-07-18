@@ -141,16 +141,16 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   // Live progress: debounced write so trainer sees exercise status in real time
   const progressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const prevMeta = useRef(meta);
-  if (onProgress && prevMeta.current !== meta) {
-    prevMeta.current = meta;
+  useEffect(() => {
+    if (!onProgress) return;
     if (progressTimer.current) clearTimeout(progressTimer.current);
     progressTimer.current = setTimeout(() => {
       const p: Record<string, { done: boolean; setsDone?: Record<number, boolean>; note?: string }> = {};
       day.exercises.forEach((ex) => { const m = meta[ex.id]; if (m) p[ex.id] = { done: m.done, setsDone: m.setsDone ?? {}, note: m.note }; });
       onProgress(p);
     }, 1500);
-  }
+    return () => { if (progressTimer.current) clearTimeout(progressTimer.current); };
+  }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
   const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
   // Блокируем скролл страницы когда сессия открыта
   useEffect(() => {

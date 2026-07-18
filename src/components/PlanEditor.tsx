@@ -1,5 +1,5 @@
 import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
@@ -50,7 +50,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
-  const lastMetrics = Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m]));
+  const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m])), [metrics]);
   const COLLAPSED_KEY = `trainerhub-collapsed-${planId}`;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
     () => { try { return JSON.parse(localStorage.getItem(`trainerhub-collapsed-${planId}`) || "{}"); } catch { return {}; } }
@@ -193,7 +193,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     setDeletingSessionId(null);
   };
 
-  const sortedSessions = [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const sortedSessions = useMemo(() => [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1)), [sessions]);
   const lastSessionOf = (day: Day) => sortedSessions.find((s) => s.dayName === day.name);
   const isDoneToday = (day: Day) => lastSessionOf(day)?.date === today() && !returnedDayIds.has(day.id);
 
