@@ -111,8 +111,13 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   };
   const handleCreateDay = async () => {
     if (!newDayName?.trim()) return;
-    await addDay(newDayName.trim());
-    setNewDayName(null);
+    try {
+      await addDay(newDayName.trim());
+      setNewDayName(null);
+    } catch (e) {
+      console.error("[PlanEditor] handleCreateDay:", e);
+      alert("Не удалось добавить день. Попробуй ещё раз.");
+    }
   };
   const handlePasteDay = async () => {
     if (!dayClipboard || !pasteInput?.trim()) return;
@@ -157,18 +162,29 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     markSaving(); updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
   };
 
-  useEffect(() => { fetchClient(clientId).then((c) => { setMembership(c.membership); setClientName(c.name); }); }, [clientId]);
+  useEffect(() => {
+    let alive = true;
+    fetchClient(clientId)
+      .then((c) => { if (alive) { setMembership(c.membership); setClientName(c.name); } })
+      .catch((e) => console.error("[PlanEditor] fetchClient:", e));
+    return () => { alive = false; };
+  }, [clientId]);
 
   const finishSession = async (m: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => {
-    await logSession(m, note, session);
-    // ponytail: новая сессия за сегодня — сбрасываем флаг "вернули в Тренировки", чтобы день снова ушёл в Проведенные
-    if (sessionDay) {
-      setReturnedDayIds((s) => (s.has(sessionDay.id) ? new Set([...s].filter((id) => id !== sessionDay.id)) : s));
-      markSessionDone(trainerId, clientId, sessionDay.name, today()); // fire-and-forget: mark calendar booking done
+    try {
+      await logSession(m, note, session);
+      // ponytail: новая сессия за сегодня — сбрасываем флаг "вернули в Тренировки", чтобы день снова ушёл в Проведенные
+      if (sessionDay) {
+        setReturnedDayIds((s) => (s.has(sessionDay.id) ? new Set([...s].filter((id) => id !== sessionDay.id)) : s));
+        markSessionDone(trainerId, clientId, sessionDay.name, today()); // fire-and-forget: mark calendar booking done
+      }
+      // Гард двойного списания: если клиент уже залогировал эту же сессию (fromClient=true), тренер не декрементирует повторно.
+      const alreadyLoggedByClient = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
+      if (membership && !alreadyLoggedByClient) setMembership(await decrementMembershipRemaining(clientId, membership));
+    } catch (e: any) {
+      console.error("[PlanEditor] finishSession:", e);
+      throw e;
     }
-    // Гард двойного списания: если клиент уже залогировал эту же сессию (fromClient=true), тренер не декрементирует повторно.
-    const alreadyLoggedByClient = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
-    if (membership && !alreadyLoggedByClient) setMembership(await decrementMembershipRemaining(clientId, membership));
   };
 
   // ponytail: ручное добавление разовой тренировки к остатку — платная пишется в журнал платежей (учитывается в статистике заработка), бесплатная — только +1 к остатку
@@ -188,9 +204,15 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
   const confirmDeleteSession = async (reason: DeleteReason) => {
     if (!deletingSessionId) return;
-    await deleteSession(deletingSessionId, reason);
-    if (reason === "Уважительная" && membership) setMembership(await incrementMembershipRemaining(clientId, membership));
-    setDeletingSessionId(null);
+    try {
+      await deleteSession(deletingSessionId, reason);
+      if (reason === "Уважительная" && membership) setMembership(await incrementMembershipRemaining(clientId, membership));
+    } catch (e: any) {
+      console.error("[PlanEditor] confirmDeleteSession:", e);
+      alert("Не удалось удалить тренировку. Попробуй ещё раз.");
+    } finally {
+      setDeletingSessionId(null);
+    }
   };
 
   const sortedSessions = useMemo(() => [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1)), [sessions]);

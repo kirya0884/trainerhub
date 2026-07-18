@@ -168,8 +168,10 @@ export function usePlan(planId: string) {
   const addMesocycle = async () => {
     if (!plan) return;
     const position = (plan.mesocycles ?? []).length;
-    const meso = await api.addMesocycle(planId, position);
-    setPlan((p) => (p ? { ...p, mesocycles: [...(p.mesocycles ?? []), meso] } : p));
+    try {
+      const meso = await api.addMesocycle(planId, position);
+      setPlan((p) => (p ? { ...p, mesocycles: [...(p.mesocycles ?? []), meso] } : p));
+    } catch (e) { console.error("[usePlan] addMesocycle:", e); }
   };
 
   const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "visibleToClient">>) => {
