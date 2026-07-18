@@ -305,8 +305,8 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         <TemplatesModal
           trainerId={trainerId}
           currentDays={plan.days}
-          onApplyPlan={async (days) => { await templatesApi.applyPlanTemplate(plan.id, days, plan.days.length); setShowTemplates(false); reload(); }}
-          onApplyDay={async (day) => { await templatesApi.applyDayTemplate(plan.id, day, plan.days.length); setShowTemplates(false); reload(); }}
+          onApplyPlan={async (days) => { try { await templatesApi.applyPlanTemplate(plan.id, days, plan.days.length); reload(); } catch (e) { console.error("[PlanEditor] applyPlan:", e); alert("Ошибка применения шаблона. Попробуй ещё раз."); } finally { setShowTemplates(false); } }}
+          onApplyDay={async (day) => { try { await templatesApi.applyDayTemplate(plan.id, day, plan.days.length); reload(); } catch (e) { console.error("[PlanEditor] applyDay:", e); alert("Ошибка применения шаблона. Попробуй ещё раз."); } finally { setShowTemplates(false); } }}
           onClose={() => setShowTemplates(false)}
         />
       )}

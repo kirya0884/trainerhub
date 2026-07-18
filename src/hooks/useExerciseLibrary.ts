@@ -6,7 +6,7 @@ import * as api from "../lib/library";
 export function useExerciseLibrary(trainerId: string) {
   const [customNames, setCustomNames] = useState<string[]>([]);
 
-  useEffect(() => { api.fetchCustomExercises(trainerId).then(setCustomNames); }, [trainerId]);
+  useEffect(() => { let alive = true; api.fetchCustomExercises(trainerId).then((n) => { if (alive) setCustomNames(n); }).catch((e) => console.error("[useExerciseLibrary]", e)); return () => { alive = false; }; }, [trainerId]);
 
   const allNames = useMemo(() => [...BUILTIN_EX_NAMES, ...customNames], [customNames]);
 

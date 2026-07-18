@@ -110,8 +110,10 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
 
   const startDay = async (dayId: string, dayName: string) => {
     if (!currentPlan) return;
-    await portalApi.startSession(client.id, currentPlan.id, dayId, dayName);
-    setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now() });
+    try {
+      await portalApi.startSession(client.id, currentPlan.id, dayId, dayName);
+      setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now() });
+    } catch (e) { console.error("[ClientPortal] startDay:", e); alert("Не удалось начать тренировку. Попробуй ещё раз."); }
   };
 
   // #6 activeDay derived here so portal always renders; CSV renders on top when not minimized
@@ -532,7 +534,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           day={activeDay}
           startedAt={activeSession.startedAt}
           onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch(() => {})}
-          onCancel={async () => { await portalApi.cancelSession(client.id); setActiveSession(null); setSessionMinimized(false); }}
+          onCancel={async () => { try { await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { setActiveSession(null); setSessionMinimized(false); } }}
           onFinish={async (metrics, session) => {
             try {
               await portalApi.logClientSession(activeSession.planId, metrics, session);

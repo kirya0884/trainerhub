@@ -7,7 +7,7 @@ export function useBookings(trainerId: string) {
   const [loading, setLoading] = useState(true);
   const reqRef = useRef(0);
 
-  const load = () => { const req = ++reqRef.current; api.fetchBookings(trainerId).then((b) => { if (req === reqRef.current) { setBookings(b); setLoading(false); } }); };
+  const load = () => { const req = ++reqRef.current; api.fetchBookings(trainerId).then((b) => { if (req === reqRef.current) { setBookings(b); setLoading(false); } }).catch((e) => { if (req === reqRef.current) setLoading(false); console.error("[useBookings]", e); }); };
   useEffect(() => { load(); }, [trainerId]);
 
   const addBooking = async (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => { await api.addBooking(trainerId, patch, clientIds); await load(); };
