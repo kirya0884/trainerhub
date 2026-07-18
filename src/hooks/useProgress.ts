@@ -38,17 +38,27 @@ export function useProgress(planId: string) {
   const deleteMetric = async (id: string) => { const snap = metrics.find((x) => x.id === id); setMetrics((p) => p.filter((x) => x.id !== id)); try { await api.deleteMetric(id); } catch (e) { if (snap) setMetrics((p) => [...p, snap]); console.error("[useProgress] deleteMetric:", e); } };
 
   const deleteSession = async (id: string, reason: DeleteReason) => {
-    const session = sessions.find((x) => x.id === id);
+    const snap = sessions.find((x) => x.id === id);
     setSessions((p) => p.filter((x) => x.id !== id));
-    await api.deleteSession(id, reason);
-    if (session) setDeletedSessions((p) => [{ id, date: session.date, dayName: session.dayName, deletedAt: new Date().toISOString(), deleteReason: reason }, ...p]);
+    try {
+      await api.deleteSession(id, reason);
+      if (snap) setDeletedSessions((p) => [{ id, date: snap.date, dayName: snap.dayName, deletedAt: new Date().toISOString(), deleteReason: reason }, ...p]);
+    } catch (e) {
+      if (snap) setSessions((p) => [...p, snap]);
+      console.error("[useProgress] deleteSession:", e);
+    }
   };
   const restoreSession = async (id: string) => { await api.restoreSession(id); await load(); };
   const updateSessionReview = (id: string, review: string) => {
     setSessions((p) => p.map((x) => (x.id === id ? { ...x, review } : x)));
     api.updateSessionReview(id, review).catch((e) => console.error("[useProgress] updateSessionReview:", e));
   };
-  const purgeSession = async (id: string) => { setDeletedSessions((p) => p.filter((x) => x.id !== id)); await api.permanentlyDeleteSession(id); };
+  const purgeSession = async (id: string) => {
+    const snap = deletedSessions.find((x) => x.id === id);
+    setDeletedSessions((p) => p.filter((x) => x.id !== id));
+    try { await api.permanentlyDeleteSession(id); }
+    catch (e) { if (snap) setDeletedSessions((p) => [...p, snap]); console.error("[useProgress] purgeSession:", e); }
+  };
 
   const logSession = async (metricsIn: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => {
     const res = await api.logSession(planId, metricsIn, note, session);

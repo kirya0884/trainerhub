@@ -72,8 +72,10 @@ export const updateDay = async (dayId: string, patch: Record<string, any>) => {
   if (error) throw error;
 };
 export const deleteDay = async (dayId: string) => { const { error } = await supabase.from("plan_days").delete().eq("id", dayId); if (error) throw error; };
-export const reorderDays = (rows: { id: string; position: number }[]) =>
-  Promise.all(rows.map((r) => supabase.from("plan_days").update({ position: r.position }).eq("id", r.id)));
+export const reorderDays = async (rows: { id: string; position: number }[]) => {
+  const res = await Promise.all(rows.map((r) => supabase.from("plan_days").update({ position: r.position }).eq("id", r.id)));
+  const err = res.find((r) => r.error)?.error; if (err) throw err;
+};
 
 export async function addExercise(dayId: string, position: number, name = "") {
   const { data, error } = await supabase
@@ -91,8 +93,10 @@ export async function updateExercise(exId: string, patch: Record<string, any>) {
   if (error) throw error;
 }
 export const deleteExercise = async (exId: string) => { const { error } = await supabase.from("plan_exercises").delete().eq("id", exId); if (error) throw error; };
-export const reorderExercises = (rows: { id: string; position: number }[]) =>
-  Promise.all(rows.map((r) => supabase.from("plan_exercises").update({ position: r.position }).eq("id", r.id)));
+export const reorderExercises = async (rows: { id: string; position: number }[]) => {
+  const res = await Promise.all(rows.map((r) => supabase.from("plan_exercises").update({ position: r.position }).eq("id", r.id)));
+  const err = res.find((r) => r.error)?.error; if (err) throw err;
+};
 
 // ponytail: serialise per-exercise to prevent concurrent DELETE+INSERT duplication
 const _srQ = new Map<string, Promise<void>>();
@@ -124,5 +128,7 @@ export const updateMesocycle = async (mesoId: string, patch: Partial<Pick<Mesocy
   if (error) throw error;
 };
 export const deleteMesocycle = async (mesoId: string) => { const { error } = await supabase.from("plan_mesocycles").delete().eq("id", mesoId); if (error) throw error; };
-export const reorderMesocycles = (rows: { id: string; position: number }[]) =>
-  Promise.all(rows.map((r) => supabase.from("plan_mesocycles").update({ position: r.position }).eq("id", r.id)));
+export const reorderMesocycles = async (rows: { id: string; position: number }[]) => {
+  const res = await Promise.all(rows.map((r) => supabase.from("plan_mesocycles").update({ position: r.position }).eq("id", r.id)));
+  const err = res.find((r) => r.error)?.error; if (err) throw err;
+};

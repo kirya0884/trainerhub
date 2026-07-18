@@ -32,7 +32,7 @@ export function usePlan(planId: string) {
   const updatePlanMeta = (patch: Partial<Pick<Plan, "name" | "note" | "visibleToClient">>) => {
     setPlan((p) => (p ? { ...p, ...patch } : p));
     if ("visibleToClient" in patch) {
-      api.updatePlanMeta(planId, patch); // немедленно — переключатель видимости
+      api.updatePlanMeta(planId, patch).catch((e) => console.error("[usePlan] updatePlanMeta (visible):", e));
     } else {
       persist("plan", patch as Record<string, any>, (pp) => api.updatePlanMeta(planId, pp));
     }
@@ -54,7 +54,7 @@ export function usePlan(planId: string) {
   const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf" | "visibleToClient" | "mesocycleId">>) => {
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, ...patch } : d)) } : p));
     if ("visibleToClient" in patch) {
-      api.updateDay(dayId, patch as Record<string, any>); // немедленно — переключатель видимости
+      api.updateDay(dayId, patch as Record<string, any>).catch((e) => console.error("[usePlan] updateDay (visible):", e));
     } else {
       persist(`day:${dayId}`, patch as Record<string, any>, (pp) => api.updateDay(dayId, pp).catch((e) => console.error("[usePlan] updateDay failed:", e)));
     }
@@ -175,22 +175,19 @@ export function usePlan(planId: string) {
   const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "visibleToClient">>) => {
     setPlan((p) => (p ? { ...p, mesocycles: (p.mesocycles ?? []).map((m) => (m.id === mesoId ? { ...m, ...patch } : m)) } : p));
     if ("visibleToClient" in patch) {
-      api.updateMesocycle(mesoId, patch); // немедленно — переключатель видимости
+      api.updateMesocycle(mesoId, patch).catch((e) => console.error("[usePlan] updateMesocycle (visible):", e));
     } else {
       persist(`meso:${mesoId}`, patch as Record<string, any>, (pp) => api.updateMesocycle(mesoId, pp));
     }
   };
 
   const deleteMesocycle = async (mesoId: string) => {
-    setPlan((p) => {
-      if (!p) return p;
-      return {
-        ...p,
-        mesocycles: (p.mesocycles ?? []).filter((m) => m.id !== mesoId),
-        days: p.days.map((d) => d.mesocycleId === mesoId ? { ...d, mesocycleId: null } : d),
-      };
-    });
-    await api.deleteMesocycle(mesoId);
+    if (!plan) return;
+    const snapMesos = plan.mesocycles ?? [];
+    const snapDays = plan.days;
+    setPlan((p) => (p ? { ...p, mesocycles: (p.mesocycles ?? []).filter((m) => m.id !== mesoId), days: p.days.map((d) => d.mesocycleId === mesoId ? { ...d, mesocycleId: null } : d) } : p));
+    try { await api.deleteMesocycle(mesoId); }
+    catch (e) { setPlan((p) => (p ? { ...p, mesocycles: snapMesos, days: snapDays } : p)); console.error("[usePlan] deleteMesocycle:", e); }
   };
 
   return {
