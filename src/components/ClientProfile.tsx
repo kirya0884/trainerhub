@@ -66,28 +66,28 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     const next = subOrder.filter((k) => k !== dragSub);
     next.splice(next.indexOf(target), 0, dragSub);
     setSubOrder(next);
-    localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next));
+    try { localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next)); } catch {}
   };
   const moveSubUp = (kind: Sub) => {
     const idx = subOrder.indexOf(kind);
     if (idx <= 0) return;
     const next = [...subOrder];
     [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-    setSubOrder(next); localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next));
+    setSubOrder(next); try { localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next)); } catch {}
   };
   const moveSubDown = (kind: Sub) => {
     const idx = subOrder.indexOf(kind);
     if (idx >= subOrder.length - 1) return;
     const next = [...subOrder];
     [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-    setSubOrder(next); localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next));
+    setSubOrder(next); try { localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next)); } catch {}
   };
   const toggleSubVisible = (kind: Sub) => {
     const isHidden = hiddenSubs.includes(kind);
     if (!isHidden && hiddenSubs.length >= subOrder.length - 1) return; // хотя бы одна под-вкладка должна остаться видимой
     const next = isHidden ? hiddenSubs.filter((k) => k !== kind) : [...hiddenSubs, kind];
     setHiddenSubs(next);
-    localStorage.setItem(SUB_HIDDEN_KEY, JSON.stringify(next));
+    try { localStorage.setItem(SUB_HIDDEN_KEY, JSON.stringify(next)); } catch {}
   };
   const [client, setClient] = useState<ClientFull | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);

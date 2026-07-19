@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { CLIENT_COLORS } from "../constants";
+import { today } from "./format";
 
 export interface ClientListItem {
   id: string;
@@ -42,7 +43,7 @@ export async function addClient(trainerId: string, name: string, goal: string, e
   const color = CLIENT_COLORS[existingCount % CLIENT_COLORS.length];
   const { data, error } = await supabase
     .from("clients")
-    .insert({ trainer_id: trainerId, name, goal, color, joined_at: new Date().toISOString().slice(0, 10) })
+    .insert({ trainer_id: trainerId, name, goal, color, joined_at: today() })
     .select()
     .single();
   if (error) throw error;
@@ -328,7 +329,7 @@ export async function fetchPhotos(clientId: string): Promise<Photo[]> {
 // ponytail: фото храним как dataURL-превью прямо в text-колонке (как в исходнике) — без Storage-бакета.
 // Для большого архива снимков лучше перевести на Supabase Storage + ссылки.
 export async function addPhoto(clientId: string, url: string) {
-  const { error } = await supabase.from("client_photos").insert({ client_id: clientId, url, taken_at: new Date().toISOString().slice(0, 10) });
+  const { error } = await supabase.from("client_photos").insert({ client_id: clientId, url, taken_at: today() });
   if (error) throw error;
 }
 

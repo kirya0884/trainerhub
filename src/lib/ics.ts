@@ -1,4 +1,5 @@
 import type { Occurrence } from "./bookings";
+import { toDateStr } from "./format";
 
 // Экспорт .ics — нативная сборка текста календаря (без библиотек), как и бэкап через Blob/createObjectURL.
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -10,7 +11,7 @@ const toIcsDate = (date: string, time: string) => {
 const addMinutes = (date: string, time: string, minutes: number) => {
   const dt = new Date(`${date}T${time || "00:00"}:00`);
   dt.setMinutes(dt.getMinutes() + minutes);
-  return { date: dt.toISOString().slice(0, 10), time: dt.toISOString().slice(11, 16) };
+  return { date: toDateStr(dt), time: `${pad(dt.getHours())}:${pad(dt.getMinutes())}` };
 };
 
 export function bookingsToIcs(occurrences: Occurrence[], clientName: (id: string) => string): string {

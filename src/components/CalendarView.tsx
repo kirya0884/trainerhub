@@ -74,7 +74,9 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
     setDragOverDay(null);
     const raw = e.dataTransfer.getData("text/plain");
     if (!raw) return;
-    const { id, occDate } = JSON.parse(raw) as { id: string; occDate: string };
+    let parsed: { id: string; occDate: string };
+    try { parsed = JSON.parse(raw); } catch { return; }
+    const { id, occDate } = parsed;
     if (occDate === targetDate) return;
     const b = findBookingById(id);
     if (!b) return;
@@ -91,7 +93,9 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
     setDragOverDay(null);
     const raw = e.dataTransfer.getData("text/plain");
     if (!raw) return;
-    const { id, occDate } = JSON.parse(raw) as { id: string; occDate: string };
+    let parsed: { id: string; occDate: string };
+    try { parsed = JSON.parse(raw); } catch { return; }
+    const { id, occDate } = parsed;
     const rect = e.currentTarget.getBoundingClientRect();
     const min = HOUR_START * 60 + Math.round(((e.clientY - rect.top) / ROW_H) * 60 / 30) * 30;
     const newTime = fromMin(Math.max(HOUR_START * 60, Math.min(min, HOUR_END * 60)));

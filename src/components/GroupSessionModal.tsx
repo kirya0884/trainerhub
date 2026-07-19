@@ -94,6 +94,7 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
   const [dayId, setDayId] = useState("");
   const [membership, setMembership] = useState<Membership | null>(null);
   const [finished, setFinished] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [vals, setVals] = useState<Record<string, SetVal[]>>({});
   const [meta, setMeta] = useState<Record<string, ExMeta>>({});
   const [mood, setMood] = useState(0);
@@ -131,7 +132,8 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
   const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0) : 0;
 
   const finish = async () => {
-    if (!day || !plan) return;
+    if (!day || !plan || busy) return;
+    setBusy(true);
     try {
       const metrics = buildMetrics(day, vals);
       const items = day.exercises.filter((ex) => ex.name).map((ex) => {
@@ -142,10 +144,17 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
       const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
       const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`;
       await progressApi.logSession(plan.id, metrics, note, session);
-      if (membership) setMembership(await clientsApi.decrementMembershipRemaining(client.id, membership));
+      // Гард двойного списания: если клиент уже сам залогировал эту сессию (fromClient) — не декрементируем повторно
+      let alreadyLoggedByClient = false;
+      try {
+        const { sessions } = await progressApi.fetchProgress(plan.id);
+        alreadyLoggedByClient = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
+      } catch {}
+      if (membership && !alreadyLoggedByClient) setMembership(await clientsApi.decrementMembershipRemaining(client.id, membership));
       setFinished(true);
       onFinished();
     } catch (e) { console.error("[GroupSessionModal] finish:", e); alert("Не удалось сохранить тренировку. Попробуй ещё раз."); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -234,7 +243,7 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
               <div className="flex items-center gap-3">
                 <span className="text-sm text-zinc-400 shrink-0">Упр.: <span className="text-lime-400 font-semibold">{doneEx}/{day.exercises.length}</span></span>
                 {totalTonnage > 0 && <span className="text-sm text-zinc-400 shrink-0">Тоннаж: <span className="text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span></span>}
-                {!finished && <button onClick={finish} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 hover:bg-lime-300 transition flex items-center justify-center gap-1.5"><CheckCircle2 size={18} /> Завершить — {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />} {client.name}</button>}
+                {!finished && <button onClick={finish} disabled={busy} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 hover:bg-lime-300 transition disabled:opacity-50 flex items-center justify-center gap-1.5"><CheckCircle2 size={18} /> Завершить — {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />} {client.name}</button>}
               </div>
             </>
           )}

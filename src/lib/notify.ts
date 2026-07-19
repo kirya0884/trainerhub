@@ -1,3 +1,4 @@
+import { today } from "./format";
 // Браузерные уведомления (native Notification API, без библиотек) — один раз в день на тренера,
 // чтобы не спамить при каждом открытии дашборда. Флаг дня храним в localStorage.
 export function requestNotifyPermission() {
@@ -6,7 +7,7 @@ export function requestNotifyPermission() {
 
 export function notifyDailyDigest(trainerId: string, items: { todayCount: number; debtNames: string[]; expiringNames: string[] }) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const key = `trainerhub-notified-${trainerId}-${new Date().toISOString().slice(0, 10)}`;
+  const key = `trainerhub-notified-${trainerId}-${today()}`;
   if (localStorage.getItem(key)) return;
   localStorage.setItem(key, "1");
 
@@ -42,7 +43,7 @@ export function notifyClientFinished(clientName: string) {
 // Клиенту: мало тренировок осталось (≤2)
 export function notifyLowBalance(clientId: string, remaining: number) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const key = `trainerhub-lowbal-${clientId}-${new Date().toISOString().slice(0, 10)}`;
+  const key = `trainerhub-lowbal-${clientId}-${today()}`;
   if (localStorage.getItem(key)) return;
   localStorage.setItem(key, "1");
   new Notification("Reps — Осталось мало тренировок", { body: `У вас осталось ${remaining} тренировк${remaining === 1 ? "а" : "и"} в пакете` });

@@ -114,14 +114,14 @@ export default function App() {
     const next = tabOrder.filter((k) => k !== dragTab);
     next.splice(next.indexOf(target), 0, dragTab);
     setTabOrder(next);
-    localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(next));
+    try { localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(next)); } catch {}
   };
   const toggleTabVisible = (kind: TabKind) => {
     const isHidden = hiddenTabs.includes(kind);
     if (!isHidden && hiddenTabs.length >= tabOrder.length - 1) return; // хотя бы одна вкладка должна остаться видимой
     const next = isHidden ? hiddenTabs.filter((k) => k !== kind) : [...hiddenTabs, kind];
     setHiddenTabs(next);
-    localStorage.setItem(TAB_HIDDEN_KEY, JSON.stringify(next));
+    try { localStorage.setItem(TAB_HIDDEN_KEY, JSON.stringify(next)); } catch {}
   };
 
   useEffect(() => {
@@ -165,7 +165,7 @@ export default function App() {
   }, [isTrainer, session]);
   useEffect(() => {
     document.documentElement.classList.toggle("light-theme", themeMode === "light");
-    localStorage.setItem("trainerhub-theme-v1", themeMode);
+    try { localStorage.setItem("trainerhub-theme-v1", themeMode); } catch {}
   }, [themeMode]);
 
   if (loading) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);

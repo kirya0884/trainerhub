@@ -131,13 +131,13 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const _vt = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (_vt.current) clearTimeout(_vt.current);
-    _vt.current = setTimeout(() => localStorage.setItem(`${SK}-vals`, JSON.stringify(vals)), 500);
+    _vt.current = setTimeout(() => { try { localStorage.setItem(`${SK}-vals`, JSON.stringify(vals)); } catch {} }, 500);
     return () => { if (_vt.current) clearTimeout(_vt.current); };
   }, [vals]); // eslint-disable-line react-hooks/exhaustive-deps
   const _mt = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (_mt.current) clearTimeout(_mt.current);
-    _mt.current = setTimeout(() => localStorage.setItem(`${SK}-meta`, JSON.stringify(meta)), 500);
+    _mt.current = setTimeout(() => { try { localStorage.setItem(`${SK}-meta`, JSON.stringify(meta)); } catch {} }, 500);
     return () => { if (_mt.current) clearTimeout(_mt.current); };
   }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;

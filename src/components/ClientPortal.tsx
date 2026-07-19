@@ -66,7 +66,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       portalApi.fetchUpcomingBooking(client.id).then((ub) => {
         setUpcoming(ub);
         if (notifyOnLoad && ub) {
-          const todayStr = new Date().toISOString().slice(0, 10);
+          const todayStr = todayFn();
           if (ub.date === todayStr && ub.time) {
             const [hh, mm] = ub.time.split(":").map(Number);
             const occMs = new Date(todayStr + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;

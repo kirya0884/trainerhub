@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { addDays } from "./format";
+import { addDays, today } from "./format";
 
 export interface Booking {
   id: string; planId: string | null; dayId: string | null; dayName: string | null;
@@ -100,7 +100,7 @@ export const expandBookings = (bookings: Booking[], rangeStart: string, rangeEnd
 export async function fetchClientDoneSessions(trainerId: string, clientId: string): Promise<{ date: string; time: string }[]> {
   const bookings = await fetchBookings(trainerId);
   const mine = bookings.filter((b) => b.clientIds.includes(clientId));
-  const occs = expandBookings(mine, "2000-01-01", new Date().toISOString().slice(0, 10));
+  const occs = expandBookings(mine, "2000-01-01", today());
   return occs.filter((o) => o.status === "done").map((o) => ({ date: o.date, time: o.time })).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
 }
 
