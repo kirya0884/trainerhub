@@ -265,6 +265,13 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         {isCircuit ? Array.from({ length: maxRounds }, (_, r) => (
           <div key={r} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-zinc-800/80" style={{ color: "var(--accent)" }}>Круг {r + 1} из {maxRounds}</div>
+            <div className="flex items-center gap-2 px-3 py-1 text-[10px] uppercase tracking-wide text-zinc-500 border-b border-zinc-800">
+              <span className="shrink-0" style={{ width: 26 }} />
+              <span className="flex-1 min-w-0">Упражнение</span>
+              <span className="w-14 text-center shrink-0">повт.</span>
+              <span className="text-xs invisible">×</span>
+              <span className="w-14 text-center shrink-0">вес, кг</span>
+            </div>
             <div className="divide-y divide-zinc-800">
               {day.exercises.map((ex) => {
                 const rows = vals[ex.id] || [];
