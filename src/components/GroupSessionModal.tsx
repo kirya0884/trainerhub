@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Users, X } from "lucide-react";
+import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Timer, Users, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { parseNum, today } from "../lib/format";
@@ -196,6 +196,7 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
                   return (
                     <div key={ex.id} className={block.items.length > 1 ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}` : `bg-zinc-900 border rounded-xl p-3 transition ${md.done ? "border-lime-400/40" : "border-zinc-800"}`}>
                       <div className="flex items-center justify-between gap-2 mb-2"><h3 className="font-semibold min-w-0 truncate"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3><span className="text-xs text-zinc-500 shrink-0 text-right">цель: {exSummary(ex)}{tonnage > 0 && <><br />тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></>}</span></div>
+                      {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-cyan-400" /> отдых между подходами: {ex.rest}</p>}
                       <div className="flex gap-1.5 overflow-x-auto pb-1">
                         <div className="flex flex-col gap-1 shrink-0"><div className="h-5 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">№</div><div className="h-9 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">Вес</div><div className="h-9 flex items-center text-[10px] uppercase tracking-wide text-zinc-500">Повт.</div></div>
                         {rows.map((r, i) => (

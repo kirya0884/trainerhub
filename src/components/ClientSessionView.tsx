@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Flame, Layers, Minimize2, Play, Send, Star, X } from "lucide-react";
+import { CheckCircle2, Circle, Flame, Layers, Minimize2, Play, Send, Star, Timer, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { parseNum, today } from "../lib/format";
 import { buildMetrics } from "../lib/sessionUtils";
@@ -276,6 +276,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                     <button onClick={() => setMetaFor(ex.id, { done: !md.done })} className="text-xs px-2 py-1 rounded-lg font-medium transition bg-zinc-800 text-zinc-400 hover:text-zinc-100" style={md.done ? { color: "var(--accent)" } : undefined}>{md.done ? "✓ Готово" : "Готово"}</button>
                   </div>
                 </div>
+                {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} style={{ color: "var(--accent)" }} /> отдых между подходами: {ex.rest}</p>}
                 <div className="space-y-1.5">
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;

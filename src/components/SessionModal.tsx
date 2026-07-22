@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Minimize2, Play, X } from "lucide-react";
+import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Minimize2, Play, Timer, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { parseNum, today } from "../lib/format";
@@ -201,6 +201,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
             return (
               <div key={ex.id} className={block.items.length > 1 ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}` : `bg-zinc-900 border rounded-xl p-3 transition ${md.done ? "border-lime-400/40" : "border-zinc-800"}`}>
                 <div className="flex items-start justify-between gap-2 mb-2"><h3 className="font-semibold min-w-0 leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3><div className="flex items-center gap-2 shrink-0">{tonnage > 0 && <span className="text-xs text-zinc-500">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></span>}<button onClick={() => setMetaFor(ex.id, { done: !md.done })} className={`text-xs px-2 py-1 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-400 hover:text-zinc-100"}`}>{md.done ? "✓ Готово" : "Готово"}</button></div></div>
+                {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-cyan-400" /> отдых между подходами: {ex.rest}</p>}
                 <div className="space-y-1.5">
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;
