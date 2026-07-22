@@ -37,7 +37,7 @@ async function insertDayFromTemplate(planId: string, td: Day, position: number) 
   // 1 запрос: создаём день (включая weekday сразу, чтобы не делать отдельный UPDATE)
   const { data: dayRow, error: dayErr } = await supabase
     .from("plan_days")
-    .insert({ plan_id: planId, name: td.name, position, weekday: td.weekday ?? null })
+    .insert({ plan_id: planId, name: td.name, position, weekday: td.weekday ?? null, method: td.method ?? "" })
     .select()
     .single();
   if (dayErr) throw dayErr;
@@ -53,6 +53,7 @@ async function insertDayFromTemplate(planId: string, td: Day, position: number) 
       rest: te.rest ?? "", note: te.note ?? "", video: te.video ?? "",
       detailed: te.detailed ?? false, exercise_group: te.group ?? "",
       tempo: te.tempo ?? "", duration: te.duration ?? "", target: te.target ?? "",
+      kind: te.kind ?? "", pulse_zone: te.pulseZone ?? "",
     })))
     .select();
   if (exErr) throw exErr;

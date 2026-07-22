@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Layers, Plus, Video, X } from "lucide-react";
+import { Activity, ChevronDown, ChevronUp, Layers, Plus, Video, X } from "lucide-react";
 import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
@@ -53,7 +53,8 @@ function ExerciseRow({
           )}
         </div>
         <button onClick={() => setShowVideo((v) => !v)} title="Видео-превью" className={`p-1.5 rounded-md transition shrink-0 ${showVideo ? "text-lime-400 bg-lime-400/10" : ex.video ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Video size={15} /></button>
-        <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-md transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>
+        <button onClick={() => update({ kind: ex.kind === "functional" ? "" : "functional" })} title="Функциональное упражнение (время/пульс вместо подходов)" className={`p-1.5 rounded-md transition shrink-0 ${ex.kind === "functional" ? "text-orange-400 bg-orange-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Activity size={15} /></button>
+        {ex.kind !== "functional" && <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-md transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>}
         <button onClick={remove} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
       </div>
 
@@ -69,7 +70,14 @@ function ExerciseRow({
           )}
         </div>
       )}
-      {ex.detailed ? (
+      {ex.kind === "functional" ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
+          <NumField label="Время выполнения" value={ex.duration} onChange={(e) => { const v = e.target.value; startTransition(() => update({ duration: v })); }} placeholder="40 с / 2 мин" />
+          <NumField label="Вес отягощения" value={ex.weight} onChange={(e) => { const v = e.target.value; startTransition(() => update({ weight: v })); }} placeholder="16 кг" />
+          <NumField label="Отдых" value={ex.rest} onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="30 с" />
+          <NumField label="Пульсовая зона" value={ex.pulseZone} onChange={(e) => { const v = e.target.value; startTransition(() => update({ pulseZone: v })); }} placeholder="Z2 120-140" />
+        </div>
+      ) : ex.detailed ? (
         <div className="pl-6 space-y-1.5">
           {ex.setRows.map((s, i) => (
             <div key={s.id} className="flex items-center gap-2">

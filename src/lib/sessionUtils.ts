@@ -11,7 +11,7 @@ export function buildMetrics(
 ): Omit<Metric, "id">[] {
   const metrics: Omit<Metric, "id">[] = [];
   day.exercises.forEach((ex) => {
-    if (!ex.name) return;
+    if (!ex.name || ex.kind === "functional") return; // функциональные — время/пульс, в прогрессию весов не пишем
     const rows = (vals[ex.id] || []).filter(
       (r) => parseNum(r.weight) != null || (r.reps !== "" && r.reps != null)
     );

@@ -12,6 +12,7 @@ const exLabel = (day: Day, idx: number) => {
   return `${ex.group}${pos}`;
 };
 const exSummary = (e: Exercise) => {
+  if (e.kind === "functional") return [e.duration, e.weight, e.pulseZone ? `пульс ${e.pulseZone}` : ""].filter(Boolean).join(" · ") || "функциональное";
   if (e.detailed && e.setRows?.length) return e.setRows.map((s, i) => `${i + 1}) ${s.weight || "—"}×${s.reps || "—"}`).join(", ");
   let base = `${e.sets}×${e.reps}`;
   if (e.weight) base += ` · ${e.weight}`;
@@ -128,13 +129,15 @@ export default function SessionModal({ day, onFinish, onClose }: {
     });
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
   const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
+  const isCircuit = day.method === "circuit";
+  const maxRounds = isCircuit && day.exercises.length ? Math.max(1, ...day.exercises.map((ex) => (vals[ex.id] || []).length)) : 0;
 
   const finish = async () => {
     if (submitting) return;
     setSubmitting(true);
     const metrics: Omit<Metric, "id">[] = [];
     day.exercises.forEach((ex) => {
-      if (!ex.name) return;
+      if (!ex.name || ex.kind === "functional") return;
       const rows = (vals[ex.id] || []).filter((r) => parseNum(r.weight) != null || (r.reps !== "" && r.reps != null));
       if (!rows.length) return;
       let best: { w: number; reps: string } | null = null;
@@ -190,7 +193,37 @@ export default function SessionModal({ day, onFinish, onClose }: {
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 max-w-2xl w-full mx-auto space-y-3">
         {day.exercises.length === 0 && <p className="text-zinc-600 text-center py-10">В этом дне нет упражнений.</p>}
-        {groupBlocks(day.exercises).map((block, bi) => {
+        {isCircuit ? Array.from({ length: maxRounds }, (_, r) => (
+          <div key={r} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-cyan-400/10 text-cyan-400">Круг {r + 1} из {maxRounds}</div>
+            <div className="divide-y divide-zinc-800">
+              {day.exercises.map((ex) => {
+                const rows = vals[ex.id] || [];
+                if (r >= rows.length || !ex.name) return null;
+                const row = rows[r];
+                const md = meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0, setsDone: {} };
+                const isDone = md.setsDone?.[r] ?? false;
+                return (
+                  <div key={ex.id} className={`flex items-center gap-2 px-3 py-2 transition ${isDone ? "opacity-50" : ""}`}>
+                    <button onClick={() => toggleSetDone(ex.id, r, rows.length)} className="shrink-0 p-0.5">
+                      {isDone ? <CheckCircle2 size={18} className="text-lime-400" /> : <Circle size={18} className="text-zinc-600" />}
+                    </button>
+                    <span className="flex-1 min-w-0 truncate text-sm font-medium">{ex.name}</span>
+                    {ex.kind === "functional" ? (
+                      <span className="text-xs text-zinc-400 shrink-0 text-right">{[ex.duration && `⏱ ${ex.duration}`, ex.weight, ex.pulseZone && `пульс ${ex.pulseZone}`].filter(Boolean).join(" · ") || "функц."}</span>
+                    ) : (
+                      <>
+                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-9 w-14 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                        <span className="text-xs text-zinc-500">×</span>
+                        <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-9 w-14 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )) : groupBlocks(day.exercises).map((block, bi) => {
           const cards = block.items.map((ex, k) => {
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
@@ -202,6 +235,14 @@ export default function SessionModal({ day, onFinish, onClose }: {
               <div key={ex.id} className={block.items.length > 1 ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}` : `bg-zinc-900 border rounded-xl p-3 transition ${md.done ? "border-lime-400/40" : "border-zinc-800"}`}>
                 <div className="flex items-start justify-between gap-2 mb-2"><h3 className="font-semibold min-w-0 leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3><div className="flex items-center gap-2 shrink-0">{tonnage > 0 && <span className="text-xs text-zinc-500">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></span>}<button onClick={() => setMetaFor(ex.id, { done: !md.done })} className={`text-xs px-2 py-1 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-400 hover:text-zinc-100"}`}>{md.done ? "✓ Готово" : "Готово"}</button></div></div>
                 {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-cyan-400" /> отдых между подходами: {ex.rest}</p>}
+                {ex.kind === "functional" ? (
+                <div className="text-sm text-zinc-300 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {ex.duration && <span className="flex items-center gap-1"><Timer size={13} className="text-orange-400" /> {ex.duration}</span>}
+                  {ex.weight && <span>вес: {ex.weight}</span>}
+                  {ex.pulseZone && <span className="text-cyan-400">пульс: {ex.pulseZone}</span>}
+                  {!ex.duration && !ex.weight && !ex.pulseZone && <span className="text-zinc-600">функциональное упражнение</span>}
+                </div>
+                ) : (
                 <div className="space-y-1.5">
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;
@@ -220,6 +261,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
                     );
                   })}
                 </div>
+                )}
                 <input value={md.note} onChange={(e) => setMetaFor(ex.id, { note: e.target.value })} placeholder="Примечание по упражнению..." className="w-full mt-2 bg-zinc-800/60 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
               </div>
             );

@@ -9,7 +9,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
 
   const { data: mesos } = await supabase.from("plan_mesocycles").select("id,plan_id,name,position,visible_to_client").eq("plan_id", planId).order("position");
 
-  const { data: days } = await supabase.from("plan_days").select("id,name,weekday,date_of,position,visible_to_client,mesocycle_id").eq("plan_id", planId).order("position");
+  const { data: days } = await supabase.from("plan_days").select("id,name,weekday,date_of,position,visible_to_client,mesocycle_id,method").eq("plan_id", planId).order("position");
   const dayIds = (days ?? []).map((d) => d.id);
 
   const { data: exercises } = dayIds.length
@@ -30,6 +30,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
       id: e.id, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest: e.rest,
       note: e.note, video: e.video, detailed: e.detailed, group: e.exercise_group,
       tempo: e.tempo, duration: e.duration, target: e.target, setRows: rowsByEx[e.id] ?? [],
+      kind: e.kind ?? "", pulseZone: e.pulse_zone ?? "",
     });
 
   const mesocycles: Mesocycle[] = (mesos ?? []).map((m) => ({
@@ -42,6 +43,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
     mesocycles,
     days: (days ?? []).map((d) => ({
       id: d.id, name: d.name, weekday: d.weekday, dateOf: d.date_of ?? null,
+      method: d.method ?? "",
       visibleToClient: d.visible_to_client !== false,
       mesocycleId: d.mesocycle_id ?? null,
       exercises: exByDay[d.id] ?? [],
@@ -80,7 +82,7 @@ export const reorderDays = async (rows: { id: string; position: number }[]) => {
 export async function addExercise(dayId: string, position: number, name = "") {
   const { data, error } = await supabase
     .from("plan_exercises")
-    .insert({ day_id: dayId, position, name, sets: "", reps: "", weight: "", rest: "" })
+    .insert({ day_id: dayId, position, name, sets: "", reps: "", weight: "", rest: "", kind: "", pulse_zone: "" })
     .select()
     .single();
   if (error) throw error;
@@ -89,6 +91,7 @@ export async function addExercise(dayId: string, position: number, name = "") {
 export async function updateExercise(exId: string, patch: Record<string, any>) {
   const dbPatch: Record<string, any> = { ...patch };
   if ("group" in dbPatch) { dbPatch.exercise_group = dbPatch.group; delete dbPatch.group; }
+  if ("pulseZone" in dbPatch) { dbPatch.pulse_zone = dbPatch.pulseZone; delete dbPatch.pulseZone; }
   const { error } = await supabase.from("plan_exercises").update(dbPatch).eq("id", exId);
   if (error) throw error;
 }

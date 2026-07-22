@@ -2,7 +2,7 @@ import type { Day, Exercise } from "../types";
 
 // ponytail: id у дней/упражнений не используется при клонировании (insertDayFromTemplate сам создаёт строки в БД) — оставляем пустыми.
 const ex = (name: string, sets: string, reps: string, rest = "90"): Exercise => ({
-  id: "", name, sets, reps, weight: "", rest, note: "", video: "", detailed: false, group: "", tempo: "", duration: "", target: "", setRows: [],
+  id: "", name, sets, reps, weight: "", rest, note: "", video: "", detailed: false, group: "", tempo: "", duration: "", target: "", kind: "", pulseZone: "", setRows: [],
 });
 const day = (name: string, weekday: number | null, exercises: Exercise[]): Day => ({ id: "", name, weekday, exercises });
 

@@ -19,6 +19,8 @@ export interface Exercise {
   duration: string;
   target: string;
   setRows: SetRow[];
+  kind: string;      // "" — обычное, "functional" — функциональное (время/пульс вместо подходов)
+  pulseZone: string; // пульсовая зона для функциональных, напр. "Z2 (120-140)"
 }
 
 export interface Day {
@@ -29,6 +31,7 @@ export interface Day {
   exercises: Exercise[];
   visibleToClient?: boolean;
   mesocycleId?: string | null;
+  method?: string; // "" — обычная, "circuit" — круговая (подходы кругами по всем упражнениям)
 }
 
 export interface Plan {

@@ -51,7 +51,7 @@ export function usePlan(planId: string) {
     }] } : p));
   };
 
-  const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf" | "visibleToClient" | "mesocycleId">>) => {
+  const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf" | "visibleToClient" | "mesocycleId" | "method">>) => {
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, ...patch } : d)) } : p));
     if ("visibleToClient" in patch) {
       api.updateDay(dayId, patch as Record<string, any>).catch((e) => console.error("[usePlan] updateDay (visible):", e));
@@ -94,7 +94,7 @@ export function usePlan(planId: string) {
     const blank: Exercise = {
       id: tempId, name, sets: "", reps: "", weight: "", rest: "",
       note: "", video: "", detailed: false, group: "",
-      tempo: "", duration: "", target: "", setRows: [],
+      tempo: "", duration: "", target: "", kind: "", pulseZone: "", setRows: [],
     };
     setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
       d.id === dayId ? { ...d, exercises: [...d.exercises, blank] } : d

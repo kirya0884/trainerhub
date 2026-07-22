@@ -84,27 +84,35 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [toast, setToast] = useState<string | null>(null);
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 2000); };
   const copySessionAsDay = (s: Session) => {
-    const hasActual = s.items?.some((i) => i.actualSets?.length);
-    if (hasActual) {
-      const exercises: Day["exercises"] = (s.items ?? []).map((item) => ({
-        id: crypto.randomUUID(), name: item.name,
-        sets: String(item.actualSets?.length || 3),
-        reps: item.actualSets?.[0]?.reps || "",
-        weight: item.actualSets?.[0]?.weight || "",
-        rest: "", note: item.note || "", video: "", group: "",
-        detailed: true, tempo: "", duration: "", target: "",
-        setRows: (item.actualSets ?? []).map((r) => ({ id: crypto.randomUUID(), weight: String(r.weight ?? ""), reps: String(r.reps ?? "") })),
-      }));
+    // Полное копирование: факт (actualSets) > план сессии (plannedSets) > упражнение из текущего плана.
+    // rest/tempo/видео и пр. подтягиваем из одноимённого упражнения плана — в сессии они не хранятся.
+    const planDay = plan?.days.find((d) => d.name === s.dayName);
+    const planExByName = (name: string) => planDay?.exercises.find((e) => e.name === name);
+    const hasAnySets = s.items?.some((i) => i.actualSets?.length || i.plannedSets?.length);
+    if (hasAnySets) {
+      const exercises: Day["exercises"] = (s.items ?? []).map((item) => {
+        const src = item.actualSets?.length ? item.actualSets : item.plannedSets ?? [];
+        const pe = planExByName(item.name);
+        return {
+          id: crypto.randomUUID(), name: item.name,
+          sets: String(src.length || parseInt(pe?.sets || "") || 3),
+          reps: src[0]?.reps || pe?.reps || "",
+          weight: src[0]?.weight || pe?.weight || "",
+          rest: pe?.rest || "", note: item.note || pe?.note || "", video: pe?.video || "", group: pe?.group || "",
+          detailed: src.length > 0, tempo: pe?.tempo || "", duration: pe?.duration || "", target: pe?.target || "",
+          kind: pe?.kind || "", pulseZone: pe?.pulseZone || "",
+          setRows: src.map((r) => ({ id: crypto.randomUUID(), weight: String(r.weight ?? ""), reps: String(r.reps ?? "") })),
+        };
+      });
       copyDay({ name: s.dayName || "Тренировка", exercises });
       showToast("Скопировано в буфер обмена");
       return;
     }
-    const day = plan?.days.find((d) => d.name === s.dayName);
-    if (day) { copyDay(day); showToast("Скопировано в буфер обмена"); return; }
-    // Fallback: exercise names only
+    if (planDay) { copyDay(planDay); showToast("Скопировано в буфер обмена"); return; }
+    // Fallback: только названия упражнений (в сессии нет ни подходов, ни плана)
     const exercises: Day["exercises"] = (s.items ?? []).map((item) => ({
       id: crypto.randomUUID(), name: item.name, sets: "3", reps: "", weight: "",
-      rest: "", note: "", video: "", group: "", detailed: false, tempo: "", duration: "", target: "", setRows: [],
+      rest: "", note: item.note || "", video: "", group: "", detailed: false, tempo: "", duration: "", target: "", kind: "", pulseZone: "", setRows: [],
     }));
     copyDay({ name: s.dayName || "Тренировка", exercises });
     showToast("Скопировано в буфер обмена");
@@ -494,6 +502,11 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                   className={`p-1.5 rounded-md transition shrink-0 ${hidden ? "text-orange-400 hover:bg-orange-400/15" : "text-zinc-500 hover:bg-zinc-700 hover:text-lime-400"}`}
                   title={hidden ? "Скрыт от клиента — показать" : "Скрыть день от клиента"}>
                   {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+                <button onClick={() => { markSaving(); updateDay(day.id, { method: day.method === "circuit" ? "" : "circuit" }); }}
+                  className={`p-1.5 rounded-md transition shrink-0 ${day.method === "circuit" ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700 hover:text-cyan-400"}`}
+                  title={day.method === "circuit" ? "Круговая тренировка — переключить на обычную" : "Сделать круговой тренировкой (подходы кругами)"}>
+                  <Repeat size={14} />
                 </button>
                 {lastSession && <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:inline" title="Дата последнего проведения">{fmtDate(lastSession.date, true)}</span>}
                 <input type="date" value={day.dateOf ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { dateOf: e.target.value || null }); }} className="bg-zinc-800 rounded-md text-xs px-1.5 py-1 outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0 text-zinc-300 w-36 hidden sm:block" />
