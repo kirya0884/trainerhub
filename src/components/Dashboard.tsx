@@ -103,18 +103,52 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trainerId, data?.clients?.length, bookings.length]);
 
+  // B20: скелетон в потоке страницы вместо блока на 100vh — вкладки остаются на месте,
+  // страница не схлопывается при появлении данных. Классы (а не инлайновые стили) —
+  // чтобы работала светлая тема: она переопределяет bg-zinc-* через html.light-theme.
   if (!data) return (
-    <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#09090b" }}>
-      {loadError
-        ? <div style={{ textAlign: "center" }}>
-            <p style={{ color: "#f87171", fontSize: 14, marginBottom: 12 }}>Ошибка загрузки: {loadError}</p>
-            <button onClick={() => { setLoadError(null); fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message)); }} style={{ color: "#a3e635", background: "none", border: "1px solid #a3e635", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 13 }}>Повторить</button>
+    <div className="space-y-5 max-w-2xl" role="status" aria-label={loadError ? "Ошибка загрузки" : "Загрузка дашборда"}>
+      {loadError ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-center space-y-3">
+          <p className="text-sm text-red-400">Ошибка загрузки: {loadError}</p>
+          <button
+            onClick={() => { setLoadError(null); fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message)); }}
+            className="text-sm font-medium text-lime-400 border border-lime-400 rounded-lg px-4 py-1.5 hover:bg-lime-400/10 transition"
+          >Повторить</button>
+        </div>
+      ) : (
+        // ponytail: геометрию повторяем приблизительно — сколько будет строк расписания и алертов,
+        // заранее неизвестно, поэтому скачок уменьшается, но не исчезает полностью.
+        <div className="animate-pulse space-y-5" aria-hidden="true">
+          <div className="flex items-center justify-between gap-3 pt-1">
+            <div className="space-y-2">
+              <div className="h-6 w-40 bg-zinc-800 rounded-lg" />
+              <div className="h-3 w-24 bg-zinc-800 rounded" />
+            </div>
+            <div className="h-16 w-16 bg-zinc-800 rounded-full shrink-0" />
           </div>
-        : <svg viewBox="0 0 32 32" style={{ animation: "spin 1s linear infinite", width: 40, height: 40 }}>
-            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-            <circle cx="16" cy="16" r="13" fill="none" stroke="#27272a" strokeWidth="3" />
-            <circle cx="16" cy="16" r="13" fill="none" stroke="#a3e635" strokeWidth="3" strokeDasharray="20 62" strokeLinecap="round" />
-          </svg>}
+          <div className="space-y-2">
+            <div className="h-3 w-32 bg-zinc-800 rounded" />
+            <div className="h-24 bg-zinc-900 border border-zinc-800 rounded-2xl" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 w-28 bg-zinc-800 rounded" />
+            <div className="grid grid-cols-3 gap-2">
+              <div className="h-20 bg-zinc-900 border border-zinc-800 rounded-2xl" />
+              <div className="h-20 bg-zinc-900 border border-zinc-800 rounded-2xl" />
+              <div className="h-20 bg-zinc-900 border border-zinc-800 rounded-2xl" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="h-3 w-36 bg-zinc-800 rounded" />
+            <div className="space-y-1.5">
+              <div className="h-11 bg-zinc-900 border border-zinc-800 rounded-xl" />
+              <div className="h-11 bg-zinc-900 border border-zinc-800 rounded-xl" />
+              <div className="h-11 bg-zinc-900 border border-zinc-800 rounded-xl" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
   const { clients, payments } = data;
