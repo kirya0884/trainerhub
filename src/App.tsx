@@ -10,6 +10,8 @@ import ClientProfile from "./components/ClientProfile";
 import Dashboard from "./components/Dashboard";
 import CalendarView from "./components/CalendarView";
 import ClientPortal from "./components/ClientPortal";
+import { useBookings } from "./hooks/useBookings";
+import { useClients } from "./hooks/useClients";
 import SubscriptionModal from "./components/SubscriptionModal";
 import BackupModal from "./components/BackupModal";
 import PinGate from "./components/PinGate";
@@ -94,6 +96,11 @@ export default function App() {
   const [view, setView] = useState<View>({ kind: "dashboard" });
   const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
+  // B17: общие данные грузим один раз здесь, а не в каждой вкладке заново.
+  // Хуки обязаны вызываться до ранних return ниже, поэтому пустой id = «пока не грузим».
+  const dataTrainerId = isTrainer && session ? session.user.id : "";
+  const bookingsHook = useBookings(dataTrainerId);
+  const { clients, reload: reloadClients } = useClients(dataTrainerId);
   const [showBackup, setShowBackup] = useState(false);
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
@@ -282,16 +289,16 @@ export default function App() {
           </div>
         )}
         {view.kind === "dashboard" && (
-          <Dashboard trainerId={session.user.id} trainerName={trainerName} trainerAvatar={trainerAvatar} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
+          <Dashboard trainerId={session.user.id} trainerName={trainerName} trainerAvatar={trainerAvatar} bookings={bookingsHook.bookings} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
         )}
         {view.kind === "calendar" && (
-          <CalendarView trainerId={session.user.id} onOpenClient={(clientId) => setView({ kind: "client", clientId })} onOpenClientPlans={(clientId) => setView({ kind: "client", clientId, sub: "plans" })} />
+          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} onOpenClient={(clientId) => setView({ kind: "client", clientId })} onOpenClientPlans={(clientId) => setView({ kind: "client", clientId, sub: "plans" })} />
         )}
         {view.kind === "plans" && (
-          <PlansOverview trainerId={session.user.id} onOpenPlan={(planId, clientId) => setView({ kind: "plan", planId, clientId, from: "plans" })} />
+          <PlansOverview trainerId={session.user.id} clients={clients ?? []} onOpenPlan={(planId, clientId) => setView({ kind: "plan", planId, clientId, from: "plans" })} />
         )}
         {view.kind === "clients" && (
-          <ClientsList trainerId={session.user.id} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
+          <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
         )}
         {view.kind === "client" && (
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />

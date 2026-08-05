@@ -2,8 +2,8 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { BarChart3, Bell, BellOff, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
-import { useBookings } from "../hooks/useBookings";
 import { expandBookings } from "../lib/bookings";
+import type { Booking } from "../lib/bookings";
 import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import { supabase } from "../lib/supabase";
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, isPushSupported } from "../lib/pushSubscribe";
@@ -30,7 +30,7 @@ const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
 
-export default function Dashboard({ trainerId, trainerName = "", trainerAvatar = "", onOpenClient }: { trainerId: string; trainerName?: string; trainerAvatar?: string; onOpenClient: (id: string) => void }) {
+export default function Dashboard({ trainerId, trainerName = "", trainerAvatar = "", bookings, onOpenClient }: { trainerId: string; trainerName?: string; trainerAvatar?: string; bookings: Booking[]; onOpenClient: (id: string) => void }) {
   // Имя клиента как ссылка на карточку. Наследует цвет родителя, поэтому одинаково
   // работает в белом расписании и в цветных алертах.
   // ponytail: тап-зону 44px по вертикали внутри строки текста не сделать, не разорвав абзац.
@@ -52,7 +52,6 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
-  const { bookings } = useBookings(trainerId);
 
   useEffect(() => {
     requestNotifyPermission();

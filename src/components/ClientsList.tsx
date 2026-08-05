@@ -1,5 +1,5 @@
 import { Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
 import type { Membership } from "../lib/clients";
@@ -10,8 +10,7 @@ import LiveWorkoutModal from "./LiveWorkoutModal";
 import type { ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
-export default function ClientsList({ trainerId, onOpenClient }: { trainerId: string; onOpenClient: (id: string) => void }) {
-  const [clients, setClients] = useState<ClientListItem[] | null>(null);
+export default function ClientsList({ trainerId, clients, reloadClients, onOpenClient }: { trainerId: string; clients: ClientListItem[] | null; reloadClients: () => void; onOpenClient: (id: string) => void }) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [goal, setGoal] = useState(GOALS[0]);
@@ -45,20 +44,18 @@ export default function ClientsList({ trainerId, onOpenClient }: { trainerId: st
       const m: Membership = { ...renewing.membership, type: "sessions", total: String(tpl.sessions), packagePrice: String(finalPrice), split: tpl.split };
       await markPaid(renewing.clientId, m, []);
       setRenewing(null);
-      load();
+      reloadClients();
     } catch (e) { console.error("[ClientsList] doRenew:", e); alert("Не удалось продлить абонемент."); }
     finally { setRenewBusy(false); }
   };
 
-  const load = () => api.fetchClients(trainerId).then(setClients).catch((e) => console.error("[ClientsList] load:", e));
-  useEffect(() => { load(); }, [trainerId]);
 
   const submit = async () => {
     if (!name.trim()) return;
     try {
       await api.addClient(trainerId, name.trim(), goal, clients?.length ?? 0);
       setName(""); setGoal(GOALS[0]); setShowForm(false);
-      load();
+      reloadClients();
     } catch (e) { console.error("[ClientsList] submit:", e); alert("Не удалось добавить подопечного."); }
   };
 

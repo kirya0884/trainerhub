@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Download, Plus, Play } from "lucide-react";
-import { useBookings } from "../hooks/useBookings";
 import { bookingsOverlap, expandBookings, toMin } from "../lib/bookings";
 import type { Booking, Occurrence } from "../lib/bookings";
 import * as clientsApi from "../lib/clients";
@@ -31,9 +30,8 @@ const HOUR_START = 6, HOUR_END = 24;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
 const ROW_H = 32; // px за час
 
-export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlans }: { trainerId: string; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void }) {
-  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload } = useBookings(trainerId);
-  const [clients, setClients] = useState<ClientListItem[]>([]);
+export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void }) {
+  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload } = bookingsHook;
   const [mode, setMode] = useState<Mode>("week");
   const today = todayFn();
   const [anchor, setAnchor] = useState(today);
@@ -44,8 +42,6 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
   const [confirmPending, setConfirmPending] = useState<{ text: string; onConfirm: () => void } | null>(null);
   const [finishedSessionClients, setFinishedSessionClients] = useState<Set<string>>(new Set());
   const askConfirm = (text: string, onConfirm: () => void) => setConfirmPending({ text, onConfirm });
-
-  useEffect(() => { clientsApi.fetchClients(trainerId).then(setClients).catch((e) => console.error("[CalendarView] fetchClients:", e)); }, [trainerId]);
 
   const weekStart = startOfWeekMon(anchor);
   const weekEnd = addDays(weekStart, 6);
@@ -305,7 +301,7 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
                   const cf = await clientsApi.fetchClient(cid);
                   if (cf.membership.type === "sessions") await clientsApi.decrementMembershipRemaining(cid, cf.membership);
                 }));
-                clientsApi.fetchClients(trainerId).then(setClients).catch((e) => console.error("[CalendarView] fetchClients:", e));
+                reloadClients();
               }
               setModal(null);
             } catch (e) { console.error("[CalendarView] onSave:", e); alert("Не удалось сохранить запись."); }
@@ -330,7 +326,7 @@ export default function CalendarView({ trainerId, onOpenClient, onOpenClientPlan
                   await updateBooking(groupSession.id, { status: "done" }, groupSession.clientIds);
                 }
                 setFinishedSessionClients(new Set());
-                clientsApi.fetchClients(trainerId).then(setClients).catch((e) => console.error("[CalendarView] fetchClients:", e));
+                reloadClients();
               }
             } catch (e) { console.error("[CalendarView] onClientFinished:", e); }
           }}

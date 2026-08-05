@@ -5,11 +5,10 @@ import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
 // Глобальная вкладка «Планы» — все программы тренера со всех клиентов в одном месте.
-export default function PlansOverview({ trainerId, onOpenPlan }: {
-  trainerId: string; onOpenPlan: (planId: string, clientId: string) => void;
+export default function PlansOverview({ trainerId, clients, onOpenPlan }: {
+  trainerId: string; clients: ClientListItem[]; onOpenPlan: (planId: string, clientId: string) => void;
 }) {
   const [plans, setPlans] = useState<PlanOverviewItem[] | null>(null);
-  const [clients, setClients] = useState<ClientListItem[]>([]);
   const [query, setQuery] = useState("");
   const [newClientId, setNewClientId] = useState("");
   const [newName, setNewName] = useState("");
@@ -17,7 +16,6 @@ export default function PlansOverview({ trainerId, onOpenPlan }: {
 
   const load = () => api.fetchAllPlans(trainerId).then(setPlans).catch((e) => setError(e.message || "Не удалось загрузить планы"));
   useEffect(() => { load(); }, [trainerId]);
-  useEffect(() => { api.fetchClients(trainerId).then(setClients).catch(() => {}); }, [trainerId]);
 
   const createPlan = async () => {
     if (!newClientId || !newName.trim()) return;

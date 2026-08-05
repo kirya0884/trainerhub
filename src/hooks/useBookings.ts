@@ -8,7 +8,8 @@ export function useBookings(trainerId: string) {
   const reqRef = useRef(0);
 
   const load = () => { const req = ++reqRef.current; api.fetchBookings(trainerId).then((b) => { if (req === reqRef.current) { setBookings(b); setLoading(false); } }).catch((e) => { if (req === reqRef.current) setLoading(false); console.error("[useBookings]", e); }); };
-  useEffect(() => { load(); }, [trainerId]);
+  // trainerId пуст, пока App.tsx не понял, тренер это или клиент — до тех пор не ходим в базу.
+  useEffect(() => { if (trainerId) load(); }, [trainerId]);
 
   const addBooking = async (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => { await api.addBooking(trainerId, patch, clientIds); await load(); };
   const updateBooking = async (id: string, patch: Partial<Omit<Booking, "id" | "clientIds">>, clientIds?: string[]) => {
