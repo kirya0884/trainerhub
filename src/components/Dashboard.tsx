@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { BarChart3, Bell, BellOff, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
@@ -31,6 +31,19 @@ const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
 
 export default function Dashboard({ trainerId, trainerName = "", trainerAvatar = "", onOpenClient }: { trainerId: string; trainerName?: string; trainerAvatar?: string; onOpenClient: (id: string) => void }) {
+  // Имя клиента как ссылка на карточку. Наследует цвет родителя, поэтому одинаково
+  // работает в белом расписании и в цветных алертах.
+  // ponytail: тап-зону 44px по вертикали внутри строки текста не сделать, не разорвав абзац.
+  // py-1 расширяет область нажатия, -my-1 гасит прирост высоты — вёрстка не съезжает,
+  // а по горизонтали ничего не добавляем, иначе запятые-разделители отлипнут от имён.
+  const ClientLink = ({ id, name, className = "" }: { id: string; name: string; className?: string }) => (
+    <button
+      type="button"
+      onClick={() => onOpenClient(id)}
+      title={`Открыть карточку: ${name}`}
+      className={`inline py-1 -my-1 rounded text-left underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current transition ${className}`}
+    >{name}</button>
+  );
   const [data, setData] = useState<{ clients: DashboardClient[]; payments: DashboardPayment[] } | null>(null);
   const [period, setPeriod] = useState<string>("month");
   const [showAnalytics, setShowAnalytics] = useState(false);
@@ -311,7 +324,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
             return (
               <div key={i} className="flex items-center gap-2 text-sm">
                 <span className="text-zinc-500 text-xs w-[44px] shrink-0">{p.date.slice(5).replace("-", ".")}</span>
-                <span className="flex-1 text-zinc-300 truncate">{cName}</span>
+                <span className="flex-1 text-zinc-300 truncate"><ClientLink id={p.clientId} name={cName} /></span>
                 {badge}
                 <span className={`font-semibold shrink-0 ${p.payStatus === "paid" ? "text-lime-400" : "text-orange-300"}`}>
                   {hideRevenue ? "•••" : `${p.amount.toLocaleString("ru-RU")} ₽`}
@@ -361,7 +374,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
                     return (
                       <span key={id} className="inline-flex items-center gap-1">
                         <RemainingBadge remaining={c ? remainingOf(c.membership) : null} />
-                        {c?.name ?? id}
+                        <ClientLink id={id} name={c?.name ?? id} />
                       </span>
                     );
                   })}
@@ -374,7 +387,9 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
                   {o.date === addDays(todayStr, 1) ? "Завтра" : new Date(o.date + "T00:00:00").toLocaleDateString("ru-RU", { weekday: "short" }).toUpperCase()}
                 </span>
                 <span className="font-mono text-xs text-zinc-400 w-10 shrink-0">{o.time}</span>
-                <span className="text-zinc-100 truncate text-sm">{o.clientIds.map((id) => clients.find((x) => x.id === id)?.name ?? id).join(", ")}</span>
+                <span className="text-zinc-100 truncate text-sm">{o.clientIds.map((id, i) => (
+                  <Fragment key={id}>{i > 0 && ", "}<ClientLink id={id} name={clients.find((x) => x.id === id)?.name ?? id} /></Fragment>
+                ))}</span>
               </div>
             ))}
           </div>
@@ -386,19 +401,23 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
           {debt.length > 0 && (
             <div className="flex items-start gap-2.5 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3.5 py-3">
               <TriangleAlert size={15} className="text-orange-400 shrink-0 mt-0.5" />
-              <p className="text-sm text-orange-300"><span className="font-semibold">Долг:</span> {debt.map((c) => c.name).join(", ")}</p>
+              <p className="text-sm text-orange-300"><span className="font-semibold">Долг:</span> {debt.map((c, i) => (
+                <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
+              ))}</p>
             </div>
           )}
           {expiring.length > 0 && (
             <div className="flex items-start gap-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3.5 py-3">
               <TriangleAlert size={15} className="text-yellow-400 shrink-0 mt-0.5" />
-              <p className="text-sm text-yellow-300"><span className="font-semibold">Заканчивается:</span> {expiring.map((c) => c.name).join(", ")}</p>
+              <p className="text-sm text-yellow-300"><span className="font-semibold">Заканчивается:</span> {expiring.map((c, i) => (
+                <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
+              ))}</p>
             </div>
           )}
           {birthdays.map(({ c, days }) => (
             <div key={c.id} className="flex items-start gap-2.5 bg-pink-500/10 border border-pink-500/20 rounded-xl px-3.5 py-3">
               <Cake size={15} className="text-pink-400 shrink-0 mt-0.5" />
-              <p className="text-sm text-pink-300"><span className="font-semibold">{c.name}</span> — {days === 0 ? "сегодня" : `через ${days} д.`}</p>
+              <p className="text-sm text-pink-300"><ClientLink id={c.id} name={c.name} className="font-semibold" /> — {days === 0 ? "сегодня" : `через ${days} д.`}</p>
             </div>
           ))}
         </div>
