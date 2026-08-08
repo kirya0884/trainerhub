@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Camera, ClipboardList, Image, KeyRound, LogOut, Moon, Package, Palette, Plus, ScrollText, Sparkles, Sun, Trash2, User, Users } from "lucide-react";
+import { Camera, ClipboardList, Image, KeyRound, LayoutGrid, LogOut, Moon, Package, Palette, Plus, ScrollText, Sparkles, Sun, Trash2, User, Users } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase";
 import SubscriptionModal from "./SubscriptionModal";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 
-export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void }) {
+export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange, tabs, onToggleTab }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void; tabs?: { kind: string; label: string; icon: typeof User; visible: boolean }[]; onToggleTab?: (kind: string) => void }) {
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
   const [brand, setBrand] = useState({ brand: "", logoUrl: "" });
   const [stats, setStats] = useState<TrainerStats | null>(null);
@@ -150,6 +150,24 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         )}
         <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl, profile.accentColor); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить цвет"}</button>
       </div>
+
+      {/* B28: настройка разделов переехала сюда из шапки — всплывающей панели больше нет,
+          а с ней и риска, что она вылезет за край экрана. Порядок меняется перетаскиванием
+          самих плиток на дашборде, здесь только видимость. */}
+      {tabs && onToggleTab && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+          <p className="text-sm text-zinc-400 flex items-center gap-1.5"><LayoutGrid size={15} className="text-lime-400" /> Разделы на главном экране</p>
+          <p className="text-xs text-zinc-500">Снимите галочку, чтобы убрать плитку с дашборда. Порядок меняется перетаскиванием самих плиток.</p>
+          <div className="space-y-0.5">
+            {tabs.map((t) => (
+              <label key={t.kind} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300 transition">
+                <input type="checkbox" checked={t.visible} onChange={() => onToggleTab(t.kind)} className="accent-lime-400 w-4 h-4" />
+                <t.icon size={15} className="text-zinc-500 shrink-0" /> {t.label}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
         <p className="text-sm text-zinc-400 flex items-center gap-1.5"><ScrollText size={15} className="text-lime-400" /> Правила проведения и списания тренировок</p>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Settings, Home, MoreHorizontal, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Home, MoreHorizontal, LogOut } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -115,7 +115,6 @@ export default function App() {
   const [hiddenTabs, setHiddenTabs] = useState<TabKind[]>(loadHiddenTabs);
   const [splash, setSplash] = useState(true);
   const [dragTab, setDragTab] = useState<TabKind | null>(null);
-  const [showTabSettings, setShowTabSettings] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const reorderTabs = (target: TabKind) => {
     if (!dragTab || dragTab === target) return;
@@ -267,36 +266,9 @@ export default function App() {
         {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
-        {/* B27: вторая строка шапки. Шестерёнка ушла влево — её выпадающий список
-            раскрывается вправо (left-0), и на правом краю он вылезал за экран,
-            добавляя горизонтальную прокрутку. Профиль и подписка переехали сюда
-            из верхней строки, чтобы разгрузить её. */}
+        {/* B27: вторая строка шапки — профиль и подписка. B28: настройка разделов
+            переехала в профиль тренера, всплывающей панели больше нет. */}
         <div className="flex items-center gap-2">
-          {view.kind === "dashboard" && (
-            <div className="relative shrink-0">
-              <button onClick={() => setShowTabSettings((v) => !v)} title="Настроить вкладки" className={`p-2 rounded-lg transition ${showTabSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
-                <Settings size={16} />
-              </button>
-              {showTabSettings && (
-                <>
-                  <div className="fixed inset-0 z-10" onClick={() => setShowTabSettings(false)} />
-                  <div className="absolute left-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-2 w-56 space-y-0.5 shadow-xl">
-                    <p className="text-xs text-zinc-500 px-2 pb-1">Видимые вкладки</p>
-                    {tabOrder.map((kind) => {
-                      const t = TAB_DEFS[kind];
-                      const visible = !hiddenTabs.includes(kind);
-                      return (
-                        <label key={kind} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300">
-                          <input type="checkbox" checked={visible} onChange={() => toggleTabVisible(kind)} className="accent-lime-400" />
-                          <t.icon size={14} className="text-zinc-500" /> {t.label}
-                        </label>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
           <button onClick={() => setView({ kind: "trainerProfile" })} className="ml-auto flex items-center gap-2 min-w-0 text-lime-400 font-semibold text-sm hover:text-lime-300 transition">
             {trainerAvatar ? (
               <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
@@ -352,7 +324,7 @@ export default function App() {
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
-          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
+          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
           <div>
