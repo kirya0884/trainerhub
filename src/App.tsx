@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Home, MoreHorizontal, LogOut, Plus, X, Pin } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -239,61 +239,17 @@ export default function App() {
     <PinGate id={session.user.id}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-24 sm:pb-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <div className="flex items-center gap-2 min-w-0">
-            {/* B26: возврат на дашборд. Обязателен — полосы вкладок больше нет,
-                без этой кнопки Календарь, Планы и Подопечные становятся тупиками. */}
-            <button
-              onClick={() => setView({ kind: "dashboard" })}
-              title="На главный экран"
-              aria-label="На главный экран"
-              className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg text-sm font-bold transition ${view.kind === "dashboard" ? "text-zinc-500" : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"}`}
-            >
-              <Home size={16} /> Reps
-            </button>
-          </div>
-          {/* B23: PIN, Корзина, Бэкап и Выйти свёрнуты в одну кнопку — нужны редко,
-              а место в шапке занимали постоянно. Панель раскрывается влево (right-0):
-              кнопка стоит у правого края, при left-0 она вылезала бы за экран. */}
-          <div className="relative shrink-0">
-            <button
-              onClick={() => setShowMenu((v) => !v)}
-              aria-expanded={showMenu}
-              aria-label="Меню"
-              title="Меню"
-              className={`p-2 rounded-lg transition ${showMenu ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
-            >
-              <MoreHorizontal size={18} />
-            </button>
-            {showMenu && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-52 shadow-xl">
-                  <button onClick={() => { setShowMenu(false); setShowPinSettings(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
-                    <Lock size={15} className="text-zinc-500 shrink-0" /> PIN-код на вход
-                  </button>
-                  <button onClick={() => { setShowMenu(false); setShowTrash(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
-                    <Trash size={15} className="text-zinc-500 shrink-0" /> Корзина
-                  </button>
-                  <button onClick={() => { setShowMenu(false); setShowBackup(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
-                    <Database size={15} className="text-zinc-500 shrink-0" /> Бэкап
-                  </button>
-                  <div className="my-1 border-t border-zinc-800" />
-                  <button onClick={() => { setShowMenu(false); supabase.auth.signOut(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition">
-                    <LogOut size={15} className="text-zinc-500 shrink-0" /> Выйти
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
-        {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
-        {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
-        {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
-        {/* B27: вторая строка шапки — профиль и подписка. B28: настройка разделов
-            переехала в профиль тренера, всплывающей панели больше нет. */}
+        {/* B30: одна строка вместо двух — логотип вместо надписи «Reps», профиль и подписка
+            сразу справа. Меню «⋯» переехало в профиль тренера. */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setView({ kind: "dashboard" })}
+            title="На главный экран"
+            aria-label="На главный экран"
+            className={`shrink-0 rounded-lg p-1 transition ${view.kind === "dashboard" ? "opacity-60" : "hover:bg-zinc-800"}`}
+          >
+            <img src="/icon-512.png" alt="Reps" className="w-7 h-7 rounded-lg object-cover" />
+          </button>
           <button onClick={() => setView({ kind: "trainerProfile" })} className="ml-auto flex items-center gap-2 min-w-0 text-lime-400 font-semibold text-sm hover:text-lime-300 transition">
             {trainerAvatar ? (
               <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
@@ -307,32 +263,10 @@ export default function App() {
             <Sparkles size={10} className="text-lime-400" /> Старт
           </button>
         </div>
-        {/* B26: плитки разделов вместо горизонтальной полосы вкладок — ничего не листается,
-            все разделы видны сразу. Порядок и скрытие берутся из той же настройки вкладок. */}
-        {view.kind === "dashboard" && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {tabOrder.filter((kind) => kind !== "dashboard" && !hiddenTabs.includes(kind)).map((kind) => {
-              const t = TAB_DEFS[kind];
-              return (
-                <button
-                  key={kind}
-                  draggable
-                  onDragStart={() => setDragTab(kind)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); reorderTabs(kind); setDragTab(null); }}
-                  onDragEnd={() => setDragTab(null)}
-                  onClick={() => setView({ kind })}
-                  title="Зажмите и перетащите, чтобы изменить порядок"
-                  className={`flex flex-col items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-2 transition hover:border-zinc-700 active:scale-[0.98] cursor-grab ${dragTab === kind ? "opacity-40" : ""}`}
-                >
-                  <t.icon size={22} style={{ color: "var(--accent)" }} />
-                  <span className="text-xs font-medium text-zinc-300 text-center leading-tight">{t.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
+        {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
+        {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
+        {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
+        {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
         {/* B10: недавние и закреплённые подопечные. Под плитками — плитки остаются
             основной навигацией. Ряд появляется только при наличии истории, поэтому
             на чистом аккаунте первый экран не растёт. Id удалённых клиентов отсеиваются. */}
@@ -385,7 +319,7 @@ export default function App() {
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
-          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
+          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
           <div>

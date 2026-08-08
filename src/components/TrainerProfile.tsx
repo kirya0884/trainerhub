@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Camera, ClipboardList, Image, KeyRound, LayoutGrid, LogOut, Moon, Package, Palette, Plus, ScrollText, Sparkles, Sun, Trash2, User, Users } from "lucide-react";
+import { Camera, ClipboardList, Database, Image, KeyRound, LayoutGrid, Lock, LogOut, Moon, MoreHorizontal, Package, Palette, Plus, ScrollText, Sparkles, Sun, Trash, Trash2, User, Users } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
@@ -7,7 +7,8 @@ import { supabase } from "../lib/supabase";
 import SubscriptionModal from "./SubscriptionModal";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 
-export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange, tabs, onToggleTab }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void; tabs?: { kind: string; label: string; icon: typeof User; visible: boolean }[]; onToggleTab?: (kind: string) => void }) {
+export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange, tabs, onToggleTab, onOpenPin, onOpenTrash, onOpenBackup, onSignOut }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void; tabs?: { kind: string; label: string; icon: typeof User; visible: boolean }[]; onToggleTab?: (kind: string) => void; onOpenPin?: () => void; onOpenTrash?: () => void; onOpenBackup?: () => void; onSignOut?: () => void }) {
+  const [showMenu, setShowMenu] = useState(false);
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
   const [brand, setBrand] = useState({ brand: "", logoUrl: "" });
   const [stats, setStats] = useState<TrainerStats | null>(null);
@@ -63,7 +64,37 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
 
   return (
     <div className="space-y-4 max-w-2xl">
-      <h2 className="text-lg font-bold flex items-center gap-1.5"><User size={18} className="text-lime-400" /> Профиль тренера</h2>
+      {/* B30: меню «⋯» переехало сюда из шапки приложения */}
+      <div className="flex items-center gap-2">
+        <h2 className="text-lg font-bold flex items-center gap-1.5"><User size={18} className="text-lime-400" /> Профиль тренера</h2>
+        {onOpenPin && (
+          <div className="relative shrink-0 ml-auto">
+            <button onClick={() => setShowMenu((v) => !v)} aria-expanded={showMenu} aria-label="Меню" title="Меню" className={`p-2 rounded-lg transition ${showMenu ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
+              <MoreHorizontal size={18} />
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-52 shadow-xl">
+                  <button onClick={() => { setShowMenu(false); onOpenPin?.(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Lock size={15} className="text-zinc-500 shrink-0" /> PIN-код на вход
+                  </button>
+                  <button onClick={() => { setShowMenu(false); onOpenTrash?.(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Trash size={15} className="text-zinc-500 shrink-0" /> Корзина
+                  </button>
+                  <button onClick={() => { setShowMenu(false); onOpenBackup?.(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Database size={15} className="text-zinc-500 shrink-0" /> Бэкап
+                  </button>
+                  <div className="my-1 border-t border-zinc-800" />
+                  <button onClick={() => { setShowMenu(false); onSignOut?.(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition">
+                    <LogOut size={15} className="text-zinc-500 shrink-0" /> Выйти
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       <button onClick={() => setShowSubscription(true)} className="w-full flex items-center justify-center gap-2 bg-zinc-900 border border-lime-400/30 hover:border-lime-400/60 text-lime-400 font-semibold rounded-xl py-3 text-sm transition">
         <Sparkles size={16} /> Подписка на Reps

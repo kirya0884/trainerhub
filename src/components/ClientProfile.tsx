@@ -38,7 +38,6 @@ const SUB_DEFS: Record<Sub, { label: string; icon: typeof Users }> = {
 };
 const DEFAULT_SUB_ORDER: Sub[] = ["overview", "reporting", "plans", "chat"];
 const SUB_ORDER_KEY = "trainerhub-client-sub-order-v2";
-const SUB_HIDDEN_KEY = "trainerhub-client-sub-hidden-v2";
 // ponytail: порядок и видимость под-вкладок карточки клиента — личная настройка устройства, как в App.tsx
 const loadSubOrder = (): Sub[] => {
   try {
@@ -47,18 +46,9 @@ const loadSubOrder = (): Sub[] => {
   } catch {}
   return DEFAULT_SUB_ORDER;
 };
-const loadHiddenSubs = (): Sub[] => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SUB_HIDDEN_KEY) || "null") as Sub[] | null;
-    if (saved) return saved.filter((k) => DEFAULT_SUB_ORDER.includes(k));
-  } catch {}
-  return [];
-};
-
 export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void }) {
   const [sub, setSub] = useState<Sub>(initialSub || "overview");
   const [subOrder, setSubOrder] = useState<Sub[]>(loadSubOrder);
-  const [hiddenSubs, setHiddenSubs] = useState<Sub[]>(loadHiddenSubs);
   const [dragSub, setDragSub] = useState<Sub | null>(null);
   const [showSubSettings, setShowSubSettings] = useState(false);
   const reorderSubs = (target: Sub) => {
@@ -67,27 +57,6 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     next.splice(next.indexOf(target), 0, dragSub);
     setSubOrder(next);
     try { localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next)); } catch {}
-  };
-  const moveSubUp = (kind: Sub) => {
-    const idx = subOrder.indexOf(kind);
-    if (idx <= 0) return;
-    const next = [...subOrder];
-    [next[idx - 1], next[idx]] = [next[idx], next[idx - 1]];
-    setSubOrder(next); try { localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next)); } catch {}
-  };
-  const moveSubDown = (kind: Sub) => {
-    const idx = subOrder.indexOf(kind);
-    if (idx >= subOrder.length - 1) return;
-    const next = [...subOrder];
-    [next[idx], next[idx + 1]] = [next[idx + 1], next[idx]];
-    setSubOrder(next); try { localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next)); } catch {}
-  };
-  const toggleSubVisible = (kind: Sub) => {
-    const isHidden = hiddenSubs.includes(kind);
-    if (!isHidden && hiddenSubs.length >= subOrder.length - 1) return; // хотя бы одна под-вкладка должна остаться видимой
-    const next = isHidden ? hiddenSubs.filter((k) => k !== kind) : [...hiddenSubs, kind];
-    setHiddenSubs(next);
-    try { localStorage.setItem(SUB_HIDDEN_KEY, JSON.stringify(next)); } catch {}
   };
   const [client, setClient] = useState<ClientFull | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -151,21 +120,6 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     <div>
       <div className="flex items-center justify-between mb-4">
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition"><ArrowLeft size={15} /> К подопечным</button>
-        <div className="flex items-center gap-3">
-          {/* B10: закрепление в ряду «Недавние» на дашборде */}
-          {onTogglePinned && (
-            <button
-              onClick={onTogglePinned}
-              aria-pressed={!!pinned}
-              title={pinned ? "Открепить с главного экрана" : "Закрепить на главном экране"}
-              className={`flex items-center gap-1.5 text-sm transition ${pinned ? "text-lime-400 hover:text-lime-300" : "text-zinc-500 hover:text-zinc-300"}`}
-            >
-              <Pin size={14} /> {pinned ? "Закреплён" : "Закрепить"}
-            </button>
-          )}
-          <button onClick={() => setShowReport(true)} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition" title="Отчёт по прогрессу (PDF)"><Printer size={14} /> Отчёт</button>
-          <button onClick={deleteClient} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition" title="Удалить подопечного"><Trash2 size={14} /> Удалить</button>
-        </div>
       </div>
       {showReport && <ClientProgressPrintView clientId={clientId} planIds={(plans ?? []).map((p) => p.id)} clientName={client.name} trainerId={trainerId} onClose={() => setShowReport(false)} />}
 
@@ -184,32 +138,29 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
             {GOALS.map((g) => <option key={g} className="bg-zinc-900">{g}</option>)}
           </select>
         </div>
-        {/* B29: настройка вкладок переехала сюда, к правому краю строки с именем.
-            Список раскрывается влево (right-0) — при left-0 он вылезал за экран. */}
+        {/* B30: шестерёнка теперь несёт действия над карточкой — закрепление, отчёт,
+            удаление. Настройка плиток убрана: под-вкладки показываются все.
+            Список раскрывается влево (right-0), иначе вылезал бы за экран. */}
         <div className="relative shrink-0">
-          <button onClick={() => setShowSubSettings((v) => !v)} title="Настроить вкладки" aria-expanded={showSubSettings} className={`p-2 rounded-lg transition ${showSubSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
+          <button onClick={() => setShowSubSettings((v) => !v)} title="Действия" aria-label="Действия" aria-expanded={showSubSettings} className={`p-2 rounded-lg transition ${showSubSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
             <Settings size={16} />
           </button>
           {showSubSettings && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowSubSettings(false)} />
-              <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-2 w-56 space-y-0.5 shadow-xl">
-                <p className="text-xs text-zinc-500 px-2 pb-1">Видимые вкладки</p>
-                {subOrder.map((kind, idx) => {
-                  const t = SUB_DEFS[kind];
-                  const visible = !hiddenSubs.includes(kind);
-                  return (
-                    <div key={kind} className="flex items-center gap-1.5 px-2 py-1 rounded-lg hover:bg-zinc-800 text-sm text-zinc-300">
-                      <input type="checkbox" checked={visible} onChange={() => toggleSubVisible(kind)} className="accent-lime-400 shrink-0 cursor-pointer" />
-                      <t.icon size={13} className="text-zinc-500 shrink-0" />
-                      <span className="flex-1 cursor-pointer select-none" onClick={() => toggleSubVisible(kind)}>{t.label}</span>
-                      <div className="flex gap-0.5 ml-auto">
-                        <button onClick={() => moveSubUp(kind)} disabled={idx === 0} className="w-6 h-6 rounded hover:bg-zinc-700 disabled:opacity-20 text-zinc-400 hover:text-zinc-100 transition text-xs flex items-center justify-center">↑</button>
-                        <button onClick={() => moveSubDown(kind)} disabled={idx === subOrder.length - 1} className="w-6 h-6 rounded hover:bg-zinc-700 disabled:opacity-20 text-zinc-400 hover:text-zinc-100 transition text-xs flex items-center justify-center">↓</button>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-52 shadow-xl">
+                {onTogglePinned && (
+                  <button onClick={() => { setShowSubSettings(false); onTogglePinned(); }} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm hover:bg-zinc-800 transition ${pinned ? "text-lime-400" : "text-zinc-300"}`}>
+                    <Pin size={15} className="shrink-0" /> {pinned ? "Открепить" : "Закрепить"}
+                  </button>
+                )}
+                <button onClick={() => { setShowSubSettings(false); setShowReport(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                  <Printer size={15} className="text-zinc-500 shrink-0" /> Отчёт по прогрессу
+                </button>
+                <div className="my-1 border-t border-zinc-800" />
+                <button onClick={() => { setShowSubSettings(false); deleteClient(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition">
+                  <Trash2 size={15} className="shrink-0" /> Удалить подопечного
+                </button>
               </div>
             </>
           )}
@@ -234,7 +185,9 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
           главной навигации активная плитка подсвечена: здесь переключается содержимое
           той же страницы, а не экран. Колонок по числу видимых вкладок. */}
       {(() => {
-        const visibleSubs = subOrder.filter((k) => !hiddenSubs.includes(k));
+        // B30: настройки видимости больше нет, поэтому показываем все — иначе ранее скрытую
+        // вкладку было бы нечем вернуть. Порядок и перетаскивание сохранены.
+        const visibleSubs = subOrder;
         const unread = chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length;
         if (!visibleSubs.length) return null;
         const cols = visibleSubs.length === 1 ? "grid-cols-1" : visibleSubs.length === 2 ? "grid-cols-2" : visibleSubs.length === 3 ? "grid-cols-3" : "grid-cols-4";
