@@ -30,7 +30,7 @@ const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
 
-export default function Dashboard({ trainerId, trainerName = "", trainerAvatar = "", bookings, onOpenClient }: { trainerId: string; trainerName?: string; trainerAvatar?: string; bookings: Booking[]; onOpenClient: (id: string) => void }) {
+export default function Dashboard({ trainerId, bookings, onOpenClient }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void }) {
   // Имя клиента как ссылка на карточку. Наследует цвет родителя, поэтому одинаково
   // работает в белом расписании и в цветных алертах.
   // ponytail: тап-зону 44px по вертикали внутри строки текста не сделать, не разорвав абзац.
@@ -120,12 +120,8 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
         // ponytail: геометрию повторяем приблизительно — сколько будет строк расписания и алертов,
         // заранее неизвестно, поэтому скачок уменьшается, но не исчезает полностью.
         <div className="animate-pulse space-y-5" aria-hidden="true">
-          <div className="flex items-center justify-between gap-3 pt-1">
-            <div className="space-y-2">
-              <div className="h-6 w-40 bg-zinc-800 rounded-lg" />
-              <div className="h-3 w-24 bg-zinc-800 rounded" />
-            </div>
-            <div className="h-16 w-16 bg-zinc-800 rounded-full shrink-0" />
+          <div className="pt-1">
+            <div className="h-3 w-32 bg-zinc-800 rounded" />
           </div>
           <div className="space-y-2">
             <div className="h-3 w-32 bg-zinc-800 rounded" />
@@ -133,8 +129,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
           </div>
           <div className="space-y-2">
             <div className="h-3 w-28 bg-zinc-800 rounded" />
-            <div className="grid grid-cols-3 gap-2">
-              <div className="h-20 bg-zinc-900 border border-zinc-800 rounded-2xl" />
+            <div className="grid grid-cols-2 gap-2">
               <div className="h-20 bg-zinc-900 border border-zinc-800 rounded-2xl" />
               <div className="h-20 bg-zinc-900 border border-zinc-800 rounded-2xl" />
             </div>
@@ -210,10 +205,9 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
   return (
     <div className="space-y-5 max-w-2xl">
 
-      {/* Greeting */}
-      <div className="flex items-start justify-between gap-3 pt-1">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
+      {/* Greeting — одна строка: имя, аватар и кольцо посещаемости убраны как дубли
+           (имя с аватаром есть в шапке App.tsx, процент посещаемости — в блоке дохода) */}
+      <div className="flex items-center gap-2 pt-1">
             <p className="text-xs font-semibold tracking-widest text-lime-400">{greeting()}</p>
             {isPushSupported() && (
               <button
@@ -237,17 +231,6 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
                   : <BellOff size={13} />}
               </button>
             )}
-          </div>
-          <h1 className="text-3xl font-bold text-zinc-50 mt-0.5 truncate">{trainerName || "Тренер"}</h1>
-        </div>
-        <div className="relative shrink-0">
-          <DonutChart pct={attendanceRate ?? 0} color="#a3e635" size={76} />
-          <div className="absolute inset-0 flex items-center justify-center">
-            {trainerAvatar
-              ? <img src={trainerAvatar} alt="" className="w-11 h-11 rounded-full object-cover" />
-              : <span className="text-xl font-bold text-zinc-100">{(trainerName || "T")[0].toUpperCase()}</span>}
-          </div>
-        </div>
       </div>
 
       {/* Revenue */}
@@ -371,7 +354,7 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
       {/* Clients */}
       <div>
         <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПОДОПЕЧНЫЕ</p>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-lime-400">
             <p className="text-2xl font-bold text-zinc-50">{activeClients.length}<span className="text-sm font-normal text-zinc-600">/{clients.length}</span></p>
             <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wide">Активных</p>
@@ -379,10 +362,6 @@ export default function Dashboard({ trainerId, trainerName = "", trainerAvatar =
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-cyan-400">
             <p className="text-2xl font-bold text-zinc-50">{trainedThisWeek}</p>
             <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wide">На неделе</p>
-          </div>
-          <div className={`bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 ${debt.length > 0 ? "border-t-orange-400" : "border-t-zinc-700"}`}>
-            <p className={`text-2xl font-bold ${debt.length > 0 ? "text-orange-400" : "text-zinc-500"}`}>{debt.length}</p>
-            <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wide">Не оплатили</p>
           </div>
         </div>
       </div>

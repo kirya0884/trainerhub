@@ -289,7 +289,7 @@ export default function App() {
           </div>
         )}
         {view.kind === "dashboard" && (
-          <Dashboard trainerId={session.user.id} trainerName={trainerName} trainerAvatar={trainerAvatar} bookings={bookingsHook.bookings} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
+          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
         )}
         {view.kind === "calendar" && (
           <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} onOpenClient={(clientId) => setView({ kind: "client", clientId })} onOpenClientPlans={(clientId) => setView({ kind: "client", clientId, sub: "plans" })} />
