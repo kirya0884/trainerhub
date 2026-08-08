@@ -1,5 +1,5 @@
 import { Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
 import type { Membership } from "../lib/clients";
@@ -10,8 +10,10 @@ import LiveWorkoutModal from "./LiveWorkoutModal";
 import type { ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
-export default function ClientsList({ trainerId, clients, reloadClients, onOpenClient }: { trainerId: string; clients: ClientListItem[] | null; reloadClients: () => void; onOpenClient: (id: string) => void }) {
-  const [showForm, setShowForm] = useState(false);
+export default function ClientsList({ trainerId, clients, reloadClients, onOpenClient, openForm }: { trainerId: string; clients: ClientListItem[] | null; reloadClients: () => void; onOpenClient: (id: string) => void; openForm?: boolean }) {
+  const [showForm, setShowForm] = useState(!!openForm);
+  // B13: FAB просит открыть форму сразу. Флаг живёт во View, читаем один раз на смену флага.
+  useEffect(() => { if (openForm) { setShowForm(true); setShowArchive(false); } }, [openForm]);
   const [name, setName] = useState("");
   const [goal, setGoal] = useState(GOALS[0]);
 

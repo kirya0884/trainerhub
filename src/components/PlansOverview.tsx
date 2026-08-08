@@ -5,8 +5,8 @@ import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
 // Глобальная вкладка «Планы» — все программы тренера со всех клиентов в одном месте.
-export default function PlansOverview({ trainerId, clients, onOpenPlan }: {
-  trainerId: string; clients: ClientListItem[]; onOpenPlan: (planId: string, clientId: string) => void;
+export default function PlansOverview({ trainerId, clients, onOpenPlan, autoFocusNew }: {
+  trainerId: string; clients: ClientListItem[]; onOpenPlan: (planId: string, clientId: string) => void; autoFocusNew?: boolean;
 }) {
   const [plans, setPlans] = useState<PlanOverviewItem[] | null>(null);
   const [query, setQuery] = useState("");
@@ -44,7 +44,7 @@ export default function PlansOverview({ trainerId, clients, onOpenPlan }: {
             <option value="">Выбери подопечного...</option>
             {clients.map((c) => <option key={c.id} value={c.id} className="bg-zinc-900">{c.name}</option>)}
           </select>
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createPlan()} placeholder="Название плана" className="flex-1 min-w-[140px] bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
+          <input autoFocus={autoFocusNew} value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createPlan()} placeholder="Название плана" className="flex-1 min-w-[140px] bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
           <button onClick={createPlan} disabled={!newClientId || !newName.trim()} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 text-sm hover:bg-lime-300 transition disabled:opacity-40 shrink-0"><Plus size={15} /> Создать</button>
         </div>
       </div>

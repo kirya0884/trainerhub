@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Home, MoreHorizontal, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Home, MoreHorizontal, LogOut, Plus, X } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -24,7 +24,7 @@ import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
 
-type View = { kind: "dashboard" } | { kind: "clients" } | { kind: "calendar" } | { kind: "plans" } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
+type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "trainerProfile";
 const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
   dashboard: { label: "Дашборд", icon: LayoutDashboard },
@@ -116,6 +116,7 @@ export default function App() {
   const [splash, setSplash] = useState(true);
   const [dragTab, setDragTab] = useState<TabKind | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [showFab, setShowFab] = useState(false);
   const reorderTabs = (target: TabKind) => {
     if (!dragTab || dragTab === target) return;
     const next = tabOrder.filter((k) => k !== dragTab);
@@ -212,7 +213,7 @@ export default function App() {
     <>
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined} />}
     <PinGate id={session.user.id}>
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-24 sm:pb-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
@@ -312,13 +313,13 @@ export default function App() {
           <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
         )}
         {view.kind === "calendar" && (
-          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} onOpenClient={(clientId) => setView({ kind: "client", clientId })} onOpenClientPlans={(clientId) => setView({ kind: "client", clientId, sub: "plans" })} />
+          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} onOpenClient={(clientId) => setView({ kind: "client", clientId })} onOpenClientPlans={(clientId) => setView({ kind: "client", clientId, sub: "plans" })} />
         )}
         {view.kind === "plans" && (
-          <PlansOverview trainerId={session.user.id} clients={clients ?? []} onOpenPlan={(planId, clientId) => setView({ kind: "plan", planId, clientId, from: "plans" })} />
+          <PlansOverview trainerId={session.user.id} clients={clients ?? []} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => setView({ kind: "plan", planId, clientId, from: "plans" })} />
         )}
         {view.kind === "clients" && (
-          <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
+          <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
         )}
         {view.kind === "client" && (
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
@@ -333,6 +334,40 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {/* B13: создание сущностей было спрятано внутри разделов — после перехода на плитки
+          путь до формы стал трёхтаповым. FAB даёт его из любого основного экрана.
+          Формы живут в детях на локальном состоянии, поэтому открываем их флагом во View —
+          новых модалок не создаём, переиспользуем существующие. */}
+      {(view.kind === "dashboard" || view.kind === "clients" || view.kind === "plans" || view.kind === "calendar") && (
+        <>
+          {showFab && <div className="fixed inset-0 z-40" onClick={() => setShowFab(false)} />}
+          <div className="fixed right-4 z-50" style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}>
+            {showFab && (
+              <div className="absolute bottom-full right-0 mb-3 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl p-1.5 shadow-xl">
+                <button onClick={() => { setShowFab(false); setView({ kind: "clients", newForm: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                  <Users size={16} className="text-lime-400 shrink-0" /> Новый подопечный
+                </button>
+                <button onClick={() => { setShowFab(false); setView({ kind: "plans", newPlan: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                  <ClipboardList size={16} className="text-lime-400 shrink-0" /> Новый план
+                </button>
+                <button onClick={() => { setShowFab(false); setView({ kind: "calendar", newBooking: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                  <CalendarDays size={16} className="text-lime-400 shrink-0" /> Новая запись
+                </button>
+              </div>
+            )}
+            <button
+              onClick={() => setShowFab((v) => !v)}
+              aria-expanded={showFab}
+              aria-label={showFab ? "Закрыть меню создания" : "Создать"}
+              className="w-14 h-14 rounded-full flex items-center justify-center text-zinc-950 shadow-lg transition active:scale-95"
+              style={{ background: "var(--accent)" }}
+            >
+              {showFab ? <X size={24} /> : <Plus size={26} />}
+            </button>
+          </div>
+        </>
+      )}
     </div>
     </PinGate>
     </>
