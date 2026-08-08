@@ -226,18 +226,6 @@ export default function App() {
             >
               <Home size={16} /> Reps
             </button>
-            <button onClick={() => setView({ kind: "trainerProfile" })} className="flex items-center gap-2 text-lime-400 font-semibold text-sm hover:text-lime-300 transition truncate max-w-[55%] sm:max-w-none">
-              {trainerAvatar ? (
-                <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
-              ) : (
-                <span className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[11px] text-zinc-500 shrink-0">{(trainerName || session.user.email || "?")[0]?.toUpperCase()}</span>
-              )}
-              <span className="truncate">{trainerName || session.user.email}</span>
-            </button>
-            {/* ponytail: план пока всегда «Старт» — подключится к биллингу при интеграции оплаты */}
-            <button onClick={() => setShowSubscription(true)} className="flex items-center gap-1 shrink-0 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 text-[11px] font-semibold rounded-full px-2 py-0.5 transition">
-              <Sparkles size={10} className="text-lime-400" /> Старт
-            </button>
           </div>
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button onClick={() => setShowPinSettings(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="PIN-код на вход"><Lock size={14} /><span className="hidden sm:inline">PIN</span></button>
@@ -250,8 +238,12 @@ export default function App() {
         {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
-        {view.kind === "dashboard" && (
-          <div className="flex justify-end">
+        {/* B27: вторая строка шапки. Шестерёнка ушла влево — её выпадающий список
+            раскрывается вправо (left-0), и на правом краю он вылезал за экран,
+            добавляя горизонтальную прокрутку. Профиль и подписка переехали сюда
+            из верхней строки, чтобы разгрузить её. */}
+        <div className="flex items-center gap-2">
+          {view.kind === "dashboard" && (
             <div className="relative shrink-0">
               <button onClick={() => setShowTabSettings((v) => !v)} title="Настроить вкладки" className={`p-2 rounded-lg transition ${showTabSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
                 <Settings size={16} />
@@ -275,9 +267,20 @@ export default function App() {
                 </>
               )}
             </div>
-
-          </div>
-        )}
+          )}
+          <button onClick={() => setView({ kind: "trainerProfile" })} className="ml-auto flex items-center gap-2 min-w-0 text-lime-400 font-semibold text-sm hover:text-lime-300 transition">
+            {trainerAvatar ? (
+              <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
+            ) : (
+              <span className="w-7 h-7 rounded-full bg-zinc-800 flex items-center justify-center text-[11px] text-zinc-500 shrink-0">{(trainerName || session.user.email || "?")[0]?.toUpperCase()}</span>
+            )}
+            <span className="truncate">{trainerName || session.user.email}</span>
+          </button>
+          {/* ponytail: план пока всегда «Старт» — подключится к биллингу при интеграции оплаты */}
+          <button onClick={() => setShowSubscription(true)} className="flex items-center gap-1 shrink-0 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 text-[11px] font-semibold rounded-full px-2 py-0.5 transition">
+            <Sparkles size={10} className="text-lime-400" /> Старт
+          </button>
+        </div>
         {/* B26: плитки разделов вместо горизонтальной полосы вкладок — ничего не листается,
             все разделы видны сразу. Порядок и скрытие берутся из той же настройки вкладок. */}
         {view.kind === "dashboard" && (
