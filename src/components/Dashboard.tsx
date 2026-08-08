@@ -48,6 +48,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient }: { train
   const [period, setPeriod] = useState<string>("month");
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
+  const [showAttention, setShowAttention] = useState(false);
   const [hideRevenue, setHideRevenue] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -408,30 +409,58 @@ export default function Dashboard({ trainerId, bookings, onOpenClient }: { train
         )}
       </div>
 
+      {/* B22: три цветные плашки (долг, окончание абонемента, дни рождения) свёрнуты в один блок.
+           Дни рождения раньше давали по плашке на человека — теперь одна строка на всех.
+           Счётчики видны в свёрнутом виде, имена раскрываются по тапу. */}
       {(debt.length > 0 || expiring.length > 0 || birthdays.length > 0) && (
-        <div className="space-y-2">
-          {debt.length > 0 && (
-            <div className="flex items-start gap-2.5 bg-orange-500/10 border border-orange-500/20 rounded-xl px-3.5 py-3">
-              <TriangleAlert size={15} className="text-orange-400 shrink-0 mt-0.5" />
-              <p className="text-sm text-orange-300"><span className="font-semibold">Долг:</span> {debt.map((c, i) => (
-                <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
-              ))}</p>
+        <div className={`rounded-xl border ${debt.length > 0 ? "bg-orange-500/10 border-orange-500/20" : "bg-zinc-900 border-zinc-800"}`}>
+          <button
+            onClick={() => setShowAttention((v) => !v)}
+            aria-expanded={showAttention}
+            className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left"
+          >
+            <TriangleAlert size={15} className={`shrink-0 ${debt.length > 0 ? "text-orange-400" : "text-zinc-500"}`} />
+            <span className={`text-sm font-semibold shrink-0 ${debt.length > 0 ? "text-orange-300" : "text-zinc-300"}`}>Требует внимания</span>
+            <span className="text-xs text-zinc-400 truncate">
+              {[
+                debt.length > 0 ? `Долг ${debt.length}` : null,
+                expiring.length > 0 ? `Заканчивается ${expiring.length}` : null,
+                birthdays.length > 0 ? `ДР ${birthdays.length}` : null,
+              ].filter(Boolean).join(" · ")}
+            </span>
+            {showAttention
+              ? <ChevronDown size={16} className="ml-auto shrink-0 text-zinc-500" />
+              : <ChevronRight size={16} className="ml-auto shrink-0 text-zinc-500" />}
+          </button>
+
+          {showAttention && (
+            <div className="px-3.5 pb-3 pt-0.5 space-y-2 border-t border-zinc-800/60">
+              {debt.length > 0 && (
+                <div className="flex items-start gap-2 pt-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0 mt-[7px]" />
+                  <p className="text-sm text-orange-300"><span className="font-semibold">Долг:</span> {debt.map((c, i) => (
+                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
+                  ))}</p>
+                </div>
+              )}
+              {expiring.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0 mt-[7px]" />
+                  <p className="text-sm text-yellow-300"><span className="font-semibold">Заканчивается:</span> {expiring.map((c, i) => (
+                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
+                  ))}</p>
+                </div>
+              )}
+              {birthdays.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <Cake size={13} className="text-pink-400 shrink-0 mt-1" />
+                  <p className="text-sm text-pink-300">{birthdays.map(({ c, days }, i) => (
+                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} className="font-semibold" /> — {days === 0 ? "сегодня" : `через ${days} д.`}</Fragment>
+                  ))}</p>
+                </div>
+              )}
             </div>
           )}
-          {expiring.length > 0 && (
-            <div className="flex items-start gap-2.5 bg-yellow-500/10 border border-yellow-500/20 rounded-xl px-3.5 py-3">
-              <TriangleAlert size={15} className="text-yellow-400 shrink-0 mt-0.5" />
-              <p className="text-sm text-yellow-300"><span className="font-semibold">Заканчивается:</span> {expiring.map((c, i) => (
-                <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
-              ))}</p>
-            </div>
-          )}
-          {birthdays.map(({ c, days }) => (
-            <div key={c.id} className="flex items-start gap-2.5 bg-pink-500/10 border border-pink-500/20 rounded-xl px-3.5 py-3">
-              <Cake size={15} className="text-pink-400 shrink-0 mt-0.5" />
-              <p className="text-sm text-pink-300"><ClientLink id={c.id} name={c.name} className="font-semibold" /> — {days === 0 ? "сегодня" : `через ${days} д.`}</p>
-            </div>
-          ))}
         </div>
       )}
 
