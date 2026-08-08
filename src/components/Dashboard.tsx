@@ -49,6 +49,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient }: { train
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
   const [showAttention, setShowAttention] = useState(false);
+  const [showMoney, setShowMoney] = useState(false);
   const [hideRevenue, setHideRevenue] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
@@ -234,6 +235,24 @@ export default function Dashboard({ trainerId, bookings, onOpenClient }: { train
             )}
       </div>
 
+      {/* B21: деньги свёрнуты в одну строку. Внутри — прежние блоки дохода, аналитики
+           и оплат без единой правки; фрагмент не создаёт узла, поэтому space-y-5 не едет. */}
+      <button
+        onClick={() => setShowMoney((v) => !v)}
+        aria-expanded={showMoney}
+        className="w-full flex items-center gap-2.5 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-left transition hover:border-zinc-700"
+      >
+        <Wallet size={16} className="text-lime-400 shrink-0" />
+        <span className="text-xs font-semibold tracking-widest text-zinc-500 truncate">{periodLabel}</span>
+        <span className="ml-auto text-base font-bold text-zinc-100 shrink-0">
+          {hideRevenue ? "• • • •" : `${income.toLocaleString("ru-RU")} ₽`}
+        </span>
+        {showMoney
+          ? <ChevronDown size={16} className="shrink-0 text-zinc-500" />
+          : <ChevronRight size={16} className="shrink-0 text-zinc-500" />}
+      </button>
+
+      {showMoney && (<>
       {/* Revenue */}
       <div>
         <div className="flex items-center justify-between mb-2">
@@ -351,6 +370,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient }: { train
           })}
         </div>
       )}
+      </>)}
 
       {/* Clients */}
       <div>
