@@ -184,31 +184,16 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
             {GOALS.map((g) => <option key={g} className="bg-zinc-900">{g}</option>)}
           </select>
         </div>
-      </div>
-
-      {!!client.activeSession && (
-        <div className="w-full flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
-          <Play size={14} className="shrink-0 text-cyan-400" />
-          <span className="flex-1 font-medium">Сейчас тренируется: <span className="text-cyan-100">{client.activeSession.dayName}</span></span>
-          <span className="text-xs text-cyan-500">{(() => { const s = Math.floor((Date.now() - client.activeSession.startedAt) / 1000); const m = Math.floor(s / 60); return m > 0 ? `${m} мин` : "только начал"; })()}</span>
-        </div>
-      )}
-      {(outOfStock || lowStock || overdue) && (
-        <button onClick={() => setSub("overview")} className={`w-full text-left flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm transition ${outOfStock || overdue ? "bg-red-500/10 hover:bg-red-500/15 text-red-300" : "bg-amber-500/10 hover:bg-amber-500/15 text-amber-300"}`}>
-          <AlertTriangle size={14} className="shrink-0" />
-          {outOfStock ? "Тренировки закончились — оформи новый платёж" : overdue ? `Подписка просрочена с ${fmtDate(client.membership.nextPaymentDate)}` : `Осталось ${remainingNum} тренировки — предложи продление`}
-        </button>
-      )}
-
-      <div className="flex items-center gap-1.5 mb-4">
+        {/* B29: настройка вкладок переехала сюда, к правому краю строки с именем.
+            Список раскрывается влево (right-0) — при left-0 он вылезал за экран. */}
         <div className="relative shrink-0">
-          <button onClick={() => setShowSubSettings((v) => !v)} title="Настроить вкладки" className={`p-2 rounded-lg transition ${showSubSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
+          <button onClick={() => setShowSubSettings((v) => !v)} title="Настроить вкладки" aria-expanded={showSubSettings} className={`p-2 rounded-lg transition ${showSubSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
             <Settings size={16} />
           </button>
           {showSubSettings && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowSubSettings(false)} />
-              <div className="absolute left-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-2 w-56 space-y-0.5 shadow-xl">
+              <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-2 w-56 space-y-0.5 shadow-xl">
                 <p className="text-xs text-zinc-500 px-2 pb-1">Видимые вкладки</p>
                 {subOrder.map((kind, idx) => {
                   const t = SUB_DEFS[kind];
@@ -229,32 +214,60 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
             </>
           )}
         </div>
-        <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 w-full overflow-x-auto">
-          {subOrder.filter((k) => !hiddenSubs.includes(k)).map((k) => {
-            const t = SUB_DEFS[k];
-            return (
-              <button
-                key={k}
-                draggable
-                onDragStart={() => setDragSub(k)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => { e.preventDefault(); reorderSubs(k); setDragSub(null); }}
-                onDragEnd={() => setDragSub(null)}
-                onClick={() => setSub(k)}
-                title="Зажмите и перетащите, чтобы изменить порядок"
-                className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap cursor-grab shrink-0 ${sub === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"} ${dragSub === k ? "opacity-40" : ""}`}
-              >
-                <t.icon size={14} /> {t.label}
-                {k === "chat" && chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length > 0 && (
-                  <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">
-                    {chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
       </div>
+
+      {!!client.activeSession && (
+        <div className="w-full flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
+          <Play size={14} className="shrink-0 text-cyan-400" />
+          <span className="flex-1 font-medium">Сейчас тренируется: <span className="text-cyan-100">{client.activeSession.dayName}</span></span>
+          <span className="text-xs text-cyan-500">{(() => { const s = Math.floor((Date.now() - client.activeSession.startedAt) / 1000); const m = Math.floor(s / 60); return m > 0 ? `${m} мин` : "только начал"; })()}</span>
+        </div>
+      )}
+      {(outOfStock || lowStock || overdue) && (
+        <button onClick={() => setSub("overview")} className={`w-full text-left flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm transition ${outOfStock || overdue ? "bg-red-500/10 hover:bg-red-500/15 text-red-300" : "bg-amber-500/10 hover:bg-amber-500/15 text-amber-300"}`}>
+          <AlertTriangle size={14} className="shrink-0" />
+          {outOfStock ? "Тренировки закончились — оформи новый платёж" : overdue ? `Подписка просрочена с ${fmtDate(client.membership.nextPaymentDate)}` : `Осталось ${remainingNum} тренировки — предложи продление`}
+        </button>
+      )}
+
+      {/* B29: плитки вместо горизонтальной полосы — ничего не листается. В отличие от
+          главной навигации активная плитка подсвечена: здесь переключается содержимое
+          той же страницы, а не экран. Колонок по числу видимых вкладок. */}
+      {(() => {
+        const visibleSubs = subOrder.filter((k) => !hiddenSubs.includes(k));
+        const unread = chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length;
+        if (!visibleSubs.length) return null;
+        const cols = visibleSubs.length === 1 ? "grid-cols-1" : visibleSubs.length === 2 ? "grid-cols-2" : visibleSubs.length === 3 ? "grid-cols-3" : "grid-cols-4";
+        return (
+          <div className={`grid ${cols} gap-2 mb-4`}>
+            {visibleSubs.map((k) => {
+              const t = SUB_DEFS[k];
+              const active = sub === k;
+              return (
+                <button
+                  key={k}
+                  draggable
+                  onDragStart={() => setDragSub(k)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); reorderSubs(k); setDragSub(null); }}
+                  onDragEnd={() => setDragSub(null)}
+                  onClick={() => setSub(k)}
+                  aria-current={active ? "page" : undefined}
+                  title="Зажмите и перетащите, чтобы изменить порядок"
+                  className={`relative flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 px-1 border transition cursor-grab ${active ? "text-zinc-950 border-transparent" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700"} ${dragSub === k ? "opacity-40" : ""}`}
+                  style={active ? { background: "var(--accent)" } : undefined}
+                >
+                  <t.icon size={18} />
+                  <span className="text-[10px] font-medium leading-tight text-center">{t.label}</span>
+                  {k === "chat" && unread > 0 && (
+                    <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">{unread}</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
       {sub === "reporting" && <ReportingTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
