@@ -30,7 +30,7 @@ const HOUR_START = 6, HOUR_END = 24;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
 const ROW_H = 32; // px за час
 
-export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans, openBooking }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void; openBooking?: boolean }) {
+export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans, openBooking, openOccurrence }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void; openBooking?: boolean; openOccurrence?: { id: string; occDate: string } }) {
   const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload } = bookingsHook;
   const [mode, setMode] = useState<Mode>("week");
   const today = todayFn();
@@ -38,6 +38,15 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   const [modal, setModal] = useState<{ booking?: Booking; date?: string; time?: string; occDate?: string } | null>(null);
   // B13: FAB просит сразу открыть форму новой записи на сегодня.
   useEffect(() => { if (openBooking) setModal({ date: todayFn() }); }, [openBooking]);
+  // B24: дашборд попросил открыть конкретную запись — ставим календарь на её дату
+  // и раскрываем карточку. Если запись успели удалить, find вернёт undefined и ничего не произойдёт.
+  useEffect(() => {
+    if (!openOccurrence) return;
+    const { id, occDate } = openOccurrence;
+    setAnchor(occDate);
+    const occ = expandBookings(bookings, occDate, occDate).find((o) => o.id === id && o.occDate === occDate);
+    if (occ) setQuickView(occ);
+  }, [openOccurrence, bookings]);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
   const [groupSession, setGroupSession] = useState<Occurrence | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);

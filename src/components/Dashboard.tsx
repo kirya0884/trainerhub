@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { BarChart3, Bell, BellOff, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, TriangleAlert, Users, Wallet } from "lucide-react";
+import { BarChart3, Bell, BellOff, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, Play, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
@@ -30,7 +30,7 @@ const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
 
-export default function Dashboard({ trainerId, bookings, onOpenClient }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void }) {
+export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenOccurrence?: (id: string, occDate: string) => void }) {
   // Имя клиента как ссылка на карточку. Наследует цвет родителя, поэтому одинаково
   // работает в белом расписании и в цветных алертах.
   // ponytail: тап-зону 44px по вертикали внутри строки текста не сделать, не разорвав абзац.
@@ -412,6 +412,18 @@ export default function Dashboard({ trainerId, bookings, onOpenClient }: { train
                     );
                   })}
                 </span>
+                {/* B24: провести тренировку прямо из расписания. Открывает календарь
+                    на дате записи с раскрытой карточкой — дальше «Начать тренировку». */}
+                {onOpenOccurrence && (
+                  <button
+                    onClick={() => onOpenOccurrence(o.id, o.occDate)}
+                    title="Провести тренировку"
+                    aria-label={`Провести тренировку в ${o.time}`}
+                    className="shrink-0 w-9 h-9 -my-1 flex items-center justify-center rounded-lg text-zinc-500 hover:text-lime-400 hover:bg-lime-400/10 transition"
+                  >
+                    <Play size={16} />
+                  </button>
+                )}
               </div>
             ))}
             {weekUpcoming.filter((o) => o.date !== todayStr).map((o) => (

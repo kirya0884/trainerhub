@@ -24,7 +24,7 @@ import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
 
-type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
+type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "trainerProfile";
 const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
   dashboard: { label: "Дашборд", icon: LayoutDashboard },
@@ -370,10 +370,10 @@ export default function App() {
           );
         })()}
         {view.kind === "dashboard" && (
-          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} />
+          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onOpenOccurrence={(id, occDate) => setView({ kind: "calendar", openOccurrence: { id, occDate } })} />
         )}
         {view.kind === "calendar" && (
-          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} onOpenClient={openClient} onOpenClientPlans={(clientId) => openClient(clientId, "plans")} />
+          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} openOccurrence={view.openOccurrence} onOpenClient={openClient} onOpenClientPlans={(clientId) => openClient(clientId, "plans")} />
         )}
         {view.kind === "plans" && (
           <PlansOverview trainerId={session.user.id} clients={clients ?? []} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => setView({ kind: "plan", planId, clientId, from: "plans" })} />
