@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Home, MoreHorizontal, LogOut, Plus, X } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Home, MoreHorizontal, LogOut, Plus, X, Pin } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -34,6 +34,20 @@ const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
   trainerProfile: { label: "Профиль", icon: User },
 };
 const DEFAULT_TAB_ORDER: TabKind[] = ["dashboard", "clients", "plans", "calendar", "trainerProfile"];
+const RECENT_KEY = "trainerhub-recent-clients-v1";
+const PINNED_KEY = "trainerhub-pinned-clients-v1";
+const RECENT_MAX = 8;
+// B10: недавние и закреплённые подопечные — личная настройка устройства,
+// та же схема, что у порядка вкладок: localStorage, без бэкенда.
+const loadIds = (key: string): string[] => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(key) || "null");
+    if (Array.isArray(saved)) return saved.filter((x) => typeof x === "string");
+  } catch {}
+  return [];
+};
+const saveIds = (key: string, ids: string[]) => { try { localStorage.setItem(key, JSON.stringify(ids)); } catch {} };
+
 const TAB_ORDER_KEY = "trainerhub-tab-order-v1";
 const TAB_HIDDEN_KEY = "trainerhub-tab-hidden-v1";
 // ponytail: порядок и видимость вкладок — личная настройка устройства, храним в localStorage, без бэкенда
@@ -117,6 +131,16 @@ export default function App() {
   const [dragTab, setDragTab] = useState<TabKind | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showFab, setShowFab] = useState(false);
+  const [recentIds, setRecentIds] = useState<string[]>(loadIds(RECENT_KEY));
+  const [pinnedIds, setPinnedIds] = useState<string[]>(loadIds(PINNED_KEY));
+  // Единая точка открытия карточки — здесь же копится история недавних.
+  const openClient = (clientId: string, sub?: Sub) => {
+    setRecentIds((prev) => { const next = [clientId, ...prev.filter((id) => id !== clientId)].slice(0, RECENT_MAX); saveIds(RECENT_KEY, next); return next; });
+    setView({ kind: "client", clientId, sub });
+  };
+  const togglePinned = (clientId: string) => {
+    setPinnedIds((prev) => { const next = prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [clientId, ...prev]; saveIds(PINNED_KEY, next); return next; });
+  };
   const reorderTabs = (target: TabKind) => {
     if (!dragTab || dragTab === target) return;
     const next = tabOrder.filter((k) => k !== dragTab);
@@ -309,20 +333,56 @@ export default function App() {
           </div>
         )}
 
+        {/* B10: недавние и закреплённые подопечные. Под плитками — плитки остаются
+            основной навигацией. Ряд появляется только при наличии истории, поэтому
+            на чистом аккаунте первый экран не растёт. Id удалённых клиентов отсеиваются. */}
+        {view.kind === "dashboard" && (() => {
+          const byId = new Map((clients ?? []).map((c) => [c.id, c]));
+          const ordered = [...pinnedIds, ...recentIds.filter((id) => !pinnedIds.includes(id))]
+            .map((id) => byId.get(id)).filter(Boolean).slice(0, RECENT_MAX) as NonNullable<ReturnType<typeof byId.get>>[];
+          if (!ordered.length) return null;
+          return (
+            <div>
+              <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">НЕДАВНИЕ</p>
+              <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+                {ordered.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => openClient(c.id)}
+                    title={c.name}
+                    className="flex flex-col items-center gap-1.5 shrink-0 w-16 group"
+                  >
+                    <span className="relative">
+                      {c.avatarUrl
+                        ? <img src={c.avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover border-2 transition" style={{ borderColor: c.color }} />
+                        : <span className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold text-zinc-950 transition" style={{ background: c.color }}>{c.name[0]?.toUpperCase()}</span>}
+                      {pinnedIds.includes(c.id) && (
+                        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center">
+                          <Pin size={9} className="text-lime-400" />
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[11px] text-zinc-400 truncate w-full text-center leading-tight group-hover:text-zinc-200 transition">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
         {view.kind === "dashboard" && (
-          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
+          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} />
         )}
         {view.kind === "calendar" && (
-          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} onOpenClient={(clientId) => setView({ kind: "client", clientId })} onOpenClientPlans={(clientId) => setView({ kind: "client", clientId, sub: "plans" })} />
+          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} onOpenClient={openClient} onOpenClientPlans={(clientId) => openClient(clientId, "plans")} />
         )}
         {view.kind === "plans" && (
           <PlansOverview trainerId={session.user.id} clients={clients ?? []} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => setView({ kind: "plan", planId, clientId, from: "plans" })} />
         )}
         {view.kind === "clients" && (
-          <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
+          <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={openClient} />
         )}
         {view.kind === "client" && (
-          <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
+          <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
           <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />

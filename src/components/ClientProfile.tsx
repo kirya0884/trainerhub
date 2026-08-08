@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -55,7 +55,7 @@ const loadHiddenSubs = (): Sub[] => {
   return [];
 };
 
-export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub }) {
+export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void }) {
   const [sub, setSub] = useState<Sub>(initialSub || "overview");
   const [subOrder, setSubOrder] = useState<Sub[]>(loadSubOrder);
   const [hiddenSubs, setHiddenSubs] = useState<Sub[]>(loadHiddenSubs);
@@ -152,6 +152,17 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       <div className="flex items-center justify-between mb-4">
         <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition"><ArrowLeft size={15} /> К подопечным</button>
         <div className="flex items-center gap-3">
+          {/* B10: закрепление в ряду «Недавние» на дашборде */}
+          {onTogglePinned && (
+            <button
+              onClick={onTogglePinned}
+              aria-pressed={!!pinned}
+              title={pinned ? "Открепить с главного экрана" : "Закрепить на главном экране"}
+              className={`flex items-center gap-1.5 text-sm transition ${pinned ? "text-lime-400 hover:text-lime-300" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <Pin size={14} /> {pinned ? "Закреплён" : "Закрепить"}
+            </button>
+          )}
           <button onClick={() => setShowReport(true)} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition" title="Отчёт по прогрессу (PDF)"><Printer size={14} /> Отчёт</button>
           <button onClick={deleteClient} className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition" title="Удалить подопечного"><Trash2 size={14} /> Удалить</button>
         </div>
