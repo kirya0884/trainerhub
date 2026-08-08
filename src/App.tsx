@@ -267,6 +267,32 @@ export default function App() {
         {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
+        {/* B26: плитки разделов вместо горизонтальной полосы вкладок — ничего не листается,
+            все разделы видны сразу. Порядок и скрытие берутся из настройки в профиле тренера. */}
+        {view.kind === "dashboard" && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {tabOrder.filter((kind) => kind !== "dashboard" && !hiddenTabs.includes(kind)).map((kind) => {
+              const t = TAB_DEFS[kind];
+              return (
+                <button
+                  key={kind}
+                  draggable
+                  onDragStart={() => setDragTab(kind)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); reorderTabs(kind); setDragTab(null); }}
+                  onDragEnd={() => setDragTab(null)}
+                  onClick={() => setView({ kind })}
+                  title="Зажмите и перетащите, чтобы изменить порядок"
+                  className={`flex flex-col items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-2 transition hover:border-zinc-700 active:scale-[0.98] cursor-grab ${dragTab === kind ? "opacity-40" : ""}`}
+                >
+                  <t.icon size={22} style={{ color: "var(--accent)" }} />
+                  <span className="text-xs font-medium text-zinc-300 text-center leading-tight">{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* B10: недавние и закреплённые подопечные. Под плитками — плитки остаются
             основной навигацией. Ряд появляется только при наличии истории, поэтому
             на чистом аккаунте первый экран не растёт. Id удалённых клиентов отсеиваются. */}
@@ -278,25 +304,25 @@ export default function App() {
           return (
             <div>
               <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">НЕДАВНИЕ</p>
-              <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1">
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                 {ordered.map((c) => (
                   <button
                     key={c.id}
                     onClick={() => openClient(c.id)}
                     title={c.name}
-                    className="flex flex-col items-center gap-1.5 shrink-0 w-16 group"
+                    className="flex flex-col items-center gap-1 shrink-0 w-14 group"
                   >
                     <span className="relative">
                       {c.avatarUrl
-                        ? <img src={c.avatarUrl} alt="" className="w-12 h-12 rounded-full object-cover border-2 transition" style={{ borderColor: c.color }} />
-                        : <span className="w-12 h-12 rounded-full flex items-center justify-center text-base font-bold text-zinc-950 transition" style={{ background: c.color }}>{c.name[0]?.toUpperCase()}</span>}
+                        ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover border-2 transition" style={{ borderColor: c.color }} />
+                        : <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-zinc-950 transition" style={{ background: c.color }}>{c.name[0]?.toUpperCase()}</span>}
                       {pinnedIds.includes(c.id) && (
                         <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center">
                           <Pin size={9} className="text-lime-400" />
                         </span>
                       )}
                     </span>
-                    <span className="text-[11px] text-zinc-400 truncate w-full text-center leading-tight group-hover:text-zinc-200 transition">{c.name}</span>
+                    <span className="text-[10px] text-zinc-400 truncate w-full text-center leading-tight group-hover:text-zinc-200 transition">{c.name}</span>
                   </button>
                 ))}
               </div>
