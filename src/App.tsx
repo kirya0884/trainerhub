@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Settings } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Settings, Home } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -216,6 +216,16 @@ export default function App() {
       <div className="max-w-2xl mx-auto space-y-4">
         <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2 min-w-0">
+            {/* B26: возврат на дашборд. Обязателен — полосы вкладок больше нет,
+                без этой кнопки Календарь, Планы и Подопечные становятся тупиками. */}
+            <button
+              onClick={() => setView({ kind: "dashboard" })}
+              title="На главный экран"
+              aria-label="На главный экран"
+              className={`shrink-0 flex items-center gap-1.5 px-2 py-1 rounded-lg text-sm font-bold transition ${view.kind === "dashboard" ? "text-zinc-500" : "text-zinc-300 hover:text-zinc-100 hover:bg-zinc-800"}`}
+            >
+              <Home size={16} /> Reps
+            </button>
             <button onClick={() => setView({ kind: "trainerProfile" })} className="flex items-center gap-2 text-lime-400 font-semibold text-sm hover:text-lime-300 transition truncate max-w-[55%] sm:max-w-none">
               {trainerAvatar ? (
                 <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
@@ -240,8 +250,8 @@ export default function App() {
         {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
-        {(view.kind === "dashboard" || view.kind === "plans" || view.kind === "clients" || view.kind === "calendar" || view.kind === "trainerProfile") && (
-          <div className="flex items-center gap-1.5">
+        {view.kind === "dashboard" && (
+          <div className="flex justify-end">
             <div className="relative shrink-0">
               <button onClick={() => setShowTabSettings((v) => !v)} title="Настроить вкладки" className={`p-2 rounded-lg transition ${showTabSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
                 <Settings size={16} />
@@ -265,29 +275,35 @@ export default function App() {
                 </>
               )}
             </div>
-            <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 overflow-x-auto">
-              {tabOrder.filter((kind) => !hiddenTabs.includes(kind)).map((kind) => {
-                const t = TAB_DEFS[kind];
-                return (
-                  <button
-                    key={kind}
-                    draggable
-                    onDragStart={() => setDragTab(kind)}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => { e.preventDefault(); reorderTabs(kind); setDragTab(null); }}
-                    onDragEnd={() => setDragTab(null)}
-                    onClick={() => setView({ kind })}
-                    title="Зажмите и перетащите, чтобы изменить порядок"
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0 cursor-grab ${view.kind === kind ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"} ${dragTab === kind ? "opacity-40" : ""}`}
-                    style={view.kind === kind ? { background: "var(--accent)" } : undefined}
-                  >
-                    <t.icon size={15} /> {t.label}
-                  </button>
-                );
-              })}
-            </div>
+
           </div>
         )}
+        {/* B26: плитки разделов вместо горизонтальной полосы вкладок — ничего не листается,
+            все разделы видны сразу. Порядок и скрытие берутся из той же настройки вкладок. */}
+        {view.kind === "dashboard" && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {tabOrder.filter((kind) => kind !== "dashboard" && !hiddenTabs.includes(kind)).map((kind) => {
+              const t = TAB_DEFS[kind];
+              return (
+                <button
+                  key={kind}
+                  draggable
+                  onDragStart={() => setDragTab(kind)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); reorderTabs(kind); setDragTab(null); }}
+                  onDragEnd={() => setDragTab(null)}
+                  onClick={() => setView({ kind })}
+                  title="Зажмите и перетащите, чтобы изменить порядок"
+                  className={`flex flex-col items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-2 transition hover:border-zinc-700 active:scale-[0.98] cursor-grab ${dragTab === kind ? "opacity-40" : ""}`}
+                >
+                  <t.icon size={22} style={{ color: "var(--accent)" }} />
+                  <span className="text-xs font-medium text-zinc-300 text-center leading-tight">{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {view.kind === "dashboard" && (
           <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={(clientId) => setView({ kind: "client", clientId })} />
         )}
