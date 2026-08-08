@@ -16,11 +16,12 @@ const fmtDateLabel = (s: string) => {
 export const BOOKING_STATUS_LABEL: Record<string, string> = { scheduled: "Запланирована", done: "Проведена", cancelled: "Отменена", "no-show": "Не пришёл" };
 export const BOOKING_STATUS_COLOR: Record<string, string> = { scheduled: "#22d3ee", done: "#a3e635", cancelled: "#52525b", "no-show": "#fb923c" };
 
-export default function BookingModal({ clients, booking, defaultDate, defaultTime, onSave, onDelete, onClose }: {
+export default function BookingModal({ clients, booking, defaultDate, defaultTime, defaultClientIds, onSave, onDelete, onClose }: {
   clients: ClientListItem[];
   booking?: Booking;
   defaultDate?: string;
   defaultTime?: string;
+  defaultClientIds?: string[];
   onSave: (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => void;
   onDelete?: () => void;
   onClose: () => void;
@@ -32,7 +33,8 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
   const [note, setNote] = useState(booking?.note || "");
   const [recurring, setRecurring] = useState(!!booking?.recurring);
   const [recurUntil, setRecurUntil] = useState(booking?.recurUntil || "");
-  const [clientIds, setClientIds] = useState<string[]>(booking?.clientIds || []);
+  // B03: из карточки подопечного клиент подставляется сразу
+  const [clientIds, setClientIds] = useState<string[]>(booking?.clientIds || defaultClientIds || []);
 
   const [selectedDayId, setSelectedDayId] = useState(booking?.dayId ?? "");
   const [selectedDayName, setSelectedDayName] = useState(booking?.dayName ?? "");

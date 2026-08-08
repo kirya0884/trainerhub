@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Ruler, X } from "lucide-react";
 import TrendChart from "./TrendChart";
 import { BODY_METRICS } from "../constants";
@@ -11,8 +11,10 @@ export const emptyMeasurement = (): Omit<Measurement, "id"> => ({
   date: today(), note: "", weight: "", neck: "", shoulders: "", chest: "", waist: "", glutes: "", thigh: "", biceps: "", bodyfat: "", muscleMass: "",
 });
 
-export default function BodyTab({ clientId, measurements, setMeasurements }: { clientId: string; measurements: Measurement[]; setMeasurements: (m: Measurement[]) => void }) {
-  const [showForm, setShowForm] = useState(false);
+export default function BodyTab({ clientId, measurements, setMeasurements, openForm }: { clientId: string; measurements: Measurement[]; setMeasurements: (m: Measurement[]) => void; openForm?: boolean }) {
+  const [showForm, setShowForm] = useState(!!openForm);
+  // B03: быстрое действие из шапки карточки просит сразу раскрыть форму
+  useEffect(() => { if (openForm) setShowForm(true); }, [openForm]);
   const [form, setForm] = useState(emptyMeasurement());
   const [bodyMetric, setBodyMetric] = useState<string>(BODY_METRICS[0].key);
 

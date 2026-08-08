@@ -24,7 +24,7 @@ import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
 
-type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
+type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "trainerProfile";
 const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
   dashboard: { label: "Дашборд", icon: LayoutDashboard },
@@ -307,7 +307,7 @@ export default function App() {
           <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onOpenOccurrence={(id, occDate) => setView({ kind: "calendar", openOccurrence: { id, occDate } })} />
         )}
         {view.kind === "calendar" && (
-          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} openOccurrence={view.openOccurrence} onOpenClient={openClient} onOpenClientPlans={(clientId) => openClient(clientId, "plans")} />
+          <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} newBookingClientId={view.newBookingClientId} openOccurrence={view.openOccurrence} onOpenClient={openClient} onOpenClientPlans={(clientId) => openClient(clientId, "plans")} />
         )}
         {view.kind === "plans" && (
           <PlansOverview trainerId={session.user.id} clients={clients ?? []} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => setView({ kind: "plan", planId, clientId, from: "plans" })} />
@@ -316,7 +316,7 @@ export default function App() {
           <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={openClient} />
         )}
         {view.kind === "client" && (
-          <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
+          <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => setView({ kind: "calendar", newBooking: true, newBookingClientId: cid })} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
           <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />

@@ -1,5 +1,5 @@
 import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
 import type { ClientFull, ClientNote, Measurement, Payment, PlanListItem, Photo } from "../lib/clients";
@@ -46,7 +46,10 @@ const loadSubOrder = (): Sub[] => {
   } catch {}
   return DEFAULT_SUB_ORDER;
 };
-export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void }) {
+export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void }) {
+  // B03: быстрые действия из шапки — счётчики, чтобы повторное нажатие срабатывало снова
+  const [measureTick, setMeasureTick] = useState(0);
+  const payRef = useRef<HTMLDivElement | null>(null);
   const [sub, setSub] = useState<Sub>(initialSub || "overview");
   const [subOrder, setSubOrder] = useState<Sub[]>(loadSubOrder);
   const [dragSub, setDragSub] = useState<Sub | null>(null);
@@ -167,6 +170,21 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         </div>
       </div>
 
+      {/* B03: частые действия без захода в подразделы. Модалок не создаём:
+          запись уводит в календарь с предвыбранным клиентом, оплата и замер —
+          переключение на нужную вкладку с раскрытой формой. */}
+      <div className="grid grid-cols-3 gap-2 mb-4">
+        <button onClick={() => onBookClient?.(clientId)} disabled={!onBookClient} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition disabled:opacity-40">
+          <CalendarCheck size={15} className="text-cyan-400 shrink-0" /> Записать
+        </button>
+        <button onClick={() => { setSub("overview"); setTimeout(() => payRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 60); }} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition">
+          <Wallet size={15} className="text-lime-400 shrink-0" /> Оплата
+        </button>
+        <button onClick={() => { setSub("reporting"); setMeasureTick((v) => v + 1); }} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition">
+          <Ruler size={15} className="text-orange-400 shrink-0" /> Замер
+        </button>
+      </div>
+
       {!!client.activeSession && (
         <div className="w-full flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
           <Play size={14} className="shrink-0 text-cyan-400" />
@@ -222,8 +240,8 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         );
       })()}
 
-      {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
-      {sub === "reporting" && <ReportingTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
+      {sub === "overview" && <OverviewTab payRef={payRef} client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
+      {sub === "reporting" && <ReportingTab measureTick={measureTick} clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
       {sub === "chat" && <ChatThread trainerId={trainerId} clientId={clientId} self="trainer" />}
     </div>
@@ -259,7 +277,8 @@ function InviteBlock({ clientId, email, hasAccount }: { clientId: string; email:
   );
 }
 
-function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink, patchMembership, trainerId }: {
+function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink, patchMembership, trainerId, payRef }: {
+  payRef?: React.RefObject<HTMLDivElement | null>;
   client: ClientFull; patch: (p: Partial<ClientFull>, immediate?: boolean) => void; patchHealth: (p: Partial<ClientFull["health"]>) => void;
   notes: ClientNote[]; setNotes: (n: ClientNote[]) => void; clientId: string; tgLink: string; waLink: string;
   patchMembership: (p: Partial<ClientFull["membership"]>, immediate?: boolean) => void; trainerId: string;
@@ -354,12 +373,13 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
           ))}
         </div>
       </div>
-      <MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} />
+      <div ref={payRef}><MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} /></div>
     </div>
   );
 }
 
-function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, setNutritionLogs, photos, setPhotos, activities, setActivities }: {
+function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, setNutritionLogs, photos, setPhotos, activities, setActivities, measureTick }: {
+  measureTick?: number;
   clientId: string;
   measurements: Measurement[]; setMeasurements: (m: Measurement[]) => void;
   nutritionLogs: NutritionLog[]; setNutritionLogs: (l: NutritionLog[]) => void;
@@ -375,6 +395,8 @@ function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, 
     { key: "photos", label: "Фото", icon: Images },
   ];
   const [reportSub, setReportSub] = useState<ReportSub>("goals");
+  // B03: кнопка «Замер» в шапке карточки — переключаем на «Замеры» и просим раскрыть форму.
+  useEffect(() => { if (measureTick) setReportSub("body"); }, [measureTick]);
   return (
     <div className="space-y-3">
       <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">
@@ -385,7 +407,7 @@ function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, 
           </button>
         ))}
       </div>
-      {reportSub === "body" && <BodyTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} />}
+      {reportSub === "body" && <BodyTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} openForm={!!measureTick} />}
       {reportSub === "nutrition" && <NutritionTab clientId={clientId} logs={nutritionLogs} setLogs={setNutritionLogs} readOnly />}
       {reportSub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly />}
       {reportSub === "photos" && <PhotosTab clientId={clientId} photos={photos} setPhotos={setPhotos} />}
