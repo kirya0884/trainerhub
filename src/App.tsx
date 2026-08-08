@@ -12,6 +12,7 @@ import CalendarView from "./components/CalendarView";
 import ClientPortal from "./components/ClientPortal";
 import { useBookings } from "./hooks/useBookings";
 import { useClients } from "./hooks/useClients";
+import { logEvent } from "./lib/events";
 import SubscriptionModal from "./components/SubscriptionModal";
 import BackupModal from "./components/BackupModal";
 import PinGate from "./components/PinGate";
@@ -134,8 +135,12 @@ export default function App() {
   const [recentIds, setRecentIds] = useState<string[]>(loadIds(RECENT_KEY));
   const [pinnedIds, setPinnedIds] = useState<string[]>(loadIds(PINNED_KEY));
   // Единая точка открытия карточки — здесь же копится история недавних.
+  // B16: единственная обёртка над навигацией — все переходы идут через setView,
+  // поэтому логируем здесь, а не расставляем вызовы по экранам.
+  const go = (v: View) => { logEvent(dataTrainerId, "view", v.kind); setView(v); };
   const openClient = (clientId: string, sub?: Sub) => {
     setRecentIds((prev) => { const next = [clientId, ...prev.filter((id) => id !== clientId)].slice(0, RECENT_MAX); saveIds(RECENT_KEY, next); return next; });
+    logEvent(dataTrainerId, "open_client", "client", { clientId });
     setView({ kind: "client", clientId, sub });
   };
   const togglePinned = (clientId: string) => {
@@ -243,14 +248,14 @@ export default function App() {
             сразу справа. Меню «⋯» переехало в профиль тренера. */}
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setView({ kind: "dashboard" })}
+            onClick={() => go({ kind: "dashboard" })}
             title="На главный экран"
             aria-label="На главный экран"
             className={`shrink-0 rounded-lg p-1 transition ${view.kind === "dashboard" ? "opacity-60" : "hover:bg-zinc-800"}`}
           >
             <img src="/icon-512.png" alt="Reps" className="w-7 h-7 rounded-lg object-cover" />
           </button>
-          <button onClick={() => setView({ kind: "trainerProfile" })} className="ml-auto flex items-center gap-2 min-w-0 text-lime-400 font-semibold text-sm hover:text-lime-300 transition">
+          <button onClick={() => go({ kind: "trainerProfile" })} className="ml-auto flex items-center gap-2 min-w-0 text-lime-400 font-semibold text-sm hover:text-lime-300 transition">
             {trainerAvatar ? (
               <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
             ) : (
@@ -281,7 +286,7 @@ export default function App() {
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => { e.preventDefault(); reorderTabs(kind); setDragTab(null); }}
                   onDragEnd={() => setDragTab(null)}
-                  onClick={() => setView({ kind })}
+                  onClick={() => go({ kind })}
                   title="Зажмите и перетащите, чтобы изменить порядок"
                   className={`flex flex-col items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-2 transition hover:border-zinc-700 active:scale-[0.98] cursor-grab ${dragTab === kind ? "opacity-40" : ""}`}
                 >
@@ -330,26 +335,26 @@ export default function App() {
           );
         })()}
         {view.kind === "dashboard" && (
-          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onOpenOccurrence={(id, occDate) => setView({ kind: "calendar", openOccurrence: { id, occDate } })} />
+          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
         )}
         {view.kind === "calendar" && (
           <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} newBookingClientId={view.newBookingClientId} openOccurrence={view.openOccurrence} onOpenClient={openClient} onOpenClientPlans={(clientId) => openClient(clientId, "plans")} />
         )}
         {view.kind === "plans" && (
-          <PlansOverview trainerId={session.user.id} clients={clients ?? []} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => setView({ kind: "plan", planId, clientId, from: "plans" })} />
+          <PlansOverview trainerId={session.user.id} clients={clients ?? []} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => { logEvent(dataTrainerId, "view", "plan"); go({ kind: "plan", planId, clientId, from: "plans" }); }} />
         )}
         {view.kind === "clients" && (
           <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={openClient} />
         )}
         {view.kind === "client" && (
-          <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => setView({ kind: "calendar", newBooking: true, newBookingClientId: cid })} onBack={() => setView({ kind: "clients" })} onOpenPlan={(planId) => setView({ kind: "plan", planId, clientId: view.clientId })} />
+          <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "client_card" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} onBack={() => go({ kind: "clients" })} onOpenPlan={(planId) => go({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
           <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
           <div>
-            <button onClick={() => setView(view.from === "plans" ? { kind: "plans" } : { kind: "client", clientId: view.clientId })} className="text-sm text-zinc-400 hover:text-zinc-100 mb-4 transition">{view.from === "plans" ? "← К планам" : "← К подопечному"}</button>
+            <button onClick={() => go(view.from === "plans" ? { kind: "plans" } : { kind: "client", clientId: view.clientId })} className="text-sm text-zinc-400 hover:text-zinc-100 mb-4 transition">{view.from === "plans" ? "← К планам" : "← К подопечному"}</button>
                <PlanEditor planId={view.planId} trainerId={session.user.id} clientId={view.clientId} />
           </div>
         )}
@@ -365,13 +370,13 @@ export default function App() {
           <div className="fixed right-4 z-50" style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}>
             {showFab && (
               <div className="absolute bottom-full right-0 mb-3 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl p-1.5 shadow-xl">
-                <button onClick={() => { setShowFab(false); setView({ kind: "clients", newForm: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "client"); go({ kind: "clients", newForm: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <Users size={16} className="text-lime-400 shrink-0" /> Новый подопечный
                 </button>
-                <button onClick={() => { setShowFab(false); setView({ kind: "plans", newPlan: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "plan"); go({ kind: "plans", newPlan: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <ClipboardList size={16} className="text-lime-400 shrink-0" /> Новый план
                 </button>
-                <button onClick={() => { setShowFab(false); setView({ kind: "calendar", newBooking: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "booking"); go({ kind: "calendar", newBooking: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <CalendarDays size={16} className="text-lime-400 shrink-0" /> Новая запись
                 </button>
               </div>

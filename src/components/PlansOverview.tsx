@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
+import { logEvent } from "../lib/events";
 import { useScrollRestore } from "../hooks/useScrollRestore";
 import { ClipboardList, Plus, Search, Trash2 } from "lucide-react";
 import * as api from "../lib/clients";
@@ -18,6 +19,8 @@ export default function PlansOverview({ trainerId, clients, onOpenPlan, autoFocu
   const [error, setError] = useState("");
 
   useEffect(() => { saveViewState("plans-query", query); }, [query]);
+  // B16: поиск логируем с задержкой — иначе событие на каждую букву
+  useEffect(() => { if (!query.trim()) return; const t = setTimeout(() => logEvent(trainerId, "search", "plans", { len: query.trim().length }), 1200); return () => clearTimeout(t); }, [query, trainerId]);
   useScrollRestore("plans", !!plans);
   const load = () => api.fetchAllPlans(trainerId).then(setPlans).catch((e) => setError(e.message || "Не удалось загрузить планы"));
   useEffect(() => { load(); }, [trainerId]);

@@ -1,6 +1,7 @@
 import { Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
+import { logEvent } from "../lib/events";
 import { useScrollRestore } from "../hooks/useScrollRestore";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -30,6 +31,8 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
   const [showArchive, setShowArchive] = useState(false);
   const [fmtFilter, setFmtFilter] = useState(() => loadViewState("clients-fmt", ""));
   useEffect(() => { saveViewState("clients-search", search); }, [search]);
+  // B16: поиск логируем с задержкой — иначе событие на каждую букву
+  useEffect(() => { if (!search.trim()) return; const t = setTimeout(() => logEvent(trainerId, "search", "clients", { len: search.trim().length }), 1200); return () => clearTimeout(t); }, [search, trainerId]);
   useEffect(() => { saveViewState("clients-fmt", fmtFilter); }, [fmtFilter]);
   useScrollRestore("clients", !!clients);
 
