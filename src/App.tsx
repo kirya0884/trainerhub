@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Settings, Home } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Database, Lock, Sparkles, Trash, ClipboardList, User, Settings, Home, MoreHorizontal, LogOut } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -116,6 +116,7 @@ export default function App() {
   const [splash, setSplash] = useState(true);
   const [dragTab, setDragTab] = useState<TabKind | null>(null);
   const [showTabSettings, setShowTabSettings] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const reorderTabs = (target: TabKind) => {
     if (!dragTab || dragTab === target) return;
     const next = tabOrder.filter((k) => k !== dragTab);
@@ -227,11 +228,39 @@ export default function App() {
               <Home size={16} /> Reps
             </button>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <button onClick={() => setShowPinSettings(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="PIN-код на вход"><Lock size={14} /><span className="hidden sm:inline">PIN</span></button>
-            <button onClick={() => setShowTrash(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="Корзина"><Trash size={14} /><span className="hidden sm:inline">Корзина</span></button>
-            <button onClick={() => setShowBackup(true)} className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-300" title="Бэкап"><Database size={14} /><span className="hidden sm:inline">Бэкап</span></button>
-            <button onClick={() => supabase.auth.signOut()} className="text-sm text-zinc-500 hover:text-zinc-300">Выйти</button>
+          {/* B23: PIN, Корзина, Бэкап и Выйти свёрнуты в одну кнопку — нужны редко,
+              а место в шапке занимали постоянно. Панель раскрывается влево (right-0):
+              кнопка стоит у правого края, при left-0 она вылезала бы за экран. */}
+          <div className="relative shrink-0">
+            <button
+              onClick={() => setShowMenu((v) => !v)}
+              aria-expanded={showMenu}
+              aria-label="Меню"
+              title="Меню"
+              className={`p-2 rounded-lg transition ${showMenu ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+            >
+              <MoreHorizontal size={18} />
+            </button>
+            {showMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-52 shadow-xl">
+                  <button onClick={() => { setShowMenu(false); setShowPinSettings(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Lock size={15} className="text-zinc-500 shrink-0" /> PIN-код на вход
+                  </button>
+                  <button onClick={() => { setShowMenu(false); setShowTrash(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Trash size={15} className="text-zinc-500 shrink-0" /> Корзина
+                  </button>
+                  <button onClick={() => { setShowMenu(false); setShowBackup(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Database size={15} className="text-zinc-500 shrink-0" /> Бэкап
+                  </button>
+                  <div className="my-1 border-t border-zinc-800" />
+                  <button onClick={() => { setShowMenu(false); supabase.auth.signOut(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition">
+                    <LogOut size={15} className="text-zinc-500 shrink-0" /> Выйти
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
