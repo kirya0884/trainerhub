@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { loadViewState, saveViewState } from "../lib/viewState";
 import { CalendarDays, ChevronLeft, ChevronRight, Download, Plus, Play } from "lucide-react";
 import { bookingsOverlap, expandBookings, toMin } from "../lib/bookings";
 import type { Booking, Occurrence } from "../lib/bookings";
@@ -32,7 +33,10 @@ const ROW_H = 32; // px за час
 
 export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans, openBooking, newBookingClientId, openOccurrence }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void; openBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } }) {
   const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload } = bookingsHook;
-  const [mode, setMode] = useState<Mode>("week");
+  // B12: запоминаем режим просмотра, но НЕ дату — вернувшись через час, ожидаешь
+  // увидеть текущую неделю, а не ту, на которой ушёл.
+  const [mode, setMode] = useState<Mode>(() => loadViewState<Mode>("calendar-mode", "week"));
+  useEffect(() => { saveViewState("calendar-mode", mode); }, [mode]);
   const today = todayFn();
   const [anchor, setAnchor] = useState(today);
   const [modal, setModal] = useState<{ booking?: Booking; date?: string; time?: string; occDate?: string } | null>(null);

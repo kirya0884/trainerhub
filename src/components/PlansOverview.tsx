@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { loadViewState, saveViewState } from "../lib/viewState";
+import { useScrollRestore } from "../hooks/useScrollRestore";
 import { ClipboardList, Plus, Search, Trash2 } from "lucide-react";
 import * as api from "../lib/clients";
 import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
@@ -9,11 +11,14 @@ export default function PlansOverview({ trainerId, clients, onOpenPlan, autoFocu
   trainerId: string; clients: ClientListItem[]; onOpenPlan: (planId: string, clientId: string) => void; autoFocusNew?: boolean;
 }) {
   const [plans, setPlans] = useState<PlanOverviewItem[] | null>(null);
-  const [query, setQuery] = useState("");
+  // B12: поисковый запрос переживает переключение вкладки
+  const [query, setQuery] = useState(() => loadViewState("plans-query", ""));
   const [newClientId, setNewClientId] = useState("");
   const [newName, setNewName] = useState("");
   const [error, setError] = useState("");
 
+  useEffect(() => { saveViewState("plans-query", query); }, [query]);
+  useScrollRestore("plans", !!plans);
   const load = () => api.fetchAllPlans(trainerId).then(setPlans).catch((e) => setError(e.message || "Не удалось загрузить планы"));
   useEffect(() => { load(); }, [trainerId]);
 

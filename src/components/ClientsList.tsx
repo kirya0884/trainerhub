@@ -1,5 +1,7 @@
 import { Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { loadViewState, saveViewState } from "../lib/viewState";
+import { useScrollRestore } from "../hooks/useScrollRestore";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
 import type { Membership } from "../lib/clients";
@@ -17,14 +19,19 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
   const [name, setName] = useState("");
   const [goal, setGoal] = useState(GOALS[0]);
 
-  const [search, setSearch] = useState("");
+  // B12: поиск и фильтр формата переживают переключение вкладки. Архив намеренно
+  // не запоминаем — вернуться в него незаметно и не понять, куда делись активные.
+  const [search, setSearch] = useState(() => loadViewState("clients-search", ""));
   const [renewing, setRenewing] = useState<{ clientId: string; name: string; membership: Membership } | null>(null);
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   const [selectedTplId, setSelectedTplId] = useState("");
   const [renewBusy, setRenewBusy] = useState(false);
   const [liveClient, setLiveClient] = useState<ClientListItem | null>(null);
   const [showArchive, setShowArchive] = useState(false);
-  const [fmtFilter, setFmtFilter] = useState("");
+  const [fmtFilter, setFmtFilter] = useState(() => loadViewState("clients-fmt", ""));
+  useEffect(() => { saveViewState("clients-search", search); }, [search]);
+  useEffect(() => { saveViewState("clients-fmt", fmtFilter); }, [fmtFilter]);
+  useScrollRestore("clients", !!clients);
 
   const openRenew = async (e: React.MouseEvent, c: { id: string; name: string }) => {
     e.stopPropagation();
