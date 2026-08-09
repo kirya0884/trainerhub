@@ -8,8 +8,25 @@ import { ExpirationPlugin } from "workbox-expiration";
 // Объявляем тип self как ServiceWorkerGlobalScope (вместо window из DOM lib)
 declare const self: ServiceWorkerGlobalScope;
 
-// Перехватываем управление немедленно при обновлении
-self.skipWaiting();
+// B32: НЕ вызываем skipWaiting() безусловно.
+//
+// В vite.config стоит registerType: "prompt" — новая версия должна ждать, пока
+// пользователь нажмёт «Обновить». Безусловный skipWaiting() делал ровно обратное:
+// worker активировался сразу, состояния ожидания не возникало, поэтому кнопка
+// обновления почти никогда не показывалась. При этом clientsClaim() отдавал новому
+// worker'у уже открытую страницу — он раздавал новые файлы, а в браузере продолжал
+// выполняться старый JavaScript. Отсюда «обновление не доехало»: помогало только
+// полное закрытие и повторный запуск приложения.
+//
+// Правильная цепочка для prompt-режима: worker ждёт → registerSW видит waiting и
+// показывает кнопку → клик шлёт SKIP_WAITING → worker активируется → страница
+// перезагружается уже на новой версии.
+self.addEventListener("message", (event: ExtendableMessageEvent) => {
+  if (event.data && event.data.type === "SKIP_WAITING") self.skipWaiting();
+});
+
+// Управление уже открытыми вкладками забираем только после активации — то есть
+// после явного согласия пользователя, а не в момент установки.
 clientsClaim();
 
 // ── 1. Precache: статические ассеты (инжектируется workbox при сборке) ──────
