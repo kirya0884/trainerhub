@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { Camera, ClipboardList, Database, Image, KeyRound, LayoutGrid, Lock, LogOut, Moon, MoreHorizontal, Package, Palette, Plus, ScrollText, Sparkles, Sun, Trash, Trash2, User, Users } from "lucide-react";
+import { Camera, ClipboardList, Database, Image, KeyRound, LayoutGrid, Lock, LogOut, Moon, MoreHorizontal, Package, Palette, Plus, RefreshCw, ScrollText, Sparkles, Sun, Trash, Trash2, User, Users } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
 import { supabase } from "../lib/supabase";
 import SubscriptionModal from "./SubscriptionModal";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
+import { checkForUpdate } from "../lib/swUpdate";
 
 export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange, tabs, onToggleTab, onOpenPin, onOpenTrash, onOpenBackup, onSignOut }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void; tabs?: { kind: string; label: string; icon: typeof User; visible: boolean }[]; onToggleTab?: (kind: string) => void; onOpenPin?: () => void; onOpenTrash?: () => void; onOpenBackup?: () => void; onSignOut?: () => void }) {
   const [showMenu, setShowMenu] = useState(false);
+  const [updState, setUpdState] = useState<"idle" | "checking" | "latest" | "error">("idle");
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
   const [brand, setBrand] = useState({ brand: "", logoUrl: "" });
   const [stats, setStats] = useState<TrainerStats | null>(null);
@@ -180,6 +182,34 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           </div>
         )}
         <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl, profile.accentColor); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить цвет"}</button>
+      </div>
+
+      {/* B33: ручное обновление. Автоматическая кнопка появляется только когда браузер
+          сам заметил новую версию — на iOS это может занять время. Здесь тренер
+          обновляется сам, не дожидаясь. */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><RefreshCw size={15} className="text-lime-400" /> Приложение</p>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs text-zinc-500 min-w-0">
+            {updState === "checking" && "Проверяем..."}
+            {updState === "latest" && "У вас последняя версия"}
+            {updState === "error" && "Не удалось проверить. Попробуйте позже"}
+            {updState === "idle" && "Если интерфейс выглядит устаревшим — проверьте обновления"}
+          </span>
+          <button
+            onClick={async () => {
+              setUpdState("checking");
+              const r = await checkForUpdate();
+              // При "updating" страница перезагрузится сама, состояние менять незачем
+              if (r === "latest" || r === "unsupported") setUpdState("latest");
+              else if (r === "error") setUpdState("error");
+            }}
+            disabled={updState === "checking"}
+            className="flex items-center gap-1.5 shrink-0 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 transition disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={updState === "checking" ? "animate-spin" : ""} /> Проверить обновления
+          </button>
+        </div>
       </div>
 
       {/* B28: настройка разделов переехала сюда из шапки — всплывающей панели больше нет,
