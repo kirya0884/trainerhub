@@ -119,6 +119,104 @@ export function setSetRows(exerciseId: string, rows: SetRow[]): Promise<void> {
 }
 
 // ── Мезоциклы ──
+// B06: дублирование плана целиком. Не через applyPlanTemplate — та функция не переносит
+// mesocycle_id, и дубликат плана с блоками потерял бы структуру: все дни свалились бы в кучу.
+// Здесь блоки копируются первыми, их новые id подставляются дням (тот же приём ремапа,
+// что в импорте бэкапа).
+//
+// Транзакции из браузера недоступны, поэтому при ошибке на середине удаляем созданный план:
+// недоделанный план в списке хуже, чем несработавшее действие.
+export async function duplicatePlan(trainerId: string, clientId: string, sourcePlanId: string, newName: string) {
+  const src = await fetchPlan(sourcePlanId);
+  const { data: planRow, error: planErr } = await supabase
+    .from("plans").insert({ trainer_id: trainerId, client_id: clientId, name: newName, note: src.note }).select("id").single();
+  if (planErr) throw planErr;
+  const newPlanId = planRow.id as string;
+
+  try {
+    // 1. Блоки — сначала, чтобы знать их новые id
+    const mesoMap: Record<string, string> = {};
+    for (const m of src.mesocycles ?? []) {
+      const { data, error } = await supabase
+        .from("plan_mesocycles")
+        .insert({ plan_id: newPlanId, name: m.name, position: m.position, visible_to_client: m.visibleToClient !== false })
+        .select("id").single();
+      if (error) throw error;
+      mesoMap[m.id] = data.id;
+    }
+
+    // 2. Дни — с переназначением блока
+    for (let i = 0; i < src.days.length; i++) {
+      const d = src.days[i];
+      const { data: dayRow, error: dayErr } = await supabase.from("plan_days").insert({
+        plan_id: newPlanId, name: d.name, position: i, weekday: d.weekday ?? null,
+        date_of: d.dateOf ?? null, visible_to_client: d.visibleToClient !== false,
+        mesocycle_id: d.mesocycleId ? mesoMap[d.mesocycleId] ?? null : null,
+        method: d.method ?? "",
+      }).select("id").single();
+      if (dayErr) throw dayErr;
+      await copyExercises(dayRow.id as string, d.exercises);
+    }
+    return newPlanId;
+  } catch (e) {
+    // Откат: убираем огрызок целиком, каскад унесёт дни и упражнения
+    await supabase.from("plans").delete().eq("id", newPlanId);
+    throw e;
+  }
+}
+
+// B06: дублирование блока (в интерфейсе — «неделя») вместе с его днями.
+export async function duplicateMesocycle(planId: string, sourceMesoId: string) {
+  const src = await fetchPlan(planId);
+  const meso = (src.mesocycles ?? []).find((m) => m.id === sourceMesoId);
+  if (!meso) throw new Error("Блок не найден");
+
+  const { data: mesoRow, error: mesoErr } = await supabase
+    .from("plan_mesocycles")
+    .insert({ plan_id: planId, name: `${meso.name} (копия)`, position: (src.mesocycles ?? []).length })
+    .select("id").single();
+  if (mesoErr) throw mesoErr;
+  const newMesoId = mesoRow.id as string;
+
+  try {
+    const days = src.days.filter((d) => d.mesocycleId === sourceMesoId);
+    let pos = src.days.length;
+    for (const d of days) {
+      const { data: dayRow, error: dayErr } = await supabase.from("plan_days").insert({
+        plan_id: planId, name: d.name, position: pos++, weekday: d.weekday ?? null,
+        visible_to_client: d.visibleToClient !== false, mesocycle_id: newMesoId, method: d.method ?? "",
+      }).select("id").single();
+      if (dayErr) throw dayErr;
+      await copyExercises(dayRow.id as string, d.exercises);
+    }
+    return newMesoId;
+  } catch (e) {
+    await supabase.from("plan_mesocycles").delete().eq("id", newMesoId);
+    throw e;
+  }
+}
+
+// Общий кусок для обоих дубликаторов: упражнения дня и их подходы.
+async function copyExercises(dayId: string, exercises: Plan["days"][number]["exercises"]) {
+  if (!exercises.length) return;
+  const { data: exRows, error: exErr } = await supabase.from("plan_exercises").insert(
+    exercises.map((e, j) => ({
+      day_id: dayId, position: j, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight,
+      rest: e.rest, note: e.note, video: e.video, detailed: e.detailed, exercise_group: e.group,
+      tempo: e.tempo, duration: e.duration, target: e.target, kind: e.kind ?? "", pulse_zone: e.pulseZone ?? "",
+    }))
+  ).select("id");
+  if (exErr) throw exErr;
+
+  const rows = (exRows ?? []).flatMap((exRow, j) =>
+    (exercises[j].setRows ?? []).map((r, i) => ({ exercise_id: exRow.id, position: i, weight: String(r.weight ?? ""), reps: String(r.reps ?? "") }))
+  );
+  if (rows.length) {
+    const { error } = await supabase.from("plan_exercise_set_rows").insert(rows);
+    if (error) throw error;
+  }
+}
+
 export async function addMesocycle(planId: string, position: number): Promise<Mesocycle> {
   const { data, error } = await supabase.from("plan_mesocycles").insert({ plan_id: planId, name: `Блок ${position + 1}`, position }).select().single();
   if (error) throw error;

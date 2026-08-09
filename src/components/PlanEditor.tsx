@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X } from "lucide-react";
+import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
@@ -10,6 +10,7 @@ import type { DeleteReason } from "../lib/progress";
 import * as paymentsApi from "../lib/payments";
 import { markSessionDone } from "../lib/bookings";
 import * as templatesApi from "../lib/templates";
+import * as plansApi from "../lib/plans";
 import type { Day, Metric, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import RemainingBadge from "./RemainingBadge";
@@ -127,6 +128,28 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       alert("Не удалось добавить день. Попробуй ещё раз.");
     }
   };
+  // B06: дублировать день — один клик с автоименем. Копирование в буфер оставлено:
+  // оно нужно, чтобы перенести день в ДРУГОЙ план, а дубликат работает внутри текущего.
+  const [dupBusy, setDupBusy] = useState<string | null>(null);
+  const duplicateDay = async (day: Day) => {
+    if (dupBusy) return;
+    setDupBusy(day.id);
+    try {
+      await templatesApi.applyDayTemplate(planId, { ...day, name: `${day.name} (копия)` }, plan?.days.length ?? 0);
+      reload();
+    } catch (e) { console.error("[PlanEditor] duplicateDay:", e); showToast("Не удалось дублировать день"); }
+    finally { setDupBusy(null); }
+  };
+  const duplicateMeso = async (mesoId: string) => {
+    if (dupBusy) return;
+    setDupBusy(mesoId);
+    try {
+      await plansApi.duplicateMesocycle(planId, mesoId);
+      reload();
+    } catch (e) { console.error("[PlanEditor] duplicateMeso:", e); showToast("Не удалось дублировать блок"); }
+    finally { setDupBusy(null); }
+  };
+
   const handlePasteDay = async () => {
     if (!dayClipboard || !pasteInput?.trim()) return;
     try {
@@ -382,6 +405,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                 <span className="flex items-center gap-1 text-[11px] font-medium text-lime-400 bg-lime-400/10 rounded-full px-2 py-1 shrink-0"><CheckCircle2 size={12} /> Проведена</span>
                 <button onClick={() => setEditingDayId(day.id)} className="p-1.5 rounded-md hover:bg-cyan-400/15 hover:text-cyan-400 text-zinc-500 transition shrink-0" title="Редактировать в отдельном окне"><Pencil size={15} /></button>
                 <button onClick={() => setReturnedDayIds((s) => new Set(s).add(day.id))} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Вернуть в Тренировки"><RotateCcw size={15} /></button>
+                <button onClick={() => duplicateDay(day)} disabled={!!dupBusy} title="Дублировать день" className="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0 disabled:opacity-40"><Copy size={15} /></button>
                 <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={15} /></button>
               </div>
             ))}
@@ -541,6 +565,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                       title={mesoHidden ? "Скрыт от клиента — показать" : "Скрыть блок от клиента"}>
                       {mesoHidden ? <EyeOff size={13} /> : <Eye size={13} />}
                     </button>
+                    <button onClick={() => duplicateMeso(meso.id)} disabled={!!dupBusy} title="Дублировать блок с днями" className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition shrink-0 disabled:opacity-40"><Copy size={13} /></button>
                     <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
                       className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
                   </div>

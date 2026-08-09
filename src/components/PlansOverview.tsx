@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { logEvent } from "../lib/events";
 import { useScrollRestore } from "../hooks/useScrollRestore";
-import { ClipboardList, Plus, Search, Trash2 } from "lucide-react";
+import { ClipboardList, Copy, Plus, Search, Trash2 } from "lucide-react";
 import * as api from "../lib/clients";
+import { duplicatePlan } from "../lib/plans";
 import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
@@ -31,6 +32,18 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
       setNewName("");
       onOpenPlan(row.id, newClientId);
     } catch (e) { console.error("[PlansOverview] createPlan:", e); alert("Не удалось создать план."); }
+  };
+  // B06: дубликат создаётся вместе с блоками, днями, упражнениями и подходами.
+  const [dupId, setDupId] = useState<string | null>(null);
+  const duplicate = async (p: PlanOverviewItem, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (dupId) return;
+    setDupId(p.id);
+    try {
+      await duplicatePlan(trainerId, p.clientId, p.id, `${p.name} (копия)`);
+      reloadPlans();
+    } catch (err) { console.error("[PlansOverview] duplicate:", err); alert("Не удалось дублировать план."); }
+    finally { setDupId(null); }
   };
   const deletePlan = async (id: string, name: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -79,6 +92,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
                 </span>
               </span>
               {p.archived && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">архив</span>}
+              <span onClick={(e) => duplicate(p, e)} className={`p-1 rounded hover:bg-zinc-700 hover:text-zinc-200 text-zinc-500 transition shrink-0 ${dupId === p.id ? "opacity-40" : ""}`} title="Дублировать план"><Copy size={14} /></span>
               <span onClick={(e) => deletePlan(p.id, p.name, e)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></span>
             </button>
           ))}

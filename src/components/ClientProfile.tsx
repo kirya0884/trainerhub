@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -24,6 +24,7 @@ import type { ChatMessage } from "../lib/messages";
 import SessionHistoryModal from "./SessionHistoryModal";
 import { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
 import { expandBookings } from "../lib/bookings";
+import { duplicatePlan } from "../lib/plans";
 import type { Booking } from "../lib/bookings";
 import RemainingBadge from "./RemainingBadge";
 import ActivityTab from "./ActivityTab";
@@ -714,6 +715,18 @@ function PlansTab({ trainerId, clientId, plans, setPlans, onOpenPlan }: { traine
       onOpenPlan(row.id);
     } catch (e) { console.error("[ClientProfile] createPlan:", e); alert("Не удалось создать план."); }
   };
+  // B06: дубликат плана со всей структурой
+  const [dupId, setDupId] = useState<string | null>(null);
+  const duplicate = async (id: string, planName: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (dupId) return;
+    setDupId(id);
+    try {
+      await duplicatePlan(trainerId, clientId, id, `${planName} (копия)`);
+      api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e));
+    } catch (err) { console.error("[ClientProfile] duplicate:", err); alert("Не удалось дублировать план."); }
+    finally { setDupId(null); }
+  };
   const deletePlan = async (id: string, planName: string, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!window.confirm(`Удалить план «${planName}»? Его можно восстановить из корзины.`)) return;
@@ -746,6 +759,7 @@ function PlansTab({ trainerId, clientId, plans, setPlans, onOpenPlan }: { traine
               <span className="font-medium truncate">{p.name}</span>
               <span className="flex items-center gap-2 shrink-0">
                 {p.archived && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded px-1.5 py-0.5">архив</span>}
+                <span onClick={(e) => duplicate(p.id, p.name, e)} className={`p-1 rounded hover:bg-zinc-700 hover:text-zinc-200 text-zinc-500 transition ${dupId === p.id ? "opacity-40" : ""}`} title="Дублировать план"><Copy size={14} /></span>
                 <span onClick={(e) => deletePlan(p.id, p.name, e)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить"><Trash2 size={14} /></span>
               </span>
             </button>
