@@ -5,7 +5,7 @@ import * as api from "../lib/clients";
 import type { ClientFull, ClientNote, Measurement, Payment, PlanListItem, Photo } from "../lib/clients";
 import * as paymentsApi from "../lib/payments";
 import type { PackageTemplate, Promotion } from "../lib/payments";
-import { fmtDate, today } from "../lib/format";
+import { fmtDate, today, addDays } from "../lib/format";
 import { fileToThumb } from "../lib/thumb";
 import { useDebouncedPersist } from "../hooks/useDebouncedPersist";
 import NumField from "./NumField";
@@ -22,21 +22,26 @@ import ChatThread from "./ChatThread";
 import * as messagesApi from "../lib/messages";
 import type { ChatMessage } from "../lib/messages";
 import SessionHistoryModal from "./SessionHistoryModal";
+import { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
+import { expandBookings } from "../lib/bookings";
+import type { Booking } from "../lib/bookings";
 import RemainingBadge from "./RemainingBadge";
 import ActivityTab from "./ActivityTab";
 import GoalsDashboard from "./GoalsDashboard";
 import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
 
-export type Sub = "overview" | "reporting" | "plans" | "chat";
+export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans" | "chat";
 
 const SUB_DEFS: Record<Sub, { label: string; icon: typeof Users }> = {
   overview: { label: "Обзор", icon: Users },
+  bookings: { label: "Записи", icon: CalendarCheck },
+  payments: { label: "Оплаты", icon: Wallet },
   reporting: { label: "Отчётность", icon: TrendingUp },
   plans: { label: "Планы", icon: ClipboardList },
   chat: { label: "Чат", icon: MessageCircle },
 };
-const DEFAULT_SUB_ORDER: Sub[] = ["overview", "reporting", "plans", "chat"];
+const DEFAULT_SUB_ORDER: Sub[] = ["overview", "bookings", "payments", "reporting", "plans", "chat"];
 const SUB_ORDER_KEY = "trainerhub-client-sub-order-v2";
 // ponytail: порядок и видимость под-вкладок карточки клиента — личная настройка устройства, как в App.tsx
 const loadSubOrder = (): Sub[] => {
@@ -46,10 +51,9 @@ const loadSubOrder = (): Sub[] => {
   } catch {}
   return DEFAULT_SUB_ORDER;
 };
-export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void }) {
+export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient, bookings, onOpenOccurrence }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void; bookings?: Booking[]; onOpenOccurrence?: (id: string, occDate: string) => void }) {
   // B03: быстрые действия из шапки — счётчики, чтобы повторное нажатие срабатывало снова
   const [measureTick, setMeasureTick] = useState(0);
-  const payRef = useRef<HTMLDivElement | null>(null);
   const [sub, setSub] = useState<Sub>(initialSub || "overview");
   const [subOrder, setSubOrder] = useState<Sub[]>(loadSubOrder);
   const [dragSub, setDragSub] = useState<Sub | null>(null);
@@ -177,7 +181,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         <button onClick={() => onBookClient?.(clientId)} disabled={!onBookClient} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition disabled:opacity-40">
           <CalendarCheck size={15} className="text-cyan-400 shrink-0" /> Записать
         </button>
-        <button onClick={() => { setSub("overview"); setTimeout(() => payRef.current?.scrollIntoView({ behavior: "smooth", block: "center" }), 60); }} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition">
+        <button onClick={() => setSub("payments")} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition">
           <Wallet size={15} className="text-lime-400 shrink-0" /> Оплата
         </button>
         <button onClick={() => { setSub("reporting"); setMeasureTick((v) => v + 1); }} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition">
@@ -208,7 +212,11 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         const visibleSubs = subOrder;
         const unread = chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length;
         if (!visibleSubs.length) return null;
-        const cols = visibleSubs.length === 1 ? "grid-cols-1" : visibleSubs.length === 2 ? "grid-cols-2" : visibleSubs.length === 3 ? "grid-cols-3" : "grid-cols-4";
+        // B02: вкладок стало шесть — в один ряд на 360 px не помещаются, поэтому от пяти
+        // раскладываем по три в два ряда. Подписи оставляем: иконки тут разнородные и без
+        // текста угадываются плохо.
+        const n = visibleSubs.length;
+        const cols = n === 1 ? "grid-cols-1" : n === 2 ? "grid-cols-2" : n === 3 ? "grid-cols-3" : n === 4 ? "grid-cols-4" : "grid-cols-3";
         return (
           <div className={`grid ${cols} gap-2 mb-4`}>
             {visibleSubs.map((k) => {
@@ -240,7 +248,9 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         );
       })()}
 
-      {sub === "overview" && <OverviewTab payRef={payRef} client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
+      {sub === "bookings" && <BookingsTab clientId={clientId} bookings={bookings ?? []} onOpenOccurrence={onOpenOccurrence} />}
+      {sub === "payments" && <MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} />}
+      {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
       {sub === "reporting" && <ReportingTab measureTick={measureTick} clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
       {sub === "chat" && <ChatThread trainerId={trainerId} clientId={clientId} self="trainer" />}
@@ -277,8 +287,7 @@ function InviteBlock({ clientId, email, hasAccount }: { clientId: string; email:
   );
 }
 
-function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink, patchMembership, trainerId, payRef }: {
-  payRef?: React.RefObject<HTMLDivElement | null>;
+function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink, patchMembership, trainerId }: {
   client: ClientFull; patch: (p: Partial<ClientFull>, immediate?: boolean) => void; patchHealth: (p: Partial<ClientFull["health"]>) => void;
   notes: ClientNote[]; setNotes: (n: ClientNote[]) => void; clientId: string; tgLink: string; waLink: string;
   patchMembership: (p: Partial<ClientFull["membership"]>, immediate?: boolean) => void; trainerId: string;
@@ -373,7 +382,6 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
           ))}
         </div>
       </div>
-      <div ref={payRef}><MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} /></div>
     </div>
   );
 }
@@ -588,6 +596,57 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
 
       {showPromotions && <PromotionsModal clientId={clientId} onClose={() => { setShowPromotions(false); load(); }} />}
       {receipt && <ReceiptPrintView payment={receipt} trainerId={trainerId} clientName={client.name} onClose={() => setReceipt(null)} />}
+    </div>
+  );
+}
+
+// B02: записи клиента в карточке. Данные уже загружены в App (B17) и приходят пропом —
+// новых запросов нет. Тап открывает запись в календаре механизмом из B24.
+// ponytail: разворачиваем повторы на год назад и вперёд — этого хватает для карточки,
+// полный горизонт живёт в календаре.
+function BookingsTab({ clientId, bookings, onOpenOccurrence }: {
+  clientId: string; bookings: Booking[]; onOpenOccurrence?: (id: string, occDate: string) => void;
+}) {
+  const todayStr = today();
+  const mine = bookings.filter((b) => b.clientIds.includes(clientId));
+  const occs = expandBookings(mine, addDays(todayStr, -365), addDays(todayStr, 365));
+  const upcoming = occs.filter((o) => o.date >= todayStr && o.status !== "cancelled").sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  const past = occs.filter((o) => o.date < todayStr).sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)).slice(0, 30);
+
+  const Row = ({ o }: { o: (typeof occs)[number] }) => (
+    <button
+      onClick={() => onOpenOccurrence?.(o.id, o.occDate)}
+      disabled={!onOpenOccurrence}
+      className="w-full flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-left transition hover:border-zinc-700 disabled:hover:border-zinc-800"
+    >
+      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: BOOKING_STATUS_COLOR[o.status] }} />
+      <span className="text-sm text-zinc-200 shrink-0 w-[86px]">{fmtDate(o.date, true)}</span>
+      <span className="font-mono text-xs text-zinc-400 w-10 shrink-0">{o.time}</span>
+      <span className="text-xs text-zinc-500 truncate flex-1">{BOOKING_STATUS_LABEL[o.status]}{o.recurring && " · еженедельно"}</span>
+    </button>
+  );
+
+  if (!occs.length) return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-8 text-center">
+      <CalendarCheck size={26} className="mx-auto text-zinc-700 mb-2" />
+      <p className="text-sm text-zinc-600">Записей в календаре пока нет</p>
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {upcoming.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПРЕДСТОЯЩИЕ — {upcoming.length}</p>
+          <div className="space-y-1.5">{upcoming.map((o) => <Row key={`${o.id}-${o.occDate}`} o={o} />)}</div>
+        </div>
+      )}
+      {past.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПРОШЕДШИЕ</p>
+          <div className="space-y-1.5">{past.map((o) => <Row key={`${o.id}-${o.occDate}`} o={o} />)}</div>
+        </div>
+      )}
     </div>
   );
 }
