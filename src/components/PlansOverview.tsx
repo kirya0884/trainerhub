@@ -8,10 +8,9 @@ import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
 // Глобальная вкладка «Планы» — все программы тренера со всех клиентов в одном месте.
-export default function PlansOverview({ trainerId, clients, onOpenPlan, autoFocusNew }: {
-  trainerId: string; clients: ClientListItem[]; onOpenPlan: (planId: string, clientId: string) => void; autoFocusNew?: boolean;
+export default function PlansOverview({ trainerId, clients, plans, reloadPlans, onOpenPlan, autoFocusNew }: {
+  trainerId: string; clients: ClientListItem[]; plans: PlanOverviewItem[] | null; reloadPlans: () => void; onOpenPlan: (planId: string, clientId: string) => void; autoFocusNew?: boolean;
 }) {
-  const [plans, setPlans] = useState<PlanOverviewItem[] | null>(null);
   // B12: поисковый запрос переживает переключение вкладки
   const [query, setQuery] = useState(() => loadViewState("plans-query", ""));
   const [newClientId, setNewClientId] = useState("");
@@ -22,8 +21,8 @@ export default function PlansOverview({ trainerId, clients, onOpenPlan, autoFocu
   // B16: поиск логируем с задержкой — иначе событие на каждую букву
   useEffect(() => { if (!query.trim()) return; const t = setTimeout(() => logEvent(trainerId, "search", "plans", { len: query.trim().length }), 1200); return () => clearTimeout(t); }, [query, trainerId]);
   useScrollRestore("plans", !!plans);
-  const load = () => api.fetchAllPlans(trainerId).then(setPlans).catch((e) => setError(e.message || "Не удалось загрузить планы"));
-  useEffect(() => { load(); }, [trainerId]);
+  // B04: планы подняты в App вместе с клиентами и записями — раздел больше не грузит их сам.
+  const load = reloadPlans;
 
   const createPlan = async () => {
     if (!newClientId || !newName.trim()) return;

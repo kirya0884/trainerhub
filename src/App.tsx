@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin } from "lucide-react";
+import { LayoutDashboard, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin, Search } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -12,6 +12,8 @@ import CalendarView from "./components/CalendarView";
 import ClientPortal from "./components/ClientPortal";
 import { useBookings } from "./hooks/useBookings";
 import { useClients } from "./hooks/useClients";
+import { usePlans } from "./hooks/usePlans";
+import SearchOverlay from "./components/SearchOverlay";
 import { logEvent } from "./lib/events";
 import { loadViewState, saveViewState } from "./lib/viewState";
 import SubscriptionModal from "./components/SubscriptionModal";
@@ -117,6 +119,8 @@ export default function App() {
   const dataTrainerId = isTrainer && session ? session.user.id : "";
   const bookingsHook = useBookings(dataTrainerId);
   const { clients, reload: reloadClients } = useClients(dataTrainerId);
+  const { plans: allPlans, reload: reloadPlans } = usePlans(dataTrainerId);
+  const [showSearch, setShowSearch] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
@@ -245,6 +249,46 @@ export default function App() {
     );
   }
 
+  // B05: ряд недавних отдаём дашборду слотом — по новому порядку он стоит
+  // между «Требует внимания» и деньгами, то есть внутри дашборда. Данные и логика
+  // закрепления при этом остаются здесь.
+        {/* B10: недавние и закреплённые подопечные. Под плитками — плитки остаются
+            основной навигацией. Ряд появляется только при наличии истории, поэтому
+            на чистом аккаунте первый экран не растёт. Id удалённых клиентов отсеиваются. */}
+  const recentRow = (() => {
+          const byId = new Map((clients ?? []).map((c) => [c.id, c]));
+          const ordered = [...pinnedIds, ...recentIds.filter((id) => !pinnedIds.includes(id))]
+            .map((id) => byId.get(id)).filter(Boolean).slice(0, RECENT_MAX) as NonNullable<ReturnType<typeof byId.get>>[];
+          if (!ordered.length) return null;
+          return (
+            <div>
+              <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">НЕДАВНИЕ</p>
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                {ordered.map((c) => (
+                  <button
+                    key={c.id}
+                    onClick={() => openClient(c.id)}
+                    title={c.name}
+                    className="flex flex-col items-center gap-1 shrink-0 w-14 group"
+                  >
+                    <span className="relative">
+                      {c.avatarUrl
+                        ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover border-2 transition" style={{ borderColor: c.color }} />
+                        : <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-zinc-950 transition" style={{ background: c.color }}>{c.name[0]?.toUpperCase()}</span>}
+                      {pinnedIds.includes(c.id) && (
+                        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center">
+                          <Pin size={9} className="text-lime-400" />
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 truncate w-full text-center leading-tight group-hover:text-zinc-200 transition">{c.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+  })();
+
   return (
     <>
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined} />}
@@ -281,7 +325,15 @@ export default function App() {
               </span>
             );
           })()}
-          <button onClick={() => go({ kind: "trainerProfile" })} className="ml-auto flex items-center gap-2 min-w-0 text-lime-400 font-semibold text-sm hover:text-lime-300 transition">
+          <button
+            onClick={() => setShowSearch(true)}
+            aria-label="Поиск"
+            title="Поиск по подопечным и планам"
+            className="ml-auto shrink-0 p-2 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+          >
+            <Search size={18} />
+          </button>
+          <button onClick={() => go({ kind: "trainerProfile" })} className="flex items-center gap-2 min-w-0 text-lime-400 font-semibold text-sm hover:text-lime-300 transition">
             {trainerAvatar ? (
               <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
             ) : (
@@ -294,6 +346,15 @@ export default function App() {
             <Sparkles size={10} className="text-lime-400" /> Старт
           </button>
         </div>
+        {showSearch && (
+          <SearchOverlay
+            clients={clients ?? []}
+            plans={allPlans ?? []}
+            onOpenClient={openClient}
+            onOpenPlan={(planId, clientId) => { logEvent(dataTrainerId, "view", "plan"); go({ kind: "plan", planId, clientId, from: "plans" }); }}
+            onClose={() => setShowSearch(false)}
+          />
+        )}
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
         {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
@@ -324,50 +385,14 @@ export default function App() {
           </div>
         )}
 
-        {/* B10: недавние и закреплённые подопечные. Под плитками — плитки остаются
-            основной навигацией. Ряд появляется только при наличии истории, поэтому
-            на чистом аккаунте первый экран не растёт. Id удалённых клиентов отсеиваются. */}
-        {view.kind === "dashboard" && (() => {
-          const byId = new Map((clients ?? []).map((c) => [c.id, c]));
-          const ordered = [...pinnedIds, ...recentIds.filter((id) => !pinnedIds.includes(id))]
-            .map((id) => byId.get(id)).filter(Boolean).slice(0, RECENT_MAX) as NonNullable<ReturnType<typeof byId.get>>[];
-          if (!ordered.length) return null;
-          return (
-            <div>
-              <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">НЕДАВНИЕ</p>
-              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-                {ordered.map((c) => (
-                  <button
-                    key={c.id}
-                    onClick={() => openClient(c.id)}
-                    title={c.name}
-                    className="flex flex-col items-center gap-1 shrink-0 w-14 group"
-                  >
-                    <span className="relative">
-                      {c.avatarUrl
-                        ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover border-2 transition" style={{ borderColor: c.color }} />
-                        : <span className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-zinc-950 transition" style={{ background: c.color }}>{c.name[0]?.toUpperCase()}</span>}
-                      {pinnedIds.includes(c.id) && (
-                        <span className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full bg-zinc-900 border border-zinc-700 flex items-center justify-center">
-                          <Pin size={9} className="text-lime-400" />
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-[10px] text-zinc-400 truncate w-full text-center leading-tight group-hover:text-zinc-200 transition">{c.name}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })()}
         {view.kind === "dashboard" && (
-          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
+          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} recentSlot={recentRow} onOpenClient={openClient} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
         )}
         {view.kind === "calendar" && (
           <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} newBookingClientId={view.newBookingClientId} openOccurrence={view.openOccurrence} onOpenClient={openClient} onOpenClientPlans={(clientId) => openClient(clientId, "plans")} />
         )}
         {view.kind === "plans" && (
-          <PlansOverview trainerId={session.user.id} clients={clients ?? []} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => { logEvent(dataTrainerId, "view", "plan"); go({ kind: "plan", planId, clientId, from: "plans" }); }} />
+          <PlansOverview trainerId={session.user.id} clients={clients ?? []} plans={allPlans} reloadPlans={reloadPlans} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => { logEvent(dataTrainerId, "view", "plan"); go({ kind: "plan", planId, clientId, from: "plans" }); }} />
         )}
         {view.kind === "clients" && (
           <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={openClient} />

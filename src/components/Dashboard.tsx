@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { BarChart3, Bell, BellOff, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, Play, TriangleAlert, Users, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
@@ -30,7 +31,7 @@ const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
 
-export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenOccurrence?: (id: string, occDate: string) => void }) {
+export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence, recentSlot }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenOccurrence?: (id: string, occDate: string) => void; recentSlot?: ReactNode }) {
   // Имя клиента как ссылка на карточку. Наследует цвет родителя, поэтому одинаково
   // работает в белом расписании и в цветных алертах.
   // ponytail: тап-зону 44px по вертикали внутри строки текста не сделать, не разорвав абзац.
@@ -235,6 +236,122 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
             )}
       </div>
 
+
+      {/* Week ahead */}
+      <div>
+        <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ВАША НЕДЕЛЯ ВПЕРЕДИ</p>
+        {todayOccurrences.length === 0 && weekUpcoming.filter((o) => o.date !== todayStr).length === 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-8 text-center">
+            <CalendarClock size={28} className="mx-auto text-zinc-700 mb-2.5" />
+            <p className="text-sm text-zinc-600">Тренировок на неделю не запланировано</p>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {todayOccurrences.map((o) => (
+              <div key={`${o.id}-${o.occDate}`} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
+                <span className="text-[10px] font-semibold text-lime-400 uppercase tracking-wide w-12 shrink-0">Сегодня</span>
+                <span className="font-mono text-xs text-zinc-400 w-10 shrink-0">{o.time}</span>
+                <span className="text-zinc-100 truncate flex items-center gap-1 flex-1">
+                  {o.clientIds.map((id) => {
+                    const c = clients.find((x) => x.id === id);
+                    return (
+                      <span key={id} className="inline-flex items-center gap-1">
+                        <RemainingBadge remaining={c ? remainingOf(c.membership) : null} />
+                        <ClientLink id={id} name={c?.name ?? id} />
+                      </span>
+                    );
+                  })}
+                </span>
+                {/* B24: провести тренировку прямо из расписания. Открывает календарь
+                    на дате записи с раскрытой карточкой — дальше «Начать тренировку». */}
+                {onOpenOccurrence && (
+                  <button
+                    onClick={() => onOpenOccurrence(o.id, o.occDate)}
+                    title="Провести тренировку"
+                    aria-label={`Провести тренировку в ${o.time}`}
+                    className="shrink-0 w-9 h-9 -my-1 flex items-center justify-center rounded-lg text-zinc-500 hover:text-lime-400 hover:bg-lime-400/10 transition"
+                  >
+                    <Play size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {weekUpcoming.filter((o) => o.date !== todayStr).map((o) => (
+              <div key={`${o.id}-${o.occDate}`} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
+                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide w-12 shrink-0">
+                  {o.date === addDays(todayStr, 1) ? "Завтра" : new Date(o.date + "T00:00:00").toLocaleDateString("ru-RU", { weekday: "short" }).toUpperCase()}
+                </span>
+                <span className="font-mono text-xs text-zinc-400 w-10 shrink-0">{o.time}</span>
+                <span className="text-zinc-100 truncate text-sm">{o.clientIds.map((id, i) => (
+                  <Fragment key={id}>{i > 0 && ", "}<ClientLink id={id} name={clients.find((x) => x.id === id)?.name ?? id} /></Fragment>
+                ))}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+
+      {/* B22: три цветные плашки (долг, окончание абонемента, дни рождения) свёрнуты в один блок.
+           Дни рождения раньше давали по плашке на человека — теперь одна строка на всех.
+           Счётчики видны в свёрнутом виде, имена раскрываются по тапу. */}
+      {(debt.length > 0 || expiring.length > 0 || birthdays.length > 0) && (
+        <div className={`rounded-xl border ${debt.length > 0 ? "bg-orange-500/10 border-orange-500/20" : "bg-zinc-900 border-zinc-800"}`}>
+          <button
+            onClick={() => setShowAttention((v) => !v)}
+            aria-expanded={showAttention}
+            className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left"
+          >
+            <TriangleAlert size={15} className={`shrink-0 ${debt.length > 0 ? "text-orange-400" : "text-zinc-500"}`} />
+            <span className={`text-sm font-semibold shrink-0 ${debt.length > 0 ? "text-orange-300" : "text-zinc-300"}`}>Требует внимания</span>
+            <span className="text-xs text-zinc-400 truncate">
+              {[
+                debt.length > 0 ? `Долг ${debt.length}` : null,
+                expiring.length > 0 ? `Заканчивается ${expiring.length}` : null,
+                birthdays.length > 0 ? `ДР ${birthdays.length}` : null,
+              ].filter(Boolean).join(" · ")}
+            </span>
+            {showAttention
+              ? <ChevronDown size={16} className="ml-auto shrink-0 text-zinc-500" />
+              : <ChevronRight size={16} className="ml-auto shrink-0 text-zinc-500" />}
+          </button>
+
+          {showAttention && (
+            <div className="px-3.5 pb-3 pt-0.5 space-y-2 border-t border-zinc-800/60">
+              {debt.length > 0 && (
+                <div className="flex items-start gap-2 pt-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0 mt-[7px]" />
+                  <p className="text-sm text-orange-300"><span className="font-semibold">Долг:</span> {debt.map((c, i) => (
+                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
+                  ))}</p>
+                </div>
+              )}
+              {expiring.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0 mt-[7px]" />
+                  <p className="text-sm text-yellow-300"><span className="font-semibold">Заканчивается:</span> {expiring.map((c, i) => (
+                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
+                  ))}</p>
+                </div>
+              )}
+              {birthdays.length > 0 && (
+                <div className="flex items-start gap-2">
+                  <Cake size={13} className="text-pink-400 shrink-0 mt-1" />
+                  <p className="text-sm text-pink-300">{birthdays.map(({ c, days }, i) => (
+                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} className="font-semibold" /> — {days === 0 ? "сегодня" : `через ${days} д.`}</Fragment>
+                  ))}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+
+      {/* B05: ряд недавних подопечных приходит слотом из App — там живут данные,
+          история открытий и закрепление. Дашборд только ставит его на нужное место. */}
+      {recentSlot}
+
       {/* B21: деньги свёрнуты в одну строку. Внутри — прежние блоки дохода, аналитики
            и оплат без единой правки; фрагмент не создаёт узла, поэтому space-y-5 не едет. */}
       <button
@@ -372,6 +489,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
       )}
       </>)}
 
+
       {/* Clients */}
       <div>
         <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПОДОПЕЧНЫЕ</p>
@@ -386,115 +504,6 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           </div>
         </div>
       </div>
-
-      {/* Week ahead */}
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ВАША НЕДЕЛЯ ВПЕРЕДИ</p>
-        {todayOccurrences.length === 0 && weekUpcoming.filter((o) => o.date !== todayStr).length === 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-8 text-center">
-            <CalendarClock size={28} className="mx-auto text-zinc-700 mb-2.5" />
-            <p className="text-sm text-zinc-600">Тренировок на неделю не запланировано</p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {todayOccurrences.map((o) => (
-              <div key={`${o.id}-${o.occDate}`} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
-                <span className="text-[10px] font-semibold text-lime-400 uppercase tracking-wide w-12 shrink-0">Сегодня</span>
-                <span className="font-mono text-xs text-zinc-400 w-10 shrink-0">{o.time}</span>
-                <span className="text-zinc-100 truncate flex items-center gap-1 flex-1">
-                  {o.clientIds.map((id) => {
-                    const c = clients.find((x) => x.id === id);
-                    return (
-                      <span key={id} className="inline-flex items-center gap-1">
-                        <RemainingBadge remaining={c ? remainingOf(c.membership) : null} />
-                        <ClientLink id={id} name={c?.name ?? id} />
-                      </span>
-                    );
-                  })}
-                </span>
-                {/* B24: провести тренировку прямо из расписания. Открывает календарь
-                    на дате записи с раскрытой карточкой — дальше «Начать тренировку». */}
-                {onOpenOccurrence && (
-                  <button
-                    onClick={() => onOpenOccurrence(o.id, o.occDate)}
-                    title="Провести тренировку"
-                    aria-label={`Провести тренировку в ${o.time}`}
-                    className="shrink-0 w-9 h-9 -my-1 flex items-center justify-center rounded-lg text-zinc-500 hover:text-lime-400 hover:bg-lime-400/10 transition"
-                  >
-                    <Play size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
-            {weekUpcoming.filter((o) => o.date !== todayStr).map((o) => (
-              <div key={`${o.id}-${o.occDate}`} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
-                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide w-12 shrink-0">
-                  {o.date === addDays(todayStr, 1) ? "Завтра" : new Date(o.date + "T00:00:00").toLocaleDateString("ru-RU", { weekday: "short" }).toUpperCase()}
-                </span>
-                <span className="font-mono text-xs text-zinc-400 w-10 shrink-0">{o.time}</span>
-                <span className="text-zinc-100 truncate text-sm">{o.clientIds.map((id, i) => (
-                  <Fragment key={id}>{i > 0 && ", "}<ClientLink id={id} name={clients.find((x) => x.id === id)?.name ?? id} /></Fragment>
-                ))}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* B22: три цветные плашки (долг, окончание абонемента, дни рождения) свёрнуты в один блок.
-           Дни рождения раньше давали по плашке на человека — теперь одна строка на всех.
-           Счётчики видны в свёрнутом виде, имена раскрываются по тапу. */}
-      {(debt.length > 0 || expiring.length > 0 || birthdays.length > 0) && (
-        <div className={`rounded-xl border ${debt.length > 0 ? "bg-orange-500/10 border-orange-500/20" : "bg-zinc-900 border-zinc-800"}`}>
-          <button
-            onClick={() => setShowAttention((v) => !v)}
-            aria-expanded={showAttention}
-            className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left"
-          >
-            <TriangleAlert size={15} className={`shrink-0 ${debt.length > 0 ? "text-orange-400" : "text-zinc-500"}`} />
-            <span className={`text-sm font-semibold shrink-0 ${debt.length > 0 ? "text-orange-300" : "text-zinc-300"}`}>Требует внимания</span>
-            <span className="text-xs text-zinc-400 truncate">
-              {[
-                debt.length > 0 ? `Долг ${debt.length}` : null,
-                expiring.length > 0 ? `Заканчивается ${expiring.length}` : null,
-                birthdays.length > 0 ? `ДР ${birthdays.length}` : null,
-              ].filter(Boolean).join(" · ")}
-            </span>
-            {showAttention
-              ? <ChevronDown size={16} className="ml-auto shrink-0 text-zinc-500" />
-              : <ChevronRight size={16} className="ml-auto shrink-0 text-zinc-500" />}
-          </button>
-
-          {showAttention && (
-            <div className="px-3.5 pb-3 pt-0.5 space-y-2 border-t border-zinc-800/60">
-              {debt.length > 0 && (
-                <div className="flex items-start gap-2 pt-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0 mt-[7px]" />
-                  <p className="text-sm text-orange-300"><span className="font-semibold">Долг:</span> {debt.map((c, i) => (
-                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
-                  ))}</p>
-                </div>
-              )}
-              {expiring.length > 0 && (
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0 mt-[7px]" />
-                  <p className="text-sm text-yellow-300"><span className="font-semibold">Заканчивается:</span> {expiring.map((c, i) => (
-                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
-                  ))}</p>
-                </div>
-              )}
-              {birthdays.length > 0 && (
-                <div className="flex items-start gap-2">
-                  <Cake size={13} className="text-pink-400 shrink-0 mt-1" />
-                  <p className="text-sm text-pink-300">{birthdays.map(({ c, days }, i) => (
-                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} className="font-semibold" /> — {days === 0 ? "сегодня" : `через ${days} д.`}</Fragment>
-                  ))}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
     </div>
   );
