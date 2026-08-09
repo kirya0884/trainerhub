@@ -14,19 +14,36 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 // (не auto-update — не хотим сбрасывать состояние во время тренировки)
 const updateSW = registerSW({
   onNeedRefresh() {
-    // Лаймовая кнопка вместо confirm() (блокирует мобильный Safari).
-    // Висит до клика — иначе пользователь пропускает её и сидит на старой версии.
+    // Не confirm() — он блокирует мобильный Safari. Висит до клика: если убрать
+    // по таймеру, пользователь пропускает её и остаётся на старой версии.
+    //
+    // B34: классы Tailwind вместо инлайновых стилей — кнопка перестала выбиваться
+    // из интерфейса и заодно подхватывает светлую тему (bg-zinc-900 и text-zinc-200
+    // переопределены в index.css; дробные вроде bg-zinc-900/95 — нет, поэтому не берём).
     if (document.getElementById("sw-update-btn")) return;
     const btn = document.createElement("button");
     btn.id = "sw-update-btn";
-    btn.textContent = "🔄 Доступно обновление — перезайти";
-    btn.style.cssText = [
-      "position:fixed", "bottom:80px", "left:50%", "transform:translateX(-50%)",
-      "z-index:9999", "background:#a3e635", "color:#09090b", "font-weight:700",
-      "padding:10px 22px", "border:none", "border-radius:12px", "cursor:pointer",
-      "font-size:14px", "box-shadow:0 4px 16px #0006", "white-space:nowrap",
-    ].join(";");
-    btn.onclick = () => { btn.disabled = true; btn.textContent = "Обновляем..."; updateSW(true); };
+    btn.className = [
+      "fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999]",
+      "flex items-center gap-2 whitespace-nowrap",
+      "bg-zinc-900 border border-zinc-700 rounded-full px-4 py-2",
+      "text-xs font-medium text-zinc-200 shadow-lg",
+      "hover:border-zinc-500 active:scale-95 transition",
+    ].join(" ");
+
+    const dot = document.createElement("span");
+    dot.className = "w-1.5 h-1.5 rounded-full bg-lime-400 shrink-0 animate-pulse";
+    const label = document.createElement("span");
+    label.textContent = "Обновить приложение";
+    btn.append(dot, label);
+
+    btn.onclick = () => {
+      btn.disabled = true;
+      btn.classList.add("opacity-60");
+      dot.remove();
+      label.textContent = "Обновляем...";
+      updateSW(true);
+    };
     document.body.appendChild(btn);
   },
   onOfflineReady() {
