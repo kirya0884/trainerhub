@@ -13,6 +13,7 @@ import ClientPortal from "./components/ClientPortal";
 import { useBookings } from "./hooks/useBookings";
 import { useClients } from "./hooks/useClients";
 import { logEvent } from "./lib/events";
+import { loadViewState, saveViewState } from "./lib/viewState";
 import SubscriptionModal from "./components/SubscriptionModal";
 import BackupModal from "./components/BackupModal";
 import PinGate from "./components/PinGate";
@@ -134,6 +135,11 @@ export default function App() {
   const [showFab, setShowFab] = useState(false);
   const [recentIds, setRecentIds] = useState<string[]>(loadIds(RECENT_KEY));
   const [pinnedIds, setPinnedIds] = useState<string[]>(loadIds(PINNED_KEY));
+  // B01 (сокращённый): чип «с кем сейчас работаю» в шапке. Только подсказка и возврат —
+  // разделы по нему НЕ фильтруются. Скрытый фильтр, меняющий содержимое экранов, — это
+  // ровно та ловушка, от которой отказались в B12 с режимом «Архив».
+  const [ctxClientId, setCtxClientId] = useState<string | null>(() => loadViewState<string | null>("ctx-client", null));
+  const setContext = (id: string | null) => { setCtxClientId(id); saveViewState("ctx-client", id); };
   // Единая точка открытия карточки — здесь же копится история недавних.
   // B16: единственная обёртка над навигацией — все переходы идут через setView,
   // поэтому логируем здесь, а не расставляем вызовы по экранам.
@@ -141,6 +147,7 @@ export default function App() {
   const openClient = (clientId: string, sub?: Sub) => {
     setRecentIds((prev) => { const next = [clientId, ...prev.filter((id) => id !== clientId)].slice(0, RECENT_MAX); saveIds(RECENT_KEY, next); return next; });
     logEvent(dataTrainerId, "open_client", "client", { clientId });
+    setContext(clientId);
     setView({ kind: "client", clientId, sub });
   };
   const togglePinned = (clientId: string) => {
@@ -255,6 +262,25 @@ export default function App() {
           >
             <img src="/icon-512.png" alt="Reps" className="w-7 h-7 rounded-lg object-cover" />
           </button>
+          {(() => {
+            if (!ctxClientId || view.kind === "client") return null;
+            const c = (clients ?? []).find((x) => x.id === ctxClientId);
+            if (!c) return null;
+            const short = c.name.split(" ")[0].slice(0, 12);
+            return (
+              <span className="flex items-center gap-1 min-w-0 bg-zinc-900 border border-zinc-800 rounded-full pl-1 pr-0.5 py-0.5 shrink">
+                <button onClick={() => openClient(c.id)} title={`Вернуться к: ${c.name}`} className="flex items-center gap-1.5 min-w-0 group">
+                  {c.avatarUrl
+                    ? <img src={c.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
+                    : <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name[0]?.toUpperCase()}</span>}
+                  <span className="text-xs text-zinc-300 truncate group-hover:text-zinc-100 transition">{short}</span>
+                </button>
+                <button onClick={() => setContext(null)} aria-label="Убрать из контекста" title="Убрать" className="p-1 rounded-full text-zinc-600 hover:text-zinc-300 transition shrink-0">
+                  <X size={11} />
+                </button>
+              </span>
+            );
+          })()}
           <button onClick={() => go({ kind: "trainerProfile" })} className="ml-auto flex items-center gap-2 min-w-0 text-lime-400 font-semibold text-sm hover:text-lime-300 transition">
             {trainerAvatar ? (
               <img src={trainerAvatar} alt="" className="w-7 h-7 rounded-full object-cover border border-zinc-700 shrink-0" />
