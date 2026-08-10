@@ -8,7 +8,7 @@ import { decrementMembershipRemaining, incrementMembershipRemaining, fetchClient
 import { fmtDate, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
 import * as paymentsApi from "../lib/payments";
-import { markSessionDone } from "../lib/bookings";
+import { fetchClientDoneSessions, markSessionDone } from "../lib/bookings";
 import * as templatesApi from "../lib/templates";
 import * as plansApi from "../lib/plans";
 import type { Day, Metric, Session } from "../types";
@@ -209,9 +209,20 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         setReturnedDayIds((s) => (s.has(sessionDay.id) ? new Set([...s].filter((id) => id !== sessionDay.id)) : s));
         markSessionDone(trainerId, clientId, sessionDay.name, today()); // fire-and-forget: mark calendar booking done
       }
-      // Гард двойного списания: если клиент уже залогировал эту же сессию (fromClient=true), тренер не декрементирует повторно.
+      // Гард двойного списания. Проверяем два источника:
+      // 1) клиент уже залогировал эту сессию сам (fromClient) — было и раньше;
+      // 2) П12: запись в календаре за эту дату уже отмечена «проведена» — тогда списание
+      //    там уже произошло. Раньше этого не проверяли, и остаток уходил дважды.
       const alreadyLoggedByClient = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
-      if (membership && !alreadyLoggedByClient) setMembership(await decrementMembershipRemaining(clientId, membership));
+      let alreadyDoneInCalendar = false;
+      if (!alreadyLoggedByClient) {
+        // При ошибке проверки НЕ списываем: недосписать безопаснее, чем списать дважды.
+        try {
+          const done = await fetchClientDoneSessions(trainerId, clientId);
+          alreadyDoneInCalendar = done.some((d) => d.date === session.date);
+        } catch (e) { console.error("[PlanEditor] проверка календаря:", e); alreadyDoneInCalendar = true; }
+      }
+      if (membership && !alreadyLoggedByClient && !alreadyDoneInCalendar) setMembership(await decrementMembershipRemaining(clientId, membership));
     } catch (e: any) {
       console.error("[PlanEditor] finishSession:", e);
       throw e;

@@ -5,6 +5,7 @@ import { parseNum, today } from "../lib/format";
 import { buildMetrics } from "../lib/sessionUtils";
 import * as plansApi from "../lib/plans";
 import * as clientsApi from "../lib/clients";
+import { fetchClientDoneSessions } from "../lib/bookings";
 import { combinedRemaining } from "../lib/clients";
 import * as progressApi from "../lib/progress";
 import type { Membership, PlanListItem } from "../lib/clients";
@@ -88,7 +89,7 @@ export type SlotClient = { id: string; name: string; color: string; remaining?: 
 
 // Один "слот" — полностью независимая тренировка одного подопечного: свой план/день/веса/повторы.
 // Слоты не размонтируются при переключении вкладок (см. ниже className="hidden"), поэтому ввод не теряется.
-function ClientSlot({ client, active, onFinished }: { client: SlotClient; active: boolean; onFinished: () => void }) {
+function ClientSlot({ client, trainerId, active, onFinished }: { client: SlotClient; trainerId: string; active: boolean; onFinished: () => void }) {
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
   const [planId, setPlanId] = useState("");
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -146,12 +147,20 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
       const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`;
       await progressApi.logSession(plan.id, metrics, note, session);
       // Гард двойного списания: если клиент уже сам залогировал эту сессию (fromClient) — не декрементируем повторно
-      let alreadyLoggedByClient = false;
+      // П12: тот же двойной гард, что в PlanEditor — сессия клиента и отметка в календаре.
+      // При ошибке любой проверки списание пропускаем: недосписать безопаснее.
+      let skipCharge = false;
       try {
         const { sessions } = await progressApi.fetchProgress(plan.id);
-        alreadyLoggedByClient = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
-      } catch {}
-      if (membership && !alreadyLoggedByClient) setMembership(await clientsApi.decrementMembershipRemaining(client.id, membership));
+        skipCharge = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
+      } catch (e) { console.error("[GroupSessionModal] проверка сессий:", e); skipCharge = true; }
+      if (!skipCharge) {
+        try {
+          const done = await fetchClientDoneSessions(trainerId, client.id);
+          skipCharge = done.some((d) => d.date === session.date);
+        } catch (e) { console.error("[GroupSessionModal] проверка календаря:", e); skipCharge = true; }
+      }
+      if (membership && !skipCharge) setMembership(await clientsApi.decrementMembershipRemaining(client.id, membership));
       setFinished(true);
       onFinished();
     } catch (e) { console.error("[GroupSessionModal] finish:", e); alert("Не удалось сохранить тренировку. Попробуй ещё раз."); }
@@ -266,7 +275,7 @@ function ClientSlot({ client, active, onFinished }: { client: SlotClient; active
 
 // Тренировка 2-4 подопечных одновременно: вкладки сверху переключают активного,
 // но все слоты остаются смонтированными (скрыты через "hidden"), поэтому введённые веса/повторы не теряются.
-export default function GroupSessionModal({ clients, onClose, onClientFinished }: { clients: SlotClient[]; onClose: () => void; onClientFinished?: (clientId: string) => void }) {
+export default function GroupSessionModal({ clients, trainerId, onClose, onClientFinished }: { clients: SlotClient[]; trainerId: string; onClose: () => void; onClientFinished?: (clientId: string) => void }) {
   const [activeId, setActiveId] = useState(clients[0]?.id || "");
   const [finishedIds, setFinishedIds] = useState<string[]>([]);
 
@@ -287,7 +296,7 @@ export default function GroupSessionModal({ clients, onClose, onClientFinished }
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 max-w-2xl w-full mx-auto">
         {clients.map((c) => (
-          <ClientSlot key={c.id} client={c} active={c.id === activeId} onFinished={() => { setFinishedIds((arr) => (arr.includes(c.id) ? arr : [...arr, c.id])); onClientFinished?.(c.id); }} />
+          <ClientSlot key={c.id} client={c} trainerId={trainerId} active={c.id === activeId} onFinished={() => { setFinishedIds((arr) => (arr.includes(c.id) ? arr : [...arr, c.id])); onClientFinished?.(c.id); }} />
         ))}
       </div>
     </div>

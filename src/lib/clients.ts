@@ -229,6 +229,28 @@ export async function updateClient(clientId: string, patch: Record<string, any>)
 
 // Автосписание 1 тренировки из остатка пакета при факте проведения (подписку и пустой остаток не трогаем).
 // Если включён сплит с привязанным партнёром — зеркалим новый остаток в его карточку (общий пул на двоих).
+// П12: защита от двойного списания. Списание живёт в четырёх местах — проведение из плана,
+// проведение из календаря, ручная отметка «Проведена» и серверная функция, которой
+// пользуется сам клиент. Раньше они друг о друге не знали, и остаток уходил дважды.
+//
+// Эта проверка отвечает на вопрос «за эту дату у клиента уже есть проведённая тренировка».
+// Клиентский путь тоже создаёт запись сессии (from_client), поэтому проверка его видит.
+//
+// ponytail: сознательное ограничение — два РЕАЛЬНЫХ занятия у одного клиента в один день
+// вторым не спишутся. Владелец выбрал этот компромисс вместо журнала списаний с миграцией.
+export async function hasSessionOnDate(clientId: string, date: string): Promise<boolean> {
+  const { data: plans, error: plansErr } = await supabase
+    .from("plans").select("id").eq("client_id", clientId).is("deleted_at", null);
+  if (plansErr) throw plansErr;
+  const ids = (plans ?? []).map((p) => p.id);
+  if (!ids.length) return false;
+
+  const { data, error } = await supabase
+    .from("plan_sessions").select("id").in("plan_id", ids).eq("date", date).is("deleted_at", null).limit(1);
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 export async function decrementMembershipRemaining(clientId: string, membership: Membership) {
   if (membership.type === "subscription" || membership.remaining === "" || membership.remaining == null) return membership;
   const left = Number(membership.remaining);

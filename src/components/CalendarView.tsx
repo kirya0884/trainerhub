@@ -311,13 +311,26 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                   await updateBooking(modal.booking.id, patch, clientIds);
                 }
               } else await addBooking(patch, clientIds);
-              // Автосписание: декремент remaining при ручной отметке «проведено» (если статус только что стал done)
+              // Автосписание при ручной отметке «проведено».
+              // П12: раньше здесь не было никакой проверки, и остаток уходил дважды —
+              // например если клиент уже завершил тренировку сам в своём портале.
+              // Теперь перед списанием смотрим, нет ли уже проведённой тренировки за эту дату.
               if (patch.status === "done" && !wasAlreadyDone && clientIds.length > 0) {
+                const occDate = modal.occDate || patch.date;
+                const skipped: string[] = [];
                 await Promise.all(clientIds.map(async (cid) => {
                   const cf = await clientsApi.fetchClient(cid);
-                  if (cf.membership.type === "sessions") await clientsApi.decrementMembershipRemaining(cid, cf.membership);
+                  if (cf.membership.type !== "sessions") return;
+                  // При ошибке проверки НЕ списываем: недосписать безопаснее, чем списать дважды —
+                  // недостачу тренер заметит, а лишнее списание всплывёт только жалобой клиента.
+                  let already = true;
+                  try { already = await clientsApi.hasSessionOnDate(cid, occDate); }
+                  catch (e) { console.error("[CalendarView] hasSessionOnDate:", e); }
+                  if (already) { skipped.push(clientName(cid)); return; }
+                  await clientsApi.decrementMembershipRemaining(cid, cf.membership);
                 }));
                 reloadClients();
+                if (skipped.length) alert(`Тренировка за этот день уже была отмечена — повторно не списываем: ${skipped.join(", ")}`);
               }
               setModal(null);
             } catch (e) { console.error("[CalendarView] onSave:", e); alert("Не удалось сохранить запись."); }
@@ -328,6 +341,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
 
       {groupSession && (
         <GroupSessionModal
+          trainerId={trainerId}
           clients={groupSession.clientIds.map((id) => ({ id, name: clientName(id), color: clients.find((c) => c.id === id)?.color || "#a3e635", remaining: clients.find((c) => c.id === id)?.remaining ?? null }))}
           onClientFinished={async (clientId) => {
             try {
