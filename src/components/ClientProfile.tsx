@@ -255,7 +255,15 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
       {sub === "reporting" && <ReportingTab measureTick={measureTick} clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} clientName={client.name} allPlans={allPlans ?? []} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
-      {sub === "chat" && <ChatThread trainerId={trainerId} clientId={clientId} self="trainer" />}
+      {sub === "chat" && (
+        <ChatThread
+          trainerId={trainerId}
+          clientId={clientId}
+          self="trainer"
+          lastRead={chatLastRead}
+          onRead={(iso) => { setChatLastRead(iso); try { localStorage.setItem(chatReadKey, iso); } catch {} }}
+        />
+      )}
     </div>
   );
 }
