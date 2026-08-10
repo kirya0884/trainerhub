@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -17,7 +17,6 @@ import BodyTab from "./BodyTab";
 import NutritionTab from "./NutritionTab";
 import * as nutritionApi from "../lib/nutrition";
 import type { NutritionLog } from "../lib/nutrition";
-import ProgramCatalogModal from "./ProgramCatalogModal";
 import ChatThread from "./ChatThread";
 import * as messagesApi from "../lib/messages";
 import type { ChatMessage } from "../lib/messages";
@@ -25,6 +24,8 @@ import SessionHistoryModal from "./SessionHistoryModal";
 import { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
 import { expandBookings } from "../lib/bookings";
 import { duplicatePlan } from "../lib/plans";
+import PlanCreateModal from "./PlanCreateModal";
+import type { PlanOverviewItem } from "../lib/clients";
 import type { Booking } from "../lib/bookings";
 import RemainingBadge from "./RemainingBadge";
 import ActivityTab from "./ActivityTab";
@@ -52,7 +53,7 @@ const loadSubOrder = (): Sub[] => {
   } catch {}
   return DEFAULT_SUB_ORDER;
 };
-export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient, bookings, onOpenOccurrence }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void; bookings?: Booking[]; onOpenOccurrence?: (id: string, occDate: string) => void }) {
+export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient, bookings, allPlans, onOpenOccurrence }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void; bookings?: Booking[]; allPlans?: PlanOverviewItem[]; onOpenOccurrence?: (id: string, occDate: string) => void }) {
   // B03: быстрые действия из шапки — счётчики, чтобы повторное нажатие срабатывало снова
   const [measureTick, setMeasureTick] = useState(0);
   const [sub, setSub] = useState<Sub>(initialSub || "overview");
@@ -253,7 +254,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       {sub === "payments" && <MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} />}
       {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
       {sub === "reporting" && <ReportingTab measureTick={measureTick} clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
-      {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
+      {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} clientName={client.name} allPlans={allPlans ?? []} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
       {sub === "chat" && <ChatThread trainerId={trainerId} clientId={clientId} self="trainer" />}
     </div>
   );
@@ -703,7 +704,7 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
   );
 }
 
-function PlansTab({ trainerId, clientId, plans, setPlans, onOpenPlan }: { trainerId: string; clientId: string; plans: PlanListItem[] | null; setPlans: (p: PlanListItem[]) => void; onOpenPlan: (id: string) => void }) {
+function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, onOpenPlan }: { trainerId: string; clientId: string; clientName: string; allPlans: PlanOverviewItem[]; plans: PlanListItem[] | null; setPlans: (p: PlanListItem[]) => void; onOpenPlan: (id: string) => void }) {
   const [name, setName] = useState("");
   const [showCatalog, setShowCatalog] = useState(false);
   const createPlan = async () => {
@@ -742,11 +743,17 @@ function PlansTab({ trainerId, clientId, plans, setPlans, onOpenPlan }: { traine
           <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createPlan()} placeholder="Название плана" className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
           <button onClick={createPlan} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 text-sm hover:bg-lime-300 transition shrink-0"><Plus size={15} /> Создать</button>
         </div>
-        <button onClick={() => setShowCatalog(true)} className="text-xs text-zinc-500 hover:text-zinc-300 transition">Или выбрать из готовой программы (масса/сушка/СФП)</button>
+        <button onClick={() => setShowCatalog(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg py-2 text-sm transition"><Sparkles size={15} className="text-lime-400" /> Создать из готового</button>
       </div>
       {showCatalog && (
-        <ProgramCatalogModal trainerId={trainerId} clientId={clientId} onClose={() => setShowCatalog(false)}
-          onCloned={(planId) => { setShowCatalog(false); api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e)); onOpenPlan(planId); }} />
+        <PlanCreateModal
+          trainerId={trainerId}
+          clientId={clientId}
+          clientName={clientName}
+          allPlans={allPlans}
+          onCreated={(planId) => { setShowCatalog(false); api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e)); onOpenPlan(planId); }}
+          onClose={() => setShowCatalog(false)}
+        />
       )}
 
       {plans === null ? (

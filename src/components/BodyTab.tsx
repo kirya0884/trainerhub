@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Ruler, X } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, Ruler, X } from "lucide-react";
 import TrendChart from "./TrendChart";
 import { BODY_METRICS } from "../constants";
 import { today } from "../lib/format";
@@ -17,6 +17,25 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
   useEffect(() => { if (openForm) setShowForm(true); }, [openForm]);
   const [form, setForm] = useState(emptyMeasurement());
   const [bodyMetric, setBodyMetric] = useState<string>(BODY_METRICS[0].key);
+  const [allFields, setAllFields] = useState(false);
+
+  // B08: форма показывала все десять полей сразу — на 59 подопечных за всё время
+  // сделано 12 замеров. Вместо угадывания «правильной тройки» берём те поля,
+  // которые заполняли в прошлый раз у этого клиента: тренер, меряющий талию и бёдра,
+  // увидит талию и бёдра. Если замеров ещё нет — разумный стартовый набор.
+  // ponytail: без настроек и без хранилища — набор выводится из самих данных.
+  const lastFilled = (() => {
+    const last = measurements[0];
+    if (!last) return null;
+    const keys = BODY_METRICS.map((m) => m.key).filter((k) => {
+      const v = (last as any)[k];
+      return v !== "" && v != null;
+    });
+    return keys.length ? keys : null;
+  })();
+  const primaryKeys: string[] = lastFilled ?? ["weight", "waist", "chest", "thigh"];
+  const visibleMetrics = allFields ? BODY_METRICS : BODY_METRICS.filter((m) => primaryKeys.includes(m.key));
+  const hiddenCount = BODY_METRICS.length - visibleMetrics.length;
 
   const submit = async () => {
     try {
@@ -45,10 +64,20 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
           <button onClick={() => { setShowForm(false); setForm(emptyMeasurement()); }} className="absolute top-2 right-2 p-1 rounded-md hover:bg-zinc-700 text-zinc-400 transition" title="Закрыть"><X size={16} /></button>
           <label className="text-xs text-zinc-500 block pr-7">Дата<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-            {BODY_METRICS.map((m) => (
+            {visibleMetrics.map((m) => (
               <NumField key={m.key} label={`${m.label} ${m.unit}`} value={(form as any)[m.key]} onChange={(e) => setForm({ ...form, [m.key]: e.target.value })} placeholder="—" />
             ))}
           </div>
+          {hiddenCount > 0 && (
+            <button onClick={() => setAllFields(true)} className="w-full flex items-center justify-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition py-1">
+              <ChevronRight size={13} /> Все параметры (ещё {hiddenCount})
+            </button>
+          )}
+          {allFields && (
+            <button onClick={() => setAllFields(false)} className="w-full flex items-center justify-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-300 transition py-1">
+              <ChevronDown size={13} /> Свернуть до основных
+            </button>
+          )}
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="заметка (необязательно)" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
           <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition" style={{ background: "var(--accent)" }}>Сохранить замер</button>
         </div>

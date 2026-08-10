@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { logEvent } from "../lib/events";
 import { useScrollRestore } from "../hooks/useScrollRestore";
-import { ClipboardList, Copy, Plus, Search, Trash2 } from "lucide-react";
+import { ClipboardList, Copy, Plus, Search, Sparkles, Trash2 } from "lucide-react";
+import PlanCreateModal from "./PlanCreateModal";
 import * as api from "../lib/clients";
 import { duplicatePlan } from "../lib/plans";
 import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
@@ -35,6 +36,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
   };
   // B06: дубликат создаётся вместе с блоками, днями, упражнениями и подходами.
   const [dupId, setDupId] = useState<string | null>(null);
+  const [wizard, setWizard] = useState(false);
   const duplicate = async (p: PlanOverviewItem, e: React.MouseEvent) => {
     e.stopPropagation();
     if (dupId) return;
@@ -52,11 +54,22 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
     catch (err) { console.error("[PlansOverview] deletePlan:", err); alert("Не удалось удалить план."); }
   };
 
+  const wizardClient = clients.find((c) => c.id === newClientId);
   const q = query.trim().toLowerCase();
   const filtered = (plans ?? []).filter((p) => !q || p.name.toLowerCase().includes(q) || p.clientName.toLowerCase().includes(q));
 
   return (
     <div className="space-y-4">
+      {wizard && wizardClient && (
+        <PlanCreateModal
+          trainerId={trainerId}
+          clientId={wizardClient.id}
+          clientName={wizardClient.name}
+          allPlans={plans ?? []}
+          onCreated={(planId) => { setWizard(false); reloadPlans(); onOpenPlan(planId, wizardClient.id); }}
+          onClose={() => setWizard(false)}
+        />
+      )}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
         <p className="text-sm text-zinc-400">Новый план</p>
         <div className="flex flex-wrap gap-2">
@@ -65,6 +78,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
             {clients.map((c) => <option key={c.id} value={c.id} className="bg-zinc-900">{c.name}</option>)}
           </select>
           <input autoFocus={autoFocusNew} value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createPlan()} placeholder="Название плана" className="flex-1 min-w-[140px] bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
+          <button onClick={() => setWizard(true)} disabled={!newClientId} title="Создать из готовой программы или копии" className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg px-3 py-2 text-sm transition disabled:opacity-40 shrink-0"><Sparkles size={15} className="text-lime-400" /> Из готового</button>
           <button onClick={createPlan} disabled={!newClientId || !newName.trim()} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 text-sm hover:bg-lime-300 transition disabled:opacity-40 shrink-0"><Plus size={15} /> Создать</button>
         </div>
       </div>
