@@ -268,11 +268,28 @@ export async function decrementMembershipRemaining(clientId: string, membership:
 
 // Возврат 1 тренировки в остаток пакета — при отмене/удалении тренировки по уважительной причине (зеркало decrementMembershipRemaining).
 export async function incrementMembershipRemaining(clientId: string, membership: Membership) {
-  if (membership.type === "subscription" || membership.remaining === "" || membership.remaining == null) return membership;
-  const left = Number(membership.remaining);
-  if (Number.isNaN(left)) return membership;
-  // remainingTotal is the denominator for "X of Y" display — it should NOT change when returning a session
-  const next = { ...membership, remaining: String(left + 1) };
+  // Подписка: разовые к ней не добавляются, оплата помесячная.
+  if (membership.type === "subscription") return membership;
+
+  // П5: раньше здесь был молчаливый выход при пустом остатке — а это как раз главный
+  // сценарий разовой тренировки: клиент пришёл без пакета. Кнопка не работала у 43
+  // подопечных из 60 и ничего об этом не сообщала. Теперь пустой остаток считаем нулём.
+  const raw = membership.remaining;
+  const base = raw === "" || raw == null ? 0 : Number(raw);
+  if (!Number.isFinite(base)) return membership;
+
+  // remainingTotal — знаменатель в «X из Y». При возврате тренировки по уважительной
+  // причине он меняться не должен, поэтому поднимаем его только когда пакета не было
+  // вовсе (иначе у клиента без абонемента показывалось бы «1 из 0»).
+  const totalRaw = membership.remainingTotal;
+  const totalWasEmpty = totalRaw === "" || totalRaw == null || Number(totalRaw) === 0;
+
+  const next: Membership = {
+    ...membership,
+    type: "sessions",
+    remaining: String(base + 1),
+    ...(totalWasEmpty ? { remainingTotal: String(base + 1) } : {}),
+  };
   await updateClient(clientId, { membership: next });
   if (membership.split && membership.partnerClientId) await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining });
   return next;

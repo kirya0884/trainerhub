@@ -232,10 +232,28 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   // ponytail: ручное добавление разовой тренировки к остатку — платная пишется в журнал платежей (учитывается в статистике заработка), бесплатная — только +1 к остатку
   const addSingleSession = async (paid: boolean) => {
     if (!membership || addingSession) return;
+
+    // П5: раньше при неподходящем абонементе кнопка молча ничего не делала —
+    // тренер не понимал, сломалось или он что-то не так делает.
+    if (membership.type === "subscription") {
+      alert("У подопечного подписка — разовые тренировки к ней не добавляются, оплата помесячная.");
+      return;
+    }
+
+    // Цена берётся из пакета. У клиента без пакета её нет, поэтому спрашиваем —
+    // иначе платёж ушёл бы в журнал на нулевую сумму.
+    let amount = sessionPrice(membership);
+    if (paid && amount <= 0) {
+      const v = window.prompt("Цена разового занятия, ₽:", "");
+      if (v == null) return;
+      amount = Number(String(v).replace(",", ".").trim()) || 0;
+      if (amount <= 0) { alert("Нужна сумма больше нуля."); return; }
+    }
+
     setAddingSession(true);
     try {
       const next = await incrementMembershipRemaining(clientId, membership);
-      if (paid) await paymentsApi.addPayment(clientId, { date: today(), amount: sessionPrice(membership), type: "single", note: "Разовая тренировка" }, 1);
+      if (paid) await paymentsApi.addPayment(clientId, { date: today(), amount, type: "single", note: "Разовая тренировка" }, 1);
       setMembership(next);
     } catch (e: any) {
       alert(e.message || "Не удалось добавить тренировку");
