@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
+import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
@@ -182,6 +182,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [newDayName, setNewDayName] = useState<string | null>(null);
   const [pasteInput, setPasteInput] = useState<string | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
+  const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [addingSession, setAddingSession] = useState(false);
   const [clientName, setClientName] = useState("");
   // Ссылка должна быть стабильной: она уходит в мемоизированный ExerciseRow.
@@ -194,6 +195,14 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     const i = GROUP_CYCLE.indexOf(cur || "");
     markSaving(); updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
   };
+
+  // Закрытие меню плана по Escape — клик мимо ловит подложка
+  useEffect(() => {
+    if (!showPlanMenu) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setShowPlanMenu(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showPlanMenu]);
 
   useEffect(() => {
     let alive = true;
@@ -338,16 +347,41 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
         <div className="flex items-center gap-1.5">
           <input value={plan.name} onChange={(e) => { markSaving(); updatePlanMeta({ name: e.target.value }); }} className="flex-1 min-w-0 bg-transparent text-xl font-bold outline-none border-b border-transparent focus:border-lime-400/50 pb-1" placeholder="Название плана" />
-          <div className="flex items-center gap-0.5 shrink-0">
-            <button onClick={() => setShowTemplates(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Шаблоны"><FileStack size={15} /></button>
-            <button onClick={() => setShowVersions(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="История версий"><History size={15} /></button>
-            <button onClick={() => setShowMeso(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Генератор мезоцикла"><Repeat size={15} /></button>
-            <button onClick={() => setShowPrint(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-lime-400 transition" title="Печать / PDF"><Printer size={15} /></button>
-            <button onClick={() => { markSaving(); updatePlanMeta({ visibleToClient: plan.visibleToClient === false ? true : false }); }} className={`p-1.5 rounded-lg hover:bg-zinc-800 transition ${plan.visibleToClient === false ? "text-orange-400" : "text-zinc-400 hover:text-lime-400"}`} title={plan.visibleToClient === false ? "Скрыт от клиента — показать" : "Скрыть от клиента"}>{plan.visibleToClient === false ? <EyeOff size={15} /> : <Eye size={15} />}</button>
-          </div>
           <span className={`text-xs shrink-0 transition-all duration-300 ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'}`}>
             {saveStatus === 'saving' ? <span className="text-zinc-500">Сохранение…</span> : <span className="text-lime-400">✓ Сохранено</span>}
           </span>
+          {/* П4: пять иконок свёрнуты в меню — строка названия перестала быть панелью инструментов */}
+          <div className="relative shrink-0">
+            <button onClick={() => setShowPlanMenu((v) => !v)} aria-expanded={showPlanMenu} aria-label="Меню плана" title="Меню плана"
+              className={`p-1.5 rounded-lg transition ${showPlanMenu ? "bg-zinc-800 text-lime-400" : plan.visibleToClient === false ? "text-orange-400 hover:bg-zinc-800" : "text-zinc-400 hover:bg-zinc-800 hover:text-lime-400"}`}>
+              <MoreHorizontal size={18} />
+            </button>
+            {showPlanMenu && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowPlanMenu(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-56 shadow-xl">
+                  <button onClick={() => { setShowPlanMenu(false); setShowTemplates(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <FileStack size={15} className="text-zinc-500 shrink-0" /> Шаблоны
+                  </button>
+                  <button onClick={() => { setShowPlanMenu(false); setShowVersions(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <History size={15} className="text-zinc-500 shrink-0" /> История версий
+                  </button>
+                  <button onClick={() => { setShowPlanMenu(false); setShowMeso(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Repeat size={15} className="text-zinc-500 shrink-0" /> Генератор мезоцикла
+                  </button>
+                  <button onClick={() => { setShowPlanMenu(false); setShowPrint(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Printer size={15} className="text-zinc-500 shrink-0" /> Печать / PDF
+                  </button>
+                  <div className="my-1 border-t border-zinc-800" />
+                  <button onClick={() => { setShowPlanMenu(false); markSaving(); updatePlanMeta({ visibleToClient: plan.visibleToClient === false ? true : false }); }}
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm hover:bg-zinc-800 transition ${plan.visibleToClient === false ? "text-orange-400" : "text-zinc-300"}`}>
+                    {plan.visibleToClient === false ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />}
+                    {plan.visibleToClient === false ? "Показать клиенту" : "Скрыть от клиента"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
           {clientName && (
             <span className="flex items-center gap-1.5 text-sm text-zinc-400 shrink-0 max-w-[100px] sm:max-w-none">
               {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />}
@@ -356,10 +390,9 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
             </span>
           )}
         </div>
-        <input value={plan.note} onChange={(e) => { markSaving(); updatePlanMeta({ note: e.target.value }); }} placeholder="Заметка к плану — напр. прогрессия каждые 2 недели" className="w-full mt-3 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
         {plan.visibleToClient === false && (
           <div className="flex items-center gap-2 bg-orange-400/10 border border-orange-400/20 rounded-lg px-3 py-2 text-sm text-orange-400 mt-2">
-            <EyeOff size={14} /> Программа скрыта от клиента — нажми глаз выше, чтобы показать
+            <EyeOff size={14} /> Программа скрыта от клиента — открой меню «⋯» выше, чтобы показать
           </div>
         )}
         <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 mt-4 overflow-x-auto">
@@ -667,6 +700,14 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       )}
 
       {viewingSession && <SessionReadModal session={viewingSession} onClose={() => setViewingSession(null)} />}
+      {/* П4: заметка внизу — заполняется редко, а сверху занимала строку наравне с названием */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <label htmlFor="plan-note" className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">Заметка к плану</label>
+        <input id="plan-note" value={plan.note} onChange={(e) => { markSaving(); updatePlanMeta({ note: e.target.value }); }}
+          placeholder="Напр. прогрессия каждые 2 недели"
+          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
+      </div>
+
       {sessionDay && <SessionModal day={sessionDay} onFinish={finishSession} onClose={() => setSessionDay(null)} />}
       {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 text-zinc-100 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg border border-zinc-700 pointer-events-none">{toast}</div>}
     </div>
