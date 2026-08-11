@@ -15,6 +15,7 @@ import type { Day, Metric, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import RemainingBadge from "./RemainingBadge";
 import ExerciseRow from "./ExerciseRow";
+import ExerciseHistoryModal from "./ExerciseHistoryModal";
 import { useDragSort } from "../hooks/useDragSort";
 import LibraryModal from "./LibraryModal";
 import MetricsView from "./MetricsView";
@@ -54,6 +55,26 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
   const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m])), [metrics]);
+  // П10: сколько тренировок в истории по каждому названию. Наружу уходит число —
+  // объект в props сломал бы мемоизацию ExerciseRow.
+  const historyCounts = useMemo(() => {
+    const c: Record<string, number> = {};
+    const seen = new Set<string>();
+    for (const s of sessions) for (const i of s.items ?? []) {
+      const k = i.name.trim().toLowerCase();
+      if (!k || seen.has(k + s.date)) continue;
+      seen.add(k + s.date);
+      c[k] = (c[k] ?? 0) + 1;
+    }
+    for (const m of metrics) {
+      const k = m.exercise.trim().toLowerCase();
+      if (!k || seen.has(k + m.date)) continue;
+      seen.add(k + m.date);
+      c[k] = (c[k] ?? 0) + 1;
+    }
+    return c;
+  }, [sessions, metrics]);
+  const openExHistory = useCallback((name: string) => setHistoryFor(name), []);
   const COLLAPSED_KEY = `trainerhub-collapsed-${planId}`;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
     () => { try { return JSON.parse(localStorage.getItem(`trainerhub-collapsed-${planId}`) || "{}"); } catch { return {}; } }
@@ -183,6 +204,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [pasteInput, setPasteInput] = useState<string | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
   const [showPlanMenu, setShowPlanMenu] = useState(false);
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [addingSession, setAddingSession] = useState(false);
   const [clientName, setClientName] = useState("");
   // Ссылка должна быть стабильной: она уходит в мемоизированный ExerciseRow.
@@ -318,7 +340,8 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               onMoveUp={() => reorderExercises(day.id, ei, ei - 1)} onMoveDown={() => reorderExercises(day.id, ei, ei + 1)}
               cycleGroup={() => cycleGroup(day.id, ex.id, ex.group, day.exercises)}
               update={(patch) => { markSaving(); updateExercise(day.id, ex.id, patch); }} remove={() => deleteExercise(day.id, ex.id)}
-              lastMetric={lastMetrics[ex.name.toLowerCase()]} />
+              lastMetric={lastMetrics[ex.name.toLowerCase()]}
+              historyCount={historyCounts[ex.name.trim().toLowerCase()] ?? 0} onOpenHistory={openExHistory} />
           );
         });
         if (block.group && block.items.length > 1) {
@@ -700,6 +723,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       )}
 
       {viewingSession && <SessionReadModal session={viewingSession} onClose={() => setViewingSession(null)} />}
+      {historyFor !== null && <ExerciseHistoryModal name={historyFor} sessions={sessions} metrics={metrics} onClose={() => setHistoryFor(null)} />}
       {/* П4: заметка внизу — заполняется редко, а сверху занимала строку наравне с названием */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
         <label htmlFor="plan-note" className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">Заметка к плану</label>

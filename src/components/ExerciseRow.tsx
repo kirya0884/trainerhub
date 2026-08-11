@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, ChevronRight, GripVertical, Layers, Plus, Video, X } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, GripVertical, Layers, Plus, TrendingUp, Video, X } from "lucide-react";
 import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
@@ -10,12 +10,13 @@ function toEmbedUrl(url: string): string {
 }
 function ExerciseRow({
   ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove, lastMetric,
-  index, dragging, dropBefore, dropAfter, collapsed, onToggleCollapse,
+  index, dragging, dropBefore, dropAfter, collapsed, onToggleCollapse, historyCount, onOpenHistory,
 }: {
   ex: Exercise; label: string; groupColor: string | null; suggestions: string[]; addToLibrary: (name: string) => void;
   canMoveUp: boolean; canMoveDown: boolean; onMoveUp: () => void; onMoveDown: () => void;
   index: number; dragging?: boolean; dropBefore?: boolean; dropAfter?: boolean;
   collapsed?: boolean; onToggleCollapse?: (id: string) => void;
+  historyCount?: number; onOpenHistory?: (name: string) => void;
   cycleGroup: () => void; update: (patch: Partial<Exercise>) => void; remove: () => void;
   lastMetric?: Metric;
 }) {
@@ -124,12 +125,29 @@ function ExerciseRow({
           </div>
         )}
         <input value={ex.note} onChange={(e) => { const v = e.target.value; startTransition(() => update({ note: v })); }} placeholder="Комментарий: техника, на что обратить внимание..." className="w-full bg-transparent text-xs text-zinc-400 px-1 py-0.5 pl-6 outline-none focus:text-zinc-200" />
-        {lastMetric && (
-          <div className="pl-6 flex items-center gap-1.5 text-[11px] text-cyan-400/80">
-            <span className="text-zinc-600">Факт {lastMetric.date.slice(5).replace("-", ".")}:</span>
-            {lastMetric.sets && <span>{lastMetric.sets}×{lastMetric.reps}</span>}
-            {lastMetric.weight && <span>· {lastMetric.weight}</span>}
-          </div>
+        {/* П10: строка факта стала входом в историю — свободного места в шапке строки нет */}
+        {(lastMetric || (historyCount ?? 0) > 0) && (
+          onOpenHistory ? (
+            <button onClick={() => onOpenHistory(ex.name)} type="button"
+              title="История упражнения: подходы по датам и график"
+              className="pl-6 flex items-center gap-1.5 text-[11px] text-cyan-400/80 hover:text-cyan-300 transition w-full text-left">
+              {lastMetric ? (
+                <>
+                  <span className="text-zinc-600">Факт {lastMetric.date.slice(5).replace("-", ".")}:</span>
+                  {lastMetric.sets && <span>{lastMetric.sets}×{lastMetric.reps}</span>}
+                  {lastMetric.weight && <span>· {lastMetric.weight}</span>}
+                </>
+              ) : <span className="text-zinc-600">История упражнения</span>}
+              {(historyCount ?? 0) > 1 && <span className="text-zinc-600">· {historyCount} трен.</span>}
+              <TrendingUp size={12} className="ml-auto shrink-0" />
+            </button>
+          ) : (
+            <div className="pl-6 flex items-center gap-1.5 text-[11px] text-cyan-400/80">
+              <span className="text-zinc-600">Факт {lastMetric!.date.slice(5).replace("-", ".")}:</span>
+              {lastMetric!.sets && <span>{lastMetric!.sets}×{lastMetric!.reps}</span>}
+              {lastMetric!.weight && <span>· {lastMetric!.weight}</span>}
+            </div>
+          )
         )}
       </>)}
     </div>
@@ -146,6 +164,8 @@ export default memo(ExerciseRow, (prev, next) =>
   prev.dropAfter === next.dropAfter &&
   prev.collapsed === next.collapsed &&
   prev.onToggleCollapse === next.onToggleCollapse &&
+  prev.historyCount === next.historyCount &&
+  prev.onOpenHistory === next.onOpenHistory &&
   prev.index === next.index &&
   prev.lastMetric === next.lastMetric &&
   prev.groupColor === next.groupColor &&
