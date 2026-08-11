@@ -51,6 +51,8 @@ export interface Mesocycle {
   name: string;
   position: number;
   visibleToClient?: boolean;
+  /** Р2: блок убран в архив вместе со своими днями. */
+  archivedAt?: string | null;
 }
 
 export interface ProgressNote { id: string; date: string; text: string }

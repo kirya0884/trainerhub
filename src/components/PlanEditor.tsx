@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
+import { Archive, BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
@@ -49,7 +49,7 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 };
 
 export default function PlanEditor({ planId, trainerId, clientId }: { planId: string; trainerId: string; clientId: string }) {
-  const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, addMesocycle, updateMesocycle, deleteMesocycle, reload } = usePlan(planId);
+  const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, addMesocycle, updateMesocycle, deleteMesocycle, reorderMesocycles, reload } = usePlan(planId);
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const exDrag = useDragSort((dayId, from, to) => reorderExercises(dayId, from, to));
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
@@ -388,7 +388,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
   return (
     <div className="space-y-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
         <div className="flex items-center gap-1.5">
           <input value={plan.name} onChange={(e) => { markSaving(); updatePlanMeta({ name: e.target.value }); }} className="flex-1 min-w-0 bg-transparent text-xl font-bold outline-none border-b border-transparent focus:border-lime-400/50 pb-1" placeholder="Название плана" />
           <span className={`text-xs shrink-0 transition-all duration-300 ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'}`}>
@@ -439,15 +439,26 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
             <EyeOff size={14} /> Программа скрыта от клиента — открой меню «⋯» выше, чтобы показать
           </div>
         )}
-        <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 mt-4 overflow-x-auto">
-          <button onClick={() => setSub("workout")} className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap ${sub === "workout" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}><ClipboardList size={14} /> Тренировки</button>
-          <button onClick={() => setSub("done")} className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap ${sub === "done" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}><CheckCircle2 size={14} /> Проведенные</button>
-          <button onClick={() => setSub("progress")} className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap ${sub === "progress" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}><TrendingUp size={14} /> Прогрессия</button>
+        {/* Р4: плитки вместо полосы, но однострочные — иначе плашка выросла бы вдвое */}
+        <div className="grid grid-cols-3 gap-1.5 mt-3">
+          {([
+            { k: "workout" as const, icon: <ClipboardList size={14} />, label: "Тренировки" },
+            { k: "done" as const, icon: <CheckCircle2 size={14} />, label: "Проведённые" },
+            { k: "progress" as const, icon: <TrendingUp size={14} />, label: "Прогрессия" },
+          ]).map((t) => (
+            <button key={t.k} onClick={() => setSub(t.k)} aria-pressed={sub === t.k}
+              className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 px-1 text-[13px] font-medium transition active:scale-[0.97] ${
+                sub === t.k ? "bg-lime-400 border-lime-400 text-zinc-950" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"}`}>
+              {t.icon}<span className="truncate">{t.label}</span>
+            </button>
+          ))}
         </div>
         {membership && (
-          <button onClick={() => setShowMembership(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 transition mt-2">
-            <Wallet size={14} className="text-lime-400 shrink-0" />
+          <button onClick={() => setShowMembership(true)}
+            className="w-full flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 active:text-lime-400 transition mt-2 px-0.5">
+            <Wallet size={13} className="text-lime-400 shrink-0" />
             <span className="truncate">{membership.type === "subscription" ? `След. платёж: ${fmtDate(membership.nextPaymentDate)}` : `Абонемент: ${combinedRemaining(membership)} тр.`}</span>
+            <ChevronRight size={13} className="ml-auto shrink-0 text-zinc-600" />
           </button>
         )}
       </div>
@@ -530,6 +541,31 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               </div>
             ))}
           </div>
+
+          {/* Р2: архив блоков — рядом с проведёнными днями, одно место для всего убранного */}
+          {(plan.mesocycles ?? []).some((m) => m.archivedAt) && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+              <h3 className="font-semibold flex items-center gap-1.5"><Archive size={16} className="text-cyan-400" /> Архив блоков
+                <span className="text-zinc-500 font-normal">· {(plan.mesocycles ?? []).filter((m) => m.archivedAt).length}</span>
+              </h3>
+              {(plan.mesocycles ?? []).filter((m) => m.archivedAt).sort((a, b) => a.position - b.position).map((meso) => {
+                const cnt = plan.days.filter((d) => d.mesocycleId === meso.id).length;
+                return (
+                  <div key={meso.id} className="flex items-center gap-1.5 bg-zinc-800/40 rounded-xl px-3 py-2.5">
+                    <Layers size={14} className="text-cyan-400 shrink-0" />
+                    <span className="flex-1 min-w-0 font-semibold truncate">{meso.name}</span>
+                    <span className="text-xs text-zinc-500 shrink-0">{cnt} дн.</span>
+                    <button onClick={() => { markSaving(); updateMesocycle(meso.id, { archivedAt: null }); }}
+                      title="Вернуть блок в Тренировки" aria-label="Вернуть блок в Тренировки"
+                      className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 active:text-lime-400 text-zinc-500 transition shrink-0"><RotateCcw size={15} /></button>
+                    <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
+                      title="Удалить блок" aria-label="Удалить блок"
+                      className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 active:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl">
             <button onClick={() => setOpenHistory((v) => !v)} className="w-full flex items-center justify-between gap-2 p-4">
@@ -620,7 +656,10 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
       {sub === "workout" && <>
       {(() => {
-        const sortedMesos = [...(plan.mesocycles ?? [])].sort((a, b) => a.position - b.position);
+        const allMesos = [...(plan.mesocycles ?? [])].sort((a, b) => a.position - b.position);
+        // Р2: архивный блок уходит из «Тренировок» вместе со своими днями.
+        // Сами дни archived_at не получают — вернёте блок, вернётся всё как было.
+        const sortedMesos = allMesos.filter((m) => !m.archivedAt);
         const hasMesos = sortedMesos.length > 0;
         const renderDayCard = (day: Day, di: number) => {
           const isOpen = !collapsed[day.id];
@@ -629,7 +668,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
           return (
             <div key={day.id} className={`bg-zinc-900 border rounded-xl ${hidden ? "border-orange-400/20 opacity-80" : "border-zinc-800"}`}>
               <div className="flex items-center gap-1 px-3 py-2.5 bg-zinc-800/40 border-b border-zinc-800 rounded-t-xl">
-                <button onClick={() => toggleCollapse(day.id)} className="p-1 rounded-md hover:bg-zinc-700 text-zinc-400 transition shrink-0">{isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</button>
+                <button onClick={() => toggleCollapse(day.id)} title={collapsed[day.id] ? "Развернуть день" : "Свернуть день"} className="p-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-400 active:text-lime-400 transition-colors duration-100 shrink-0">{isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</button>
                 <span className="flex flex-col -my-1 shrink-0">
                   <button onClick={() => { const t = visibleNeighbour(plan.days, di, -1); if (t >= 0) reorderDays(di, t); }} disabled={visibleNeighbour(plan.days, di, -1) < 0} title="Выше" className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronUp size={14} /></button>
                   <button onClick={() => { const t = visibleNeighbour(plan.days, di, 1); if (t >= 0) reorderDays(di, t); }} disabled={visibleNeighbour(plan.days, di, 1) < 0} title="Ниже" className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronDown size={14} /></button>
@@ -669,7 +708,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
         return (
           <>
-            {sortedMesos.map((meso) => {
+            {sortedMesos.map((meso, mi) => {
               const mesoHidden = meso.visibleToClient === false;
               const mesoDays = plan.days.map((day, di) => ({ day, di })).filter(({ day }) => day.mesocycleId === meso.id);
               return (
@@ -677,9 +716,17 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                   <div className={`flex items-center gap-2 border rounded-xl px-3 py-2 ${mesoHidden ? "border-orange-400/20 bg-orange-400/5" : "border-cyan-400/20 bg-zinc-900/80"}`}>
                     <button onClick={() => toggleCollapse(meso.id)} title={collapsed[meso.id] ? "Развернуть блок" : "Свернуть блок"}
                       aria-label={collapsed[meso.id] ? "Развернуть блок" : "Свернуть блок"}
-                      className="p-1 -ml-1 rounded-md hover:bg-zinc-700 text-zinc-400 transition shrink-0">
+                      className="p-1 -ml-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-400 active:text-cyan-400 transition-colors duration-100 shrink-0">
                       {collapsed[meso.id] ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
                     </button>
+                    <span className="flex flex-col -my-1 shrink-0">
+                      <button onClick={() => { const t = mi - 1; if (t >= 0) reorderMesocycles(mi, t); }} disabled={mi === 0}
+                        title="Блок выше" aria-label="Переместить блок выше"
+                        className="text-zinc-600 hover:text-zinc-300 active:text-cyan-400 disabled:opacity-30"><ChevronUp size={14} /></button>
+                      <button onClick={() => { const t = mi + 1; if (t < sortedMesos.length) reorderMesocycles(mi, t); }} disabled={mi === sortedMesos.length - 1}
+                        title="Блок ниже" aria-label="Переместить блок ниже"
+                        className="text-zinc-600 hover:text-zinc-300 active:text-cyan-400 disabled:opacity-30"><ChevronDown size={14} /></button>
+                    </span>
                     <Layers size={14} className={`shrink-0 ${mesoHidden ? "text-orange-400" : "text-cyan-400"}`} />
                     <input value={meso.name} onChange={(e) => updateMesocycle(meso.id, { name: e.target.value })}
                       className="flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none border-b border-transparent focus:border-cyan-400/50 pb-0.5"
@@ -690,6 +737,9 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                       title={mesoHidden ? "Скрыт от клиента — показать" : "Скрыть блок от клиента"}>
                       {mesoHidden ? <EyeOff size={13} /> : <Eye size={13} />}
                     </button>
+                    <button onClick={() => { markSaving(); updateMesocycle(meso.id, { archivedAt: new Date().toISOString() }); }}
+                      title="Убрать блок в архив вместе с днями" aria-label="Убрать блок в архив"
+                      className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 active:text-lime-400 transition shrink-0"><Archive size={13} /></button>
                     <button onClick={() => duplicateMeso(meso.id)} disabled={!!dupBusy} title="Дублировать блок с днями" className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition shrink-0 disabled:opacity-40"><Copy size={13} /></button>
                     <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
                       className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>

@@ -183,6 +183,24 @@ export function usePlan(planId: string) {
   };
 
   // ── Мезоциклы ──
+  /** Р1: перестановка блоков. Пишем позиции разом, как reorderDays. */
+  const reorderMesocycles = async (from: number, to: number) => {
+    if (!plan || from === to) return;
+    const list = [...(plan.mesocycles ?? [])].sort((a, b) => a.position - b.position);
+    const snapshot = plan.mesocycles ?? [];
+    const arr = [...list];
+    const [m] = arr.splice(from, 1);
+    arr.splice(Math.max(0, Math.min(arr.length, to)), 0, m);
+    const next = arr.map((x, i) => ({ ...x, position: i }));
+    setPlan((p) => (p ? { ...p, mesocycles: next } : p));
+    try {
+      await api.reorderMesocycles(next.map((x, i) => ({ id: x.id, position: i })));
+    } catch (e) {
+      console.error("[usePlan] reorderMesocycles:", e);
+      setPlan((p) => (p ? { ...p, mesocycles: snapshot } : p));
+    }
+  };
+
   const addMesocycle = async () => {
     if (!plan) return;
     // П2: новый блок сверху. Имя считаем от количества — позиция теперь всегда 0.
@@ -201,10 +219,11 @@ export function usePlan(planId: string) {
     } catch (e) { console.error("[usePlan] addMesocycle:", e); }
   };
 
-  const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "visibleToClient">>) => {
+  const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "visibleToClient" | "archivedAt">>) => {
     setPlan((p) => (p ? { ...p, mesocycles: (p.mesocycles ?? []).map((m) => (m.id === mesoId ? { ...m, ...patch } : m)) } : p));
-    if ("visibleToClient" in patch) {
-      api.updateMesocycle(mesoId, patch).catch((e) => console.error("[usePlan] updateMesocycle (visible):", e));
+    // Переключатели пишем сразу, без дебаунса — как у дней
+    if ("visibleToClient" in patch || "archivedAt" in patch) {
+      api.updateMesocycle(mesoId, patch).catch((e) => console.error("[usePlan] updateMesocycle (flag):", e));
     } else {
       persist(`meso:${mesoId}`, patch as Record<string, any>, (pp) => api.updateMesocycle(mesoId, pp));
     }
@@ -223,7 +242,7 @@ export function usePlan(planId: string) {
     plan, loading, error,
     updatePlanMeta, addDay, updateDay, deleteDay, reorderDays,
     addExercise, updateExercise, deleteExercise, reorderExercises,
-    addMesocycle, updateMesocycle, deleteMesocycle,
+    addMesocycle, updateMesocycle, deleteMesocycle, reorderMesocycles,
     reload: load,
   };
 }

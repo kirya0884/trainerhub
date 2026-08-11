@@ -7,7 +7,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
   const { data: plan, error } = await supabase.from("plans").select("id,name,note,visible_to_client").eq("id", planId).single();
   if (error) throw error;
 
-  const { data: mesos } = await supabase.from("plan_mesocycles").select("id,plan_id,name,position,visible_to_client").eq("plan_id", planId).order("position");
+  const { data: mesos } = await supabase.from("plan_mesocycles").select("id,plan_id,name,position,visible_to_client,archived_at").eq("plan_id", planId).order("position");
 
   const { data: days } = await supabase.from("plan_days").select("id,name,weekday,date_of,position,visible_to_client,mesocycle_id,method,archived_at").eq("plan_id", planId).order("position");
   const dayIds = (days ?? []).map((d) => d.id);
@@ -35,7 +35,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
 
   const mesocycles: Mesocycle[] = (mesos ?? []).map((m) => ({
     id: m.id, planId: m.plan_id, name: m.name, position: m.position,
-    visibleToClient: m.visible_to_client !== false,
+    visibleToClient: m.visible_to_client !== false, archivedAt: m.archived_at ?? null,
   }));
 
   return {
@@ -223,10 +223,11 @@ export async function addMesocycle(planId: string, position: number, name: strin
   // Имя приходит снаружи: с вставкой сверху позиция всегда 0 и выводить имя из неё нельзя.
   const { data, error } = await supabase.from("plan_mesocycles").insert({ plan_id: planId, name, position }).select().single();
   if (error) throw error;
-  return { id: data.id, planId: data.plan_id, name: data.name, position: data.position, visibleToClient: true };
+  return { id: data.id, planId: data.plan_id, name: data.name, position: data.position, visibleToClient: true, archivedAt: null };
 }
-export const updateMesocycle = async (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "position" | "visibleToClient">>) => {
+export const updateMesocycle = async (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "position" | "visibleToClient" | "archivedAt">>) => {
   const row: Record<string, any> = { ...patch };
+  if ("archivedAt" in row) { row.archived_at = row.archivedAt; delete row.archivedAt; }
   if ("visibleToClient" in row) { row.visible_to_client = row.visibleToClient; delete row.visibleToClient; }
   const { error } = await supabase.from("plan_mesocycles").update(row).eq("id", mesoId);
   if (error) throw error;

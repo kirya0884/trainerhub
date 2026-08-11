@@ -58,12 +58,20 @@ function ExerciseRow({
           <button onClick={() => onToggleCollapse(ex.id)} type="button"
             title={collapsed ? "Развернуть упражнение" : "Свернуть упражнение"}
             aria-label={collapsed ? "Развернуть упражнение" : "Свернуть упражнение"}
-            className="shrink-0 p-1 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition">
+            className="shrink-0 p-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-500 hover:text-zinc-300 active:text-lime-400 transition-colors duration-100">
             {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
           </button>
         )}
         <button onClick={cycleGroup} title="Суперсет: объединить упражнения в группу" className={`shrink-0 min-w-7 h-7 px-1 rounded-md text-xs font-bold flex items-center justify-center transition ${ex.group ? "text-zinc-950" : "text-zinc-500 bg-zinc-800 hover:bg-zinc-700"}`} style={ex.group ? { background: groupColor ?? undefined } : undefined}>{label}</button>
-        <div className="relative flex-1 min-w-0">
+        <button onClick={() => setShowVideo((v) => !v)} title="Видео-превью" className={`p-1.5 rounded-md transition shrink-0 ${showVideo ? "text-lime-400 bg-lime-400/10" : ex.video ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Video size={15} /></button>
+        <button onClick={() => update({ kind: ex.kind === "functional" ? "" : "functional" })} title="Функциональное упражнение (время/пульс вместо подходов)" className={`p-1.5 rounded-md transition shrink-0 ${ex.kind === "functional" ? "text-orange-400 bg-orange-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Activity size={15} /></button>
+        {ex.kind !== "functional" && <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-md transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>}
+        <button onClick={() => { if (window.confirm(`Удалить упражнение «${ex.name || "без названия"}»? Подходы и комментарии удалятся вместе с ним.`)) remove(); }} title="Удалить упражнение" aria-label="Удалить упражнение" className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
+      </div>
+
+      {/* Р5: имя на своей строке. В общем ряду с семью кнопками ему оставалось
+          около 150 px на экране 360 px — набирать длинные названия было нечем. */}
+        <div className="relative w-full">
           <input value={ex.name} onChange={(e) => { const v = e.target.value; startTransition(() => update({ name: v })); setAcOpen(true); }} onFocus={() => setAcOpen(true)} onBlur={() => setTimeout(() => setAcOpen(false), 150)} placeholder="Название упражнения" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
           {acOpen && q && !exactExists && (
             <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
@@ -72,11 +80,6 @@ function ExerciseRow({
             </div>
           )}
         </div>
-        <button onClick={() => setShowVideo((v) => !v)} title="Видео-превью" className={`p-1.5 rounded-md transition shrink-0 ${showVideo ? "text-lime-400 bg-lime-400/10" : ex.video ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Video size={15} /></button>
-        <button onClick={() => update({ kind: ex.kind === "functional" ? "" : "functional" })} title="Функциональное упражнение (время/пульс вместо подходов)" className={`p-1.5 rounded-md transition shrink-0 ${ex.kind === "functional" ? "text-orange-400 bg-orange-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Activity size={15} /></button>
-        {ex.kind !== "functional" && <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-md transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>}
-        <button onClick={() => { if (window.confirm(`Удалить упражнение «${ex.name || "без названия"}»? Подходы и комментарии удалятся вместе с ним.`)) remove(); }} title="Удалить упражнение" aria-label="Удалить упражнение" className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
-      </div>
 
       {/* П1: свёрнутое упражнение показывает только строку с названием и кнопками */}
       {!collapsed && (<>

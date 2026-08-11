@@ -39,12 +39,17 @@ input, textarea, select { font-size: 16px !important; }
 .bg-lime-400\/50     { background-color: color-mix(in srgb, var(--accent, #a3e635) 50%, transparent) !important; }
 .bg-lime-400\/60     { background-color: color-mix(in srgb, var(--accent, #a3e635) 60%, transparent) !important; }
 
-/* hover states */
-.hover\:bg-lime-400:hover   { background-color: var(--accent, #a3e635) !important; }
-.hover\:bg-lime-300:hover   { background-color: color-mix(in srgb, var(--accent, #a3e635) 82%, white) !important; }
-.hover\:text-lime-400:hover { color: var(--accent, #a3e635) !important; }
-.hover\:text-lime-300:hover { color: color-mix(in srgb, var(--accent, #a3e635) 80%, white) !important; }
-.hover\:border-lime-400\/40:hover { border-color: color-mix(in srgb, var(--accent, #a3e635) 40%, transparent) !important; }
+/* hover states
+   Р6: только там, где есть настоящее наведение. Эти правила идут с !important и
+   перебивают Tailwind, поэтому флаг hoverOnlyWhenSupported их не покрывает — на
+   телефоне подсветка залипала бы после тапа до касания в другом месте. */
+@media (hover: hover) {
+  .hover\:bg-lime-400:hover   { background-color: var(--accent, #a3e635) !important; }
+  .hover\:bg-lime-300:hover   { background-color: color-mix(in srgb, var(--accent, #a3e635) 82%, white) !important; }
+  .hover\:text-lime-400:hover { color: var(--accent, #a3e635) !important; }
+  .hover\:text-lime-300:hover { color: color-mix(in srgb, var(--accent, #a3e635) 80%, white) !important; }
+  .hover\:border-lime-400\/40:hover { border-color: color-mix(in srgb, var(--accent, #a3e635) 40%, transparent) !important; }
+}
 
 /* focus states */
 .focus\:border-lime-400\/50:focus { border-color: color-mix(in srgb, var(--accent, #a3e635) 50%, transparent) !important; }
@@ -85,11 +90,13 @@ html.light-theme .border-zinc-700 { border-color: #cbd5e1 !important; }
 /* dividers */
 html.light-theme .divide-zinc-800 > :not([hidden]) ~ :not([hidden]) { border-color: #e2e8f0 !important; }
 
-/* hover states */
-html.light-theme .hover\:bg-zinc-800:hover { background-color: #f1f5f9 !important; }
-html.light-theme .hover\:bg-zinc-700:hover { background-color: #e2e8f0 !important; }
-html.light-theme .hover\:text-zinc-100:hover { color: #0f172a !important; }
-html.light-theme .hover\:text-zinc-300:hover { color: #334155 !important; }
+/* hover states — Р6: см. комментарий выше */
+@media (hover: hover) {
+  html.light-theme .hover\:bg-zinc-800:hover { background-color: #f1f5f9 !important; }
+  html.light-theme .hover\:bg-zinc-700:hover { background-color: #e2e8f0 !important; }
+  html.light-theme .hover\:text-zinc-100:hover { color: #0f172a !important; }
+  html.light-theme .hover\:text-zinc-300:hover { color: #334155 !important; }
+}
 
 /* inputs / placeholders */
 html.light-theme input::placeholder,
