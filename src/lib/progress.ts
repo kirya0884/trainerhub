@@ -18,7 +18,7 @@ export async function fetchProgress(planId: string): Promise<ProgressData> {
     progress: (progress ?? []).map((p) => ({ id: p.id, date: p.date, text: p.text })),
     metrics: (metrics ?? []).map((m) => ({ id: m.id, date: m.date, exercise: m.exercise, weight: m.weight ?? "", reps: m.reps ?? "", rest: m.rest ?? "", sets: m.sets ?? "" })),
     sessions: (sessions ?? []).map((s) => ({
-      id: s.id, date: s.date, dayName: s.day_name ?? "", mood: s.mood ?? 0, wellbeing: s.wellbeing ?? 0,
+      id: s.id, date: s.date, dayName: s.day_name ?? "", dayId: s.day_id ?? null, mood: s.mood ?? 0, wellbeing: s.wellbeing ?? 0,
       clientRating: s.client_rating ?? 0, review: s.review ?? "", done: s.done ?? 0, total: s.total ?? 0,
       fromClient: !!s.from_client, items: itemsBySession[s.id] ?? [],
     })),
@@ -33,7 +33,7 @@ export async function fetchClientSessionsSummary(planIds: string[]): Promise<{ s
   const { data: metrics } = await supabase.from("plan_metrics").select("*").in("plan_id", planIds).order("date");
   return {
     sessions: (sessions ?? []).map((s) => ({
-      id: s.id, date: s.date, dayName: s.day_name ?? "", mood: s.mood ?? 0, wellbeing: s.wellbeing ?? 0,
+      id: s.id, date: s.date, dayName: s.day_name ?? "", dayId: s.day_id ?? null, mood: s.mood ?? 0, wellbeing: s.wellbeing ?? 0,
       clientRating: s.client_rating ?? 0, review: s.review ?? "", done: s.done ?? 0, total: s.total ?? 0,
       fromClient: !!s.from_client, items: [],
     })),
@@ -98,7 +98,7 @@ export async function logSession(planId: string, metricsIn: Omit<Metric, "id">[]
     : null;
 
   const { data: sessRow, error: sessErr } = await supabase.from("plan_sessions").insert({
-    plan_id: planId, date: session.date, day_name: session.dayName,
+    plan_id: planId, date: session.date, day_name: session.dayName, day_id: session.dayId ?? null,
     mood: session.mood || null, wellbeing: session.wellbeing || null, client_rating: session.clientRating || null,
     review: session.review, done: session.done, total: session.total, from_client: session.fromClient,
   }).select().single();
@@ -115,7 +115,7 @@ export async function logSession(planId: string, metricsIn: Omit<Metric, "id">[]
     metrics: savedMetrics,
     progress: noteRow ? { id: noteRow.id, date: noteRow.date, text: noteRow.text } as ProgressNote : null,
     session: {
-      id: sessRow.id, date: sessRow.date, dayName: sessRow.day_name ?? "", mood: sessRow.mood ?? 0, wellbeing: sessRow.wellbeing ?? 0,
+      id: sessRow.id, date: sessRow.date, dayName: sessRow.day_name ?? "", dayId: sessRow.day_id ?? null, mood: sessRow.mood ?? 0, wellbeing: sessRow.wellbeing ?? 0,
       clientRating: sessRow.client_rating ?? 0, review: sessRow.review ?? "", done: sessRow.done ?? 0, total: sessRow.total ?? 0,
       fromClient: !!sessRow.from_client, items: session.items,
     } as Session,

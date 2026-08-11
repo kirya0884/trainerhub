@@ -24,6 +24,8 @@ export interface Exercise {
 }
 
 export interface Day {
+  /** П3: день ушёл в «Проведённые». null — обычный день в списке тренировок. */
+  archivedAt?: string | null;
   id: string;
   name: string;
   weekday: number | null;
@@ -57,4 +59,6 @@ export interface SessionItem { name: string; effort: number; rpe: number; note: 
 export interface Session {
   id: string; date: string; dayName: string; mood: number; wellbeing: number; clientRating: number;
   review: string; done: number; total: number; fromClient: boolean; items: SessionItem[];
+  /** П3: связь с днём плана по id. У сессий до миграции пусто — связь была только по имени. */
+  dayId?: string | null;
 }

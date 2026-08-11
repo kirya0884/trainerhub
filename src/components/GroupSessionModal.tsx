@@ -143,9 +143,11 @@ function ClientSlot({ client, trainerId, active, onFinished }: { client: SlotCli
         const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
         return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "" };
       });
-      const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
+      const session: Omit<Session, "id"> = { date: today(), dayName: day.name, dayId: day.id, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
       const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`;
       await progressApi.logSession(plan.id, metrics, note, session);
+      // П3: день уходит в «Проведённые» и из группового проведения тоже
+      plansApi.updateDay(day.id, { archivedAt: new Date().toISOString() }).catch((e) => console.error("[GroupSessionModal] archive day:", e));
       // Гард двойного списания: если клиент уже сам залогировал эту сессию (fromClient) — не декрементируем повторно
       // П12: тот же двойной гард, что в PlanEditor — сессия клиента и отметка в календаре.
       // При ошибке любой проверки списание пропускаем: недосписать безопаснее.
