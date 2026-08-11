@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, ChevronUp, Layers, Plus, Video, X } from "lucide-react";
+import { Activity, GripVertical, Layers, Plus, Video, X } from "lucide-react";
 import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
@@ -10,9 +10,11 @@ function toEmbedUrl(url: string): string {
 }
 function ExerciseRow({
   ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove, lastMetric,
+  index, dragging, dropBefore, dropAfter,
 }: {
   ex: Exercise; label: string; groupColor: string | null; suggestions: string[]; addToLibrary: (name: string) => void;
   canMoveUp: boolean; canMoveDown: boolean; onMoveUp: () => void; onMoveDown: () => void;
+  index: number; dragging?: boolean; dropBefore?: boolean; dropAfter?: boolean;
   cycleGroup: () => void; update: (patch: Partial<Exercise>) => void; remove: () => void;
   lastMetric?: Metric;
 }) {
@@ -36,12 +38,20 @@ function ExerciseRow({
   const removeSetRow = (sid: string) => update({ setRows: ex.setRows.filter((s) => s.id !== sid) });
 
   return (
-    <div className="bg-zinc-800/40 rounded-lg p-2.5 space-y-2" style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}>
+    <div data-ds-idx={index}
+      className={`bg-zinc-800/40 rounded-lg p-2.5 space-y-2 transition-shadow ${dragging ? "opacity-40 ring-2 ring-lime-400" : ""} ${dropBefore ? "shadow-[0_-2px_0_0_#a3e635]" : ""} ${dropAfter ? "shadow-[0_2px_0_0_#a3e635]" : ""}`}
+      style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}>
       <div className="flex items-center gap-1">
-        <span className="hidden sm:flex flex-col shrink-0">
-          <button onClick={onMoveUp} disabled={!canMoveUp} className="p-1.5 -my-0.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-30 disabled:hover:text-zinc-600" title="Выше"><ChevronUp size={16} /></button>
-          <button onClick={onMoveDown} disabled={!canMoveDown} className="p-1.5 -my-0.5 text-zinc-600 hover:text-zinc-300 disabled:opacity-30 disabled:hover:text-zinc-600" title="Ниже"><ChevronDown size={16} /></button>
-        </span>
+        <button data-ds-handle type="button"
+          title="Перетащить. С клавиатуры — стрелки вверх и вниз"
+          aria-label="Перетащить упражнение. Стрелки вверх и вниз меняют порядок"
+          onKeyDown={(e) => {
+            if (e.key === "ArrowUp" && canMoveUp) { e.preventDefault(); onMoveUp(); }
+            if (e.key === "ArrowDown" && canMoveDown) { e.preventDefault(); onMoveDown(); }
+          }}
+          className="shrink-0 p-1.5 -ml-1 text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing touch-none select-none">
+          <GripVertical size={16} />
+        </button>
         <button onClick={cycleGroup} title="Суперсет: объединить упражнения в группу" className={`shrink-0 min-w-7 h-7 px-1 rounded-md text-xs font-bold flex items-center justify-center transition ${ex.group ? "text-zinc-950" : "text-zinc-500 bg-zinc-800 hover:bg-zinc-700"}`} style={ex.group ? { background: groupColor ?? undefined } : undefined}>{label}</button>
         <div className="relative flex-1 min-w-0">
           <input value={ex.name} onChange={(e) => { const v = e.target.value; startTransition(() => update({ name: v })); setAcOpen(true); }} onFocus={() => setAcOpen(true)} onBlur={() => setTimeout(() => setAcOpen(false), 150)} placeholder="Название упражнения" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
@@ -119,6 +129,10 @@ export default memo(ExerciseRow, (prev, next) =>
   prev.label === next.label &&
   prev.canMoveUp === next.canMoveUp &&
   prev.canMoveDown === next.canMoveDown &&
+  prev.dragging === next.dragging &&
+  prev.dropBefore === next.dropBefore &&
+  prev.dropAfter === next.dropAfter &&
+  prev.index === next.index &&
   prev.lastMetric === next.lastMetric &&
   prev.groupColor === next.groupColor &&
   prev.suggestions === next.suggestions

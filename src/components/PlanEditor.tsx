@@ -15,6 +15,7 @@ import type { Day, Metric, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import RemainingBadge from "./RemainingBadge";
 import ExerciseRow from "./ExerciseRow";
+import { useDragSort } from "../hooks/useDragSort";
 import LibraryModal from "./LibraryModal";
 import MetricsView from "./MetricsView";
 import ModalShell from "./ModalShell";
@@ -49,6 +50,7 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 export default function PlanEditor({ planId, trainerId, clientId }: { planId: string; trainerId: string; clientId: string }) {
   const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, addMesocycle, updateMesocycle, deleteMesocycle, reload } = usePlan(planId);
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
+  const exDrag = useDragSort((dayId, from, to) => reorderExercises(dayId, from, to));
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
   const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m])), [metrics]);
@@ -285,12 +287,15 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
   // ponytail: тело дня (упражнения) — общий рендер для инлайн-режима во вкладке «Тренировки» и для модалки редактирования из «Проведенные»
   const DayBody = ({ day }: { day: Day }) => (
-    <div className="p-3 space-y-2">
+    <div className="p-3 space-y-2" {...exDrag.rootProps(day.id)}>
       {groupBlocks(day.exercises).map((block, bi) => {
         const rows = block.items.map((ex, k) => {
           const ei = block.startIdx + k;
           return (
             <ExerciseRow key={ex.id} ex={ex} label={exLabel(day, ei)} groupColor={ex.group ? GROUP_COLORS[ex.group] : null} suggestions={allNames} addToLibrary={addToLibrary}
+              index={ei} dragging={exDrag.drag?.key === day.id && exDrag.drag.from === ei}
+              dropBefore={exDrag.drag?.key === day.id && exDrag.drag.over === ei && exDrag.drag.from !== ei}
+              dropAfter={exDrag.drag?.key === day.id && exDrag.drag.over === day.exercises.length && ei === day.exercises.length - 1 && exDrag.drag.from !== ei}
               canMoveUp={ei > 0} canMoveDown={ei < day.exercises.length - 1}
               onMoveUp={() => reorderExercises(day.id, ei, ei - 1)} onMoveDown={() => reorderExercises(day.id, ei, ei + 1)}
               cycleGroup={() => cycleGroup(day.id, ex.id, ex.group, day.exercises)}
