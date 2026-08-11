@@ -141,15 +141,35 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     copyDay({ name: s.dayName || "Тренировка", exercises });
     showToast("Скопировано в буфер обмена");
   };
+  // П11: одна защита на все пути добавления. На телефоне вставка + перенумерация
+  // занимают секунду-две, кнопка всё это время выглядела нерабочей — и её жали ещё раз.
+  const [addBusy, setAddBusy] = useState(false);
+
   const handleCreateDay = async () => {
-    if (!newDayName?.trim()) return;
+    if (!newDayName?.trim() || addBusy) return;
+    setAddBusy(true);
     try {
       await addDay(newDayName.trim());
       setNewDayName(null);
     } catch (e) {
       console.error("[PlanEditor] handleCreateDay:", e);
       alert("Не удалось добавить день. Попробуй ещё раз.");
-    }
+    } finally { setAddBusy(false); }
+  };
+
+  const handleAddMesocycle = async () => {
+    if (addBusy) return;
+    setAddBusy(true);
+    try { await addMesocycle(); } finally { setAddBusy(false); }
+  };
+
+  /** Общая обёртка для применения шаблонов: один и тот же замок, одно и то же сообщение. */
+  const runAdd = async (fn: () => Promise<void>, failMsg: string) => {
+    if (addBusy) return;
+    setAddBusy(true);
+    try { await fn(); reload(); }
+    catch (e) { console.error("[PlanEditor] runAdd:", e); alert(failMsg); }
+    finally { setAddBusy(false); }
   };
   // B06: дублировать день — один клик с автоименем. Копирование в буфер оставлено:
   // оно нужно, чтобы перенести день в ДРУГОЙ план, а дубликат работает внутри текущего.
@@ -174,7 +194,8 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   };
 
   const handlePasteDay = async () => {
-    if (!dayClipboard || !pasteInput?.trim()) return;
+    if (!dayClipboard || !pasteInput?.trim() || addBusy) return;
+    setAddBusy(true);
     try {
       await templatesApi.applyDayTemplate(planId, { id: "", name: pasteInput.trim(), weekday: null, exercises: dayClipboard.exercises } as Day, (plan?.days.length ?? 0));
       reload();
@@ -182,7 +203,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     } catch (e) {
       console.error("Paste day failed:", e);
       showToast("Ошибка при вставке дня");
-    }
+    } finally { setAddBusy(false); }
   };
   const [libFor, setLibFor] = useState<string | null>(null);
   const [sub, setSub] = useState<"workout" | "done" | "progress">("workout");
@@ -435,8 +456,8 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         <TemplatesModal
           trainerId={trainerId}
           currentDays={plan.days}
-          onApplyPlan={async (days) => { try { await templatesApi.applyPlanTemplate(plan.id, days, plan.days.length); reload(); } catch (e) { console.error("[PlanEditor] applyPlan:", e); alert("Ошибка применения шаблона. Попробуй ещё раз."); } finally { setShowTemplates(false); } }}
-          onApplyDay={async (day) => { try { await templatesApi.applyDayTemplate(plan.id, day, plan.days.length); reload(); } catch (e) { console.error("[PlanEditor] applyDay:", e); alert("Ошибка применения шаблона. Попробуй ещё раз."); } finally { setShowTemplates(false); } }}
+          onApplyPlan={(days) => runAdd(() => templatesApi.applyPlanTemplate(plan.id, days, plan.days.length), "Не удалось применить шаблон плана.")}
+          onApplyDay={(day) => runAdd(() => templatesApi.applyDayTemplate(plan.id, day, plan.days.length), "Не удалось применить шаблон дня.")}
           onClose={() => setShowTemplates(false)}
         />
       )}
@@ -687,14 +708,14 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
           <input autoFocus value={newDayName} onChange={(e) => setNewDayName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && newDayName.trim()) handleCreateDay(); if (e.key === "Escape") setNewDayName(null); }}
             placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <button onClick={handleCreateDay} disabled={!newDayName.trim()} className="px-3 py-2 text-sm rounded-lg bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40">Создать</button>
+          <button onClick={handleCreateDay} disabled={!newDayName.trim() || addBusy} className="px-3 py-2 text-sm rounded-lg bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Добавляю…" : "Создать"}</button>
           <button onClick={() => setNewDayName(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
         </div>
       ) : (
         <div className="flex gap-2">
           <button onClick={() => setNewDayName("")} className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-2 text-sm font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={15} /> Добавить день</button>
           <button onClick={() => setShowDayLibrary(true)} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-2 px-3 text-sm font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><BookOpen size={14} /> Шаблоны</button>
-          <button onClick={addMesocycle} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-2 px-3 text-sm font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><Layers size={14} /> Блок</button>
+          <button onClick={handleAddMesocycle} disabled={addBusy} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-2 px-3 text-sm font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap disabled:opacity-40"><Layers size={14} /> Блок</button>
         </div>
       )}
       {pasteInput !== null ? (
@@ -702,7 +723,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
           <input autoFocus value={pasteInput} onChange={(e) => setPasteInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && pasteInput.trim()) handlePasteDay(); if (e.key === "Escape") setPasteInput(null); }}
             placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
-          <button onClick={handlePasteDay} disabled={!pasteInput.trim()} className="px-3 py-2 text-sm rounded-lg bg-cyan-400 text-zinc-950 font-semibold hover:bg-cyan-300 transition disabled:opacity-40">Вставить</button>
+          <button onClick={handlePasteDay} disabled={!pasteInput.trim() || addBusy} className="px-3 py-2 text-sm rounded-lg bg-cyan-400 text-zinc-950 font-semibold hover:bg-cyan-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Вставляю…" : "Вставить"}</button>
           <button onClick={() => setPasteInput(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
         </div>
       ) : (
