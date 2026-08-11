@@ -1,5 +1,5 @@
 import { BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
@@ -166,7 +166,6 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [libFor, setLibFor] = useState<string | null>(null);
   const [sub, setSub] = useState<"workout" | "done" | "progress">("workout");
   const [sessionDay, setSessionDay] = useState<Day | null>(null);
-  const [returnedDayIds, setReturnedDayIds] = useState<Set<string>>(new Set());
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
   const [showMembership, setShowMembership] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -185,11 +184,12 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [membership, setMembership] = useState<Membership | null>(null);
   const [addingSession, setAddingSession] = useState(false);
   const [clientName, setClientName] = useState("");
-  const toggleCollapse = (id: string) => setCollapsed((c) => {
+  // Ссылка должна быть стабильной: она уходит в мемоизированный ExerciseRow.
+  const toggleCollapse = useCallback((id: string) => setCollapsed((c) => {
     const next = { ...c, [id]: !c[id] };
     localStorage.setItem(`trainerhub-collapsed-${planId}`, JSON.stringify(next));
     return next;
-  });
+  }), [planId]);
   const cycleGroup = (dayId: string, exId: string, cur: string, exercises: Day["exercises"]) => {
     const i = GROUP_CYCLE.indexOf(cur || "");
     markSaving(); updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
@@ -205,10 +205,12 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
   const finishSession = async (m: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => {
     try {
-      await logSession(m, note, session);
+      await logSession(m, note, { ...session, dayId: sessionDay?.id ?? null });
       // ponytail: новая сессия за сегодня — сбрасываем флаг "вернули в Тренировки", чтобы день снова ушёл в Проведенные
       if (sessionDay) {
-        setReturnedDayIds((s) => (s.has(sessionDay.id) ? new Set([...s].filter((id) => id !== sessionDay.id)) : s));
+        // П3: проведённый день уходит в «Проведённые» насовсем. Признак лежит на самом дне,
+        // поэтому переживает перезагрузку и одинаков на всех устройствах тренера.
+        updateDay(sessionDay.id, { archivedAt: new Date().toISOString() });
         markSessionDone(trainerId, clientId, sessionDay.name, today()); // fire-and-forget: mark calendar booking done
       }
       // Гард двойного списания. Проверяем два источника:
@@ -279,7 +281,13 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
   const sortedSessions = useMemo(() => [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1)), [sessions]);
   const lastSessionOf = (day: Day) => sortedSessions.find((s) => s.dayName === day.name);
-  const isDoneToday = (day: Day) => lastSessionOf(day)?.date === today() && !returnedDayIds.has(day.id);
+  // П3: день скрыт из «Тренировок», только если он помечен проведённым явно.
+  const isArchived = (day: Day) => !!day.archivedAt;
+  // Сосед ищется среди неархивных: обмен со скрытым днём выглядел бы как «кнопка не работает».
+  const visibleNeighbour = (days: Day[], di: number, dir: -1 | 1) => {
+    for (let i = di + dir; i >= 0 && i < days.length; i += dir) if (!isArchived(days[i])) return i;
+    return -1;
+  };
 
   if (loading) return <div className="text-zinc-500 text-sm p-4">Загрузка плана…</div>;
   if (error) return <div className="text-red-400 text-sm p-4">Ошибка: {error}</div>;
@@ -293,7 +301,8 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
           const ei = block.startIdx + k;
           return (
             <ExerciseRow key={ex.id} ex={ex} label={exLabel(day, ei)} groupColor={ex.group ? GROUP_COLORS[ex.group] : null} suggestions={allNames} addToLibrary={addToLibrary}
-              index={ei} dragging={exDrag.drag?.key === day.id && exDrag.drag.from === ei}
+              index={ei} collapsed={!!collapsed[ex.id]} onToggleCollapse={toggleCollapse}
+              dragging={exDrag.drag?.key === day.id && exDrag.drag.from === ei}
               dropBefore={exDrag.drag?.key === day.id && exDrag.drag.over === ei && exDrag.drag.from !== ei}
               dropAfter={exDrag.drag?.key === day.id && exDrag.drag.over === day.exercises.length && ei === day.exercises.length - 1 && exDrag.drag.from !== ei}
               canMoveUp={ei > 0} canMoveDown={ei < day.exercises.length - 1}
@@ -431,14 +440,14 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
       {sub === "done" && (
         <div className="space-y-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
-            <h3 className="font-semibold flex items-center gap-1.5"><CheckCircle2 size={16} className="text-lime-400" /> Проведено сегодня</h3>
-            {plan.days.filter(isDoneToday).length === 0 && <p className="text-sm text-zinc-600 text-center py-4">Сегодня тренировок не проведено.</p>}
-            {plan.days.filter(isDoneToday).map((day) => (
+            <h3 className="font-semibold flex items-center gap-1.5"><CheckCircle2 size={16} className="text-lime-400" /> Проведённые дни{plan.days.filter(isArchived).length > 0 && <span className="text-zinc-500 font-normal">· {plan.days.filter(isArchived).length}</span>}</h3>
+            {plan.days.filter(isArchived).length === 0 && <p className="text-sm text-zinc-600 text-center py-4">Пока пусто. Проведённые дни уходят сюда из «Тренировок» и остаются здесь — их можно посмотреть, скопировать или вернуть обратно.</p>}
+            {plan.days.filter(isArchived).map((day) => (
               <div key={day.id} className="flex items-center gap-1.5 bg-zinc-800/40 rounded-xl px-3 py-2.5">
                 <span className="flex-1 min-w-0 font-semibold truncate">{day.name}</span>
-                <span className="flex items-center gap-1 text-[11px] font-medium text-lime-400 bg-lime-400/10 rounded-full px-2 py-1 shrink-0"><CheckCircle2 size={12} /> Проведена</span>
+                <span className="flex items-center gap-1 text-[11px] font-medium text-lime-400 bg-lime-400/10 rounded-full px-2 py-1 shrink-0"><CheckCircle2 size={12} /> {day.archivedAt ? fmtDate(day.archivedAt.slice(0, 10)) : "Проведена"}</span>
                 <button onClick={() => setEditingDayId(day.id)} className="p-1.5 rounded-md hover:bg-cyan-400/15 hover:text-cyan-400 text-zinc-500 transition shrink-0" title="Редактировать в отдельном окне"><Pencil size={15} /></button>
-                <button onClick={() => setReturnedDayIds((s) => new Set(s).add(day.id))} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Вернуть в Тренировки"><RotateCcw size={15} /></button>
+                <button onClick={() => updateDay(day.id, { archivedAt: null })} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Вернуть в Тренировки"><RotateCcw size={15} /></button>
                 <button onClick={() => duplicateDay(day)} disabled={!!dupBusy} title="Дублировать день" className="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0 disabled:opacity-40"><Copy size={15} /></button>
                 <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={15} /></button>
               </div>
@@ -545,8 +554,8 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               <div className="flex items-center gap-1 px-3 py-2.5 bg-zinc-800/40 border-b border-zinc-800 rounded-t-xl">
                 <button onClick={() => toggleCollapse(day.id)} className="p-1 rounded-md hover:bg-zinc-700 text-zinc-400 transition shrink-0">{isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</button>
                 <span className="flex flex-col -my-1 shrink-0">
-                  <button onClick={() => reorderDays(di, di - 1)} disabled={di === 0} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronUp size={14} /></button>
-                  <button onClick={() => reorderDays(di, di + 1)} disabled={di === plan.days.length - 1} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronDown size={14} /></button>
+                  <button onClick={() => { const t = visibleNeighbour(plan.days, di, -1); if (t >= 0) reorderDays(di, t); }} disabled={visibleNeighbour(plan.days, di, -1) < 0} title="Выше" className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronUp size={14} /></button>
+                  <button onClick={() => { const t = visibleNeighbour(plan.days, di, 1); if (t >= 0) reorderDays(di, t); }} disabled={visibleNeighbour(plan.days, di, 1) < 0} title="Ниже" className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronDown size={14} /></button>
                 </span>
                 <input value={day.name} onChange={(e) => { markSaving(); updateDay(day.id, { name: e.target.value }); }} className={`flex-1 min-w-0 bg-transparent font-semibold outline-none border-b border-transparent focus:border-lime-400/50 pb-0.5 ${hidden ? "text-zinc-500" : ""}`} placeholder="Название дня" />
                 {hasMesos && (
@@ -578,7 +587,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         };
 
         if (!hasMesos) {
-          return plan.days.map((day, di) => isDoneToday(day) ? null : renderDayCard(day, di));
+          return plan.days.map((day, di) => isArchived(day) ? null : renderDayCard(day, di));
         }
 
         return (
@@ -589,6 +598,11 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               return (
                 <div key={meso.id} className="space-y-2">
                   <div className={`flex items-center gap-2 border rounded-xl px-3 py-2 ${mesoHidden ? "border-orange-400/20 bg-orange-400/5" : "border-cyan-400/20 bg-zinc-900/80"}`}>
+                    <button onClick={() => toggleCollapse(meso.id)} title={collapsed[meso.id] ? "Развернуть блок" : "Свернуть блок"}
+                      aria-label={collapsed[meso.id] ? "Развернуть блок" : "Свернуть блок"}
+                      className="p-1 -ml-1 rounded-md hover:bg-zinc-700 text-zinc-400 transition shrink-0">
+                      {collapsed[meso.id] ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                    </button>
                     <Layers size={14} className={`shrink-0 ${mesoHidden ? "text-orange-400" : "text-cyan-400"}`} />
                     <input value={meso.name} onChange={(e) => updateMesocycle(meso.id, { name: e.target.value })}
                       className="flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none border-b border-transparent focus:border-cyan-400/50 pb-0.5"
@@ -603,11 +617,11 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                     <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
                       className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
                   </div>
-                  {mesoDays.filter(({ day }) => !isDoneToday(day)).map(({ day, di }) => renderDayCard(day, di))}
+                  {!collapsed[meso.id] && mesoDays.filter(({ day }) => !isArchived(day)).map(({ day, di }) => renderDayCard(day, di))}
                 </div>
               );
             })}
-            {plan.days.map((day, di) => ({ day, di })).filter(({ day }) => !day.mesocycleId && !isDoneToday(day)).map(({ day, di }) => renderDayCard(day, di))}
+            {plan.days.map((day, di) => ({ day, di })).filter(({ day }) => !day.mesocycleId && !isArchived(day)).map(({ day, di }) => renderDayCard(day, di))}
           </>
         );
       })()}

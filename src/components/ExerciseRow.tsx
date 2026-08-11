@@ -1,4 +1,4 @@
-import { Activity, GripVertical, Layers, Plus, Video, X } from "lucide-react";
+import { Activity, ChevronDown, ChevronRight, GripVertical, Layers, Plus, Video, X } from "lucide-react";
 import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
@@ -10,11 +10,12 @@ function toEmbedUrl(url: string): string {
 }
 function ExerciseRow({
   ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove, lastMetric,
-  index, dragging, dropBefore, dropAfter,
+  index, dragging, dropBefore, dropAfter, collapsed, onToggleCollapse,
 }: {
   ex: Exercise; label: string; groupColor: string | null; suggestions: string[]; addToLibrary: (name: string) => void;
   canMoveUp: boolean; canMoveDown: boolean; onMoveUp: () => void; onMoveDown: () => void;
   index: number; dragging?: boolean; dropBefore?: boolean; dropAfter?: boolean;
+  collapsed?: boolean; onToggleCollapse?: (id: string) => void;
   cycleGroup: () => void; update: (patch: Partial<Exercise>) => void; remove: () => void;
   lastMetric?: Metric;
 }) {
@@ -52,6 +53,14 @@ function ExerciseRow({
           className="shrink-0 p-1.5 -ml-1 text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing touch-none select-none">
           <GripVertical size={16} />
         </button>
+        {onToggleCollapse && (
+          <button onClick={() => onToggleCollapse(ex.id)} type="button"
+            title={collapsed ? "Развернуть упражнение" : "Свернуть упражнение"}
+            aria-label={collapsed ? "Развернуть упражнение" : "Свернуть упражнение"}
+            className="shrink-0 p-1 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition">
+            {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+          </button>
+        )}
         <button onClick={cycleGroup} title="Суперсет: объединить упражнения в группу" className={`shrink-0 min-w-7 h-7 px-1 rounded-md text-xs font-bold flex items-center justify-center transition ${ex.group ? "text-zinc-950" : "text-zinc-500 bg-zinc-800 hover:bg-zinc-700"}`} style={ex.group ? { background: groupColor ?? undefined } : undefined}>{label}</button>
         <div className="relative flex-1 min-w-0">
           <input value={ex.name} onChange={(e) => { const v = e.target.value; startTransition(() => update({ name: v })); setAcOpen(true); }} onFocus={() => setAcOpen(true)} onBlur={() => setTimeout(() => setAcOpen(false), 150)} placeholder="Название упражнения" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
@@ -68,58 +77,61 @@ function ExerciseRow({
         <button onClick={() => { if (window.confirm(`Удалить упражнение «${ex.name || "без названия"}»? Подходы и комментарии удалятся вместе с ним.`)) remove(); }} title="Удалить упражнение" aria-label="Удалить упражнение" className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
       </div>
 
-      {showVideo && (
-        <div className="pl-6 space-y-1.5">
-          <input value={ex.video} onChange={(e) => { const v = e.target.value; startTransition(() => update({ video: v })); }} placeholder="Ссылка на видео (YouTube или .mp4)" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
-          {ex.video && (
-            /\.(mp4|webm|ogg)$/i.test(ex.video) ? (
-              <video src={ex.video} controls className="w-full max-h-56 rounded-lg bg-black" />
-            ) : (
-              <iframe src={toEmbedUrl(ex.video)} className="w-full aspect-video rounded-lg" allowFullScreen loading="lazy" title={ex.name || "Видео упражнения"} />
-            )
-          )}
-        </div>
-      )}
-      {ex.kind === "functional" ? (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
-          <NumField label="Время выполнения" value={ex.duration} onChange={(e) => { const v = e.target.value; startTransition(() => update({ duration: v })); }} placeholder="40 с / 2 мин" />
-          <NumField label="Вес отягощения" value={ex.weight} onChange={(e) => { const v = e.target.value; startTransition(() => update({ weight: v })); }} placeholder="16 кг" />
-          <NumField label="Отдых" value={ex.rest} onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="30 с" />
-          <NumField label="Пульсовая зона" value={ex.pulseZone} onChange={(e) => { const v = e.target.value; startTransition(() => update({ pulseZone: v })); }} placeholder="Z2 120-140" />
-        </div>
-      ) : ex.detailed ? (
-        <div className="pl-6 space-y-1.5">
-          {ex.setRows.map((s, i) => (
-            <div key={s.id} className="flex items-center gap-2">
-              <span className="text-xs text-zinc-400 w-5 text-center shrink-0 font-medium">{i + 1}</span>
-              <input value={s.weight} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="вес" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
-              <span className="text-xs text-zinc-500">×</span>
-              <input value={s.reps} inputMode="numeric" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
-              <button onClick={() => removeSetRow(s.id)} className="ml-auto p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition" title="Удалить подход"><X size={13} /></button>
-            </div>
-          ))}
-          <div className="flex items-center gap-3 mt-0.5">
-            <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-lime-400 transition"><Plus size={13} /> подход</button>
-            <span className="text-[10px] uppercase tracking-wide text-zinc-500 ml-auto">Отдых</span>
-            <input value={ex.rest} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+      {/* П1: свёрнутое упражнение показывает только строку с названием и кнопками */}
+      {!collapsed && (<>
+        {showVideo && (
+          <div className="pl-6 space-y-1.5">
+            <input value={ex.video} onChange={(e) => { const v = e.target.value; startTransition(() => update({ video: v })); }} placeholder="Ссылка на видео (YouTube или .mp4)" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
+            {ex.video && (
+              /\.(mp4|webm|ogg)$/i.test(ex.video) ? (
+                <video src={ex.video} controls className="w-full max-h-56 rounded-lg bg-black" />
+              ) : (
+                <iframe src={toEmbedUrl(ex.video)} className="w-full aspect-video rounded-lg" allowFullScreen loading="lazy" title={ex.name || "Видео упражнения"} />
+              )
+            )}
           </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
-          <NumField label="Подходы" value={ex.sets} onChange={(e) => { const v = e.target.value; startTransition(() => update({ sets: v })); }} placeholder="4" />
-          <NumField label="Повторы" value={ex.reps} onChange={(e) => { const v = e.target.value; startTransition(() => update({ reps: v })); }} placeholder="8-12" />
-          <NumField label="Вес" value={ex.weight} onChange={(e) => { const v = e.target.value; startTransition(() => update({ weight: v })); }} placeholder="60 кг" />
-          <NumField label="Отдых" value={ex.rest} onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" />
-        </div>
-      )}
-      <input value={ex.note} onChange={(e) => { const v = e.target.value; startTransition(() => update({ note: v })); }} placeholder="Комментарий: техника, на что обратить внимание..." className="w-full bg-transparent text-xs text-zinc-400 px-1 py-0.5 pl-6 outline-none focus:text-zinc-200" />
-      {lastMetric && (
-        <div className="pl-6 flex items-center gap-1.5 text-[11px] text-cyan-400/80">
-          <span className="text-zinc-600">Факт {lastMetric.date.slice(5).replace("-", ".")}:</span>
-          {lastMetric.sets && <span>{lastMetric.sets}×{lastMetric.reps}</span>}
-          {lastMetric.weight && <span>· {lastMetric.weight}</span>}
-        </div>
-      )}
+        )}
+        {ex.kind === "functional" ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
+            <NumField label="Время выполнения" value={ex.duration} onChange={(e) => { const v = e.target.value; startTransition(() => update({ duration: v })); }} placeholder="40 с / 2 мин" />
+            <NumField label="Вес отягощения" value={ex.weight} onChange={(e) => { const v = e.target.value; startTransition(() => update({ weight: v })); }} placeholder="16 кг" />
+            <NumField label="Отдых" value={ex.rest} onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="30 с" />
+            <NumField label="Пульсовая зона" value={ex.pulseZone} onChange={(e) => { const v = e.target.value; startTransition(() => update({ pulseZone: v })); }} placeholder="Z2 120-140" />
+          </div>
+        ) : ex.detailed ? (
+          <div className="pl-6 space-y-1.5">
+            {ex.setRows.map((s, i) => (
+              <div key={s.id} className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 w-5 text-center shrink-0 font-medium">{i + 1}</span>
+                <input value={s.weight} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="вес" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                <span className="text-xs text-zinc-500">×</span>
+                <input value={s.reps} inputMode="numeric" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                <button onClick={() => removeSetRow(s.id)} className="ml-auto p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition" title="Удалить подход"><X size={13} /></button>
+              </div>
+            ))}
+            <div className="flex items-center gap-3 mt-0.5">
+              <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-lime-400 transition"><Plus size={13} /> подход</button>
+              <span className="text-[10px] uppercase tracking-wide text-zinc-500 ml-auto">Отдых</span>
+              <input value={ex.rest} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
+            <NumField label="Подходы" value={ex.sets} onChange={(e) => { const v = e.target.value; startTransition(() => update({ sets: v })); }} placeholder="4" />
+            <NumField label="Повторы" value={ex.reps} onChange={(e) => { const v = e.target.value; startTransition(() => update({ reps: v })); }} placeholder="8-12" />
+            <NumField label="Вес" value={ex.weight} onChange={(e) => { const v = e.target.value; startTransition(() => update({ weight: v })); }} placeholder="60 кг" />
+            <NumField label="Отдых" value={ex.rest} onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" />
+          </div>
+        )}
+        <input value={ex.note} onChange={(e) => { const v = e.target.value; startTransition(() => update({ note: v })); }} placeholder="Комментарий: техника, на что обратить внимание..." className="w-full bg-transparent text-xs text-zinc-400 px-1 py-0.5 pl-6 outline-none focus:text-zinc-200" />
+        {lastMetric && (
+          <div className="pl-6 flex items-center gap-1.5 text-[11px] text-cyan-400/80">
+            <span className="text-zinc-600">Факт {lastMetric.date.slice(5).replace("-", ".")}:</span>
+            {lastMetric.sets && <span>{lastMetric.sets}×{lastMetric.reps}</span>}
+            {lastMetric.weight && <span>· {lastMetric.weight}</span>}
+          </div>
+        )}
+      </>)}
     </div>
   );
 }
@@ -132,6 +144,8 @@ export default memo(ExerciseRow, (prev, next) =>
   prev.dragging === next.dragging &&
   prev.dropBefore === next.dropBefore &&
   prev.dropAfter === next.dropAfter &&
+  prev.collapsed === next.collapsed &&
+  prev.onToggleCollapse === next.onToggleCollapse &&
   prev.index === next.index &&
   prev.lastMetric === next.lastMetric &&
   prev.groupColor === next.groupColor &&
