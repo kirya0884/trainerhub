@@ -40,21 +40,33 @@ export function usePlan(planId: string) {
 
   const addDay = async (name: string) => {
     if (!plan || !name.trim()) return;
-    const position = plan.days.length;
-    // Авто-назначаем новый день в последний видимый мезоцикл
-    const sortedMesos = [...(plan.mesocycles ?? [])].sort((a, b) => b.position - a.position);
+    // П2: новый день встаёт сверху. Самый свежий блок теперь тоже наверху,
+    // то есть с наименьшей позицией — сортировка по возрастанию, не по убыванию.
+    const sortedMesos = [...(plan.mesocycles ?? [])].sort((a, b) => a.position - b.position);
     const activeMeso = sortedMesos.find((m) => m.visibleToClient !== false) ?? null;
-    const row = await api.addDay(planId, name.trim(), position, activeMeso?.id);
-    setPlan((p) => (p ? { ...p, days: [...p.days, {
+    const snapshot = plan.days;
+    const row = await api.addDay(planId, name.trim(), 0, activeMeso?.id);
+    const day: Day = {
       id: row.id, name: row.name, weekday: row.weekday, dateOf: null,
-      exercises: [], visibleToClient: true, mesocycleId: activeMeso?.id ?? null,
-    }] } : p));
+      exercises: [], visibleToClient: true, mesocycleId: activeMeso?.id ?? null, archivedAt: null,
+    };
+    const next = [day, ...snapshot];
+    setPlan((p) => (p ? { ...p, days: next } : p));
+    try {
+      await api.reorderDays(next.map((d, i) => ({ id: d.id, position: i })));
+    } catch (e) {
+      // День создан, перенумерация не прошла. Порядок в базе стал неоднозначным, но данные целы —
+      // откатывать нечего, поправится при следующем перетаскивании или перезагрузке.
+      console.error("[usePlan] addDay renumber:", e);
+    }
   };
 
-  const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf" | "visibleToClient" | "mesocycleId" | "method">>) => {
+  const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf" | "visibleToClient" | "mesocycleId" | "method" | "archivedAt">>) => {
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, ...patch } : d)) } : p));
-    if ("visibleToClient" in patch) {
-      api.updateDay(dayId, patch as Record<string, any>).catch((e) => console.error("[usePlan] updateDay (visible):", e));
+    // Переключатели пишем сразу, без дебаунса: пользователь может уйти с экрана раньше,
+    // чем сработает отложенная запись, и «день проведён» потеряется.
+    if ("visibleToClient" in patch || "archivedAt" in patch) {
+      api.updateDay(dayId, patch as Record<string, any>).catch((e) => console.error("[usePlan] updateDay (flag):", e));
     } else {
       persist(`day:${dayId}`, patch as Record<string, any>, (pp) => api.updateDay(dayId, pp).catch((e) => console.error("[usePlan] updateDay failed:", e)));
     }
@@ -167,10 +179,19 @@ export function usePlan(planId: string) {
   // ── Мезоциклы ──
   const addMesocycle = async () => {
     if (!plan) return;
-    const position = (plan.mesocycles ?? []).length;
+    // П2: новый блок сверху. Имя считаем от количества — позиция теперь всегда 0.
+    const snapshot = plan.mesocycles ?? [];
     try {
-      const meso = await api.addMesocycle(planId, position);
-      setPlan((p) => (p ? { ...p, mesocycles: [...(p.mesocycles ?? []), meso] } : p));
+      const meso = await api.addMesocycle(planId, 0, `Блок ${snapshot.length + 1}`);
+      const next = [meso, ...snapshot];
+      setPlan((p) => (p ? { ...p, mesocycles: next } : p));
+      try {
+        await api.reorderMesocycles(next.map((m, i) => ({ id: m.id, position: i })));
+        setPlan((p) => (p ? { ...p, mesocycles: next.map((m, i) => ({ ...m, position: i })) } : p));
+      } catch (e) {
+        console.error("[usePlan] addMesocycle renumber:", e);
+        setPlan((p) => (p ? { ...p, mesocycles: [...snapshot, meso] } : p));
+      }
     } catch (e) { console.error("[usePlan] addMesocycle:", e); }
   };
 

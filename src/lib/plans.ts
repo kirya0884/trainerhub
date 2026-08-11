@@ -9,7 +9,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
 
   const { data: mesos } = await supabase.from("plan_mesocycles").select("id,plan_id,name,position,visible_to_client").eq("plan_id", planId).order("position");
 
-  const { data: days } = await supabase.from("plan_days").select("id,name,weekday,date_of,position,visible_to_client,mesocycle_id,method").eq("plan_id", planId).order("position");
+  const { data: days } = await supabase.from("plan_days").select("id,name,weekday,date_of,position,visible_to_client,mesocycle_id,method,archived_at").eq("plan_id", planId).order("position");
   const dayIds = (days ?? []).map((d) => d.id);
 
   const { data: exercises } = dayIds.length
@@ -46,6 +46,7 @@ export async function fetchPlan(planId: string): Promise<Plan> {
       method: d.method ?? "",
       visibleToClient: d.visible_to_client !== false,
       mesocycleId: d.mesocycle_id ?? null,
+      archivedAt: d.archived_at ?? null,
       exercises: exByDay[d.id] ?? [],
     })),
   };
@@ -70,6 +71,7 @@ export const updateDay = async (dayId: string, patch: Record<string, any>) => {
   if ("dateOf" in patch) { row.date_of = patch.dateOf; delete row.dateOf; }
   if ("visibleToClient" in patch) { row.visible_to_client = patch.visibleToClient; delete row.visibleToClient; }
   if ("mesocycleId" in patch) { row.mesocycle_id = patch.mesocycleId; delete row.mesocycleId; }
+  if ("archivedAt" in patch) { row.archived_at = patch.archivedAt; delete row.archivedAt; }
   const { error } = await supabase.from("plan_days").update(row).eq("id", dayId);
   if (error) throw error;
 };
@@ -217,8 +219,9 @@ async function copyExercises(dayId: string, exercises: Plan["days"][number]["exe
   }
 }
 
-export async function addMesocycle(planId: string, position: number): Promise<Mesocycle> {
-  const { data, error } = await supabase.from("plan_mesocycles").insert({ plan_id: planId, name: `Блок ${position + 1}`, position }).select().single();
+export async function addMesocycle(planId: string, position: number, name: string): Promise<Mesocycle> {
+  // Имя приходит снаружи: с вставкой сверху позиция всегда 0 и выводить имя из неё нельзя.
+  const { data, error } = await supabase.from("plan_mesocycles").insert({ plan_id: planId, name, position }).select().single();
   if (error) throw error;
   return { id: data.id, planId: data.plan_id, name: data.name, position: data.position, visibleToClient: true };
 }
