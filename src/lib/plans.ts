@@ -81,10 +81,10 @@ export const reorderDays = async (rows: { id: string; position: number }[]) => {
   const err = res.find((r) => r.error)?.error; if (err) throw err;
 };
 
-export async function addExercise(dayId: string, position: number, name = "") {
+export async function addExercise(dayId: string, position: number, name = "", detailed = false) {
   const { data, error } = await supabase
     .from("plan_exercises")
-    .insert({ day_id: dayId, position, name, sets: "", reps: "", weight: "", rest: "", kind: "", pulse_zone: "" })
+    .insert({ day_id: dayId, position, name, sets: "", reps: "", weight: "", rest: "", kind: "", pulse_zone: "", detailed })
     .select()
     .single();
   if (error) throw error;

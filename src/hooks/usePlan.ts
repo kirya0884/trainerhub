@@ -103,17 +103,23 @@ export function usePlan(planId: string) {
     if (!day) return;
     // Optimistic: показываем сразу с temp ID, потом заменяем на реальный
     const tempId = `temp-${crypto.randomUUID()}`;
+    // П13: новое упражнение сразу в режиме «разные подходы» — тренер почти всегда
+    // включал его вручную. Три пустые строки, как их делает toggleDetailed: без них
+    // раскрытый вид был бы пустым. Существующие упражнения не трогаем.
+    const setRows = Array.from({ length: 3 }, () => ({ id: crypto.randomUUID(), weight: "", reps: "" }));
     const blank: Exercise = {
       id: tempId, name, sets: "", reps: "", weight: "", rest: "",
-      note: "", video: "", detailed: false, group: "",
-      tempo: "", duration: "", target: "", kind: "", pulseZone: "", setRows: [],
+      note: "", video: "", detailed: true, group: "",
+      tempo: "", duration: "", target: "", kind: "", pulseZone: "", setRows,
     };
     setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
       d.id === dayId ? { ...d, exercises: [...d.exercises, blank] } : d
     )} : p));
     try {
-      const row = await api.addExercise(dayId, day.exercises.length, name);
+      const row = await api.addExercise(dayId, day.exercises.length, name, true);
       tempIdMap.current.set(tempId, row.id);
+      // Строки подходов пишем уже по реальному id — по временному они ушли бы в никуда
+      api.setSetRows(row.id, setRows).catch((e) => console.error("[usePlan] addExercise setSetRows:", e));
       setPlan((p) => (p ? { ...p, days: p.days.map((d) =>
         d.id === dayId ? { ...d, exercises: d.exercises.map((e) =>
           e.id === tempId ? { ...blank, id: row.id } : e
