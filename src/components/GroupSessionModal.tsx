@@ -1,4 +1,5 @@
 import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Timer, Users, X } from "lucide-react";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { parseNum, today } from "../lib/format";
@@ -278,11 +279,14 @@ function ClientSlot({ client, trainerId, active, onFinished }: { client: SlotCli
 // Тренировка 2-4 подопечных одновременно: вкладки сверху переключают активного,
 // но все слоты остаются смонтированными (скрыты через "hidden"), поэтому введённые веса/повторы не теряются.
 export default function GroupSessionModal({ clients, trainerId, onClose, onClientFinished }: { clients: SlotClient[]; trainerId: string; onClose: () => void; onClientFinished?: (clientId: string) => void }) {
+  // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
+  // Вызов до любых ранних return — иначе порядок хуков поедет.
+  const { panelProps } = useModalA11y(onClose, "Групповое проведение тренировки");
   const [activeId, setActiveId] = useState(clients[0]?.id || "");
   const [finishedIds, setFinishedIds] = useState<string[]>([]);
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
+    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 flex flex-col outline-none">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 min-w-0"><Users size={16} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">Групповая тренировка</h2></div>
         <button onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0"><X size={20} /></button>

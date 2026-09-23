@@ -131,7 +131,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
       </div>
       <div className="px-4 py-3 border-t border-zinc-800 flex items-center gap-2 shrink-0">
         {booking && onDelete && (
-          <button onClick={onDelete} className="p-2.5 rounded-lg hover:bg-red-500/20 text-zinc-500 hover:text-red-400 transition"><Trash2 size={16} /></button>
+          <button onClick={onDelete} title="Удалить запись" aria-label="Удалить запись" className="p-2.5 rounded-lg hover:bg-red-500/20 text-zinc-500 hover:text-red-400 transition"><Trash2 size={16} /></button>
         )}
         <button onClick={save} className="flex-1 bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 hover:bg-cyan-300 transition">Сохранить</button>
       </div>

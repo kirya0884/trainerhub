@@ -1,4 +1,5 @@
 import { CheckCircle2, ChevronDown, ChevronRight, Circle, Eye, Flame, Layers, X } from "lucide-react";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { useState } from "react";
 import { fmtDate } from "../lib/format";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
@@ -8,6 +9,9 @@ const SUPERSET_NAME: Record<number, string> = { 2: "Двусет", 3: "Трис�
 
 /** Просмотр пройденной тренировки. Read-only, карточки раскрываются/скрываются. */
 export default function SessionReadModal({ session, onClose }: { session: Session; onClose: () => void }) {
+  // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
+  // Вызов до любых ранних return — иначе порядок хуков поедет.
+  const { panelProps } = useModalA11y(onClose, "Просмотр проведённой тренировки");
   // По умолчанию все раскрыты
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
   const toggle = (i: number) => setCollapsed((c) => ({ ...c, [i]: !c[i] }));
@@ -19,7 +23,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
   // (group info не сохраняется в сессии, показываем просто список)
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
+    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 flex flex-col outline-none">
       {/* Header */}
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="min-w-0">

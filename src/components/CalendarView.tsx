@@ -154,9 +154,9 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
       {/* Week strip — nav + 7-day row */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
         <div className="flex items-center justify-between mb-2.5">
-          <button onClick={goPrev} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><ChevronLeft size={18} /></button>
+          <button onClick={goPrev} title="Назад" aria-label="Предыдущий период" className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><ChevronLeft size={18} /></button>
           <p className="text-sm font-semibold text-zinc-200">{navTitle}</p>
-          <button onClick={goNext} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><ChevronRight size={18} /></button>
+          <button onClick={goNext} title="Вперёд" aria-label="Следующий период" className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><ChevronRight size={18} /></button>
         </div>
         <div className="grid grid-cols-7 gap-1">
           {stripDays.map((d, i) => {

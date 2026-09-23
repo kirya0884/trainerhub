@@ -1,4 +1,5 @@
 import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Minimize2, Play, Timer, X } from "lucide-react";
+import { useModalA11y } from "../hooks/useModalA11y";
 import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { parseNum, today } from "../lib/format";
@@ -62,6 +63,9 @@ type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe:
 export default function SessionModal({ day, onFinish, onClose }: {
   day: Day; onFinish: (metrics: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => void | Promise<void>; onClose: () => void;
 }) {
+  // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
+  // Вызов до любых ранних return — иначе порядок хуков поедет.
+  const { panelProps } = useModalA11y(onClose, "Проведение тренировки");
   const SK = `th-tsess-${day.id}`;
   const [vals, setVals] = useState<Record<string, SetVal[]>>(() => {
     try {
@@ -182,7 +186,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
+    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 flex flex-col outline-none">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs text-zinc-500 mt-0.5"><span className="font-mono text-lime-400 mr-2">{timer}</span>Отмечай факт по подходам, ставь огонёчки на последних подходах</p></div>
         <div className="flex items-center gap-1 shrink-0">
