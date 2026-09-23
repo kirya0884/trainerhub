@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { notifyClientsChanged } from "./clientsBus";
 import { CLIENT_COLORS } from "../constants";
 import { today } from "./format";
 
@@ -56,6 +57,7 @@ export interface DeletedItem { id: string; name: string; deletedAt: string }
 export async function deleteClient(id: string) {
   const { error } = await supabase.from("clients").update({ deleted_at: new Date().toISOString() }).eq("id", id);
   if (error) throw error;
+  notifyClientsChanged();
 }
 
 export async function fetchDeletedClients(trainerId: string): Promise<DeletedItem[]> {
@@ -67,6 +69,7 @@ export async function fetchDeletedClients(trainerId: string): Promise<DeletedIte
 export async function restoreClient(id: string) {
   const { error } = await supabase.from("clients").update({ deleted_at: null }).eq("id", id);
   if (error) throw error;
+  notifyClientsChanged();
 }
 
 export async function permanentlyDeleteClient(id: string) {
@@ -242,6 +245,9 @@ export async function updateClient(clientId: string, patch: Record<string, any>)
   for (const [k, v] of Object.entries(patch)) row[k === "pauseReason" ? "pause_reason" : k] = v;
   const { error } = await supabase.from("clients").update(row).eq("id", clientId);
   if (error) throw error;
+  // Н3: общий список подопечных живёт в App и раздаётся всем экранам — сообщаем,
+  // что его пора перечитать, иначе остаток обновится только там, где правили.
+  notifyClientsChanged();
 }
 
 // Автосписание 1 тренировки из остатка пакета при факте проведения (подписку и пустой остаток не трогаем).
