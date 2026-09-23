@@ -1,16 +1,11 @@
 import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Timer, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
+import { buildMeta, buildVals, tonnageOf, useSessionSlot, type ExMeta, type SetVal } from "../hooks/useSessionSlot";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
-import { parseNum, today } from "../lib/format";
-import { buildMetrics } from "../lib/sessionUtils";
-import * as plansApi from "../lib/plans";
-import * as clientsApi from "../lib/clients";
-import { fetchClientDoneSessions } from "../lib/bookings";
+import { parseNum } from "../lib/format";
 import { combinedRemaining } from "../lib/clients";
-import * as progressApi from "../lib/progress";
-import type { Membership, PlanListItem } from "../lib/clients";
-import type { Day, Exercise, Metric, Plan, Session } from "../types";
+import type { Day, Exercise } from "../types";
 import RemainingBadge from "./RemainingBadge";
 
 // Дублируем мелкие хелперы из SessionModal — так уже принято в проекте (без общего модуля под мелкие функции).
@@ -41,8 +36,6 @@ const groupBlocks = (exercises: Day["exercises"]) => {
   return blocks;
 };
 // Тоннаж = сумма (вес × повторы) по всем подходам с заполненными числами.
-const tonnageOf = (rows: { weight: string; reps: string }[]) =>
-  rows.reduce((sum, r) => { const w = parseNum(r.weight); const rp = parseNum(r.reps); return w != null && rp != null ? sum + w * rp : sum; }, 0);
 const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} кг`;
 
 function FlameRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -66,109 +59,19 @@ function EmojiScale({ value, onChange, emojis }: { value: number; onChange: (v: 
   );
 }
 
-type SetVal = { weight: string; reps: string };
-type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number };
 
-const buildVals = (day: Day): Record<string, SetVal[]> => {
-  const init: Record<string, SetVal[]> = {};
-  day.exercises.forEach((ex) => {
-    if (ex.detailed && ex.setRows?.length) init[ex.id] = ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }));
-    else {
-      const n = Math.max(1, Math.min(12, parseInt(ex.sets) || 3));
-      init[ex.id] = Array.from({ length: n }, () => ({ weight: ex.weight ? String(parseNum(ex.weight) ?? "") : "", reps: ex.reps || "" }));
-    }
-  });
-  return init;
-};
-const buildMeta = (day: Day): Record<string, ExMeta> => {
-  const m: Record<string, ExMeta> = {};
-  day.exercises.forEach((ex) => { m[ex.id] = { done: false, note: "", fires: {}, rpe: 0 }; });
-  return m;
-};
 
 export type SlotClient = { id: string; name: string; color: string; remaining?: string | null };
 
 // Один "слот" — полностью независимая тренировка одного подопечного: свой план/день/веса/повторы.
 // Слоты не размонтируются при переключении вкладок (см. ниже className="hidden"), поэтому ввод не теряется.
 function ClientSlot({ client, trainerId, active, onFinished }: { client: SlotClient; trainerId: string; active: boolean; onFinished: () => void }) {
-  const [plans, setPlans] = useState<PlanListItem[] | null>(null);
-  const [planId, setPlanId] = useState("");
-  const [plan, setPlan] = useState<Plan | null>(null);
-  const [dayId, setDayId] = useState("");
-  const [membership, setMembership] = useState<Membership | null>(null);
-  const [finished, setFinished] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [vals, setVals] = useState<Record<string, SetVal[]>>({});
-  const [meta, setMeta] = useState<Record<string, ExMeta>>({});
-  const [mood, setMood] = useState(0);
-  const [wellbeing, setWellbeing] = useState(0);
-  const [review, setReview] = useState("");
-  const [clientRating, setClientRating] = useState(0);
-
-  useEffect(() => {
-    clientsApi.fetchClientPlans(client.id).then((list) => {
-      setPlans(list);
-      const first = list.find((p) => !p.archived) || list[0];
-      if (first) setPlanId(first.id);
-    }).catch((e) => console.error("[GroupSessionModal] fetchPlans:", e));
-    clientsApi.fetchClient(client.id).then((c) => setMembership(c.membership)).catch((e) => console.error("[GroupSessionModal] fetchClient:", e));
-  }, [client.id]);
-
-  useEffect(() => {
-    if (!planId) { setPlan(null); setDayId(""); return; }
-    plansApi.fetchPlan(planId).then((p) => { setPlan(p); setDayId(p.days[0]?.id || ""); }).catch((e) => console.error("[GroupSessionModal] fetchPlan:", e));
-  }, [planId]);
-
-  const day = plan?.days.find((d) => d.id === dayId) || null;
-
-  useEffect(() => {
-    if (!day) return;
-    setVals(buildVals(day));
-    setMeta(buildMeta(day));
-  }, [day?.id]);
-
-  const setVal = (exId: string, i: number, patch: Partial<SetVal>) =>
-    setVals((a) => ({ ...a, [exId]: a[exId].map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
-  const setMetaFor = (exId: string, patch: Partial<ExMeta>) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], ...patch } }));
-  const setFire = (exId: string, idx: number, v: number) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], fires: { ...m[exId].fires, [idx]: v } } }));
-  const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
-  const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0) : 0;
-
-  const finish = async () => {
-    if (!day || !plan || busy) return;
-    setBusy(true);
-    try {
-      const metrics = buildMetrics(day, vals);
-      const items = day.exercises.filter((ex) => ex.name).map((ex) => {
-        const f = meta[ex.id]?.fires || {};
-        const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
-        return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "" };
-      });
-      const session: Omit<Session, "id"> = { date: today(), dayName: day.name, dayId: day.id, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
-      const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`;
-      await progressApi.logSession(plan.id, metrics, note, session);
-      // П3: день уходит в «Проведённые» и из группового проведения тоже
-      plansApi.updateDay(day.id, { archivedAt: new Date().toISOString() }).catch((e) => console.error("[GroupSessionModal] archive day:", e));
-      // Гард двойного списания: если клиент уже сам залогировал эту сессию (fromClient) — не декрементируем повторно
-      // П12: тот же двойной гард, что в PlanEditor — сессия клиента и отметка в календаре.
-      // При ошибке любой проверки списание пропускаем: недосписать безопаснее.
-      let skipCharge = false;
-      try {
-        const { sessions } = await progressApi.fetchProgress(plan.id);
-        skipCharge = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
-      } catch (e) { console.error("[GroupSessionModal] проверка сессий:", e); skipCharge = true; }
-      if (!skipCharge) {
-        try {
-          const done = await fetchClientDoneSessions(trainerId, client.id);
-          skipCharge = done.some((d) => d.date === session.date);
-        } catch (e) { console.error("[GroupSessionModal] проверка календаря:", e); skipCharge = true; }
-      }
-      if (membership && !skipCharge) setMembership(await clientsApi.decrementMembershipRemaining(client.id, membership));
-      setFinished(true);
-      onFinished();
-    } catch (e) { console.error("[GroupSessionModal] finish:", e); alert("Не удалось сохранить тренировку. Попробуй ещё раз."); }
-    finally { setBusy(false); }
-  };
+  // Д1: всё состояние слота живёт в хуке — так родитель может держать сразу двоих
+  // и показывать их подходы рядом, а не по вкладкам.
+  const s = useSessionSlot(client.id, trainerId, onFinished);
+  const { plans, planId, setPlanId, plan, dayId, setDayId, day, membership, finished, busy,
+    vals, meta, setVal, setMetaFor, setFire, mood, setMood, wellbeing, setWellbeing,
+    review, setReview, clientRating, setClientRating, doneEx, totalTonnage, finish } = s;
 
   return (
     <div className={active ? "space-y-3" : "hidden"}>
