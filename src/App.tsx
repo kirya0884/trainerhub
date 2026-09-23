@@ -27,6 +27,8 @@ import * as trainerApi from "./lib/trainer";
 import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
+import { useHistoryNav } from "./hooks/useHistoryNav";
+import { useSwipeBack } from "./hooks/useSwipeBack";
 
 type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "trainerProfile";
@@ -111,7 +113,8 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRecovery, setIsRecovery] = useState(false);
-  const [view, setView] = useState<View>({ kind: "dashboard" });
+  // Н1: экран живёт в history — работают свайп, кнопка «назад» Android и браузера
+  const { view, push: setView, back: goBack } = useHistoryNav<View>({ kind: "dashboard" });
   const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
   // B17: общие данные грузим один раз здесь, а не в каждой вкладке заново.
@@ -148,6 +151,8 @@ export default function App() {
   // B16: единственная обёртка над навигацией — все переходы идут через setView,
   // поэтому логируем здесь, а не расставляем вызовы по экранам.
   const go = (v: View) => { logEvent(dataTrainerId, "view", v.kind); setView(v); };
+  // Н1: на дашборде возвращаться некуда — жест там выключен, чтобы не уводить из приложения
+  const swipeDx = useSwipeBack(view.kind !== "dashboard", goBack);
   const openClient = (clientId: string, sub?: Sub) => {
     setRecentIds((prev) => { const next = [clientId, ...prev.filter((id) => id !== clientId)].slice(0, RECENT_MAX); saveIds(RECENT_KEY, next); return next; });
     logEvent(dataTrainerId, "open_client", "client", { clientId });
@@ -294,7 +299,8 @@ export default function App() {
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined} />}
     <PinGate id={session.user.id}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-24 sm:pb-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
-      <div className="max-w-2xl mx-auto space-y-4">
+      <div className="max-w-2xl mx-auto space-y-4"
+        style={swipeDx ? { transform: `translateX(${swipeDx}px)`, transition: "none" } : { transition: "transform .18s ease-out" }}>
         {/* B30: одна строка вместо двух — логотип вместо надписи «Reps», профиль и подписка
             сразу справа. Меню «⋯» переехало в профиль тренера. */}
         <div className="flex items-center gap-2">
@@ -398,14 +404,14 @@ export default function App() {
           <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={openClient} />
         )}
         {view.kind === "client" && (
-          <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "client_card" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} bookings={bookingsHook.bookings} allPlans={allPlans ?? []} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "open_booking"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} onBack={() => go({ kind: "clients" })} onOpenPlan={(planId) => go({ kind: "plan", planId, clientId: view.clientId })} />
+          <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "client_card" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} bookings={bookingsHook.bookings} allPlans={allPlans ?? []} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "open_booking"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} onBack={goBack} onOpenPlan={(planId) => go({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
           <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
           <div>
-            <button onClick={() => go(view.from === "plans" ? { kind: "plans" } : { kind: "client", clientId: view.clientId })} className="text-sm text-zinc-400 hover:text-zinc-100 mb-4 transition">{view.from === "plans" ? "← К планам" : "← К подопечному"}</button>
+            <button onClick={goBack} className="text-sm text-zinc-400 hover:text-zinc-100 mb-4 transition">{view.from === "plans" ? "← К планам" : "← К подопечному"}</button>
                <PlanEditor planId={view.planId} trainerId={session.user.id} clientId={view.clientId} />
           </div>
         )}
