@@ -62,7 +62,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   }, [trainerId]);
 
   useEffect(() => {
-    if (isPushSupported()) isPushSubscribed().then(setPushEnabled).catch(() => {});
+    if (isPushSupported()) isPushSubscribed().then(setPushEnabled).catch((e) => console.error("[Dashboard] статус push:", e));
   }, []);
 
   // Real-time: detect when a client starts/finishes a workout

@@ -42,7 +42,7 @@ export default function LiveWorkoutModal({ clientId, clientName, clientColor, ac
         const d = plan?.days.find((d) => d.id === activeSession.dayId);
         setDay(d ?? null);
       })
-      .catch(() => {});
+      .catch((e) => console.error("[LiveWorkoutModal] загрузка плана:", e));
   }, [activeSession.planId, activeSession.dayId]);
 
   // Supabase realtime subscription on client record

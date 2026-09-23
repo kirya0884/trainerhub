@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
+import { readJson, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -47,10 +48,8 @@ const DEFAULT_SUB_ORDER: Sub[] = ["overview", "bookings", "payments", "reporting
 const SUB_ORDER_KEY = "trainerhub-client-sub-order-v2";
 // ponytail: порядок и видимость под-вкладок карточки клиента — личная настройка устройства, как в App.tsx
 const loadSubOrder = (): Sub[] => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SUB_ORDER_KEY) || "null") as Sub[] | null;
-    if (saved && saved.length === DEFAULT_SUB_ORDER.length && DEFAULT_SUB_ORDER.every((k) => saved.includes(k))) return saved;
-  } catch {}
+  const saved = readJson<Sub[] | null>(SUB_ORDER_KEY, null);
+  if (saved && saved.length === DEFAULT_SUB_ORDER.length && DEFAULT_SUB_ORDER.every((k) => saved.includes(k))) return saved;
   return DEFAULT_SUB_ORDER;
 };
 export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient, bookings, allPlans, onOpenOccurrence }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void; bookings?: Booking[]; allPlans?: PlanOverviewItem[]; onOpenOccurrence?: (id: string, occDate: string) => void }) {
@@ -65,7 +64,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     const next = subOrder.filter((k) => k !== dragSub);
     next.splice(next.indexOf(target), 0, dragSub);
     setSubOrder(next);
-    try { localStorage.setItem(SUB_ORDER_KEY, JSON.stringify(next)); } catch {}
+    writeJson(SUB_ORDER_KEY, next);
   };
   const [client, setClient] = useState<ClientFull | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -84,12 +83,12 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     let alive = true;
     api.fetchClient(clientId).then((v) => { if (alive) setClient(v); }).catch((e) => console.error("[ClientProfile] fetchClient:", e));
     api.fetchMeasurements(clientId).then((v) => { if (alive) setMeasurements(v); }).catch((e) => console.error("[ClientProfile] fetchMeasurements:", e));
-    nutritionApi.fetchNutritionLogs(clientId).then((v) => { if (alive) setNutritionLogs(v); }).catch(() => {});
-    api.fetchPhotos(clientId).then((v) => { if (alive) setPhotos(v); }).catch(() => {});
-    api.fetchNotes(clientId).then((v) => { if (alive) setNotes(v); }).catch(() => {});
-    api.fetchClientPlans(clientId).then((v) => { if (alive) setPlans(v); }).catch(() => {});
-    portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch(() => {});
-    messagesApi.fetchMessages(clientId).then((v) => { if (alive) setChatMessages(v); }).catch(() => {});
+    nutritionApi.fetchNutritionLogs(clientId).then((v) => { if (alive) setNutritionLogs(v); }).catch((e) => console.error("[ClientProfile] питание:", e));
+    api.fetchPhotos(clientId).then((v) => { if (alive) setPhotos(v); }).catch((e) => console.error("[ClientProfile] фото:", e));
+    api.fetchNotes(clientId).then((v) => { if (alive) setNotes(v); }).catch((e) => console.error("[ClientProfile] заметки:", e));
+    api.fetchClientPlans(clientId).then((v) => { if (alive) setPlans(v); }).catch((e) => console.error("[ClientProfile] планы:", e));
+    portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch((e) => console.error("[ClientProfile] активность:", e));
+    messagesApi.fetchMessages(clientId).then((v) => { if (alive) setChatMessages(v); }).catch((e) => console.error("[ClientProfile] сообщения:", e));
     return () => { alive = false; };
   }, [clientId]);
 
@@ -261,7 +260,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
           clientId={clientId}
           self="trainer"
           lastRead={chatLastRead}
-          onRead={(iso) => { setChatLastRead(iso); try { localStorage.setItem(chatReadKey, iso); } catch {} }}
+          onRead={(iso) => { setChatLastRead(iso); writeJson(chatReadKey, iso); }}
         />
       )}
     </div>
@@ -446,9 +445,9 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
 
   const load = () => {
     paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[PaymentsTab] fetchTemplates:", e));
-    paymentsApi.fetchPromotions(clientId).then(setPromotions).catch(() => {});
+    paymentsApi.fetchPromotions(clientId).then(setPromotions).catch((e) => console.error("[ClientProfile] акции:", e));
     api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
-    api.fetchClients(trainerId).then((cs) => setOtherClients(cs.filter((c) => c.id !== clientId))).catch(() => {});
+    api.fetchClients(trainerId).then((cs) => setOtherClients(cs.filter((c) => c.id !== clientId))).catch((e) => console.error("[ClientProfile] список подопечных:", e));
   };
   useEffect(load, [clientId, trainerId]);
 

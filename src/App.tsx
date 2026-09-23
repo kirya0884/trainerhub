@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { cleanupStorage, readJson, writeJson } from "./lib/storage";
 import { LayoutDashboard, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin, Search } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
@@ -46,29 +47,23 @@ const RECENT_MAX = 8;
 // B10: недавние и закреплённые подопечные — личная настройка устройства,
 // та же схема, что у порядка вкладок: localStorage, без бэкенда.
 const loadIds = (key: string): string[] => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(key) || "null");
-    if (Array.isArray(saved)) return saved.filter((x) => typeof x === "string");
-  } catch {}
+  const saved = readJson<unknown>(key, null);
+  if (Array.isArray(saved)) return saved.filter((x) => typeof x === "string");
   return [];
 };
-const saveIds = (key: string, ids: string[]) => { try { localStorage.setItem(key, JSON.stringify(ids)); } catch {} };
+const saveIds = (key: string, ids: string[]) => { writeJson(key, ids); };
 
 const TAB_ORDER_KEY = "trainerhub-tab-order-v1";
 const TAB_HIDDEN_KEY = "trainerhub-tab-hidden-v1";
 // ponytail: порядок и видимость вкладок — личная настройка устройства, храним в localStorage, без бэкенда
 const loadTabOrder = (): TabKind[] => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(TAB_ORDER_KEY) || "null") as TabKind[] | null;
-    if (saved && saved.length === DEFAULT_TAB_ORDER.length && DEFAULT_TAB_ORDER.every((k) => saved.includes(k))) return saved;
-  } catch {}
+  const saved = readJson<TabKind[] | null>(TAB_ORDER_KEY, null);
+  if (saved && saved.length === DEFAULT_TAB_ORDER.length && DEFAULT_TAB_ORDER.every((k) => saved.includes(k))) return saved;
   return DEFAULT_TAB_ORDER;
 };
 const loadHiddenTabs = (): TabKind[] => {
-  try {
-    const saved = JSON.parse(localStorage.getItem(TAB_HIDDEN_KEY) || "null") as TabKind[] | null;
-    if (saved) return saved.filter((k) => DEFAULT_TAB_ORDER.includes(k));
-  } catch {}
+  const saved = readJson<TabKind[] | null>(TAB_HIDDEN_KEY, null);
+  if (saved) return saved.filter((k) => DEFAULT_TAB_ORDER.includes(k));
   return [];
 };
 
@@ -114,6 +109,9 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isRecovery, setIsRecovery] = useState(false);
   // Н1: экран живёт в history — работают свайп, кнопка «назад» Android и браузера
+  // А3: разовая уборка хранилища при старте — брошенные черновики тренировок копились
+  // без ограничения и были причиной переполнения квоты, из-за которого запись молча падала.
+  useEffect(() => { cleanupStorage(); }, []);
   const { view, push: setView, back: goBack } = useHistoryNav<View>({ kind: "dashboard" });
   const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
@@ -167,14 +165,14 @@ export default function App() {
     const next = tabOrder.filter((k) => k !== dragTab);
     next.splice(next.indexOf(target), 0, dragTab);
     setTabOrder(next);
-    try { localStorage.setItem(TAB_ORDER_KEY, JSON.stringify(next)); } catch {}
+    writeJson(TAB_ORDER_KEY, next);
   };
   const toggleTabVisible = (kind: TabKind) => {
     const isHidden = hiddenTabs.includes(kind);
     if (!isHidden && hiddenTabs.length >= tabOrder.length - 1) return; // хотя бы одна вкладка должна остаться видимой
     const next = isHidden ? hiddenTabs.filter((k) => k !== kind) : [...hiddenTabs, kind];
     setHiddenTabs(next);
-    try { localStorage.setItem(TAB_HIDDEN_KEY, JSON.stringify(next)); } catch {}
+    writeJson(TAB_HIDDEN_KEY, next);
   };
 
   useEffect(() => {
@@ -218,7 +216,7 @@ export default function App() {
   }, [isTrainer, session]);
   useEffect(() => {
     document.documentElement.classList.toggle("light-theme", themeMode === "light");
-    try { localStorage.setItem("trainerhub-theme-v1", themeMode); } catch {}
+    writeJson("trainerhub-theme-v1", themeMode);
   }, [themeMode]);
 
   if (loading) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);

@@ -53,6 +53,7 @@ const updateSW = registerSW({
     if (!reg) return;
     // PWA с рабочего экрана живёт без перезагрузок неделями — SW сам не узнаёт об обновлении.
     // Проверяем каждые 15 минут и при каждом возврате в приложение.
+    // Молчание осознанное: проверка обновления фоновая, сеть может быть недоступна
     const check = () => reg.update().catch(() => {});
     setInterval(check, 15 * 60_000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });

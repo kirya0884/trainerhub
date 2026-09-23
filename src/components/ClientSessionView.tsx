@@ -1,4 +1,5 @@
-import { CheckCircle2, Circle, Flame, Layers, Minimize2, Play, Send, Star, Timer, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Flame, Layers, Minimize2, Play, Send, Star, Timer, X } from "lucide-react";
+import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
 import { parseNum, today } from "../lib/format";
 import { buildMetrics } from "../lib/sessionUtils";
@@ -93,11 +94,11 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 }) {
 
   const SK = `th-sess-${day.id}`;
+  // А3: раньше сбой записи черновика глушился catch {} — тренер терял введённое молча
+  const [draftFailed, setDraftFailed] = useState(false);
   const [vals, setVals] = useState<Record<string, SetVal[]>>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(`${SK}-vals`) || "null");
-      if (saved && typeof saved === "object") return saved as Record<string, SetVal[]>;
-    } catch {}
+    const saved = readJson<Record<string, SetVal[]> | null>(`${SK}-vals`, null);
+    if (saved && typeof saved === "object") return saved;
     const init: Record<string, SetVal[]> = {};
     day.exercises.forEach((ex) => {
       if (ex.detailed && ex.setRows?.length) init[ex.id] = ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }));
@@ -109,10 +110,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     return init;
   });
   const [meta, setMeta] = useState<Record<string, ExMeta>>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(`${SK}-meta`) || "null");
-      if (saved && typeof saved === "object") return saved as Record<string, ExMeta>;
-    } catch {}
+    const saved = readJson<Record<string, ExMeta> | null>(`${SK}-meta`, null);
+    if (saved && typeof saved === "object") return saved;
     const m: Record<string, ExMeta> = {};
     day.exercises.forEach((ex) => { m[ex.id] = { fires: {}, note: "", done: false, setsDone: {} }; });
     return m;
@@ -132,13 +131,17 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const _vt = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (_vt.current) clearTimeout(_vt.current);
-    _vt.current = setTimeout(() => { try { localStorage.setItem(`${SK}-vals`, JSON.stringify(vals)); } catch {} }, 500);
+    _vt.current = setTimeout(() => {
+      if (writeJson(`${SK}-vals`, vals)) touchDraft(SK); else setDraftFailed(true);
+    }, 500);
     return () => { if (_vt.current) clearTimeout(_vt.current); };
   }, [vals]); // eslint-disable-line react-hooks/exhaustive-deps
   const _mt = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (_mt.current) clearTimeout(_mt.current);
-    _mt.current = setTimeout(() => { try { localStorage.setItem(`${SK}-meta`, JSON.stringify(meta)); } catch {} }, 500);
+    _mt.current = setTimeout(() => {
+      if (writeJson(`${SK}-meta`, meta)) touchDraft(SK); else setDraftFailed(true);
+    }, 500);
     return () => { if (_mt.current) clearTimeout(_mt.current); };
   }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
@@ -171,8 +174,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const [review, setReview] = useState("");
 
   const finish = () => {
-    localStorage.removeItem(`${SK}-vals`);
-    localStorage.removeItem(`${SK}-meta`);
+    removeKey(`${SK}-vals`);
+    removeKey(`${SK}-meta`);
     const metrics = buildMetrics(day, vals);
 
     const items = day.exercises.filter((ex) => ex.name).map((ex) => {
@@ -202,8 +205,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   const cancel = () => {
     if (window.confirm("Прервать тренировку? Несохранённые отметки будут потеряны.")) {
-      localStorage.removeItem(`${SK}-vals`);
-      localStorage.removeItem(`${SK}-meta`);
+      removeKey(`${SK}-vals`);
+      removeKey(`${SK}-meta`);
       onCancel();
     }
   };
@@ -211,6 +214,12 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   if (step === "feedback") {
     return (
       <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col" style={{ "--accent": accent } as React.CSSProperties}>
+        {draftFailed && (
+          <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
+            <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+            <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывайте экран, пока не завершите тренировку.</span>
+          </div>
+        )}
         <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
           <h2 className="font-bold">Как прошла тренировка?</h2>
           <button onClick={() => setStep("training")} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={20} /></button>
@@ -251,6 +260,12 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   return (
     <div style={{ "--accent": accent } as React.CSSProperties}>
+      {draftFailed && (
+        <div className="flex items-start gap-2 bg-orange-400/10 border border-orange-400/25 rounded-xl px-3 py-2 mb-3 text-[13px] text-orange-300">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывайте экран, пока не завершите тренировку.</span>
+        </div>
+      )}
     <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} style={{ color: "var(--accent)" }} className="shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs mt-0.5 font-mono" style={{ color: "var(--accent)" }}><SessionTimer startedAt={startedAt} /></p></div>

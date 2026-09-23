@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { writeJson } from "../lib/storage";
 import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Layers, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
@@ -531,7 +532,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       )}
 
       {/* ── ЧАТ ── */}
-      {tab === "chat" && <ChatThread lastRead={chatLastRead} onRead={(iso) => { setChatLastRead(iso); try { localStorage.setItem(chatReadKey, iso); } catch {} }} trainerId={client.trainerId} clientId={client.id} self="client" accent={profile.accentColor} />}
+      {tab === "chat" && <ChatThread lastRead={chatLastRead} onRead={(iso) => { setChatLastRead(iso); writeJson(chatReadKey, iso); }} trainerId={client.trainerId} clientId={client.id} self="client" accent={profile.accentColor} />}
 
       {/* #6 Session overlay — renders on top; minimized shows bottom bar only */}
       {activeSession && activeDay && (
@@ -542,7 +543,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           accent={profile.accentColor}
           day={activeDay}
           startedAt={activeSession.startedAt}
-          onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch(() => {})}
+          onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch((e) => console.error("[ClientPortal] прогресс тренировки не ушёл тренеру:", e))}
           onCancel={async () => { try { await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { setActiveSession(null); setSessionMinimized(false); } }}
           onFinish={async (metrics, session) => {
             try {

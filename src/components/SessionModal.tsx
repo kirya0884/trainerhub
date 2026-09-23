@@ -1,4 +1,5 @@
-import { CheckCircle2, Circle, Flame, Layers, MessageSquare, Minimize2, Play, Timer, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, Flame, Layers, MessageSquare, Minimize2, Play, Timer, X } from "lucide-react";
+import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
@@ -67,11 +68,11 @@ export default function SessionModal({ day, onFinish, onClose }: {
   // Вызов до любых ранних return — иначе порядок хуков поедет.
   const { panelProps } = useModalA11y(onClose, "Проведение тренировки");
   const SK = `th-tsess-${day.id}`;
+  // А3: раньше сбой записи черновика глушился catch {} — тренер терял введённое молча
+  const [draftFailed, setDraftFailed] = useState(false);
   const [vals, setVals] = useState<Record<string, SetVal[]>>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(`${SK}-vals`) || "null");
-      if (saved && typeof saved === "object") return saved as Record<string, SetVal[]>;
-    } catch {}
+    const saved = readJson<Record<string, SetVal[]> | null>(`${SK}-vals`, null);
+    if (saved && typeof saved === "object") return saved;
     const init: Record<string, SetVal[]> = {};
     day.exercises.forEach((ex) => {
       if (ex.detailed && ex.setRows?.length) init[ex.id] = ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }));
@@ -83,10 +84,8 @@ export default function SessionModal({ day, onFinish, onClose }: {
     return init;
   });
   const [meta, setMeta] = useState<Record<string, ExMeta>>(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem(`${SK}-meta`) || "null");
-      if (saved && typeof saved === "object") return saved as Record<string, ExMeta>;
-    } catch {}
+    const saved = readJson<Record<string, ExMeta> | null>(`${SK}-meta`, null);
+    if (saved && typeof saved === "object") return saved;
     const m: Record<string, ExMeta> = {};
     day.exercises.forEach((ex) => { m[ex.id] = { done: false, note: "", fires: {}, rpe: 0, setsDone: {} }; });
     return m;
@@ -101,16 +100,20 @@ export default function SessionModal({ day, onFinish, onClose }: {
   const _vt = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (_vt.current) clearTimeout(_vt.current);
-    _vt.current = setTimeout(() => { try { localStorage.setItem(`${SK}-vals`, JSON.stringify(vals)); } catch {} }, 500);
+    _vt.current = setTimeout(() => {
+      if (writeJson(`${SK}-vals`, vals)) touchDraft(SK); else setDraftFailed(true);
+    }, 500);
     return () => { if (_vt.current) clearTimeout(_vt.current); };
   }, [vals]); // eslint-disable-line react-hooks/exhaustive-deps
   const _mt = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (_mt.current) clearTimeout(_mt.current);
-    _mt.current = setTimeout(() => { try { localStorage.setItem(`${SK}-meta`, JSON.stringify(meta)); } catch {} }, 500);
+    _mt.current = setTimeout(() => {
+      if (writeJson(`${SK}-meta`, meta)) touchDraft(SK); else setDraftFailed(true);
+    }, 500);
     return () => { if (_mt.current) clearTimeout(_mt.current); };
   }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
-  const clearPersist = () => { try { localStorage.removeItem(`${SK}-vals`); localStorage.removeItem(`${SK}-meta`); } catch {} };
+  const clearPersist = () => { removeKey(`${SK}-vals`); removeKey(`${SK}-meta`); };
   const [startedAt] = useState(() => Date.now());
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -187,6 +190,12 @@ export default function SessionModal({ day, onFinish, onClose }: {
 
   return (
     <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 flex flex-col outline-none">
+      {draftFailed && (
+        <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
+          <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+          <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывайте экран, пока не завершите тренировку.</span>
+        </div>
+      )}
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs text-zinc-500 mt-0.5"><span className="font-mono text-lime-400 mr-2">{timer}</span>Отмечай факт по подходам, ставь огонёчки на последних подходах</p></div>
         <div className="flex items-center gap-1 shrink-0">

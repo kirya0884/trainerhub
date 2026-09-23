@@ -115,6 +115,8 @@ export function setSetRows(exerciseId: string, rows: SetRow[]): Promise<void> {
     }
   };
   const prev = _srQ.get(exerciseId) ?? Promise.resolve();
+  // Молчание осознанное: гасим ошибку ПРЕДЫДУЩЕЙ операции в очереди, чтобы она
+  // не отменила следующую. Ошибку текущей операции ловит её собственный вызов.
   const next = prev.catch(() => {}).then(run);
   _srQ.set(exerciseId, next);
   return next;

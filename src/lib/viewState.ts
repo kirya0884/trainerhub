@@ -1,3 +1,4 @@
+import { writeJson } from "./storage";
 // B12: состояние вида (поиск, фильтры, прокрутка) переживает переключение вкладок.
 // sessionStorage, а не localStorage: фильтр, доживший до следующего запуска приложения,
 // выглядит как пропавшие данные. В рамках сессии — ровно то поведение, которого ждут.
@@ -10,5 +11,5 @@ export function loadViewState<T>(key: string, fallback: T): T {
 }
 
 export function saveViewState(key: string, value: unknown) {
-  try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {}
+  writeJson(key, value, sessionStorage);
 }
