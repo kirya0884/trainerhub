@@ -6,13 +6,20 @@ type Drag = { key: string; from: number; over: number };
  * Перетаскивание элементов списка на нативных Pointer Events.
  *
  * Слушатели вешаются один раз на контейнер и работают делегированием: элемент
- * ищется по [data-ds-idx], ручка — по [data-ds-handle]. Так строкам не нужно
+ * ищется по [data-<ns>-idx], ручка — по [data-<ns>-handle]. Так строкам не нужно
  * передавать объекты-обработчики, и их мемоизация остаётся рабочей.
  *
  * Порядок в DOM = порядок в массиве, поэтому вложенность (суперсеты) не мешает.
  * Наружу пишем один раз, на отпускании: onDrop(key, from, to).
+ *
+ * Н2: списки бывают вложенными — дни содержат упражнения, и у каждого своё
+ * перетаскивание. Два механизма разводят их:
+ *  - пространство имён `ns` в атрибутах: поиск от корня дней не цепляет упражнения;
+ *  - общий маркер data-drag-root и проверка «я самый внутренний»: касание внутри
+ *    вложенного списка внешний корень не берёт, иначе долгое нажатие на упражнение
+ *    утаскивало бы заодно весь день.
  */
-export function useDragSort(onDrop: (key: string, from: number, to: number) => void) {
+export function useDragSort(onDrop: (key: string, from: number, to: number) => void, ns = "ds") {
   const [drag, setDrag] = useState<Drag | null>(null);
   const dragRef = useRef<Drag | null>(null);
   const containerRef = useRef<HTMLElement | null>(null);
@@ -20,6 +27,9 @@ export function useDragSort(onDrop: (key: string, from: number, to: number) => v
   const pressAt = useRef<{ x: number; y: number } | null>(null);
   const dropRef = useRef(onDrop);
   dropRef.current = onDrop;
+
+  const IDX = `data-${ns}-idx`;
+  const HANDLE = `[data-${ns}-handle]`;
 
   const cancelPress = useCallback(() => {
     if (pressTimer.current != null) { clearTimeout(pressTimer.current); pressTimer.current = null; }
@@ -36,18 +46,21 @@ export function useDragSort(onDrop: (key: string, from: number, to: number) => v
   }, []);
 
   const rootProps = (key: string) => ({
-    "data-ds-root": true,
+    [`data-${ns}-root`]: true,
+    "data-drag-root": true,
     onPointerDown: (e: React.PointerEvent) => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
       const t = e.target as HTMLElement;
-      const item = t.closest<HTMLElement>("[data-ds-idx]");
+      // Событие всплыло из вложенного списка — там свой обработчик, наш молчит
+      if (t.closest("[data-drag-root]") !== e.currentTarget) return;
+      const item = t.closest<HTMLElement>(`[${IDX}]`);
       if (!item) return;
       const container = e.currentTarget as HTMLElement;
-      const idx = Number(item.dataset.dsIdx);
+      const idx = Number(item.getAttribute(IDX));
       if (!Number.isFinite(idx)) return;
       cancelPress();
       // Ручка — тащим сразу; остальная карточка — после удержания, и только мимо полей
-      if (t.closest("[data-ds-handle]")) { begin(container, key, idx); return; }
+      if (t.closest(HANDLE)) { begin(container, key, idx); return; }
       if (t.closest("input,button,textarea,select,a,[contenteditable]")) return;
       pressAt.current = { x: e.clientX, y: e.clientY };
       pressTimer.current = window.setTimeout(() => { pressTimer.current = null; begin(container, key, idx); }, 350);
@@ -68,10 +81,10 @@ export function useDragSort(onDrop: (key: string, from: number, to: number) => v
     if (!container) return;
 
     const targetAt = (y: number) => {
-      const els = Array.from(container.querySelectorAll<HTMLElement>("[data-ds-idx]"));
+      const els = Array.from(container.querySelectorAll<HTMLElement>(`[${IDX}]`));
       for (const el of els) {
         const r = el.getBoundingClientRect();
-        if (y < r.top + r.height / 2) return Number(el.dataset.dsIdx);
+        if (y < r.top + r.height / 2) return Number(el.getAttribute(IDX));
       }
       return els.length;
     };

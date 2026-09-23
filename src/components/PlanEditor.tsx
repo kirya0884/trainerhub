@@ -1,4 +1,4 @@
-import { Archive, BarChart3, BookOpen, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
+import { Archive, BarChart3, BookOpen, GripVertical, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
 import { usePlan } from "../hooks/usePlan";
@@ -52,6 +52,15 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, addMesocycle, updateMesocycle, deleteMesocycle, reorderMesocycles, reload } = usePlan(planId);
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const exDrag = useDragSort((dayId, from, to) => reorderExercises(dayId, from, to));
+  // Н2: дни переставляются перетаскиванием. Перетаскивание идёт внутри одного контейнера
+  // (блок, «без блока» или плоский список), поэтому локальные позиции переводим
+  // в сквозные индексы plan.days — их и ждёт reorderDays.
+  const dayLists = useRef<Record<string, number[]>>({});
+  const dayDrag = useDragSort((key, from, to) => {
+    const list = dayLists.current[key];
+    if (!list || list[from] == null || list[to] == null) return;
+    reorderDays(list[from], list[to]);
+  }, "dsday");
   const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
   const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m])), [metrics]);
@@ -661,18 +670,29 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         // Сами дни archived_at не получают — вернёте блок, вернётся всё как было.
         const sortedMesos = allMesos.filter((m) => !m.archivedAt);
         const hasMesos = sortedMesos.length > 0;
-        const renderDayCard = (day: Day, di: number) => {
+        const renderDayCard = (day: Day, di: number, li = 0, dkey = "") => {
           const isOpen = !collapsed[day.id];
           const lastSession = lastSessionOf(day);
           const hidden = day.visibleToClient === false;
           return (
-            <div key={day.id} className={`bg-zinc-900 border rounded-xl ${hidden ? "border-orange-400/20 opacity-80" : "border-zinc-800"}`}>
+            <div key={day.id} data-dsday-idx={li}
+              className={`bg-zinc-900 border rounded-xl transition-shadow ${hidden ? "border-orange-400/20 opacity-80" : "border-zinc-800"} ${
+                dayDrag.drag?.key === dkey && dayDrag.drag.from === li ? "opacity-40 ring-2 ring-lime-400" : ""} ${
+                dayDrag.drag?.key === dkey && dayDrag.drag.over === li && dayDrag.drag.from !== li ? "shadow-[0_-3px_0_0_#a3e635]" : ""}`}>
               <div className="flex items-center gap-1 px-3 py-2.5 bg-zinc-800/40 border-b border-zinc-800 rounded-t-xl">
                 <button onClick={() => toggleCollapse(day.id)} title={collapsed[day.id] ? "Развернуть день" : "Свернуть день"} className="p-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-400 active:text-lime-400 transition-colors duration-100 shrink-0">{isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</button>
-                <span className="flex flex-col -my-1 shrink-0">
-                  <button onClick={() => { const t = visibleNeighbour(plan.days, di, -1); if (t >= 0) reorderDays(di, t); }} disabled={visibleNeighbour(plan.days, di, -1) < 0} title="Выше" className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronUp size={14} /></button>
-                  <button onClick={() => { const t = visibleNeighbour(plan.days, di, 1); if (t >= 0) reorderDays(di, t); }} disabled={visibleNeighbour(plan.days, di, 1) < 0} title="Ниже" className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"><ChevronDown size={14} /></button>
-                </span>
+                {/* Н2: ручка вместо двух стрелок по 14 px — в них почти невозможно попасть пальцем.
+                    Стрелки клавиатуры остались здесь же: перетаскивание с клавиатуры недоступно. */}
+                <button data-dsday-handle type="button"
+                  title="Перетащить день. С клавиатуры — стрелки вверх и вниз"
+                  aria-label="Перетащить день. Стрелки вверх и вниз меняют порядок"
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowUp") { const t = visibleNeighbour(plan.days, di, -1); if (t >= 0) { e.preventDefault(); reorderDays(di, t); } }
+                    if (e.key === "ArrowDown") { const t = visibleNeighbour(plan.days, di, 1); if (t >= 0) { e.preventDefault(); reorderDays(di, t); } }
+                  }}
+                  className="shrink-0 p-1.5 -mx-0.5 text-zinc-600 hover:text-zinc-300 active:text-lime-400 cursor-grab active:cursor-grabbing touch-none select-none transition-colors duration-100">
+                  <GripVertical size={16} />
+                </button>
                 <input value={day.name} onChange={(e) => { markSaving(); updateDay(day.id, { name: e.target.value }); }} className={`flex-1 min-w-0 bg-transparent font-semibold outline-none border-b border-transparent focus:border-lime-400/50 pb-0.5 ${hidden ? "text-zinc-500" : ""}`} placeholder="Название дня" />
                 {hasMesos && (
                   <select value={day.mesocycleId ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { mesocycleId: e.target.value || null }); }}
@@ -703,7 +723,13 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         };
 
         if (!hasMesos) {
-          return plan.days.map((day, di) => isArchived(day) ? null : renderDayCard(day, di));
+          const flat = plan.days.map((day, di) => ({ day, di })).filter(({ day }) => !isArchived(day));
+          dayLists.current["flat"] = flat.map((x) => x.di);
+          return (
+            <div className="space-y-2" {...dayDrag.rootProps("flat")}>
+              {flat.map(({ day, di }, li) => renderDayCard(day, di, li, "flat"))}
+            </div>
+          );
         }
 
         return (
@@ -744,11 +770,28 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                     <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
                       className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
                   </div>
-                  {!collapsed[meso.id] && mesoDays.filter(({ day }) => !isArchived(day)).map(({ day, di }) => renderDayCard(day, di))}
+                  {!collapsed[meso.id] && (() => {
+                    const vis = mesoDays.filter(({ day }) => !isArchived(day));
+                    dayLists.current[meso.id] = vis.map((x) => x.di);
+                    return (
+                      <div className="space-y-2" {...dayDrag.rootProps(meso.id)}>
+                        {vis.map(({ day, di }, li) => renderDayCard(day, di, li, meso.id))}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
-            {plan.days.map((day, di) => ({ day, di })).filter(({ day }) => !day.mesocycleId && !isArchived(day)).map(({ day, di }) => renderDayCard(day, di))}
+            {(() => {
+              const loose = plan.days.map((day, di) => ({ day, di })).filter(({ day }) => !day.mesocycleId && !isArchived(day));
+              if (!loose.length) return null;
+              dayLists.current["loose"] = loose.map((x) => x.di);
+              return (
+                <div className="space-y-2" {...dayDrag.rootProps("loose")}>
+                  {loose.map(({ day, di }, li) => renderDayCard(day, di, li, "loose"))}
+                </div>
+              );
+            })()}
           </>
         );
       })()}
