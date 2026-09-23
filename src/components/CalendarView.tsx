@@ -67,7 +67,17 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
 
   const rangeStart = mode === "day" ? anchor : mode === "week" ? weekStart : gridStart;
   const rangeEnd = mode === "day" ? anchor : mode === "week" ? weekEnd : gridEnd;
-  const occurrences = expandBookings(bookings, rangeStart, rangeEnd);
+  // А5: подопечный удаляется мягко (уходит в корзину), связи booking_clients при этом
+  // сохраняются — иначе восстановление из корзины вернуло бы клиента без его тренировок.
+  // Поэтому чиним чтением: имена берём только у живых, а запись, где живых не осталось,
+  // в расписании не показываем. Вернули клиента — запись вернулась сама, без записи в базу.
+  const liveIds = new Set(clients.map((c) => c.id));
+  const withLiveClients = <T extends { clientIds: string[] }>(list: T[]): T[] =>
+    list
+      .map((o) => ({ ...o, clientIds: o.clientIds.filter((id) => liveIds.has(id)) }))
+      .filter((o) => o.clientIds.length > 0);
+
+  const occurrences = withLiveClients(expandBookings(bookings, rangeStart, rangeEnd));
   const listDays = mode === "day" ? [anchor] : mode === "week" ? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)) : [];
   const gridDays = mode === "month" ? Array.from({ length: (new Date(gridEnd + "T00:00:00").getTime() - new Date(gridStart + "T00:00:00").getTime()) / 86400000 + 1 }, (_, i) => addDays(gridStart, i)) : [];
 
@@ -121,7 +131,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   };
 
   const exportIcs = () => {
-    const range = expandBookings(bookings, today, addDays(today, 89));
+    const range = withLiveClients(expandBookings(bookings, today, addDays(today, 89)));
     downloadIcs(bookingsToIcs(range, clientName));
   };
 
@@ -129,7 +139,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   const stripStart = startOfWeekMon(anchor);
   const stripDays = Array.from({ length: 7 }, (_, i) => addDays(stripStart, i));
   const STRIP_LABELS = ["ПН", "ВТ", "СР", "ЧТ", "ПТ", "СБ", "ВС"];
-  const todayCount = expandBookings(bookings, today, today).length;
+  const todayCount = withLiveClients(expandBookings(bookings, today, today)).length;
   const todayLabel = todayCount === 1 ? "ЗАНЯТИЕ" : todayCount > 1 && todayCount < 5 ? "ЗАНЯТИЯ" : "ЗАНЯТИЙ";
 
   return (

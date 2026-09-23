@@ -70,8 +70,25 @@ export async function restoreClient(id: string) {
 }
 
 export async function permanentlyDeleteClient(id: string) {
+  // Какие записи календаря держались на этом подопечном — узнаём ДО удаления:
+  // внешний ключ стоит с on delete cascade и снесёт связи вместе с клиентом.
+  const { data: links } = await supabase.from("booking_clients").select("booking_id").eq("client_id", id);
+  const touched = [...new Set((links ?? []).map((l: any) => l.booking_id as string))];
+
   const { error } = await supabase.from("clients").delete().eq("id", id);
   if (error) throw error;
+
+  // А5: подчищаем записи, оставшиеся совсем без подопечных. Делаем это только здесь —
+  // при мягком удалении связи трогать нельзя, иначе восстановление из корзины
+  // вернуло бы клиента без его тренировок. Окончательное удаление отката не имеет.
+  if (!touched.length) return;
+  const { data: still } = await supabase.from("booking_clients").select("booking_id").in("booking_id", touched);
+  const alive = new Set((still ?? []).map((l: any) => l.booking_id as string));
+  const empty = touched.filter((b) => !alive.has(b));
+  if (empty.length) {
+    const { error: delErr } = await supabase.from("bookings").delete().in("id", empty);
+    if (delErr) throw delErr;
+  }
 }
 
 export async function deletePlan(id: string) {
