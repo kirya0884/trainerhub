@@ -14,7 +14,7 @@ import { today as todayFn, addDays, addMonths, toDateStr } from "../lib/format";
 
 const WEEKDAYS_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 const WEEKDAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const MODES = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
+const MODES = [["day", "День"], ["days3", "3 дня"], ["week", "Неделя"], ["month", "Месяц"]] as const;
 type Mode = (typeof MODES)[number][0];
 
 const capFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
@@ -29,7 +29,9 @@ const fromMin = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0"
 
 const HOUR_START = 6, HOUR_END = 24;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
-const ROW_H = 32; // px за час
+// К1: 40 px на час вместо 32 — в узкой колонке имя переносится на две строки,
+// и при 32 px оно обрезалось. Сетка прокручивается по вертикали, места хватает.
+const ROW_H = 40; // px за час
 
 export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans, openBooking, newBookingClientId, openOccurrence }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void; openBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } }) {
   const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload } = bookingsHook;
@@ -65,8 +67,11 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   const gridStart = startOfWeekMon(monthStart);
   const gridEnd = addDays(startOfWeekMon(monthEnd), 6);
 
-  const rangeStart = mode === "day" ? anchor : mode === "week" ? weekStart : gridStart;
-  const rangeEnd = mode === "day" ? anchor : mode === "week" ? weekEnd : gridEnd;
+  // К1: «3 дня» — середина между днём и неделей; на телефоне колонки выходят ~100 px
+  // и имена видно целиком, в отличие от недельных ~44 px.
+  const days3End = addDays(anchor, 2);
+  const rangeStart = mode === "day" || mode === "days3" ? anchor : mode === "week" ? weekStart : gridStart;
+  const rangeEnd = mode === "day" ? anchor : mode === "days3" ? days3End : mode === "week" ? weekEnd : gridEnd;
   // А5: подопечный удаляется мягко (уходит в корзину), связи booking_clients при этом
   // сохраняются — иначе восстановление из корзины вернуло бы клиента без его тренировок.
   // Поэтому чиним чтением: имена берём только у живых, а запись, где живых не осталось,
@@ -78,15 +83,19 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
       .filter((o) => o.clientIds.length > 0);
 
   const occurrences = withLiveClients(expandBookings(bookings, rangeStart, rangeEnd));
-  const listDays = mode === "day" ? [anchor] : mode === "week" ? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)) : [];
+  const listDays = mode === "day" ? [anchor]
+    : mode === "days3" ? Array.from({ length: 3 }, (_, i) => addDays(anchor, i))
+    : mode === "week" ? Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)) : [];
   const gridDays = mode === "month" ? Array.from({ length: (new Date(gridEnd + "T00:00:00").getTime() - new Date(gridStart + "T00:00:00").getTime()) / 86400000 + 1 }, (_, i) => addDays(gridStart, i)) : [];
 
   const clientName = (id: string) => clients.find((c) => c.id === id)?.name || "—";
   const findBookingById = (id: string) => bookings.find((b) => b.id === id);
 
-  const navTitle = mode === "day" ? fmtLong(anchor) : mode === "week" ? `${fmt(weekStart)} – ${fmt(weekEnd)}` : fmtMonth(anchor);
-  const goPrev = () => setAnchor(mode === "day" ? addDays(anchor, -1) : mode === "week" ? addDays(anchor, -7) : addMonths(anchor, -1));
-  const goNext = () => setAnchor(mode === "day" ? addDays(anchor, 1) : mode === "week" ? addDays(anchor, 7) : addMonths(anchor, 1));
+  const navTitle = mode === "day" ? fmtLong(anchor)
+    : mode === "days3" ? `${fmt(anchor)} – ${fmt(days3End)}`
+    : mode === "week" ? `${fmt(weekStart)} – ${fmt(weekEnd)}` : fmtMonth(anchor);
+  const goPrev = () => setAnchor(mode === "day" ? addDays(anchor, -1) : mode === "days3" ? addDays(anchor, -3) : mode === "week" ? addDays(anchor, -7) : addMonths(anchor, -1));
+  const goNext = () => setAnchor(mode === "day" ? addDays(anchor, 1) : mode === "days3" ? addDays(anchor, 3) : mode === "week" ? addDays(anchor, 7) : addMonths(anchor, 1));
   const goToday = () => setAnchor(today);
 
   // Перенос занятия drag-and-drop на другой день (вид «Месяц», время не меняется); при конфликте — подтверждение.
@@ -173,10 +182,13 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
             const isToday = d === today;
             const hasEvents = occurrences.some((o) => o.date === d);
             return (
-              <button key={d} onClick={() => { setAnchor(d); mode === "month" && setMode("week"); }}
+              <button key={d} onClick={() => { setAnchor(d); if (mode === "month") setMode("days3"); }}
                 className="flex flex-col items-center gap-1 py-1.5 rounded-xl transition hover:bg-zinc-800">
                 <span className="text-[10px] font-medium text-zinc-500">{STRIP_LABELS[i]}</span>
-                <span className={`text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full transition ${isToday ? "bg-lime-400 text-zinc-950" : "text-zinc-300"}`}>{Number(d.slice(8))}</span>
+                <span className={`text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full transition ${
+                  d === anchor ? "bg-lime-400 text-zinc-950"
+                  : isToday ? "text-lime-400 ring-1 ring-lime-400/50"
+                  : "text-zinc-300"}`}>{Number(d.slice(8))}</span>
                 <span className={`w-1 h-1 rounded-full ${hasEvents ? "bg-cyan-400" : ""}`} />
               </button>
             );
@@ -234,29 +246,29 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
               <div key={h} style={{ height: ROW_H }} className="text-[10px] text-zinc-500 text-right pr-1 -translate-y-1.5">{h}:00</div>
             ))}
           </div>
-          <div className="flex-1 overflow-x-auto">
-            <div className="flex" style={{ minWidth: listDays.length > 1 ? listDays.length * 72 : undefined }}>
-              {listDays.map((d, idx) => {
+          {/* К1: без minWidth — семь колонок по ~44 px влезают в 360 px и ничего не едет вбок.
+              На широком экране колонки получают нижнюю границу ширины через sm:min-w. */}
+          <div className="flex-1 overflow-x-hidden">
+            <div className="flex">
+              {listDays.map((d) => {
                 const occs = occurrences.filter((o) => o.date === d).sort((a, b) => a.time.localeCompare(b.time));
                 return (
-                  <div key={d} className={`flex-1 min-w-[68px] border-r border-zinc-800 last:border-r-0 ${dragOverDay === d ? "bg-cyan-400/5" : ""}`}>
-                    <div className={`h-7 flex items-center justify-between px-1.5 border-b border-zinc-800 text-xs sticky top-0 bg-zinc-900 ${d === today ? "text-cyan-400 font-semibold" : "text-zinc-400"}`}>
-                      <span className="truncate">{mode === "week" ? `${WEEKDAYS_SHORT[idx]} ${d.slice(8)}` : WEEKDAYS_FULL[(new Date(d + "T00:00:00").getDay() + 6) % 7]}</span>
-                      <button onClick={() => setModal({ date: d })} className="text-zinc-600 hover:text-cyan-400 transition shrink-0"><Plus size={13} /></button>
-                    </div>
+                  <div key={d} className={`flex-1 min-w-0 sm:min-w-[68px] border-r border-zinc-800 last:border-r-0 ${
+                    dragOverDay === d ? "bg-cyan-400/5" : d === today ? "bg-zinc-800/25" : ""}`}>
                     <div className="relative cursor-pointer" style={{ height: HOURS.length * ROW_H }}
                       onClick={(e) => { const min = HOUR_START * 60 + Math.round(((e.clientY - e.currentTarget.getBoundingClientRect().top) / ROW_H) * 60 / 30) * 30; setModal({ date: d, time: fromMin(Math.max(HOUR_START * 60, Math.min(min, HOUR_END * 60))) }); }}
                       onDragOver={(e) => { e.preventDefault(); setDragOverDay(d); }} onDragLeave={() => setDragOverDay(null)} onDrop={(e) => onDropAt(e, d)}>
                       {HOURS.map((h, i) => i > 0 && <div key={h} className="absolute left-0 right-0 border-t border-zinc-800/60" style={{ top: i * ROW_H }} />)}
                       {occs.map((o) => {
                         const top = Math.max(0, (toMin(o.time) - HOUR_START * 60) * (ROW_H / 60));
-                        const height = Math.max(22, (Number(o.duration) || 60) * (ROW_H / 60));
+                        const height = Math.max(26, (Number(o.duration) || 60) * (ROW_H / 60));
                         return (
                           <button key={`${o.id}-${o.occDate}`} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", JSON.stringify({ id: o.id, occDate: o.occDate }))}
                             onClick={(e) => { e.stopPropagation(); setQuickView(o); }} style={{ top, height, background: `${BOOKING_STATUS_COLOR[o.status]}26`, borderLeft: `3px solid ${BOOKING_STATUS_COLOR[o.status]}` }}
                             className="absolute left-0.5 right-0.5 rounded-md px-1.5 py-0.5 text-left overflow-hidden cursor-grab active:cursor-grabbing">
-                            <span className="block text-[11px] font-mono text-zinc-300 leading-tight">{o.time}</span>
-                            <span className="block text-sm text-zinc-100 truncate leading-tight font-medium">{o.clientIds.map(clientName).join(", ")}</span>
+                            {/* К1: в узкой колонке имя переносится, а не обрезается многоточием */}
+                            <span className="hidden sm:block text-[11px] font-mono text-zinc-300 leading-tight">{o.time}</span>
+                            <span className="block text-[11px] sm:text-sm text-zinc-100 leading-tight font-medium break-words">{o.clientIds.map(clientName).join(", ")}</span>
                           </button>
                         );
                       })}
