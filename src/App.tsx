@@ -31,6 +31,7 @@ import type { Sub } from "./components/ClientProfile";
 import SessionModal from "./components/SessionModal";
 import { finishWorkout } from "./lib/finishWorkout";
 import { ActiveWorkoutProvider, useActiveWorkout } from "./hooks/useActiveWorkout";
+import { urlToView, viewToUrl, type ViewLike } from "./lib/viewUrl";
 import { useHistoryNav } from "./hooks/useHistoryNav";
 import { useSwipeBack } from "./hooks/useSwipeBack";
 
@@ -139,7 +140,11 @@ export default function App() {
   // А3: разовая уборка хранилища при старте — брошенные черновики тренировок копились
   // без ограничения и были причиной переполнения квоты, из-за которого запись молча падала.
   useEffect(() => { cleanupStorage(); }, []);
-  const { view, push: setView, back: goBack } = useHistoryNav<View>({ kind: "dashboard" });
+  const { view, push: setView, back: goBack } = useHistoryNav<View>(
+    { kind: "dashboard" },
+    (v) => viewToUrl(v as ViewLike),
+    (h) => urlToView(h) as View,
+  );
   const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
   // B17: общие данные грузим один раз здесь, а не в каждой вкладке заново.
