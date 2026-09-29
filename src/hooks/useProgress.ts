@@ -69,5 +69,5 @@ export function useProgress(planId: string) {
     } catch (e) { console.error("[useProgress] logSession:", e); throw e; }
   };
 
-  return { progress, metrics, sessions, deletedSessions, loading, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession, reload: load };
+  return { progress, metrics, sessions, deletedSessions, loading, reloadProgress: load, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession, reload: load };
 }

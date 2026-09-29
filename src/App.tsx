@@ -28,6 +28,9 @@ import * as trainerApi from "./lib/trainer";
 import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
+import SessionModal from "./components/SessionModal";
+import { finishWorkout } from "./lib/finishWorkout";
+import { ActiveWorkoutProvider, useActiveWorkout } from "./hooks/useActiveWorkout";
 import { useHistoryNav } from "./hooks/useHistoryNav";
 import { useSwipeBack } from "./hooks/useSwipeBack";
 
@@ -104,6 +107,30 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
 }
 
 // ponytail: навигация — простой стейт-стек без роутера, пока приложение состоит из 3 экранов
+
+/**
+ * Д3: активная тренировка рендерится здесь, вне переключателя экранов, поэтому
+ * свёрнутая плашка висит внизу поверх всего и открывается с любого экрана.
+ * Раньше SessionModal жил внутри PlanEditor и исчезал при уходе с экрана плана.
+ */
+function ActiveWorkoutHost({ trainerId }: { trainerId: string }) {
+  const { active, stop } = useActiveWorkout();
+  if (!active) return null;
+  return (
+    <SessionModal
+      key={active.day.id}
+      day={active.day}
+      onFinish={async (metrics, note, session) => {
+        await finishWorkout({
+          trainerId, clientId: active.clientId, planId: active.planId,
+          day: active.day, metrics, note, session,
+        });
+      }}
+      onClose={stop}
+    />
+  );
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -295,6 +322,7 @@ export default function App() {
   return (
     <>
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined} />}
+    <ActiveWorkoutProvider>
     <PinGate id={session.user.id}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-24 sm:pb-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4"
@@ -450,6 +478,9 @@ export default function App() {
       )}
     </div>
     </PinGate>
+    {/* Д3: вне переключателя экранов — переживает любую навигацию */}
+    <ActiveWorkoutHost trainerId={session.user.id} />
+    </ActiveWorkoutProvider>
     </>
   );
 }

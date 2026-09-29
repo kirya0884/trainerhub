@@ -8,8 +8,9 @@ import { decrementMembershipRemaining, incrementMembershipRemaining, fetchClient
 import { fmtDate, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
 import * as paymentsApi from "../lib/payments";
-import { fetchClientDoneSessions, markSessionDone } from "../lib/bookings";
 import * as templatesApi from "../lib/templates";
+import { onWorkoutFinished } from "../lib/clientsBus";
+import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import * as plansApi from "../lib/plans";
 import type { Day, Metric, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
@@ -23,7 +24,6 @@ import ModalShell from "./ModalShell";
 import PeriodizationModal from "./PeriodizationModal";
 import PlanPrintView from "./PlanPrintView";
 import PlanVersionsModal from "./PlanVersionsModal";
-import SessionModal from "./SessionModal";
 import SessionReadModal from "./SessionReadModal";
 import TemplatesModal from "./TemplatesModal";
 import DayTemplateLibrary from "./DayTemplateLibrary";
@@ -61,7 +61,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     if (!list || list[from] == null || list[to] == null) return;
     reorderDays(list[from], list[to]);
   }, "dsday");
-  const { progress, metrics, sessions, deletedSessions, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
+  const { progress, metrics, sessions, deletedSessions, reloadProgress, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
   const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m])), [metrics]);
   // П10: сколько тренировок в истории по каждому названию. Наружу уходит число —
@@ -216,7 +216,6 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   };
   const [libFor, setLibFor] = useState<string | null>(null);
   const [sub, setSub] = useState<"workout" | "done" | "progress">("workout");
-  const [sessionDay, setSessionDay] = useState<Day | null>(null);
   const [editingDayId, setEditingDayId] = useState<string | null>(null);
   const [showMembership, setShowMembership] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -233,6 +232,10 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [newDayName, setNewDayName] = useState<string | null>(null);
   const [pasteInput, setPasteInput] = useState<string | null>(null);
   const [membership, setMembership] = useState<Membership | null>(null);
+  // Д3: тренировка живёт на уровне приложения, поэтому запускаем её через контекст,
+  // а прогресс перечитываем по сигналу — к моменту завершения этот экран мог быть закрыт.
+  const workout = useActiveWorkout();
+  useEffect(() => onWorkoutFinished((pid) => { if (pid === planId) reloadProgress(); }), [planId]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [addingSession, setAddingSession] = useState(false);
@@ -264,35 +267,6 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     return () => { alive = false; };
   }, [clientId]);
 
-  const finishSession = async (m: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => {
-    try {
-      await logSession(m, note, { ...session, dayId: sessionDay?.id ?? null });
-      // ponytail: новая сессия за сегодня — сбрасываем флаг "вернули в Тренировки", чтобы день снова ушёл в Проведенные
-      if (sessionDay) {
-        // П3: проведённый день уходит в «Проведённые» насовсем. Признак лежит на самом дне,
-        // поэтому переживает перезагрузку и одинаков на всех устройствах тренера.
-        updateDay(sessionDay.id, { archivedAt: new Date().toISOString() });
-        markSessionDone(trainerId, clientId, sessionDay.name, today()); // fire-and-forget: mark calendar booking done
-      }
-      // Гард двойного списания. Проверяем два источника:
-      // 1) клиент уже залогировал эту сессию сам (fromClient) — было и раньше;
-      // 2) П12: запись в календаре за эту дату уже отмечена «проведена» — тогда списание
-      //    там уже произошло. Раньше этого не проверяли, и остаток уходил дважды.
-      const alreadyLoggedByClient = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
-      let alreadyDoneInCalendar = false;
-      if (!alreadyLoggedByClient) {
-        // При ошибке проверки НЕ списываем: недосписать безопаснее, чем списать дважды.
-        try {
-          const done = await fetchClientDoneSessions(trainerId, clientId);
-          alreadyDoneInCalendar = done.some((d) => d.date === session.date);
-        } catch (e) { console.error("[PlanEditor] проверка календаря:", e); alreadyDoneInCalendar = true; }
-      }
-      if (membership && !alreadyLoggedByClient && !alreadyDoneInCalendar) setMembership(await decrementMembershipRemaining(clientId, membership));
-    } catch (e: any) {
-      console.error("[PlanEditor] finishSession:", e);
-      throw e;
-    }
-  };
 
   // ponytail: ручное добавление разовой тренировки к остатку — платная пишется в журнал платежей (учитывается в статистике заработка), бесплатная — только +1 к остатку
   const addSingleSession = async (paid: boolean) => {
@@ -713,7 +687,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                 </button>
                 {lastSession && <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:inline" title="Дата последнего проведения">{fmtDate(lastSession.date, true)}</span>}
                 <input type="date" value={day.dateOf ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { dateOf: e.target.value || null }); }} className="bg-zinc-800 rounded-md text-xs px-1.5 py-1 outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0 text-zinc-300 w-36 hidden sm:block" />
-                <button onClick={() => setSessionDay(day)} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Провести тренировку"><Play size={15} /></button>
+                <button onClick={() => { if (!workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Провести тренировку"><Play size={15} /></button>
                 <button onClick={() => copyDay(day)} className="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0" title="Копировать день"><Clipboard size={15} /></button>
                 <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><Trash2 size={15} /></button>
               </div>
@@ -846,7 +820,6 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
           className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
       </div>
 
-      {sessionDay && <SessionModal day={sessionDay} onFinish={finishSession} onClose={() => setSessionDay(null)} />}
       {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 text-zinc-100 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg border border-zinc-700 pointer-events-none">{toast}</div>}
     </div>
   );

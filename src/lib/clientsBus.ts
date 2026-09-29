@@ -20,3 +20,18 @@ export function onClientsChanged(fn: () => void) {
   bus.addEventListener(EVT, fn);
   return () => bus.removeEventListener(EVT, fn);
 }
+
+// Д3: тренировка завершена. PlanEditor может быть размонтирован в этот момент
+// (тренировка теперь живёт на уровне приложения), поэтому он перечитывает
+// прогресс по сигналу, а не полагается на собственный колбэк.
+const FIN = "workout-finished";
+
+export function notifyWorkoutFinished(planId: string) {
+  bus.dispatchEvent(new CustomEvent(FIN, { detail: planId }));
+}
+
+export function onWorkoutFinished(fn: (planId: string) => void) {
+  const h = (e: Event) => fn((e as CustomEvent<string>).detail);
+  bus.addEventListener(FIN, h);
+  return () => bus.removeEventListener(FIN, h);
+}

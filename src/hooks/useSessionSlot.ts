@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
-import { fetchClientDoneSessions } from "../lib/bookings";
 import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
 import { parseNum, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
-import * as progressApi from "../lib/progress";
 import { buildMetrics } from "../lib/sessionUtils";
+import { finishWorkout } from "../lib/finishWorkout";
 import { MOOD_EMOJI } from "../constants";
 import type { Day, Plan, Session } from "../types";
 
@@ -107,23 +106,10 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
         done: doneEx, total: day.exercises.length, fromClient: false, items,
       };
       const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`;
-      await progressApi.logSession(plan.id, metrics, note, session);
-      // П3: день уходит в «Проведённые» и из группового проведения тоже
-      plansApi.updateDay(day.id, { archivedAt: new Date().toISOString() }).catch((e) => console.error("[useSessionSlot] archive day:", e));
-      // П12: двойной гард списания — сессия клиента и отметка в календаре.
-      // При ошибке любой проверки списание пропускаем: недосписать безопаснее.
-      let skipCharge = false;
-      try {
-        const { sessions } = await progressApi.fetchProgress(plan.id);
-        skipCharge = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
-      } catch (e) { console.error("[useSessionSlot] проверка сессий:", e); skipCharge = true; }
-      if (!skipCharge) {
-        try {
-          const done = await fetchClientDoneSessions(trainerId, clientId);
-          skipCharge = done.some((d) => d.date === session.date);
-        } catch (e) { console.error("[useSessionSlot] проверка календаря:", e); skipCharge = true; }
-      }
-      if (membership && !skipCharge) setMembership(await clientsApi.decrementMembershipRemaining(clientId, membership));
+      // Д3: запись сессии, архивация дня, отметка в календаре и двойной гард
+      // списания — всё в одной общей функции, а не копией на каждый экран.
+      const res = await finishWorkout({ trainerId, clientId, planId: plan.id, day, metrics, note, session, membership });
+      setMembership(res.membership);
       setFinished(true);
       onFinished();
     } catch (e) {
