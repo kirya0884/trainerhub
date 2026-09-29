@@ -432,7 +432,8 @@ export default function App() {
           <PlansOverview trainerId={session.user.id} clients={clients ?? []} plans={allPlans} reloadPlans={reloadPlans} autoFocusNew={view.newPlan} onOpenPlan={(planId, clientId) => { logEvent(dataTrainerId, "view", "plan"); go({ kind: "plan", planId, clientId, from: "plans" }); }} />
         )}
         {view.kind === "clients" && (
-          <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={openClient} />
+          <ClientsList trainerId={session.user.id} clients={clients} reloadClients={reloadClients} openForm={view.newForm} onOpenClient={openClient}
+            onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "clients_list" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} />
         )}
         {view.kind === "client" && (
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "client_card" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} bookings={bookingsHook.bookings} allPlans={allPlans ?? []} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "open_booking"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} onBack={goBack} onOpenPlan={(planId) => go({ kind: "plan", planId, clientId: view.clientId })} />

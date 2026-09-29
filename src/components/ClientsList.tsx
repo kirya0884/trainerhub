@@ -1,4 +1,5 @@
-import { Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { CalendarCheck, Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { useSwipeRow } from "../hooks/useSwipeRow";
 import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { logEvent } from "../lib/events";
@@ -13,7 +14,7 @@ import LiveWorkoutModal from "./LiveWorkoutModal";
 import type { ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
 
-export default function ClientsList({ trainerId, clients, reloadClients, onOpenClient, openForm }: { trainerId: string; clients: ClientListItem[] | null; reloadClients: () => void; onOpenClient: (id: string) => void; openForm?: boolean }) {
+export default function ClientsList({ trainerId, clients, reloadClients, onOpenClient, openForm, onBookClient }: { trainerId: string; clients: ClientListItem[] | null; reloadClients: () => void; onOpenClient: (id: string) => void; openForm?: boolean; onBookClient?: (clientId: string) => void }) {
   const [showForm, setShowForm] = useState(!!openForm);
   // B13: FAB просит открыть форму сразу. Флаг живёт во View, читаем один раз на смену флага.
   useEffect(() => { if (openForm) { setShowForm(true); setShowArchive(false); } }, [openForm]);
@@ -28,6 +29,8 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
   const [selectedTplId, setSelectedTplId] = useState("");
   const [renewBusy, setRenewBusy] = useState(false);
   const [liveClient, setLiveClient] = useState<ClientListItem | null>(null);
+  // B11: свайп по строке влево открывает быстрые действия
+  const swipe = useSwipeRow();
   const [showArchive, setShowArchive] = useState(false);
   const [fmtFilter, setFmtFilter] = useState(() => loadViewState("clients-fmt", ""));
   useEffect(() => { saveViewState("clients-search", search); }, [search]);
@@ -117,44 +120,65 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
           .filter((c) => !search.trim() || c.name.toLowerCase().includes(search.toLowerCase()))
           .filter((c) => !fmtFilter || c.format === fmtFilter)
           .map((c) => (
-          <button key={c.id} onClick={() => onOpenClient(c.id)} className={`w-full text-left flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:border-zinc-700 transition ${c.status === "left" ? "opacity-50" : ""}`}>
-            {c.avatarUrl
-              ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 border border-zinc-700" />
-              : <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name.charAt(0).toUpperCase()}</div>
-            }
-            <div className="flex-1 min-w-0">
-              <p className="font-medium truncate flex items-center gap-1.5">
-                <RemainingBadge remaining={c.remaining} />
-                {c.name}
-                {c.hasHealthFlags && <HeartPulse size={13} className="text-amber-400 shrink-0" />}
-                {c.status === "paused" && <span className="text-[10px] uppercase tracking-wide bg-amber-500/15 text-amber-400 rounded px-1.5 py-0.5 shrink-0">пауза</span>}
-                {c.status === "left" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">ушёл</span>}
-                {c.status === "archived" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-500 rounded px-1.5 py-0.5 shrink-0">архив</span>}
-                {c.format === "online" && <span className="text-[10px] uppercase tracking-wide bg-cyan-400/10 text-cyan-400 rounded px-1.5 py-0.5 shrink-0">онлайн</span>}
-                {c.format === "offline" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700/50 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">офлайн</span>}
-                {!!c.activeSession && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setLiveClient(c); }}
-                    className="text-[10px] uppercase tracking-wide bg-cyan-400/15 text-cyan-400 hover:bg-cyan-400/30 rounded px-1.5 py-0.5 shrink-0 flex items-center gap-1 transition"
-                    title="Смотреть тренировку онлайн"
-                  ><Play size={10} /> тренируется</button>
-                )}
-              </p>
-              <p className="text-xs text-zinc-500">{c.goal}</p>
+          // B11: строка едет влево, под ней панель действий
+          <div key={c.id} {...swipe.rowProps(c.id)} className="relative overflow-hidden rounded-xl">
+            <div className="absolute inset-y-0 right-0 flex items-stretch" style={{ width: swipe.PANEL_W }}>
+              <button onClick={() => { swipe.setOpenId(null); onBookClient?.(c.id); }}
+                className="flex-1 flex flex-col items-center justify-center gap-1 bg-cyan-500/20 text-cyan-300 active:bg-cyan-500/30 transition">
+                <CalendarCheck size={18} />
+                <span className="text-[11px] font-medium">Записать</span>
+              </button>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
-              {c.remaining !== null && c.remaining !== "" && Number(c.remaining) <= 2 && (
-                <button
-                  onClick={(e) => openRenew(e, c)}
-                  className="flex items-center gap-1 text-[11px] font-semibold bg-orange-400/15 text-orange-400 hover:bg-orange-400/25 rounded-full px-2 py-0.5 transition"
-                  title="Быстрое продление пакета"
-                >
-                  <RefreshCw size={10} /> Продлить
+            <div className="relative" style={{ transform: `translateX(${swipe.offsetFor(c.id)}px)`, transition: swipe.openId === c.id || swipe.offsetFor(c.id) === 0 ? "transform .18s ease-out" : "none" }}>
+            <button onClick={() => { if (swipe.openId === c.id) { swipe.setOpenId(null); return; } onOpenClient(c.id); }} className={`w-full text-left flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:border-zinc-700 transition ${c.status === "left" ? "opacity-50" : ""}`}>
+              {c.avatarUrl
+                ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 border border-zinc-700" />
+                : <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name.charAt(0).toUpperCase()}</div>
+              }
+              <div className="flex-1 min-w-0">
+                <p className="font-medium truncate flex items-center gap-1.5">
+                  <RemainingBadge remaining={c.remaining} />
+                  {c.name}
+                  {c.hasHealthFlags && <HeartPulse size={13} className="text-amber-400 shrink-0" />}
+                  {c.status === "paused" && <span className="text-[10px] uppercase tracking-wide bg-amber-500/15 text-amber-400 rounded px-1.5 py-0.5 shrink-0">пауза</span>}
+                  {c.status === "left" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">ушёл</span>}
+                  {c.status === "archived" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-500 rounded px-1.5 py-0.5 shrink-0">архив</span>}
+                  {c.format === "online" && <span className="text-[10px] uppercase tracking-wide bg-cyan-400/10 text-cyan-400 rounded px-1.5 py-0.5 shrink-0">онлайн</span>}
+                  {c.format === "offline" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700/50 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">офлайн</span>}
+                  {!!c.activeSession && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setLiveClient(c); }}
+                      className="text-[10px] uppercase tracking-wide bg-cyan-400/15 text-cyan-400 hover:bg-cyan-400/30 rounded px-1.5 py-0.5 shrink-0 flex items-center gap-1 transition"
+                      title="Смотреть тренировку онлайн"
+                    ><Play size={10} /> тренируется</button>
+                  )}
+                </p>
+                <p className="text-xs text-zinc-500">{c.goal}</p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                {c.remaining !== null && c.remaining !== "" && Number(c.remaining) <= 2 && (
+                  <button
+                    onClick={(e) => openRenew(e, c)}
+                    className="flex items-center gap-1 text-[11px] font-semibold bg-orange-400/15 text-orange-400 hover:bg-orange-400/25 rounded-full px-2 py-0.5 transition"
+                    title="Быстрое продление пакета"
+                  >
+                    <RefreshCw size={10} /> Продлить
+                  </button>
+                )}
+                {/* B11: на десктопе жеста нет. Действие одно, поэтому кнопка ведёт
+                  прямо к нему — меню с единственным пунктом было бы лишним тапом. */}
+              {onBookClient && (
+                <button onClick={(e) => { e.stopPropagation(); onBookClient(c.id); }}
+                  title="Записать на тренировку" aria-label="Записать на тренировку"
+                  className="hidden sm:flex p-1.5 rounded-lg text-zinc-600 hover:bg-cyan-400/15 hover:text-cyan-400 active:text-cyan-400 transition-colors duration-100">
+                  <CalendarCheck size={15} />
                 </button>
               )}
               <ChevronRight size={18} className="text-zinc-600" />
+              </div>
+            </button>
             </div>
-          </button>
+          </div>
         ))}
       </div>
       {liveClient && liveClient.activeSession && (
