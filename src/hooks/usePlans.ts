@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSharedListSync } from "./useSharedListSync";
 import * as api from "../lib/clients";
 import type { PlanOverviewItem } from "../lib/clients";
 
@@ -17,6 +18,9 @@ export function usePlans(trainerId: string) {
       .catch((e) => console.error("[usePlans]", e));
   };
   useEffect(() => { load(); }, [trainerId]);
+
+  // А4: обновление из другого окна — возврат к окну и события репликации
+  useSharedListSync(!!trainerId, ["plans"], load, `plans-sync-${trainerId}`);
 
   return { plans, reload: load };
 }

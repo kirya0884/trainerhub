@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSharedListSync } from "./useSharedListSync";
 import * as api from "../lib/clients";
 import { onClientsChanged } from "../lib/clientsBus";
 import type { ClientListItem } from "../lib/clients";
@@ -29,6 +30,9 @@ export function useClients(trainerId: string) {
     });
     return () => { off(); if (t) clearTimeout(t); };
   }, [trainerId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // А4: обновление из другого окна — возврат к окну и события репликации
+  useSharedListSync(!!trainerId, ["clients"], load, `clients-sync-${trainerId}`);
 
   return { clients, reload: load };
 }

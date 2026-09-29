@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSharedListSync } from "./useSharedListSync";
 import * as api from "../lib/bookings";
 import type { Booking } from "../lib/bookings";
 
@@ -27,6 +28,9 @@ export function useBookings(trainerId: string) {
     else await api.setException(b, occDate, patch);
     await load();
   };
+
+  // А4: обновление из другого окна — возврат к окну и события репликации
+  useSharedListSync(!!trainerId, ["bookings", "booking_clients"], load, `bookings-sync-${trainerId}`);
 
   return { bookings, loading, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload: load };
 }
