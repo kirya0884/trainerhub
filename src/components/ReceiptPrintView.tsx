@@ -6,7 +6,7 @@ export default function ReceiptPrintView({ payment, trainerId, clientName, onClo
   const brand = usePrintBrand(trainerId);
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 overflow-y-auto">
       <PrintTopBar title="Чек об оплате" onClose={onClose} />
 
       <div className="print-area max-w-sm mx-auto bg-white text-zinc-900 p-6 my-4 rounded-xl">

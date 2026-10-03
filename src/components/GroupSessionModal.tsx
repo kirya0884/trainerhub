@@ -198,7 +198,7 @@ export default function GroupSessionModal({ clients, trainerId, onClose, onClien
   };
 
   return (
-    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 flex flex-col outline-none">
+    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col outline-none">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2 min-w-0"><Users size={16} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">Групповая тренировка</h2></div>
         <button onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0"><X size={20} /></button>

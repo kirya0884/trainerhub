@@ -213,7 +213,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   if (step === "feedback") {
     return (
-      <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col" style={{ "--accent": accent } as React.CSSProperties}>
+      <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col" style={{ "--accent": accent } as React.CSSProperties}>
         {draftFailed && (
           <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
@@ -266,7 +266,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
           <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывайте экран, пока не завершите тренировку.</span>
         </div>
       )}
-    <div className="fixed inset-0 z-50 bg-zinc-950 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col">
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} style={{ color: "var(--accent)" }} className="shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs mt-0.5 font-mono" style={{ color: "var(--accent)" }}><SessionTimer startedAt={startedAt} /></p></div>
         <div className="flex items-center gap-1 shrink-0">

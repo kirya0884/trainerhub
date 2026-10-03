@@ -114,10 +114,13 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
  * свёрнутая плашка висит внизу поверх всего и открывается с любого экрана.
  * Раньше SessionModal жил внутри PlanEditor и исчезал при уходе с экрана плана.
  */
-function ActiveWorkoutHost({ trainerId }: { trainerId: string }) {
+function ActiveWorkoutHost({ trainerId, accent }: { trainerId: string; accent: string }) {
   const { active, stop } = useActiveWorkout();
   if (!active) return null;
+  // Акцент задаётся на контейнере приложения, а этот хост рендерится вне его —
+  // без своей переменной тренер с нестандартным цветом увидел бы цвет по умолчанию.
   return (
+    <div style={{ "--accent": accent } as React.CSSProperties}>
     <SessionModal
       key={active.day.id}
       day={active.day}
@@ -129,6 +132,7 @@ function ActiveWorkoutHost({ trainerId }: { trainerId: string }) {
       }}
       onClose={stop}
     />
+    </div>
   );
 }
 
@@ -485,7 +489,7 @@ export default function App() {
     </div>
     </PinGate>
     {/* Д3: вне переключателя экранов — переживает любую навигацию */}
-    <ActiveWorkoutHost trainerId={session.user.id} />
+    <ActiveWorkoutHost trainerId={session.user.id} accent={trainerAccent} />
     </ActiveWorkoutProvider>
     </>
   );

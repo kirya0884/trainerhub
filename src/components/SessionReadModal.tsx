@@ -23,7 +23,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
   // (group info не сохраняется в сессии, показываем просто список)
 
   return (
-    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 flex flex-col outline-none">
+    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col outline-none">
       {/* Header */}
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="min-w-0">

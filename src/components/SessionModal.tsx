@@ -179,7 +179,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
   if (minimized) {
     return (
       <button onClick={() => setMinimized(false)}
-        className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
+        className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Play size={15} className="text-lime-400 shrink-0" />
         <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>
         <span className="font-mono text-lime-400 text-sm shrink-0">{timer}</span>
@@ -188,8 +188,11 @@ export default function SessionModal({ day, onFinish, onClose }: {
     );
   }
 
+  // Д3/фикс: цвет текста задаётся здесь, а не наследуется. Модал рендерится из App
+  // вне общего контейнера с text-zinc-100 — без своего цвета текст падал
+  // на умолчание браузера и становился чёрным на тёмном фоне.
   return (
-    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 flex flex-col outline-none">
+    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col outline-none">
       {draftFailed && (
         <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />

@@ -30,7 +30,7 @@ export default function SearchOverlay({ clients, plans, onOpenClient, onOpenPlan
   const nothing = term.length > 0 && !foundClients.length && !foundPlans.length;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-zinc-950/95 backdrop-blur-sm flex flex-col" role="dialog" aria-label="Поиск">
+    <div className="fixed inset-0 z-[60] bg-zinc-950/95 text-zinc-100 backdrop-blur-sm flex flex-col" role="dialog" aria-label="Поиск">
       <div className="max-w-2xl w-full mx-auto px-3 sm:px-4 py-4 flex flex-col min-h-0 flex-1">
         <div className="flex items-center gap-2 shrink-0">
           <div className="flex-1 flex items-center gap-2 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">

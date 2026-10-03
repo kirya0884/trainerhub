@@ -34,7 +34,10 @@ export function useSwipeBack(enabled: boolean, onBack: () => void) {
     const blocked = (t: EventTarget | null) => {
       const el = t as HTMLElement | null;
       if (!el?.closest) return false;
-      return !!el.closest('[role="dialog"],[data-ds-root],[draggable="true"],input,textarea,select');
+      // data-drag-root — общий маркер всех зон перетаскивания. Раньше тут был
+      // data-ds-root, но Н2 ввёл пространства имён, и зоны дней перестали попадать
+      // под проверку: жест возврата мог запуститься поверх перетаскивания дня.
+      return !!el.closest('[role="dialog"],[data-drag-root],[draggable="true"],input,textarea,select');
     };
 
     const onStart = (e: TouchEvent) => {

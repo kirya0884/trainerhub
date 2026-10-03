@@ -24,7 +24,7 @@ export default function ClientProgressPrintView({ clientId, planIds, clientName,
   const attendanceRate = attended.length ? Math.round((attended.reduce((a, s) => a + s.done / s.total, 0) / attended.length) * 100) : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-zinc-950 overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 overflow-y-auto">
       <PrintTopBar title="Предпросмотр печати" onClose={onClose} />
 
       <div className="print-area max-w-2xl mx-auto bg-white text-zinc-900 p-6 my-4 rounded-xl">
