@@ -92,7 +92,7 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-4">
-        <h1 className="text-xl font-bold text-center"><span className="text-lime-400">Trainer</span><span className="text-cyan-400">Hub</span></h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-center">Reps</h1>
         <p className="text-sm text-zinc-400 text-center">Придумай новый пароль</p>
         <form onSubmit={submit} className="space-y-3">
           <input type="password" required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />

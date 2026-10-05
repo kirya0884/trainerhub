@@ -38,7 +38,7 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        background: "#04030F",
+        background: "#09090b",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",

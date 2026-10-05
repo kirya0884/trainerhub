@@ -62,8 +62,11 @@ export default function AuthScreen() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-4">
-        <h1 className="text-xl font-bold text-center"><span className="text-lime-400">Trainer</span><span className="text-cyan-400">Hub</span></h1>
-        <p className="text-xs text-zinc-500 text-center -mt-2">Платформа для персональных тренеров</p>
+        <div className="flex flex-col items-center gap-3">
+          <img src="/icon-192.png" alt="" className="w-14 h-14 rounded-2xl" />
+          <h1 className="text-2xl font-extrabold tracking-tight">Reps</h1>
+        </div>
+        <p className="text-sm text-zinc-500 text-center -mt-2">Платформа для персональных тренеров</p>
 
         {forgotPw ? (
           <>
