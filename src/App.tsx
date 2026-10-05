@@ -165,8 +165,11 @@ export default function App() {
   const [trainerName, setTrainerName] = useState("");
   const [trainerAvatar, setTrainerAvatar] = useState("");
   const [trainerAccent, setTrainerAccent] = useState("#a3e635");
+  // Пишется через writeJson (в кавычках), поэтому и читаем через readJson — раньше
+  // getItem возвращал '"light"', сравнение с "light" не проходило, и после
+  // перезагрузки светлая тема слетала на тёмную.
   const [themeMode, setThemeMode] = useState<"dark" | "light">(
-    () => (localStorage.getItem("trainerhub-theme-v1") as "dark" | "light") || "dark"
+    () => (readJson<string>("trainerhub-theme-v1", "dark") === "light" ? "light" : "dark")
   );
   const [tabOrder, setTabOrder] = useState<TabKind[]>(loadTabOrder);
   const [hiddenTabs, setHiddenTabs] = useState<TabKind[]>(loadHiddenTabs);

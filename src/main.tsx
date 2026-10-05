@@ -1,6 +1,9 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+// Шрифт в бандле, а не с Google Fonts: PWA должна работать в зале без сети,
+// а woff2 попадают в precache сервис-воркера (globPatterns в vite.config.ts)
+import "@fontsource-variable/onest";
 import "./index.css";
 import { registerSW } from "virtual:pwa-register";
 

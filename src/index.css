@@ -2,6 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Цветовые токены ───────────────────────────────────────────────
+   Классы zinc-* и lime-* берут цвет отсюда (см. tailwind.config.js).
+   Три набора серых: --bg-* для фонов, --ink-* для текста, --line-* для рамок.
+   Значения — RGB-каналы через пробел, чтобы работали модификаторы /40, /60 и т.п.
+   Тёмная тема = исходная палитра zinc, кроме ink-500/600: подняты до контраста
+   5.3:1 и ~4:1 на карточке (было 3.7:1 и 2.3:1).
+   ------------------------------------------------------------------ */
+:root {
+  --accent: #a3e635;    /* тренер переопределяет из профиля, клиент — на своём контейнере */
+  --accent-ink: 100%;   /* доля акцента в цвете текста; в светлой теме затемняем */
+
+  --bg-50: 250 250 250;  --bg-100: 244 244 245; --bg-200: 228 228 231; --bg-300: 212 212 216;
+  --bg-400: 161 161 170; --bg-500: 113 113 122; --bg-600: 82 82 91;    --bg-700: 63 63 70;
+  --bg-800: 39 39 42;    --bg-900: 24 24 27;    --bg-950: 9 9 11;
+
+  --ink-50: 250 250 250;  --ink-100: 244 244 245; --ink-200: 228 228 231; --ink-300: 212 212 216;
+  --ink-400: 161 161 170; --ink-500: 139 139 148; --ink-600: 117 117 126; --ink-700: 63 63 70;
+  --ink-800: 39 39 42;    --ink-900: 24 24 27;    --ink-950: 9 9 11;
+
+  --line-50: 250 250 250;  --line-100: 244 244 245; --line-200: 228 228 231; --line-300: 212 212 216;
+  --line-400: 161 161 170; --line-500: 113 113 122; --line-600: 82 82 91;    --line-700: 63 63 70;
+  --line-800: 39 39 42;    --line-900: 24 24 27;    --line-950: 9 9 11;
+}
+
+/* Светлая тема: включается классом на <html> (см. App.tsx).
+   Светлые оттенки 50-400 у фона и рамок не трогаем — ими нарисованы печатные формы
+   и светлые чипы, которые должны оставаться светлыми в любой теме. */
+html.light-theme {
+  color-scheme: light;
+  --accent-ink: 52%;    /* лайм на белом 1.5:1 → 5.1:1 */
+
+  --bg-500: 161 161 170; --bg-600: 212 212 216; --bg-700: 228 228 231;
+  --bg-800: 239 239 241; --bg-900: 255 255 255; --bg-950: 244 244 245;
+
+  --ink-50: 9 9 11;      --ink-100: 24 24 27;    --ink-200: 39 39 42;    --ink-300: 63 63 70;
+  --ink-400: 82 82 91;   --ink-500: 95 95 104;   --ink-600: 110 110 119; --ink-700: 139 139 148;
+  --ink-800: 161 161 170; --ink-900: 24 24 27;   --ink-950: 9 9 11;
+
+  --line-500: 161 161 170; --line-600: 161 161 170; --line-700: 212 212 216;
+  --line-800: 228 228 231; --line-900: 228 228 231; --line-950: 228 228 231;
+}
+
+/* Печатные формы всегда белые — текст в них всегда тёмный, в любой теме */
+.print-area {
+  --accent-ink: 52%;
+  --ink-50: 9 9 11;      --ink-100: 24 24 27;    --ink-200: 39 39 42;    --ink-300: 63 63 70;
+  --ink-400: 82 82 91;   --ink-500: 95 95 104;   --ink-600: 110 110 119; --ink-700: 63 63 70;
+  --ink-800: 39 39 42;   --ink-900: 24 24 27;    --ink-950: 9 9 11;
+}
+
+body {
+  /* Цифры одинаковой ширины: веса, суммы и таймеры не прыгают при обновлении */
+  font-variant-numeric: tabular-nums;
+}
+
+/* Плейсхолдеры без явного класса — тем же цветом, что вторичный текст */
+input::placeholder, textarea::placeholder { color: rgb(var(--ink-600)); }
+
 /* iOS Safari зумирует поля с font-size < 16px — держим минимум 16px везде */
 input, textarea, select { font-size: 16px !important; }
 
@@ -12,95 +70,3 @@ input, textarea, select { font-size: 16px !important; }
   .print-area { position: absolute; left: 0; top: 0; width: 100%; }
   .no-print { display: none !important; }
 }
-
-
-/* ── Акцентный цвет тренера (--accent) ─────────────────────────────
-   Tailwind-классы lime-400 переопределяются через CSS, чтобы все
-   кнопки и элементы реагировали на выбранный цвет без правки TSX.
-   color-mix() поддерживается Chrome 111+, FF 113+, Safari 16.2+.
-   ------------------------------------------------------------------ */
-
-/* solid */
-.bg-lime-400          { background-color: var(--accent, #a3e635) !important; }
-.text-lime-400        { color: var(--accent, #a3e635) !important; }
-.border-lime-400      { border-color: var(--accent, #a3e635) !important; }
-.border-t-lime-400    { border-top-color: var(--accent, #a3e635) !important; }
-.ring-lime-400        { --tw-ring-color: var(--accent, #a3e635) !important; }
-.accent-lime-400      { accent-color: var(--accent, #a3e635) !important; }
-
-/* opacity variants */
-.bg-lime-400\/5      { background-color: color-mix(in srgb, var(--accent, #a3e635)  5%, transparent) !important; }
-.bg-lime-400\/10     { background-color: color-mix(in srgb, var(--accent, #a3e635) 10%, transparent) !important; }
-.bg-lime-400\/15     { background-color: color-mix(in srgb, var(--accent, #a3e635) 15%, transparent) !important; }
-.bg-lime-400\/20     { background-color: color-mix(in srgb, var(--accent, #a3e635) 20%, transparent) !important; }
-.bg-lime-400\/25     { background-color: color-mix(in srgb, var(--accent, #a3e635) 25%, transparent) !important; }
-.bg-lime-400\/30     { background-color: color-mix(in srgb, var(--accent, #a3e635) 30%, transparent) !important; }
-.bg-lime-400\/40     { background-color: color-mix(in srgb, var(--accent, #a3e635) 40%, transparent) !important; }
-.bg-lime-400\/50     { background-color: color-mix(in srgb, var(--accent, #a3e635) 50%, transparent) !important; }
-.bg-lime-400\/60     { background-color: color-mix(in srgb, var(--accent, #a3e635) 60%, transparent) !important; }
-
-/* hover states
-   Р6: только там, где есть настоящее наведение. Эти правила идут с !important и
-   перебивают Tailwind, поэтому флаг hoverOnlyWhenSupported их не покрывает — на
-   телефоне подсветка залипала бы после тапа до касания в другом месте. */
-@media (hover: hover) {
-  .hover\:bg-lime-400:hover   { background-color: var(--accent, #a3e635) !important; }
-  .hover\:bg-lime-300:hover   { background-color: color-mix(in srgb, var(--accent, #a3e635) 82%, white) !important; }
-  .hover\:text-lime-400:hover { color: var(--accent, #a3e635) !important; }
-  .hover\:text-lime-300:hover { color: color-mix(in srgb, var(--accent, #a3e635) 80%, white) !important; }
-  .hover\:border-lime-400\/40:hover { border-color: color-mix(in srgb, var(--accent, #a3e635) 40%, transparent) !important; }
-}
-
-/* focus states */
-.focus\:border-lime-400\/50:focus { border-color: color-mix(in srgb, var(--accent, #a3e635) 50%, transparent) !important; }
-.focus\:ring-lime-400\/40:focus   { --tw-ring-color: color-mix(in srgb, var(--accent, #a3e635) 40%, transparent) !important; }
-
-/* ── Светлая тема (light mode) ──────────────────────────────────────
-   CSS-каскад переопределяет Tailwind zinc-классы.
-   Применяется через html.light-theme (см. App.tsx).
-   ------------------------------------------------------------------ */
-html.light-theme {
-  color-scheme: light;
-}
-
-/* backgrounds */
-html.light-theme .bg-zinc-950 { background-color: #f8fafc !important; }
-html.light-theme .bg-zinc-900 { background-color: #ffffff !important; }
-html.light-theme .bg-zinc-800 { background-color: #f1f5f9 !important; }
-html.light-theme .bg-zinc-700 { background-color: #e2e8f0 !important; }
-
-/* opacity variants */
-html.light-theme .bg-zinc-800\/60 { background-color: rgba(241,245,249,0.6) !important; }
-html.light-theme .bg-zinc-950\/90 { background-color: rgba(248,250,252,0.9) !important; }
-
-/* text */
-html.light-theme .text-zinc-100 { color: #0f172a !important; }
-html.light-theme .text-zinc-200 { color: #1e293b !important; }
-html.light-theme .text-zinc-300 { color: #334155 !important; }
-html.light-theme .text-zinc-400 { color: #64748b !important; }
-html.light-theme .text-zinc-500 { color: #94a3b8 !important; }
-html.light-theme .text-zinc-600 { color: #94a3b8 !important; }
-html.light-theme .text-zinc-700 { color: #cbd5e1 !important; }
-html.light-theme .text-zinc-950 { color: #0f172a !important; }
-
-/* borders */
-html.light-theme .border-zinc-800 { border-color: #e2e8f0 !important; }
-html.light-theme .border-zinc-700 { border-color: #cbd5e1 !important; }
-
-/* dividers */
-html.light-theme .divide-zinc-800 > :not([hidden]) ~ :not([hidden]) { border-color: #e2e8f0 !important; }
-
-/* hover states — Р6: см. комментарий выше */
-@media (hover: hover) {
-  html.light-theme .hover\:bg-zinc-800:hover { background-color: #f1f5f9 !important; }
-  html.light-theme .hover\:bg-zinc-700:hover { background-color: #e2e8f0 !important; }
-  html.light-theme .hover\:text-zinc-100:hover { color: #0f172a !important; }
-  html.light-theme .hover\:text-zinc-300:hover { color: #334155 !important; }
-}
-
-/* inputs / placeholders */
-html.light-theme input::placeholder,
-html.light-theme textarea::placeholder { color: #94a3b8 !important; }
-
-/* ring focus visible in light mode */
-html.light-theme .focus\:ring-zinc-700:focus { --tw-ring-color: #cbd5e1 !important; }
