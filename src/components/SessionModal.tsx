@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Circle, Flame, Layers, MessageSquare, Minimize2, Play, Timer, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Flame, Layers, MessageSquare, Minimize2, Play, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useEffect, useRef, useState } from "react";
@@ -41,8 +41,8 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="transition" title={`${n} из 5`}>
-          <Flame size={18} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
+        <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="p-1 transition" title={`${n} из 5`}>
+          <Flame size={22} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
         </button>
       ))}
     </div>
@@ -135,6 +135,10 @@ export default function SessionModal({ day, onFinish, onClose }: {
       return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
     });
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
+  // Текущее — первое невыполненное: подсвечиваем, чтобы в зале не искать глазами, где остановились
+  const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
+  // Выполненные упражнения сворачиваются в строку; тап раскрывает обратно (поправить вес, заметку)
+  const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
   const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
   const isCircuit = day.method === "circuit";
   const maxRounds = isCircuit && day.exercises.length ? Math.max(1, ...day.exercises.map((ex) => (vals[ex.id] || []).length)) : 0;
@@ -199,11 +203,19 @@ export default function SessionModal({ day, onFinish, onClose }: {
           <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывайте экран, пока не завершите тренировку.</span>
         </div>
       )}
-      <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
-        <div className="min-w-0"><div className="flex items-center gap-2"><Play size={16} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">{day.name}</h2></div><p className="text-xs text-zinc-500 mt-0.5"><span className="font-mono text-lime-400 mr-2">{timer}</span>Отмечай факт по подходам, ставь огонёчки на последних подходах</p></div>
-        <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => setMinimized(true)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400" title="Свернуть"><Minimize2 size={18} /></button>
-          <button onClick={() => { if (window.confirm("Прервать тренировку? Отметки будут удалены.")) { clearPersist(); onClose(); } }} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={20} /></button>
+      <div className="border-b border-zinc-800 bg-zinc-900 px-4 pt-3 pb-2.5 shrink-0">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="font-bold truncate">{day.name}</h2>
+            <p className="text-sm text-zinc-500 mt-0.5"><span className="font-mono font-bold text-base text-lime-400 mr-2">{timer}</span>{doneEx} из {day.exercises.length} упр.</p>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <button onClick={() => setMinimized(true)} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Свернуть" aria-label="Свернуть"><Minimize2 size={20} /></button>
+            <button onClick={() => { if (window.confirm("Прервать тренировку? Отметки будут удалены.")) { clearPersist(); onClose(); } }} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Прервать" aria-label="Прервать тренировку"><X size={22} /></button>
+          </div>
+        </div>
+        <div className="h-1 mt-2 rounded-full bg-zinc-800 overflow-hidden">
+          <div className="h-full rounded-full bg-lime-400 transition-[width] duration-300" style={{ width: `${day.exercises.length ? (doneEx / day.exercises.length) * 100 : 0}%` }} />
         </div>
       </div>
 
@@ -213,11 +225,10 @@ export default function SessionModal({ day, onFinish, onClose }: {
           <div key={r} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
             <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-cyan-400/10 text-cyan-400">Круг {r + 1} из {maxRounds}</div>
             <div className="flex items-center gap-2 px-3 py-1 text-[10px] uppercase tracking-wide text-zinc-500 border-b border-zinc-800">
-              <span className="shrink-0" style={{ width: 26 }} />
               <span className="flex-1 min-w-0">Упражнение</span>
               <span className="w-14 text-center shrink-0">повт.</span>
-              <span className="text-xs invisible">×</span>
               <span className="w-14 text-center shrink-0">вес, кг</span>
+              <span className="w-11 shrink-0" />
             </div>
             <div className="divide-y divide-zinc-800">
               {day.exercises.map((ex) => {
@@ -227,20 +238,20 @@ export default function SessionModal({ day, onFinish, onClose }: {
                 const md = meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0, setsDone: {} };
                 const isDone = md.setsDone?.[r] ?? false;
                 return (
-                  <div key={ex.id} className={`flex items-center gap-2 px-3 py-2 transition ${isDone ? "opacity-50" : ""}`}>
-                    <button onClick={() => toggleSetDone(ex.id, r, rows.length)} className="shrink-0 p-0.5">
-                      {isDone ? <CheckCircle2 size={18} className="text-lime-400" /> : <Circle size={18} className="text-zinc-600" />}
-                    </button>
-                    <span className="flex-1 min-w-0 truncate text-sm font-medium">{ex.name}</span>
+                  <div key={ex.id} className="flex items-center gap-2 px-3 py-2">
+                    <span className={`flex-1 min-w-0 truncate text-sm font-medium transition ${isDone ? "text-zinc-500" : ""}`}>{ex.name}</span>
                     {ex.kind === "functional" ? (
                       <span className="text-xs text-zinc-400 shrink-0 text-right">{[ex.duration && `⏱ ${ex.duration}`, ex.weight, ex.pulseZone && `пульс ${ex.pulseZone}`].filter(Boolean).join(" · ") || "функц."}</span>
                     ) : (
                       <>
-                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-9 w-14 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
-                        <span className="text-xs text-zinc-500">×</span>
-                        <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-9 w-14 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-11 w-14 bg-zinc-800 rounded-xl px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
+                        <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-11 w-14 bg-zinc-800 rounded-xl px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
                       </>
                     )}
+                    <button onClick={() => toggleSetDone(ex.id, r, rows.length)} aria-pressed={isDone} aria-label={isDone ? "Снять отметку" : "Отметить выполненным"}
+                      className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                      <Check size={20} strokeWidth={2.5} />
+                    </button>
                   </div>
                 );
               })}
@@ -254,9 +265,27 @@ export default function SessionModal({ day, onFinish, onClose }: {
             const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
             const md = meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0 };
             const tonnage = tonnageOf(rows);
+            const grouped = block.items.length > 1;
+            const isCurrent = ex.id === currentId;
+            const shell = grouped
+              ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}`
+              : `bg-zinc-900 border rounded-2xl p-3.5 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
+            if (md.done && !openDone[ex.id]) {
+              const fact = rows.filter((r) => r.weight || r.reps).map((r) => `${r.reps || "—"}×${r.weight || "—"}`).join(", ");
+              return (
+                <button key={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} w-full flex items-center gap-3 text-left`}>
+                  <CheckCircle2 size={20} className="text-lime-400 shrink-0" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold truncate"><span className="text-zinc-500 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</span>
+                    <span className="block text-xs text-zinc-500 truncate">{ex.kind === "functional" ? exSummary(ex) : fact || exSummary(ex)}</span>
+                  </span>
+                  {tonnage > 0 && <span className="text-xs text-zinc-500 shrink-0">{fmtTonnage(tonnage)}</span>}
+                </button>
+              );
+            }
             return (
-              <div key={ex.id} className={block.items.length > 1 ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}` : `bg-zinc-900 border rounded-xl p-3 transition ${md.done ? "border-lime-400/40" : "border-zinc-800"}`}>
-                <div className="flex items-start justify-between gap-2 mb-2"><h3 className="font-semibold min-w-0 leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3><div className="flex items-center gap-2 shrink-0">{tonnage > 0 && <span className="text-xs text-zinc-500">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></span>}<button onClick={() => setMetaFor(ex.id, { done: !md.done })} className={`text-xs px-2 py-1 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-400 hover:text-zinc-100"}`}>{md.done ? "✓ Готово" : "Готово"}</button></div></div>
+              <div key={ex.id} className={shell}>
+                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-sm px-3 h-9 rounded-xl font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
                 {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-cyan-400" /> отдых между подходами: {ex.rest}</p>}
                 {ex.kind === "functional" ? (
                 <div className="text-sm text-zinc-300 flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -266,20 +295,29 @@ export default function SessionModal({ day, onFinish, onClose }: {
                   {!ex.duration && !ex.weight && !ex.pulseZone && <span className="text-zinc-600">функциональное упражнение</span>}
                 </div>
                 ) : (
-                <div className="space-y-1.5">
+                <div className="space-y-2">
+                  <div className="grid grid-cols-[1.5rem_1fr_1fr_3rem] gap-2 text-xs text-zinc-500 text-center">
+                    <span>#</span><span>Повторы</span><span>Вес, кг</span><span />
+                  </div>
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;
                     return (
-                      <div key={i} className={`flex items-center gap-2 transition ${isDone ? "opacity-50" : ""}`}>
-                        <button onClick={() => toggleSetDone(ex.id, i, rows.length)} className="shrink-0 p-0.5">
-                          {isDone ? <CheckCircle2 size={18} className="text-lime-400" /> : <Circle size={18} className="text-zinc-600" />}
-                        </button>
-                        <span className="text-xs text-zinc-400 w-4 text-center shrink-0">{i + 1}</span>
-                        <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
-                        <span className="text-xs text-zinc-500">×</span>
-                        <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-base text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
-                        <span className="text-xs text-zinc-500 shrink-0">кг</span>
-                        {fireIdx.includes(i) && <FlameRate value={md.fires[i] || 0} onChange={(v) => setFire(ex.id, i, v)} />}
+                      <div key={i}>
+                        <div className="grid grid-cols-[1.5rem_1fr_1fr_3rem] gap-2 items-center">
+                          <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
+                          <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-xl px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                          <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-xl px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                          <button onClick={() => toggleSetDone(ex.id, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
+                            className={`h-12 w-12 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                            <Check size={22} strokeWidth={2.5} />
+                          </button>
+                        </div>
+                        {fireIdx.includes(i) && (
+                          <div className="flex items-center gap-2 pl-8 mt-1">
+                            <span className="text-xs text-zinc-500">Усилие</span>
+                            <FlameRate value={md.fires[i] || 0} onChange={(v) => setFire(ex.id, i, v)} />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -312,7 +350,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
         </div>
       </div>
 
-      <div className="border-t border-zinc-800 bg-zinc-900 px-3 py-2.5 shrink-0"><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-xs text-zinc-500"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="ml-2 text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} disabled={submitting} className="ml-auto bg-lime-400 text-zinc-950 font-bold rounded-xl px-5 py-2 text-sm hover:bg-lime-300 transition disabled:opacity-50 flex items-center gap-1.5"><CheckCircle2 size={16} /> {submitting ? "Сохранение..." : "Завершить"}</button></div></div>
+      <div className="border-t border-zinc-800 bg-zinc-900 px-3 pt-2.5 shrink-0" style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))" }}><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-sm text-zinc-500"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} disabled={submitting} className="ml-auto h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl px-6 text-base hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"><CheckCircle2 size={18} /> {submitting ? "Сохранение..." : "Завершить"}</button></div></div>
     </div>
   );
 }
