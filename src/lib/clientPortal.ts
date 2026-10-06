@@ -62,6 +62,13 @@ export async function fetchTrainerBrand(trainerId: string) {
   return { brand: data?.brand || "Reps", logoUrl: data?.logo_url || "", trainingRules: (data?.profile as any)?.trainingRules || "" };
 }
 
+// Строка bookings глазами клиента: участники ему не видны, поэтому в записи только он сам
+const toBooking = (b: any, clientId: string): Booking => ({
+  id: b.id, planId: b.plan_id, dayId: b.day_id ?? null, dayName: b.day_name ?? null, date: b.date, time: b.time ?? "", duration: b.duration ?? 60,
+  status: b.status ?? "scheduled", note: b.note ?? "", recurring: !!b.recurring, recurUntil: b.recur_until,
+  exceptions: b.exceptions ?? {}, clientIds: [clientId],
+});
+
 export interface UpcomingBooking { date: string; time: string; duration: number }
 
 // Клиент может читать только bookings, в которых он участвует (см. миграцию 0003) — раскрываем повторы на лету и берём ближайшее занятие
@@ -70,11 +77,7 @@ export async function fetchUpcomingBooking(clientId: string): Promise<UpcomingBo
   const ids = (links ?? []).map((l) => l.booking_id);
   if (!ids.length) return null;
   const { data } = await supabase.from("bookings").select("*").in("id", ids);
-  const bookings: Booking[] = (data ?? []).map((b: any) => ({
-    id: b.id, planId: b.plan_id, dayId: b.day_id ?? null, dayName: b.day_name ?? null, date: b.date, time: b.time ?? "", duration: b.duration ?? 60,
-    status: b.status ?? "scheduled", note: b.note ?? "", recurring: !!b.recurring, recurUntil: b.recur_until,
-    exceptions: b.exceptions ?? {}, clientIds: [clientId],
-  }));
+  const bookings: Booking[] = (data ?? []).map((b: any) => toBooking(b, clientId));
   const todayStr = today();
   const occs = expandBookings(bookings, todayStr, addDays(todayStr, 60)).filter((o) => o.status !== "cancelled");
   occs.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
@@ -119,24 +122,21 @@ export async function markClientBookingDone(trainerId: string, clientId: string,
   try {
     const { data } = await supabase
       .from("bookings")
-      .select("id, recurring, date, day_name, status, exceptions, booking_clients(client_id)")
+      .select("*, booking_clients(client_id)")
       .eq("trainer_id", trainerId)
       .eq("day_name", dayName);
-    for (const b of data ?? []) {
-      const inDate = b.recurring || b.date === date;
-      const hasClient = (b.booking_clients ?? []).some((x: any) => x.client_id === clientId);
-      // skip already-done/cancelled base records for non-recurring
-      if (!b.recurring && (b.status === "done" || b.status === "cancelled")) continue;
-      if (inDate && hasClient) {
-        if (b.recurring) {
-          const ex = b.exceptions ?? {};
-          const exceptions = { ...ex, [date]: { ...(ex[date] ?? {}), status: "done" } };
-          await supabase.from("bookings").update({ exceptions }).eq("id", b.id);
-        } else {
-          await supabase.from("bookings").update({ status: "done" }).eq("id", b.id);
-        }
-        break;
-      }
+    const rows = (data ?? []).filter((b: any) => (b.booking_clients ?? []).some((x: any) => x.client_id === clientId));
+    // Запись, которая действительно приходится на этот день — с учётом дня недели повтора
+    // и переносов. Раньше любая еженедельная запись с этим днём плана считалась подходящей,
+    // и при двух сериях (пн и чт) «проведена» могла встать не на ту.
+    const occ = expandBookings(rows.map((b: any) => toBooking(b, clientId)), date, date).find((o) => o.status === "scheduled");
+    if (!occ) return;
+    if (occ.isOccurrence) {
+      const ex = rows.find((b: any) => b.id === occ.id)?.exceptions ?? {};
+      const exceptions = { ...ex, [occ.occDate]: { ...(ex[occ.occDate] ?? {}), status: "done" } };
+      await supabase.from("bookings").update({ exceptions }).eq("id", occ.id);
+    } else {
+      await supabase.from("bookings").update({ status: "done" }).eq("id", occ.id);
     }
-  } catch (e) { console.error('[markClientBookingDone]', e); }
+  } catch (e) { console.error("[markClientBookingDone]", e); }
 }
