@@ -67,14 +67,14 @@ export function RestBar({ timer }: { timer: RestTimer }) {
   const { left } = timer;
   return (
     <div className="shrink-0 px-3 pb-2">
-      <div role="status" aria-live="polite" className={`max-w-2xl mx-auto flex items-center gap-3 rounded-2xl pl-4 pr-2 h-14 text-zinc-950 shadow-lg ${left > 0 ? "bg-zinc-100" : "bg-lime-400"}`}>
+      <div role="status" aria-live="polite" className={`max-w-2xl mx-auto flex items-center gap-3 rounded-2xl pl-4 pr-1.5 h-12 text-zinc-950 shadow-lg ${left > 0 ? "bg-zinc-100" : "bg-lime-400"}`}>
         <Timer size={20} className="shrink-0" />
         {left > 0
-          ? <div className="leading-tight"><p className="text-xs opacity-70">Отдых</p><p className="font-mono text-xl font-bold">{fmtClock(left)}</p></div>
+          ? <div className="leading-tight"><p className="text-xs opacity-70">Отдых</p><p className="font-mono text-lg font-bold">{fmtClock(left)}</p></div>
           : <p className="font-bold">Отдых окончен</p>}
         <div className="ml-auto flex gap-1.5">
-          {left > 0 && <button onClick={() => timer.addSeconds(30)} className="h-10 px-3 rounded-xl bg-black/10 font-semibold text-sm">+30 с</button>}
-          <button onClick={timer.skip} className="h-10 px-3 rounded-xl bg-black/10 font-semibold text-sm">{left > 0 ? "Пропустить" : "Закрыть"}</button>
+          {left > 0 && <button onClick={() => timer.addSeconds(30)} className="h-9 px-3 rounded-xl bg-black/10 font-semibold text-sm">+30 с</button>}
+          <button onClick={timer.skip} className="h-9 px-3 rounded-xl bg-black/10 font-semibold text-sm">{left > 0 ? "Пропустить" : "Закрыть"}</button>
         </div>
       </div>
     </div>

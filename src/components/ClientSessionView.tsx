@@ -56,8 +56,8 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="p-1" title={`${n} из 5`}>
-          <Flame size={22} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
+        <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="p-0.5" title={`${n} из 5`}>
+          <Flame size={18} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
         </button>
       ))}
     </div>
@@ -292,7 +292,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4 max-w-2xl w-full mx-auto space-y-3">
+      <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 max-w-2xl w-full mx-auto space-y-2.5">
         {day.exercises.length === 0 && <p className="text-zinc-500 text-center py-10">В этом дне нет упражнений.</p>}
         {isCircuit ? Array.from({ length: maxRounds }, (_, r) => (
           <div key={r} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -301,7 +301,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
               <span className="flex-1 min-w-0">Упражнение</span>
               <span className="w-14 text-center shrink-0">повт.</span>
               <span className="w-14 text-center shrink-0">вес, кг</span>
-              <span className="w-11 shrink-0" />
+              <span className="w-10 shrink-0" />
             </div>
             <div className="divide-y divide-zinc-800">
               {day.exercises.map((ex) => {
@@ -317,12 +317,12 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                       <span className="text-xs text-zinc-400 shrink-0 text-right">{[ex.duration && `⏱ ${ex.duration}`, ex.weight, ex.pulseZone && `пульс ${ex.pulseZone}`].filter(Boolean).join(" · ") || "функц."}</span>
                     ) : (
                       <>
-                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-11 w-14 bg-zinc-800 rounded-xl px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
-                        <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-11 w-14 bg-zinc-800 rounded-xl px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
+                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-10 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
+                        <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-10 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
                       </>
                     )}
                     <button onClick={() => tapSet(ex, r, rows.length)} aria-pressed={isDone} aria-label={isDone ? "Снять отметку" : "Отметить выполненным"}
-                      className={`w-11 h-11 shrink-0 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                      className={`w-10 h-10 shrink-0 rounded-lg flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                       <Check size={20} strokeWidth={2.5} />
                     </button>
                   </div>
@@ -342,13 +342,13 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             const isCurrent = ex.id === currentId;
             const shell = grouped
               ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}`
-              : `bg-zinc-900 border rounded-2xl p-3.5 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
+              : `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
             // Выполненное — строкой с фактическими подходами; тап раскрывает обратно
             if (md.done && !openDone[ex.id]) {
               const fact = rows.filter((r) => r.weight || r.reps).map((r) => `${r.reps || "—"}×${r.weight || "—"}`).join(", ");
               return (
-                <button key={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} w-full flex items-center gap-3 text-left`}>
-                  <CheckCircle2 size={20} className="text-lime-400 shrink-0" />
+                <button key={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} !py-2 w-full flex items-center gap-2.5 text-left`}>
+                  <CheckCircle2 size={18} className="text-lime-400 shrink-0" />
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold truncate"><span className="text-zinc-500 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</span>
                     <span className="block text-xs text-zinc-500 truncate">{ex.kind === "functional" ? exSummary(ex) : fact || exSummary(ex)}</span>
@@ -359,7 +359,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             }
             return (
               <div key={ex.id} className={shell}>
-                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-sm px-3 h-9 rounded-xl font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
+                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-2.5 h-8 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
                 {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-lime-400" /> отдых между подходами: {ex.rest}</p>}
                 {ex.kind === "functional" ? (
                 <div className="text-sm text-zinc-300 flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -369,25 +369,25 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                   {!ex.duration && !ex.weight && !ex.pulseZone && <span className="text-zinc-500">функциональное упражнение</span>}
                 </div>
                 ) : (
-                <div className="space-y-2">
-                  <div className="grid grid-cols-[1.5rem_1fr_1fr_3rem] gap-2 text-xs text-zinc-500 text-center">
+                <div className="space-y-1.5">
+                  <div className="grid grid-cols-[1.25rem_1fr_1fr_2.5rem] gap-1.5 text-[11px] text-zinc-500 text-center">
                     <span>#</span><span>Повторы</span><span>Вес, кг</span><span />
                   </div>
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;
                     return (
                       <div key={i}>
-                        <div className="grid grid-cols-[1.5rem_1fr_1fr_3rem] gap-2 items-center">
+                        <div className="grid grid-cols-[1.25rem_1fr_1fr_2.5rem] gap-1.5 items-center">
                           <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
-                          <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-xl px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
-                          <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-xl px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                          <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                          <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                           <button onClick={() => tapSet(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
-                            className={`h-12 w-12 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
-                            <Check size={22} strokeWidth={2.5} />
+                            className={`h-10 w-10 rounded-lg flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                            <Check size={20} strokeWidth={2.5} />
                           </button>
                         </div>
                         {fireIdx.includes(i) && (
-                          <div className="flex items-center gap-2 pl-8 mt-1">
+                          <div className="flex items-center gap-1.5 pl-7">
                             <span className="text-xs text-zinc-500">Усилие</span>
                             <FlameRate value={md.fires[i] || 0} onChange={(v) => setFire(ex.id, i, v)} />
                           </div>
@@ -397,7 +397,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                   })}
                 </div>
                 )}
-                <input value={md.note} onChange={(e) => setMetaFor(ex.id, { note: e.target.value })} placeholder="Примечание: как прошло, ощущения..." className="w-full mt-2 bg-zinc-800/60 rounded-xl px-3 h-11 outline-none focus:ring-2 focus:ring-lime-400/60" />
+                <input value={md.note} onChange={(e) => setMetaFor(ex.id, { note: e.target.value })} placeholder="Примечание: как прошло, ощущения..." className="w-full mt-2 bg-zinc-800/60 rounded-lg px-3 h-9 outline-none focus:ring-2 focus:ring-lime-400/60" />
               </div>
             );
           });
