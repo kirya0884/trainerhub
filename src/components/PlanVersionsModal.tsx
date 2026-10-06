@@ -4,6 +4,7 @@ import * as versionsApi from "../lib/planVersions";
 import type { PlanVersion } from "../lib/planVersions";
 import { fmtDate } from "../lib/format";
 import ModalShell from "./ModalShell";
+import { SkeletonRows } from "./Skeleton";
 
 export default function PlanVersionsModal({ planId, onClose, onRestored }: { planId: string; onClose: () => void; onRestored: () => void }) {
   const [versions, setVersions] = useState<PlanVersion[] | null>(null);
@@ -33,7 +34,7 @@ export default function PlanVersionsModal({ planId, onClose, onRestored }: { pla
       )}>
       <div className="p-3 overflow-y-auto flex-1 min-h-0 space-y-1.5">
         {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-lg px-3 py-2">{error}</p>}
-        {versions === null && !error && <p className="text-sm text-zinc-500">Загрузка...</p>}
+        {versions === null && !error && <SkeletonRows />}
         {versions?.length === 0 && <p className="text-sm text-zinc-600 text-center py-6">Версий пока нет. Сохраните текущее состояние плана, чтобы можно было к нему вернуться.</p>}
         {versions?.map((v) => (
           <div key={v.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2.5">

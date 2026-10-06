@@ -58,7 +58,7 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
           {/* Пресеты */}
           <div className="flex flex-wrap gap-1.5">
             {ACTIVITY_PRESETS.map((p) => (
-              <button key={p} onClick={() => selectPreset(p)} className="px-2.5 py-1 rounded-lg text-xs font-medium transition border" style={type === p ? { background: accentColor, color: "#09090b", borderColor: accentColor } : { borderColor: "#3f3f46", color: "#a1a1aa" }}>
+              <button key={p} onClick={() => selectPreset(p)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition border ${type === p ? "" : "border-zinc-700 text-zinc-400"}`} style={type === p ? { background: accentColor, color: "#09090b", borderColor: accentColor } : undefined}>
                 {p}
               </button>
             ))}

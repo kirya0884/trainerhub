@@ -24,6 +24,7 @@ import { supabase } from "../lib/supabase";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
 import ChatThread from "./ChatThread";
+import { SkeletonRows } from "./Skeleton";
 
 type Tab = "profile" | "program" | "reporting" | "chat";
 type ProgramSub = "active" | "completed" | "progress";
@@ -296,7 +297,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           {programSub === "active" && (
             <div className="space-y-3">
               {!currentPlan && <p className="text-sm text-zinc-600 text-center py-8">Тренер пока не назначил программу</p>}
-              {currentPlan && !planHook.plan && <p className="text-sm text-zinc-500">Загрузка...</p>}
+              {currentPlan && !planHook.plan && <SkeletonRows />}
               {currentPlan && planHook.plan && (
                 <p className="text-xs text-zinc-500 font-medium">{currentPlan.name}</p>
               )}

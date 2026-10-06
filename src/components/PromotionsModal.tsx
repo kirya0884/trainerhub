@@ -3,6 +3,7 @@ import { Percent, Plus, X } from "lucide-react";
 import ModalShell from "./ModalShell";
 import * as api from "../lib/payments";
 import type { Promotion } from "../lib/payments";
+import { SkeletonRows } from "./Skeleton";
 
 const APPLIES = [["sessions", "Пакет тренировок"], ["subscription", "Подписка"]] as const;
 
@@ -45,7 +46,7 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
         </div>
 
         <div className="space-y-1.5">
-          {promos === null && <p className="text-zinc-600 text-xs">Загрузка...</p>}
+          {promos === null && <SkeletonRows rows={2} />}
           {promos?.length === 0 && <p className="text-zinc-600 text-xs">Акций пока нет</p>}
           {promos?.map((p) => (
             <div key={p.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 ${p.active ? "bg-orange-500/10" : "bg-zinc-800/30 opacity-60"}`}>

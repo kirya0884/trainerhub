@@ -32,6 +32,7 @@ import ActivityTab from "./ActivityTab";
 import GoalsDashboard from "./GoalsDashboard";
 import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
+import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans" | "chat";
 
@@ -93,7 +94,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     return () => { alive = false; };
   }, [clientId]);
 
-  if (!client) return <p className="text-zinc-500 text-sm p-4">Загрузка...</p>;
+  if (!client) return <div className="p-4"><ScreenSkeleton avatar /></div>;
 
   // Текстовые поля — debounce per-field, чтобы не слать запрос на каждую букву. Чекбоксы/селекты — сразу.
   const patch = (p: Partial<ClientFull>, immediate = false) => {
@@ -845,7 +846,7 @@ function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, 
       )}
 
       {plans === null ? (
-        <p className="text-zinc-500 text-sm">Загрузка...</p>
+        <SkeletonRows />
       ) : (
         <div className="space-y-2">
           {plans.length === 0 && <p className="text-zinc-600 text-sm text-center py-8">Планов пока нет</p>}

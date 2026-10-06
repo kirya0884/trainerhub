@@ -20,14 +20,14 @@ const SectionTitle = ({ children, right }: { children: ReactNode; right?: ReactN
 // Минуты до начала (отрицательные — уже идёт)
 const minsUntil = (date: string, time: string) => Math.round((new Date(`${date}T${time || "00:00"}:00`).getTime() - Date.now()) / 60000);
 
-function DonutChart({ pct, color = "#a3e635", size = 72 }: { pct: number; color?: string; size?: number }) {
+function DonutChart({ pct, size = 72 }: { pct: number; size?: number }) {
   const r = (size - 10) / 2;
   const circ = 2 * Math.PI * r;
   const dash = Math.min(1, pct / 100) * circ;
   return (
     <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#27272a" strokeWidth={8} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={8}
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" className="stroke-zinc-800" strokeWidth={8} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" className="stroke-lime-400" strokeWidth={8}
         strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
     </svg>
   );
@@ -415,7 +415,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
           <div className="flex items-center gap-4">
             <div className="relative shrink-0">
-              <DonutChart pct={income > 0 ? Math.min(100, attendanceRate ?? 0) : 0} color="#a3e635" size={68} />
+              <DonutChart pct={income > 0 ? Math.min(100, attendanceRate ?? 0) : 0} size={68} />
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="text-[11px] font-bold text-zinc-300">{attendanceRate != null ? `${attendanceRate}%` : "—"}</span>
               </div>

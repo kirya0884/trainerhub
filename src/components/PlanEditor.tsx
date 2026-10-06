@@ -28,6 +28,7 @@ import PlanVersionsModal from "./PlanVersionsModal";
 import SessionReadModal from "./SessionReadModal";
 import TemplatesModal from "./TemplatesModal";
 import DayTemplateLibrary from "./DayTemplateLibrary";
+import { ScreenSkeleton } from "./Skeleton";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -325,7 +326,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
     return -1;
   };
 
-  if (loading) return <div className="text-zinc-500 text-sm p-4">Загрузка плана…</div>;
+  if (loading) return <div className="p-4"><ScreenSkeleton /></div>;
   if (error) return <div className="text-red-400 text-sm p-4">Ошибка: {error}</div>;
   if (!plan) return null;
 
@@ -653,7 +654,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
             <div key={day.id} data-dsday-idx={li}
               className={`bg-zinc-900 border rounded-xl transition-shadow ${hidden ? "border-orange-400/20 opacity-80" : "border-zinc-800"} ${
                 dayDrag.drag?.key === dkey && dayDrag.drag.from === li ? "opacity-40 ring-2 ring-lime-400" : ""} ${
-                dayDrag.drag?.key === dkey && dayDrag.drag.over === li && dayDrag.drag.from !== li ? "shadow-[0_-3px_0_0_#a3e635]" : ""}`}>
+                dayDrag.drag?.key === dkey && dayDrag.drag.over === li && dayDrag.drag.from !== li ? "shadow-[0_-3px_0_0_var(--accent)]" : ""}`}>
               <div className="flex items-center gap-1 px-3 py-2.5 bg-zinc-800/40 border-b border-zinc-800 rounded-t-xl">
                 <button onClick={() => toggleCollapse(day.id)} title={collapsed[day.id] ? "Развернуть день" : "Свернуть день"} className="p-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-400 active:text-lime-400 transition-colors duration-100 shrink-0">{isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</button>
                 {/* Н2: ручка вместо двух стрелок по 14 px — в них почти невозможно попасть пальцем.

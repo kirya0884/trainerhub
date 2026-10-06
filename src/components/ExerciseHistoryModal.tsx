@@ -127,9 +127,11 @@ export default function ExerciseHistoryModal({
         {view === "chart" && entries.length > 0 && (
           <div>
             <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{chart.title}</p>
-            <TrendChart data={chart.data} color="#a3e635" height={220}
-              formatter={(v) => `${v} ${chart.unit}`}
-              emptyText="В подходах нет чисел — заполни вес или повторы во время тренировки." />
+            <div className="text-lime-400">
+              <TrendChart data={chart.data} color="currentColor" height={220}
+                formatter={(v) => `${v} ${chart.unit}`}
+                emptyText="В подходах нет чисел — заполни вес или повторы во время тренировки." />
+            </div>
           </div>
         )}
       </div>

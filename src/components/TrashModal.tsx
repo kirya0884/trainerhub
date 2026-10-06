@@ -3,6 +3,7 @@ import { RotateCcw, Trash2, Trash } from "lucide-react";
 import ModalShell from "./ModalShell";
 import * as api from "../lib/clients";
 import type { DeletedItem } from "../lib/clients";
+import { SkeletonRows } from "./Skeleton";
 
 export default function TrashModal({ trainerId, onClose }: { trainerId: string; onClose: () => void }) {
   const [clients, setClients] = useState<DeletedItem[]>([]);
@@ -28,7 +29,7 @@ export default function TrashModal({ trainerId, onClose }: { trainerId: string; 
   return (
     <ModalShell title="Корзина" icon={<Trash size={17} className="text-lime-400" />} onClose={onClose}>
       <div className="p-4 space-y-4 text-sm overflow-y-auto">
-        {loading && <p className="text-zinc-500">Загрузка...</p>}
+        {loading && <SkeletonRows />}
         {!loading && clients.length === 0 && plans.length === 0 && <p className="text-zinc-600 text-center py-6">Корзина пуста</p>}
 
         {clients.length > 0 && (

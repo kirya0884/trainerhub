@@ -41,7 +41,7 @@ function ExerciseRow({
 
   return (
     <div data-ds-idx={index}
-      className={`bg-zinc-800/40 rounded-lg p-2.5 space-y-2 transition-shadow ${dragging ? "opacity-40 ring-2 ring-lime-400" : ""} ${dropBefore ? "shadow-[0_-2px_0_0_#a3e635]" : ""} ${dropAfter ? "shadow-[0_2px_0_0_#a3e635]" : ""}`}
+      className={`bg-zinc-800/40 rounded-lg p-2.5 space-y-2 transition-shadow ${dragging ? "opacity-40 ring-2 ring-lime-400" : ""} ${dropBefore ? "shadow-[0_-2px_0_0_var(--accent)]" : ""} ${dropAfter ? "shadow-[0_2px_0_0_var(--accent)]" : ""}`}
       style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}>
       <div className="flex items-center gap-1">
         <button data-ds-handle type="button"

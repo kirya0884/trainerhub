@@ -5,6 +5,7 @@ import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { cohortRetention, debtClients, monthlyRevenue, pendingPaymentClients, revenueBySource, topClientsByRevenue, trialConversionRate } from "../lib/analytics";
 import { exportAnalyticsCsv } from "../lib/exportAnalytics";
 import RemainingBadge from "./RemainingBadge";
+import { chartColors } from "../lib/themeColor";
 
 const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions" && m.remaining !== "" && m.remaining != null ? String(m.remaining) : null);
 
@@ -22,6 +23,7 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
 
+  const cc = chartColors();
   return (
     <div className="space-y-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
@@ -40,14 +42,14 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
         <p className="text-xs text-zinc-500 mb-2">Доход по месяцам</p>
         {hasRevenue ? (
-          <div style={{ height: 140 }}>
+          <div style={{ height: 140 }} className="text-lime-400">
             <ResponsiveContainer>
               <BarChart data={revenue} margin={{ top: 5, right: 8, left: -16, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#3f3f46" vertical={false} />
-                <XAxis dataKey="label" stroke="#71717a" fontSize={11} tickLine={false} />
-                <YAxis stroke="#71717a" fontSize={11} tickLine={false} width={40} />
-                <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8, fontSize: 12 }} labelStyle={{ color: "#a1a1aa" }} formatter={(v: any) => [`${v.toLocaleString("ru-RU")} ₽`, "Доход"]} />
-                <Bar dataKey="total" fill="#a3e635" radius={[4, 4, 0, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke={cc.grid} vertical={false} />
+                <XAxis dataKey="label" stroke={cc.axis} fontSize={11} tickLine={false} />
+                <YAxis stroke={cc.axis} fontSize={11} tickLine={false} width={40} />
+                <Tooltip contentStyle={{ background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: cc.tooltipLabel }} formatter={(v: any) => [`${v.toLocaleString("ru-RU")} ₽`, "Доход"]} />
+                <Bar dataKey="total" fill="currentColor" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

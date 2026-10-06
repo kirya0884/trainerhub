@@ -6,6 +6,7 @@ import {
   saveClientGoals, dateRange, periodRange,
 } from "../lib/goals";
 import { fmtDate } from "../lib/format";
+import { ScreenSkeleton } from "./Skeleton";
 
 type Period = 7 | 14 | 30;
 
@@ -24,7 +25,7 @@ function DonutRing({ pct, color, size = 80 }: { pct: number; color: string; size
   const c = size / 2;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={c} cy={c} r={r} fill="none" stroke="#27272a" strokeWidth={9} />
+      <circle cx={c} cy={c} r={r} fill="none" className="stroke-zinc-800" strokeWidth={9} />
       {pct > 0 && (
         <circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth={9}
           strokeDasharray={`${fill} ${circ}`} strokeLinecap="round"
@@ -156,7 +157,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
   const hasActGoals = goals.steps || goals.activeMinutes;
   const hasSessionGoal = goals.sessionsPerWeek;
 
-  if (loading) return <div className="text-zinc-500 text-sm p-4">Загрузка…</div>;
+  if (loading) return <div className="p-4"><ScreenSkeleton /></div>;
 
   return (
     <div className="space-y-4">

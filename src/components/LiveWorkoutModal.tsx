@@ -4,6 +4,7 @@ import { supabase } from "../lib/supabase";
 import { fetchPlan } from "../lib/plans";
 import type { Day } from "../types";
 import ModalShell from "./ModalShell";
+import { SkeletonRows } from "./Skeleton";
 
 interface ActiveSession {
   planId: string;
@@ -101,7 +102,7 @@ export default function LiveWorkoutModal({ clientId, clientName, clientColor, ac
 
         {/* Exercise list */}
         {day === null && (
-          <p className="text-sm text-zinc-500 text-center py-4">Загрузка упражнений...</p>
+          <SkeletonRows rows={4} />
         )}
         {exercises.length === 0 && day !== null && (
           <p className="text-sm text-zinc-500 text-center py-4">Нет упражнений в этом дне</p>
@@ -132,7 +133,7 @@ export default function LiveWorkoutModal({ clientId, clientName, clientColor, ac
                     {ex.sets && <span className="text-xs text-zinc-500">{ex.sets} × {ex.reps}</span>}
                     {ex.weight && <span className="text-xs text-zinc-500">{ex.weight}</span>}
                     {setsTotal > 0 && (
-                      <span className="text-xs flex items-center gap-1" style={{ color: done ? "var(--accent,#a3e635)" : "#71717a" }}>
+                      <span className={`text-xs flex items-center gap-1 ${done ? "text-lime-400" : "text-zinc-500"}`}>
                         <Layers size={11} />
                         {setsDoneCount}/{setsTotal} подходов
                       </span>

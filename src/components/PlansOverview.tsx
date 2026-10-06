@@ -8,6 +8,7 @@ import * as api from "../lib/clients";
 import { duplicatePlan } from "../lib/plans";
 import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
 import RemainingBadge from "./RemainingBadge";
+import { SkeletonRows } from "./Skeleton";
 
 // Глобальная вкладка «Планы» — все программы тренера со всех клиентов в одном месте.
 export default function PlansOverview({ trainerId, clients, plans, reloadPlans, onOpenPlan, autoFocusNew }: {
@@ -91,7 +92,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
       {error ? (
         <p className="text-red-400 text-sm text-center py-10">{error}</p>
       ) : plans === null ? (
-        <p className="text-zinc-500 text-sm">Загрузка...</p>
+        <SkeletonRows rows={4} />
       ) : filtered.length === 0 ? (
         <p className="text-zinc-600 text-sm text-center py-10">{plans.length === 0 ? "Планов пока нет. Создай первый выше." : "Ничего не найдено"}</p>
       ) : (

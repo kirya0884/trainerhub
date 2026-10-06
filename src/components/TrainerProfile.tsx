@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase";
 import SubscriptionModal from "./SubscriptionModal";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 import { checkForUpdate } from "../lib/swUpdate";
+import { ScreenSkeleton } from "./Skeleton";
 
 export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange, tabs, onToggleTab, onMoveTab, onOpenPin, onOpenTrash, onOpenBackup, onSignOut }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void; tabs?: { kind: string; label: string; icon: typeof User; visible: boolean }[]; onToggleTab?: (kind: string) => void; onMoveTab?: (kind: string, dir: -1 | 1) => void; onOpenPin?: () => void; onOpenTrash?: () => void; onOpenBackup?: () => void; onSignOut?: () => void }) {
   const [showMenu, setShowMenu] = useState(false);
@@ -62,7 +63,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
     try { await trainerApi.saveTrainerBrand(trainerId, brand); } finally { setSavingBrand(false); }
   };
 
-  if (!profile || !stats) return <div className="text-zinc-500 text-sm p-4">Загрузка...</div>;
+  if (!profile || !stats) return <div className="p-4"><ScreenSkeleton avatar /></div>;
 
   return (
     <div className="space-y-4 max-w-2xl">

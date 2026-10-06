@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import * as api from "../lib/templates";
 import type { DayTemplate } from "../lib/templates";
 import type { Day, Exercise } from "../types";
+import { SkeletonRows } from "./Skeleton";
 
 interface TplEx {
   tempId: string;
@@ -159,7 +160,7 @@ export default function DayTemplateLibrary({
               className="w-full flex items-center justify-center gap-1.5 bg-zinc-800/60 hover:bg-zinc-800 border border-dashed border-zinc-700 hover:border-lime-400/40 rounded-xl py-3 text-sm font-medium text-zinc-300 hover:text-lime-400 transition">
               <Plus size={16} /> Создать шаблон дня
             </button>
-            {loading && <p className="text-zinc-500 text-sm text-center py-4">Загрузка…</p>}
+            {loading && <SkeletonRows />}
             {!loading && templates.length === 0 && (
               <p className="text-zinc-600 text-sm text-center py-6">Шаблонов пока нет. Создай первый — сохранишь упражнения и сразу вставишь в любой план.</p>
             )}
