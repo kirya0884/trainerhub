@@ -27,7 +27,7 @@ const updateSW = registerSW({
     const btn = document.createElement("button");
     btn.id = "sw-update-btn";
     btn.className = [
-      "fixed bottom-20 left-1/2 -translate-x-1/2 z-[9999]",
+      "fixed bottom-[calc(var(--tabbar-h,0px)+1rem)] left-1/2 -translate-x-1/2 z-[9999]",
       "flex items-center gap-2 whitespace-nowrap",
       "bg-zinc-900 border border-zinc-700 rounded-full px-4 py-2",
       "text-xs font-medium text-zinc-200 shadow-lg",

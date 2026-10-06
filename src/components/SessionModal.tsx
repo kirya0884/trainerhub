@@ -234,7 +234,8 @@ export default function SessionModal({ day, onFinish, onClose }: {
   if (minimized) {
     return (
       <button onClick={() => setMinimized(false)}
-        className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
+        style={{ bottom: "var(--tabbar-h, 0px)" }}
+        className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Play size={15} className="text-lime-400 shrink-0" />
         <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>
         {restLeft > 0 && <span className="font-mono text-sm shrink-0 text-zinc-300">отдых {fmtClock(restLeft)}</span>}

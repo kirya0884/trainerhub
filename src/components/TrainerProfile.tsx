@@ -212,13 +212,12 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         </div>
       </div>
 
-      {/* B28: настройка разделов переехала сюда из шапки — всплывающей панели больше нет,
-          а с ней и риска, что она вылезет за край экрана. Порядок меняется перетаскиванием
-          самих плиток на дашборде, здесь только видимость. */}
+      {/* B28: настройка разделов переехала сюда из шапки. Ш4а: управляет нижней панелью
+          (плиток на дашборде больше нет); здесь только видимость. */}
       {tabs && onToggleTab && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-          <p className="text-sm text-zinc-400 flex items-center gap-1.5"><LayoutGrid size={15} className="text-lime-400" /> Разделы на главном экране</p>
-          <p className="text-xs text-zinc-500">Снимите галочку, чтобы убрать плитку с дашборда. Порядок меняется перетаскиванием самих плиток.</p>
+          <p className="text-sm text-zinc-400 flex items-center gap-1.5"><LayoutGrid size={15} className="text-lime-400" /> Разделы в нижней панели</p>
+          <p className="text-xs text-zinc-500">Снимите галочку, чтобы убрать раздел из нижней панели. «Главная» видна всегда.</p>
           <div className="space-y-0.5">
             {tabs.map((t) => (
               <label key={t.kind} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300 transition">

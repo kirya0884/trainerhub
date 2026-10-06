@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { cleanupStorage, readJson, writeJson } from "./lib/storage";
-import { LayoutDashboard, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin, Search } from "lucide-react";
+import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin, Search } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -38,7 +38,7 @@ import { useSwipeBack } from "./hooks/useSwipeBack";
 type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "trainerProfile";
 const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
-  dashboard: { label: "Дашборд", icon: LayoutDashboard },
+  dashboard: { label: "Главная", icon: Home },
   clients: { label: "Подопечные", icon: Users },
   plans: { label: "Планы", icon: ClipboardList },
   calendar: { label: "Календарь", icon: CalendarDays },
@@ -171,10 +171,11 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<"dark" | "light">(
     () => (readJson<string>("trainerhub-theme-v1", "dark") === "light" ? "light" : "dark")
   );
-  const [tabOrder, setTabOrder] = useState<TabKind[]>(loadTabOrder);
+  // Порядок раньше менялся перетаскиванием плиток; плиток больше нет, сохранённый порядок
+  // по-прежнему задаёт порядок вкладок нижней панели.
+  const [tabOrder] = useState<TabKind[]>(loadTabOrder);
   const [hiddenTabs, setHiddenTabs] = useState<TabKind[]>(loadHiddenTabs);
   const [splash, setSplash] = useState(true);
-  const [dragTab, setDragTab] = useState<TabKind | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [showFab, setShowFab] = useState(false);
   const [recentIds, setRecentIds] = useState<string[]>(loadIds(RECENT_KEY));
@@ -198,13 +199,6 @@ export default function App() {
   };
   const togglePinned = (clientId: string) => {
     setPinnedIds((prev) => { const next = prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [clientId, ...prev]; saveIds(PINNED_KEY, next); return next; });
-  };
-  const reorderTabs = (target: TabKind) => {
-    if (!dragTab || dragTab === target) return;
-    const next = tabOrder.filter((k) => k !== dragTab);
-    next.splice(next.indexOf(target), 0, dragTab);
-    setTabOrder(next);
-    writeJson(TAB_ORDER_KEY, next);
   };
   const toggleTabVisible = (kind: TabKind) => {
     const isHidden = hiddenTabs.includes(kind);
@@ -253,6 +247,14 @@ export default function App() {
   useEffect(() => {
     if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#a3e635"); }).catch((e) => console.error("[App] fetchTrainerSelf:", e));
   }, [isTrainer, session]);
+  // Высота нижней панели — для того, что прижато к низу экрана вне App (свёрнутая
+  // тренировка, плашка «Обновить приложение»): они поднимаются над панелью.
+  const showTabbar = !!(session && isTrainer);
+  useEffect(() => {
+    if (!showTabbar) return;
+    document.documentElement.style.setProperty("--tabbar-h", "calc(4rem + env(safe-area-inset-bottom))");
+    return () => { document.documentElement.style.removeProperty("--tabbar-h"); };
+  }, [showTabbar]);
   useEffect(() => {
     document.documentElement.classList.toggle("light-theme", themeMode === "light");
     writeJson("trainerhub-theme-v1", themeMode);
@@ -331,12 +333,22 @@ export default function App() {
           );
   })();
 
+  // Нижняя панель: «Главная» всегда первая, дальше видимые разделы в сохранённом порядке,
+  // «+» посередине. Профиль — по аватару в шапке, в панель не входит.
+  const navItems: (TabKind | "fab")[] = ["dashboard", ...tabOrder.filter((k) => k !== "dashboard" && k !== "trainerProfile" && !hiddenTabs.includes(k))];
+  navItems.splice(Math.ceil(navItems.length / 2), 0, "fab");
+  const activeTab: TabKind | null =
+    view.kind === "client" ? "clients"
+    : view.kind === "plan" ? (view.from === "plans" ? "plans" : "clients")
+    : view.kind === "trainerProfile" ? null
+    : view.kind;
+
   return (
     <>
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined} />}
     <ActiveWorkoutProvider>
     <PinGate id={session.user.id}>
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-24 sm:pb-6" style={{ "--accent": trainerAccent } as React.CSSProperties}>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-28 sm:pb-28" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4"
         style={swipeDx ? { transform: `translateX(${swipeDx}px)`, transition: "none" } : { transition: "transform .18s ease-out" }}>
         {/* B30: одна строка вместо двух — логотип вместо надписи «Reps», профиль и подписка
@@ -403,32 +415,6 @@ export default function App() {
         {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
-        {/* B26: плитки разделов вместо горизонтальной полосы вкладок — ничего не листается,
-            все разделы видны сразу. Порядок и скрытие берутся из настройки в профиле тренера. */}
-        {view.kind === "dashboard" && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {tabOrder.filter((kind) => kind !== "dashboard" && !hiddenTabs.includes(kind)).map((kind) => {
-              const t = TAB_DEFS[kind];
-              return (
-                <button
-                  key={kind}
-                  draggable
-                  onDragStart={() => setDragTab(kind)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); reorderTabs(kind); setDragTab(null); }}
-                  onDragEnd={() => setDragTab(null)}
-                  onClick={() => go({ kind })}
-                  title="Зажмите и перетащите, чтобы изменить порядок"
-                  className={`flex flex-col items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl py-4 px-2 transition hover:border-zinc-700 active:scale-[0.98] cursor-grab ${dragTab === kind ? "opacity-40" : ""}`}
-                >
-                  <t.icon size={22} style={{ color: "var(--accent)" }} />
-                  <span className="text-xs font-medium text-zinc-300 text-center leading-tight">{t.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
         {view.kind === "dashboard" && (
           <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} recentSlot={recentRow} onOpenClient={openClient} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
         )}
@@ -446,7 +432,7 @@ export default function App() {
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "client_card" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} bookings={bookingsHook.bookings} allPlans={allPlans ?? []} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "open_booking"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} onBack={goBack} onOpenPlan={(planId) => go({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
-          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
+          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.filter((kind) => kind !== "dashboard" && kind !== "trainerProfile").map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
           <div>
@@ -456,16 +442,41 @@ export default function App() {
         )}
       </div>
 
-      {/* B13: создание сущностей было спрятано внутри разделов — после перехода на плитки
-          путь до формы стал трёхтаповым. FAB даёт его из любого основного экрана.
-          Формы живут в детях на локальном состоянии, поэтому открываем их флагом во View —
-          новых модалок не создаём, переиспользуем существующие. */}
-      {(view.kind === "dashboard" || view.kind === "clients" || view.kind === "plans" || view.kind === "calendar") && (
-        <>
-          {showFab && <div className="fixed inset-0 z-40" onClick={() => setShowFab(false)} />}
-          <div className="fixed right-4 z-50" style={{ bottom: "calc(1.25rem + env(safe-area-inset-bottom))" }}>
+      {/* Ш4а: нижняя панель вместо плиток на дашборде и плавающей «+» — разделы доступны
+          с любого экрана, а не только с главного. Видимость и порядок — из настройки в профиле.
+          B13: «+» по центру открывает те же формы создания флагом во View. */}
+      {showFab && <div className="fixed inset-0 z-40" onClick={() => setShowFab(false)} />}
+      <nav aria-label="Разделы" className="fixed inset-x-0 bottom-0 z-40 bg-zinc-950/85 backdrop-blur-xl border-t border-zinc-800" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="relative max-w-2xl mx-auto h-16 grid" style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}>
+          {navItems.map((kind) => {
+            if (kind === "fab") return (
+              <div key="fab" className="flex items-center justify-center">
+                <button
+                  onClick={() => setShowFab((v) => !v)}
+                  aria-expanded={showFab}
+                  aria-label={showFab ? "Закрыть меню создания" : "Создать"}
+                  className="w-12 h-12 rounded-2xl flex items-center justify-center bg-lime-400 text-zinc-950 shadow-lg transition active:scale-95"
+                >
+                  {showFab ? <X size={24} /> : <Plus size={26} />}
+                </button>
+              </div>
+            );
+            const t = TAB_DEFS[kind];
+            const active = activeTab === kind;
+            return (
+              <button
+                key={kind}
+                onClick={() => { setShowFab(false); go({ kind }); }}
+                aria-current={active ? "page" : undefined}
+                className={`flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition ${active ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}
+              >
+                <t.icon size={22} className={active ? "text-lime-400" : ""} />
+                {t.label}
+              </button>
+            );
+          })}
             {showFab && (
-              <div className="absolute bottom-full right-0 mb-3 w-56 bg-zinc-900 border border-zinc-800 rounded-2xl p-1.5 shadow-xl">
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-60 bg-zinc-900 border border-zinc-800 rounded-2xl p-1.5 shadow-xl">
                 <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "client"); go({ kind: "clients", newForm: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <Users size={16} className="text-lime-400 shrink-0" /> Новый подопечный
                 </button>
@@ -477,18 +488,8 @@ export default function App() {
                 </button>
               </div>
             )}
-            <button
-              onClick={() => setShowFab((v) => !v)}
-              aria-expanded={showFab}
-              aria-label={showFab ? "Закрыть меню создания" : "Создать"}
-              className="w-14 h-14 rounded-full flex items-center justify-center text-zinc-950 shadow-lg transition active:scale-95"
-              style={{ background: "var(--accent)" }}
-            >
-              {showFab ? <X size={24} /> : <Plus size={26} />}
-            </button>
-          </div>
-        </>
-      )}
+        </div>
+      </nav>
     </div>
     </PinGate>
     {/* Д3: вне переключателя экранов — переживает любую навигацию */}
