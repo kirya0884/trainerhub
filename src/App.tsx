@@ -257,7 +257,22 @@ export default function App() {
   }, [isTrainer, session]);
   // Высота нижней панели — для того, что прижато к низу экрана вне App (свёрнутая
   // тренировка, плашка «Обновить приложение»): они поднимаются над панелью.
-  const showTabbar = !!(session && isTrainer);
+  // Клавиатура открыта = фокус в поле ввода. На iPhone с открытой клавиатурой fixed-панель
+  // не держится внизу: уезжает вместе со страницей и висит над клавиатурой. Поэтому на
+  // время ввода прячем её, как это делают нативные приложения.
+  const [kbOpen, setKbOpen] = useState(false);
+  useEffect(() => {
+    const isField = (el: Element | null) =>
+      !!el && (el.matches("textarea, select, [contenteditable=''], [contenteditable='true']")
+        || (el.matches("input") && !["checkbox", "radio", "button", "submit", "reset", "range", "file", "color"].includes((el as HTMLInputElement).type)));
+    const onIn = () => setKbOpen(isField(document.activeElement));
+    // Фокус может сразу перейти в соседнее поле — проверяем уже после этого
+    const onOut = () => setTimeout(onIn, 50);
+    document.addEventListener("focusin", onIn);
+    document.addEventListener("focusout", onOut);
+    return () => { document.removeEventListener("focusin", onIn); document.removeEventListener("focusout", onOut); };
+  }, []);
+  const showTabbar = !!(session && isTrainer) && !kbOpen;
   useEffect(() => {
     if (!showTabbar) return;
     document.documentElement.style.setProperty("--tabbar-h", "calc(4rem + env(safe-area-inset-bottom))");
@@ -454,7 +469,7 @@ export default function App() {
           с любого экрана, а не только с главного. Видимость и порядок — из настройки в профиле.
           B13: «+» по центру открывает те же формы создания флагом во View. */}
       {showFab && <div className="fixed inset-0 z-40" onClick={() => setShowFab(false)} />}
-      <nav aria-label="Разделы" className="fixed inset-x-0 bottom-0 z-40 bg-zinc-950/85 backdrop-blur-xl border-t border-zinc-800" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+      <nav aria-label="Разделы" className={`fixed inset-x-0 bottom-0 z-40 bg-zinc-950/85 backdrop-blur-xl border-t border-zinc-800 ${kbOpen ? "hidden" : ""}`} style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="relative max-w-2xl mx-auto h-16 grid" style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}>
           {navItems.map((kind) => {
             if (kind === "fab") return (
