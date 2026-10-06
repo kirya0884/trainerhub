@@ -187,7 +187,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
       <div className="flex gap-1.5 mb-4 overflow-x-auto -mx-1 px-1">
         {segs.map((s) => (
           <button key={s.key} onClick={s.pick} aria-pressed={s.on}
-            className={`shrink-0 flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium transition ${s.on ? "bg-zinc-100 text-zinc-950" : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200"}`}>
+            className={`shrink-0 flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium transition ${s.on ? "bg-lime-400 text-zinc-950" : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200"}`}>
             {s.key === "archive" && <Archive size={14} />} {s.label}
           </button>
         ))}

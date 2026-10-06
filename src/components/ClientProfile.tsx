@@ -1,4 +1,4 @@
-import { AlertTriangle, ArrowLeft, Apple, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, Settings, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
+import { ArrowLeft, Apple, MoreHorizontal, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
 import { readJson, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
@@ -28,7 +28,6 @@ import { duplicatePlan } from "../lib/plans";
 import PlanCreateModal from "./PlanCreateModal";
 import type { PlanOverviewItem } from "../lib/clients";
 import type { Booking } from "../lib/bookings";
-import RemainingBadge from "./RemainingBadge";
 import ActivityTab from "./ActivityTab";
 import GoalsDashboard from "./GoalsDashboard";
 import * as portalApi from "../lib/clientPortal";
@@ -59,6 +58,8 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const [subOrder, setSubOrder] = useState<Sub[]>(loadSubOrder);
   const [dragSub, setDragSub] = useState<Sub | null>(null);
   const [showSubSettings, setShowSubSettings] = useState(false);
+  // Имя — крупным заголовком; правка по тапу (у полей ввода на iOS шрифт не меньше 16 px — см. index.css)
+  const [editingName, setEditingName] = useState(false);
   const reorderSubs = (target: Sub) => {
     if (!dragSub || dragSub === target) return;
     const next = subOrder.filter((k) => k !== dragSub);
@@ -124,102 +125,183 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     catch (e) { console.error("[ClientProfile] deleteClient:", e); alert("Не удалось удалить карточку. Попробуй ещё раз."); }
   };
 
+  // Ш4 профиль: сводка по макету — абонемент, вес, посещаемость за 30 дней
+  const isSessions = client.membership.type !== "subscription";
+  const remTotal = Number(client.membership.remainingTotal) || Number(client.membership.total) || 0;
+  const hasRemaining = isSessions && client.membership.remaining !== "";
+  const weights = measurements
+    .map((m) => ({ date: m.date, w: Number(String(m.weight).replace(",", ".")) }))
+    .filter((x) => x.w > 0);
+  const lastW = weights[weights.length - 1];
+  const weightDelta = lastW && weights.length > 1 ? lastW.w - weights[0].w : null;
+  const spark = weights.slice(-8);
+  const sparkPts = (() => {
+    if (spark.length < 2) return "";
+    const ws = spark.map((x) => x.w); const lo = Math.min(...ws), hi = Math.max(...ws), span = hi - lo || 1;
+    return spark.map((x, i) => `${(i / (spark.length - 1)) * 100},${4 + (1 - (x.w - lo) / span) * 32}`).join(" ");
+  })();
+  const recent = expandBookings(bookings ?? [], addDays(today(), -29), today())
+    .filter((o) => o.clientIds.includes(clientId) && (o.status === "done" || o.status === "no-show"));
+  const attended = recent.filter((o) => o.status === "done").length;
+  const attendance = recent.length ? Math.round((attended / recent.length) * 100) : null;
+  const ringPct = hasRemaining && remTotal > 0 ? Math.max(0, Math.min(1, remainingNum / remTotal)) : 0;
+  const ringColor = outOfStock ? "text-red-400" : lowStock ? "text-orange-400" : "text-lime-400";
+  const fmtKg = (n: number) => n.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
+  const unread = chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length;
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <button onClick={onBack} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 transition"><ArrowLeft size={15} /> К подопечным</button>
-      </div>
       {showReport && <ClientProgressPrintView clientId={clientId} planIds={(plans ?? []).map((p) => p.id)} clientName={client.name} trainerId={trainerId} onClose={() => setShowReport(false)} />}
 
-      <div className="flex items-center gap-3 mb-4">
-        {client.avatarUrl ? (
-          <img src={client.avatarUrl} alt="" className="w-11 h-11 rounded-full object-cover border border-zinc-700 shrink-0" />
-        ) : (
-          <div className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-zinc-950 shrink-0" style={{ background: client.color }}>{client.name.charAt(0).toUpperCase()}</div>
-        )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            {client.membership.type === "sessions" && <RemainingBadge remaining={client.membership.remaining !== "" ? String(remainingNum) : null} />}
-            <input value={client.name} onChange={(e) => patch({ name: e.target.value })} className="w-full bg-transparent font-bold text-lg outline-none border-b border-transparent focus:border-lime-400/50" />
-          </div>
-          <select value={client.goal} onChange={(e) => patch({ goal: e.target.value }, true)} className="bg-transparent text-xs text-zinc-500 outline-none cursor-pointer">
-            {GOALS.map((g) => <option key={g} className="bg-zinc-900">{g}</option>)}
-          </select>
-        </div>
-        {/* B30: шестерёнка теперь несёт действия над карточкой — закрепление, отчёт,
-            удаление. Настройка плиток убрана: под-вкладки показываются все.
-            Список раскрывается влево (right-0), иначе вылезал бы за экран. */}
-        <div className="relative shrink-0">
-          <button onClick={() => setShowSubSettings((v) => !v)} title="Действия" aria-label="Действия" aria-expanded={showSubSettings} className={`p-2 rounded-lg transition ${showSubSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
-            <Settings size={16} />
-          </button>
-          {showSubSettings && (
-            <>
-              <div className="fixed inset-0 z-10" onClick={() => setShowSubSettings(false)} />
-              <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-52 shadow-xl">
-                {onTogglePinned && (
-                  <button onClick={() => { setShowSubSettings(false); onTogglePinned(); }} className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm hover:bg-zinc-800 transition ${pinned ? "text-lime-400" : "text-zinc-300"}`}>
-                    <Pin size={15} className="shrink-0" /> {pinned ? "Открепить" : "Закрепить"}
-                  </button>
-                )}
-                <button onClick={() => { setShowSubSettings(false); setShowReport(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
-                  <Printer size={15} className="text-zinc-500 shrink-0" /> Отчёт по прогрессу
-                </button>
-                <div className="my-1 border-t border-zinc-800" />
-                <button onClick={() => { setShowSubSettings(false); deleteClient(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition">
-                  <Trash2 size={15} className="shrink-0" /> Удалить подопечного
-                </button>
-              </div>
-            </>
+      {/* Шапка: назад, закрепить, меню действий (отчёт, удаление) */}
+      <div className="flex items-center justify-between -mx-2 -mt-1">
+        <button onClick={onBack} aria-label="К подопечным" title="К подопечным" className="w-11 h-11 flex items-center justify-center rounded-xl text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 transition"><ArrowLeft size={22} /></button>
+        <div className="flex items-center">
+          {onTogglePinned && (
+            <button onClick={onTogglePinned} aria-label={pinned ? "Открепить" : "Закрепить"} title={pinned ? "Открепить" : "Закрепить"} aria-pressed={!!pinned}
+              className={`w-11 h-11 flex items-center justify-center rounded-xl transition hover:bg-zinc-900 ${pinned ? "text-lime-400" : "text-zinc-400 hover:text-zinc-100"}`}><Pin size={20} /></button>
           )}
+          {/* B30: действия над карточкой. Список раскрывается влево (right-0), иначе вылез бы за экран */}
+          <div className="relative">
+            <button onClick={() => setShowSubSettings((v) => !v)} title="Действия" aria-label="Действия" aria-expanded={showSubSettings}
+              className={`w-11 h-11 flex items-center justify-center rounded-xl transition ${showSubSettings ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900"}`}>
+              <MoreHorizontal size={22} />
+            </button>
+            {showSubSettings && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowSubSettings(false)} />
+                <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-56 shadow-xl">
+                  <button onClick={() => { setShowSubSettings(false); setShowReport(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    <Printer size={15} className="text-zinc-500 shrink-0" /> Отчёт по прогрессу
+                  </button>
+                  <div className="my-1 border-t border-zinc-800" />
+                  <button onClick={() => { setShowSubSettings(false); deleteClient(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition">
+                    <Trash2 size={15} className="shrink-0" /> Удалить подопечного
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* B03: частые действия без захода в подразделы. Модалок не создаём:
-          запись уводит в календарь с предвыбранным клиентом, оплата и замер —
-          переключение на нужную вкладку с раскрытой формой. */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <button onClick={() => onBookClient?.(clientId)} disabled={!onBookClient} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition disabled:opacity-40">
-          <CalendarCheck size={15} className="text-cyan-400 shrink-0" /> Записать
-        </button>
-        <button onClick={() => setSub("payments")} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition">
-          <Wallet size={15} className="text-lime-400 shrink-0" /> Оплата
-        </button>
-        <button onClick={() => { setSub("reporting"); setMeasureTick((v) => v + 1); }} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 text-xs font-medium text-zinc-300 hover:border-zinc-700 hover:text-zinc-100 transition">
-          <Ruler size={15} className="text-orange-400 shrink-0" /> Замер
-        </button>
+      {/* Аватар, имя (редактируется на месте) и цель — по центру */}
+      <div className="flex flex-col items-center text-center pt-1">
+        {client.avatarUrl
+          ? <img src={client.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover" />
+          : <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-zinc-950" style={{ background: client.color }}>{client.name.charAt(0).toUpperCase()}</div>}
+        {editingName ? (
+          <input autoFocus value={client.name} onChange={(e) => patch({ name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={(e) => e.key === "Enter" && setEditingName(false)} aria-label="Имя подопечного"
+            className="mt-3 w-full max-w-xs h-11 bg-zinc-900 border border-zinc-700 rounded-xl text-center font-bold outline-none focus:border-lime-400/60 px-3" />
+        ) : (
+          <button onClick={() => setEditingName(true)} title="Изменить имя" className="mt-3 group flex items-center gap-1.5 max-w-full px-2 rounded-lg">
+            <span className="text-2xl font-extrabold tracking-tight truncate">{client.name}</span>
+            <Pencil size={14} className="shrink-0 text-zinc-600 group-hover:text-zinc-400" />
+          </button>
+        )}
+        <select value={client.goal} onChange={(e) => patch({ goal: e.target.value }, true)} aria-label="Цель"
+          className="mt-0.5 bg-transparent text-sm text-zinc-400 outline-none cursor-pointer text-center">
+          {GOALS.map((g) => <option key={g} className="bg-zinc-900">{g}</option>)}
+        </select>
+      </div>
+
+      {/* B03: частые действия. Запись — в календарь с выбранным клиентом,
+          оплата/замер/чат — переключение вкладки (замер — с раскрытой формой) */}
+      <div className="grid grid-cols-4 gap-2 mt-5">
+        {[
+          { label: "Записать", icon: CalendarCheck, onClick: () => onBookClient?.(clientId), disabled: !onBookClient },
+          { label: "Оплата", icon: Wallet, onClick: () => setSub("payments") },
+          { label: "Замер", icon: Ruler, onClick: () => { setSub("reporting"); setMeasureTick((v) => v + 1); } },
+          { label: "Чат", icon: MessageCircle, onClick: () => setSub("chat"), badge: unread },
+        ].map((a) => (
+          <button key={a.label} onClick={a.onClick} disabled={a.disabled}
+            className="relative flex flex-col items-center gap-1.5 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 transition disabled:opacity-40">
+            <a.icon size={20} className="text-zinc-100" />
+            {a.label}
+            {!!a.badge && <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{a.badge}</span>}
+          </button>
+        ))}
       </div>
 
       {!!client.activeSession && (
-        <div className="w-full flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
+        <div className="w-full flex items-center gap-2 rounded-xl px-3.5 py-2.5 mt-4 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
           <Play size={14} className="shrink-0 text-cyan-400" />
           <span className="flex-1 font-medium">Сейчас тренируется: <span className="text-cyan-100">{client.activeSession.dayName}</span></span>
           <span className="text-xs text-cyan-500">{(() => { const s = Math.floor((Date.now() - client.activeSession.startedAt) / 1000); const m = Math.floor(s / 60); return m > 0 ? `${m} мин` : "только начал"; })()}</span>
         </div>
       )}
-      {(outOfStock || lowStock || overdue) && (
-        <button onClick={() => setSub("overview")} className={`w-full text-left flex items-center gap-2 rounded-lg px-3 py-2 mb-3 text-sm transition ${outOfStock || overdue ? "bg-red-500/10 hover:bg-red-500/15 text-red-300" : "bg-amber-500/10 hover:bg-amber-500/15 text-amber-300"}`}>
-          <AlertTriangle size={14} className="shrink-0" />
-          {outOfStock ? "Тренировки закончились — оформи новый платёж" : overdue ? `Подписка просрочена с ${fmtDate(client.membership.nextPaymentDate)}` : `Осталось ${remainingNum} тренировки — предложи продление`}
-        </button>
-      )}
 
-      {/* B29: плитки вместо горизонтальной полосы — ничего не листается. В отличие от
-          главной навигации активная плитка подсвечена: здесь переключается содержимое
-          той же страницы, а не экран. Колонок по числу видимых вкладок. */}
+      {/* Сводка: абонемент (на всю ширину), вес и посещаемость */}
+      <div className="grid grid-cols-2 gap-2.5 mt-4">
+        <button onClick={() => setSub("payments")} className="col-span-2 flex items-center gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
+          {hasRemaining ? (
+            <span className="relative w-16 h-16 shrink-0">
+              <svg viewBox="0 0 64 64" className="w-16 h-16 -rotate-90" aria-hidden="true">
+                <circle cx="32" cy="32" r="27" fill="none" strokeWidth="7" className="stroke-current text-zinc-800" />
+                <circle cx="32" cy="32" r="27" fill="none" strokeWidth="7" strokeLinecap="round" className={`stroke-current ${ringColor}`}
+                  strokeDasharray={`${ringPct * 169.6} 169.6`} />
+              </svg>
+              <span className={`absolute inset-0 flex items-center justify-center text-lg font-extrabold ${outOfStock ? "text-red-400" : ""}`}>{remainingNum}</span>
+            </span>
+          ) : (
+            <span className="w-16 h-16 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center"><Wallet size={24} className="text-zinc-400" /></span>
+          )}
+          <span className="min-w-0 flex-1">
+            <span className="block font-bold">
+              {hasRemaining
+                ? outOfStock ? (remainingNum < 0 ? `Долг: ${-remainingNum} тр.` : "Тренировки закончились") : `Осталось ${remainingNum}${remTotal ? ` из ${remTotal}` : ""}`
+                : !isSessions ? "Подписка" : "Абонемент не оформлен"}
+            </span>
+            <span className={`block text-sm truncate ${overdue ? "text-red-400" : "text-zinc-500"}`}>
+              {!isSessions
+                ? client.membership.nextPaymentDate ? `${overdue ? "Просрочена с" : "Следующая оплата"} ${fmtDate(client.membership.nextPaymentDate)}` : "Дата оплаты не указана"
+                : client.membership.packagePrice ? `Пакет за ${Number(client.membership.packagePrice).toLocaleString("ru-RU")} ₽` : "Нажмите, чтобы оформить"}
+            </span>
+          </span>
+          <span className={`shrink-0 h-9 px-3 rounded-xl text-sm font-semibold flex items-center ${outOfStock || lowStock || overdue ? "bg-orange-400/15 text-orange-300" : "bg-zinc-800 text-zinc-300"}`}>
+            {outOfStock || lowStock || overdue ? "Продлить" : "Оплаты"}
+          </span>
+        </button>
+
+        <button onClick={() => { setSub("reporting"); }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
+          <span className="block text-sm text-zinc-400">Вес</span>
+          {lastW ? (
+            <>
+              <span className="block text-2xl font-extrabold tracking-tight mt-1">{fmtKg(lastW.w)} <span className="text-sm font-semibold text-zinc-500">кг</span></span>
+              {weightDelta !== null && <span className={`block text-xs font-semibold mt-0.5 ${weightDelta <= 0 ? "text-lime-400" : "text-orange-400"}`}>{weightDelta > 0 ? "+" : weightDelta < 0 ? "−" : ""}{fmtKg(Math.abs(weightDelta))} кг с {fmtDate(weights[0].date, true)}</span>}
+              {sparkPts && (
+                <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-9 mt-2" aria-hidden="true">
+                  <polyline points={sparkPts} fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" className="stroke-current text-lime-400" />
+                </svg>
+              )}
+            </>
+          ) : <span className="block text-sm text-zinc-500 mt-1">Замеров пока нет</span>}
+        </button>
+
+        <button onClick={() => setSub("bookings")} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
+          <span className="block text-sm text-zinc-400">Посещаемость</span>
+          {attendance !== null ? (
+            <>
+              <span className="block text-2xl font-extrabold tracking-tight mt-1">{attendance}%</span>
+              <span className="block text-xs text-zinc-500 mt-0.5">{attended} из {recent.length} за 30 дней</span>
+              <span className="flex gap-1 mt-3" aria-hidden="true">
+                {recent.slice(-8).map((o, i) => <span key={i} className={`flex-1 h-5 rounded ${o.status === "done" ? "bg-lime-400" : "bg-zinc-800"}`} />)}
+              </span>
+            </>
+          ) : <span className="block text-sm text-zinc-500 mt-1">Нет тренировок за 30 дней</span>}
+        </button>
+      </div>
+
+
+      {/* B29: разделы карточки — плитками, ничего не листается; активный — акцентом.
+          От пяти вкладок — по три в два ряда. Порядок меняется перетаскиванием. */}
       {(() => {
-        // B30: настройки видимости больше нет, поэтому показываем все — иначе ранее скрытую
-        // вкладку было бы нечем вернуть. Порядок и перетаскивание сохранены.
         const visibleSubs = subOrder;
-        const unread = chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length;
         if (!visibleSubs.length) return null;
-        // B02: вкладок стало шесть — в один ряд на 360 px не помещаются, поэтому от пяти
-        // раскладываем по три в два ряда. Подписи оставляем: иконки тут разнородные и без
-        // текста угадываются плохо.
         const n = visibleSubs.length;
         const cols = n === 1 ? "grid-cols-1" : n === 2 ? "grid-cols-2" : n === 3 ? "grid-cols-3" : n === 4 ? "grid-cols-4" : "grid-cols-3";
         return (
-          <div className={`grid ${cols} gap-2 mb-4`}>
+          <div className={`grid ${cols} gap-1.5 mt-5 mb-4 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl`}>
             {visibleSubs.map((k) => {
               const t = SUB_DEFS[k];
               const active = sub === k;
@@ -234,13 +316,12 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
                   onClick={() => setSub(k)}
                   aria-current={active ? "page" : undefined}
                   title="Зажмите и перетащите, чтобы изменить порядок"
-                  className={`relative flex flex-col items-center justify-center gap-1 rounded-xl py-2.5 px-1 border transition cursor-grab ${active ? "text-zinc-950 border-transparent" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-100 hover:border-zinc-700"} ${dragSub === k ? "opacity-40" : ""}`}
-                  style={active ? { background: "var(--accent)" } : undefined}
+                  className={`relative flex items-center justify-center gap-1.5 h-10 rounded-xl text-[13px] font-semibold transition cursor-grab ${active ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"} ${dragSub === k ? "opacity-40" : ""}`}
                 >
-                  <t.icon size={18} />
-                  <span className="text-[10px] font-medium leading-tight text-center">{t.label}</span>
+                  <t.icon size={15} className="shrink-0" />
+                  <span className="truncate">{t.label}</span>
                   {k === "chat" && unread > 0 && (
-                    <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">{unread}</span>
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">{unread}</span>
                   )}
                 </button>
               );
