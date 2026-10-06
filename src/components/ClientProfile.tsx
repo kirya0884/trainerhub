@@ -33,6 +33,7 @@ import GoalsDashboard from "./GoalsDashboard";
 import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
+import StartWorkoutModal from "./StartWorkoutModal";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans" | "chat";
 
@@ -74,6 +75,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [notes, setNotes] = useState<ClientNote[]>([]);
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
+  const [showStart, setShowStart] = useState(false);
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   const [showReport, setShowReport] = useState(false);
   const persist = useDebouncedPersist();
@@ -95,6 +97,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   }, [clientId]);
 
   if (!client) return <div className="p-4"><ScreenSkeleton avatar /></div>;
+  const activePlans = (plans ?? []).filter((p) => !p.archived);
 
   // Текстовые поля — debounce per-field, чтобы не слать запрос на каждую букву. Чекбоксы/селекты — сразу.
   const patch = (p: Partial<ClientFull>, immediate = false) => {
@@ -223,6 +226,15 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
           </button>
         ))}
       </div>
+
+      {/* Начать тренировку по одному из действующих планов — без захода в редактор плана */}
+      {activePlans.length > 0 && (
+        <button onClick={() => setShowStart(true)}
+          className="mt-3 w-full h-12 rounded-2xl bg-lime-400 text-zinc-950 font-bold flex items-center justify-center gap-2 hover:bg-lime-300 transition active:scale-[0.98]">
+          <Play size={18} /> Начать тренировку
+        </button>
+      )}
+      {showStart && <StartWorkoutModal clientId={clientId} clientName={client.name} plans={activePlans} onClose={() => setShowStart(false)} />}
 
       {!!client.activeSession && (
         <div className="w-full flex items-center gap-2 rounded-xl px-3.5 py-2.5 mt-4 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
