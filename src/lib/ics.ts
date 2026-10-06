@@ -1,5 +1,5 @@
 import type { Occurrence } from "./bookings";
-import { toDateStr } from "./format";
+import { toDateStr, today } from "./format";
 
 // Экспорт .ics — нативная сборка текста календаря (без библиотек), как и бэкап через Blob/createObjectURL.
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -38,7 +38,7 @@ export function downloadIcs(ics: string) {
   const blob = new Blob([ics], { type: "text/calendar" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `reps-bookings-${new Date().toISOString().slice(0, 10)}.ics`;
+  a.href = url; a.download = `reps-bookings-${today()}.ics`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -2,7 +2,7 @@ import { History, RotateCcw, Save, Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import * as versionsApi from "../lib/planVersions";
 import type { PlanVersion } from "../lib/planVersions";
-import { fmtDate } from "../lib/format";
+import { fmtDate, today } from "../lib/format";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 
@@ -14,7 +14,7 @@ export default function PlanVersionsModal({ planId, onClose, onRestored }: { pla
   useEffect(load, [planId]);
 
   const save = async () => {
-    const label = window.prompt("Название версии (необязательно):", `Версия от ${fmtDate(new Date().toISOString().slice(0, 10))}`) ?? "";
+    const label = window.prompt("Название версии (необязательно):", `Версия от ${fmtDate(today())}`) ?? "";
     setBusy(true);
     try { await versionsApi.snapshotPlan(planId, label); load(); } catch (e: any) { setError(e.message || "Не удалось сохранить версию"); } finally { setBusy(false); }
   };

@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, CheckCircle2, Flame, Layers, Minimize2, Play, Send, Star, Timer, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Flame, Layers, Minimize2, Play, Send, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
 import { parseNum, parseRest, today } from "../lib/format";
@@ -7,18 +7,6 @@ import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import type { Day, Metric, Session } from "../types";
-
-function StarRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} onClick={() => onChange(value === n ? 0 : n)} title={`${n} из 5`}>
-          <Star size={26} style={{ color: n <= value ? "var(--accent)" : "#3f3f46" }} fill={n <= value ? "currentColor" : "none"} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];

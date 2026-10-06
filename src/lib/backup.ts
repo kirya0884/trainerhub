@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { today } from "./format";
 
 // Бэкап тренера целиком: clients + их дочерние коллекции, plans + их дни/упражнения/прогресс,
 // bookings и шаблоны. Экспорт — просто вложенный JSON (Blob/URL.createObjectURL, без библиотек).
@@ -48,7 +49,7 @@ export function downloadBackup(data: object) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = url; a.download = `reps-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.href = url; a.download = `reps-backup-${today()}.json`;
   a.click();
   URL.revokeObjectURL(url);
 }

@@ -538,8 +538,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
         </div>
       )}
 
-      {/* ── ЧАТ ── */}
-
       {/* #6 Session overlay — renders on top; minimized shows bottom bar only */}
       {activeSession && activeDay && (
         <ClientSessionView
