@@ -306,7 +306,7 @@ export default function App() {
           if (!ordered.length) return null;
           return (
             <div>
-              <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">НЕДАВНИЕ</p>
+              <h2 className="text-[17px] font-bold mb-2">Недавние</h2>
               <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
                 {ordered.map((c) => (
                   <button

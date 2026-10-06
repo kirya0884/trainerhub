@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { BarChart3, Bell, BellOff, Cake, CalendarClock, ChevronDown, ChevronRight, Clock, Eye, EyeOff, Play, TriangleAlert, Users, Wallet } from "lucide-react";
+import { BarChart3, Bell, BellOff, Cake, CalendarClock, Check, ChevronDown, ChevronRight, Clock, Eye, EyeOff, Hourglass, Play, TriangleAlert, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
@@ -12,7 +12,13 @@ import AnalyticsPanel from "./AnalyticsPanel";
 import { today, addDays } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
 
-const greeting = () => { const h = new Date().getHours(); return h < 12 ? "ДОБРОЕ УТРО" : h < 18 ? "ДОБРЫЙ ДЕНЬ" : "ДОБРЫЙ ВЕЧЕР"; };
+const greeting = () => { const h = new Date().getHours(); return h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер"; };
+// Ш4б: обычный заголовок раздела вместо мелкого капса с разрядкой над каждым блоком
+const SectionTitle = ({ children, right }: { children: ReactNode; right?: ReactNode }) => (
+  <div className="flex items-center justify-between mb-2"><h2 className="text-[17px] font-bold">{children}</h2>{right}</div>
+);
+// Минуты до начала (отрицательные — уже идёт)
+const minsUntil = (date: string, time: string) => Math.round((new Date(`${date}T${time || "00:00"}:00`).getTime() - Date.now()) / 60000);
 
 function DonutChart({ pct, color = "#a3e635", size = 72 }: { pct: number; color?: string; size?: number }) {
   const r = (size - 10) / 2;
@@ -49,7 +55,8 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   const [period, setPeriod] = useState<string>("month");
   const [showAnalytics, setShowAnalytics] = useState(false);
   const [showPayments, setShowPayments] = useState(false);
-  const [showAttention, setShowAttention] = useState(false);
+  // Ш4б: какой чип «Требует внимания» раскрыт (имена под ним)
+  const [attn, setAttn] = useState<"debt" | "exp" | "bday" | null>(null);
   const [showMoney, setShowMoney] = useState(false);
   const [hideRevenue, setHideRevenue] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -190,7 +197,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   const last30 = expandBookings(bookings, addDays(todayStr, -29), todayStr).filter((o) => o.status === "done" || o.status === "no-show");
   const attendanceRate = last30.length ? Math.round((last30.filter((o) => o.status === "done").length / last30.length) * 100) : null;
   const trainedThisWeek = expandBookings(bookings, addDays(todayStr, -6), todayStr).filter((o) => o.status === "done").length;
-  const periodLabel = period === "day" ? "СЕГОДНЯ" : period === "week" ? "НЕДЕЛЯ" : new Date(todayStr + "T00:00:00").toLocaleDateString("ru-RU", { month: "long", year: "numeric" }).toUpperCase();
+  const periodLabel = period === "day" ? "сегодня" : period === "week" ? "неделя" : new Date(todayStr + "T00:00:00").toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
 
   // Оплаты за текущий месяц из client_payments (реальные поступления, не расчётный доход)
   const thisMonth = todayStr.slice(0, 7);
@@ -205,148 +212,173 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
 
 
 
+  // Ш4б: ближайшая тренировка — идущая или следующая сегодня, иначе ближайшая на неделе
+  const tomorrowStr = addDays(todayStr, 1);
+  const nextOcc =
+    todayOccurrences.find((o) => o.status === "scheduled" && o.time && minsUntil(o.date, o.time) > -(o.duration || 60))
+    ?? weekUpcoming.filter((o) => o.date !== todayStr).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))[0];
+  const weekday = (d: string) => { const w = new Date(d + "T00:00:00").toLocaleDateString("ru-RU", { weekday: "long" }); return w.charAt(0).toUpperCase() + w.slice(1); };
+  const dayLabel = (d: string) => d === todayStr ? "Сегодня" : d === tomorrowStr ? "Завтра" : weekday(d);
+  const whenLabel = (o: { date: string; time: string }) => {
+    if (o.date !== todayStr) return `${dayLabel(o.date)}, ${o.time}`;
+    const m = minsUntil(o.date, o.time);
+    if (m <= 0) return "Идёт сейчас";
+    return m < 60 ? `Через ${m} мин` : `Через ${Math.floor(m / 60)} ч ${m % 60} мин`;
+  };
+  const names = (ids: string[]) => ids.map((id, i) => {
+    const c = clients.find((x) => x.id === id);
+    return <Fragment key={id}>{i > 0 && ", "}<ClientLink id={id} name={c?.name ?? id} /></Fragment>;
+  });
+  const statusText: Record<string, string> = { done: "Проведена", "no-show": "Не пришёл" };
+  const upcomingNotToday = weekUpcoming.filter((o) => o.date !== todayStr).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+
   return (
-    <div className="space-y-5 max-w-2xl">
+    <div className="space-y-6 max-w-2xl">
 
-      {/* Greeting — одна строка: имя, аватар и кольцо посещаемости убраны как дубли
-           (имя с аватаром есть в шапке App.tsx, процент посещаемости — в блоке дохода) */}
+      {/* Ш4б: приветствие обычным заголовком; имя и аватар — в шапке App.tsx */}
       <div className="flex items-center gap-2 pt-1">
-            <p className="text-xs font-semibold tracking-widest text-lime-400">{greeting()}</p>
-            {isPushSupported() && (
-              <button
-                onClick={async () => {
-                  setPushLoading(true);
-                  if (pushEnabled) {
-                    await unsubscribeFromPush(trainerId);
-                    setPushEnabled(false);
-                  } else {
-                    const ok = await subscribeToPush(trainerId);
-                    setPushEnabled(ok);
-                  }
-                  setPushLoading(false);
-                }}
-                disabled={pushLoading}
-                title={pushEnabled ? "Push включены — нажми чтобы отключить" : "Включить push-уведомления"}
-                className="ml-1 p-1 rounded-lg transition text-zinc-500 hover:text-zinc-200"
-              >
-                {pushEnabled
-                  ? <Bell size={13} className="text-lime-400" />
-                  : <BellOff size={13} />}
-              </button>
-            )}
-      </div>
-
-
-      {/* Week ahead */}
-      <div>
-        <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ВАША НЕДЕЛЯ ВПЕРЕДИ</p>
-        {todayOccurrences.length === 0 && weekUpcoming.filter((o) => o.date !== todayStr).length === 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-8 text-center">
-            <CalendarClock size={28} className="mx-auto text-zinc-700 mb-2.5" />
-            <p className="text-sm text-zinc-600">Тренировок на неделю не запланировано</p>
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {todayOccurrences.map((o) => (
-              <div key={`${o.id}-${o.occDate}`} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
-                <span className="text-[10px] font-semibold text-lime-400 uppercase tracking-wide w-12 shrink-0">Сегодня</span>
-                <span className="font-mono text-xs text-zinc-400 w-10 shrink-0">{o.time}</span>
-                <span className="text-zinc-100 truncate flex items-center gap-1 flex-1">
-                  {o.clientIds.map((id) => {
-                    const c = clients.find((x) => x.id === id);
-                    return (
-                      <span key={id} className="inline-flex items-center gap-1">
-                        <RemainingBadge remaining={c ? remainingOf(c.membership) : null} />
-                        <ClientLink id={id} name={c?.name ?? id} />
-                      </span>
-                    );
-                  })}
-                </span>
-                {/* B24: провести тренировку прямо из расписания. Открывает календарь
-                    на дате записи с раскрытой карточкой — дальше «Начать тренировку». */}
-                {onOpenOccurrence && (
-                  <button
-                    onClick={() => onOpenOccurrence(o.id, o.occDate)}
-                    title="Провести тренировку"
-                    aria-label={`Провести тренировку в ${o.time}`}
-                    className="shrink-0 w-9 h-9 -my-1 flex items-center justify-center rounded-lg text-zinc-500 hover:text-lime-400 hover:bg-lime-400/10 transition"
-                  >
-                    <Play size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
-            {weekUpcoming.filter((o) => o.date !== todayStr).map((o) => (
-              <div key={`${o.id}-${o.occDate}`} className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
-                <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wide w-12 shrink-0">
-                  {o.date === addDays(todayStr, 1) ? "Завтра" : new Date(o.date + "T00:00:00").toLocaleDateString("ru-RU", { weekday: "short" }).toUpperCase()}
-                </span>
-                <span className="font-mono text-xs text-zinc-400 w-10 shrink-0">{o.time}</span>
-                <span className="text-zinc-100 truncate text-sm">{o.clientIds.map((id, i) => (
-                  <Fragment key={id}>{i > 0 && ", "}<ClientLink id={id} name={clients.find((x) => x.id === id)?.name ?? id} /></Fragment>
-                ))}</span>
-              </div>
-            ))}
-          </div>
+        <div className="min-w-0">
+          <p className="text-sm text-zinc-500 first-letter:uppercase">{new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</p>
+          <h1 className="text-2xl font-extrabold tracking-tight">{greeting()}</h1>
+        </div>
+        {isPushSupported() && (
+          <button
+            onClick={async () => {
+              setPushLoading(true);
+              if (pushEnabled) {
+                await unsubscribeFromPush(trainerId);
+                setPushEnabled(false);
+              } else {
+                const ok = await subscribeToPush(trainerId);
+                setPushEnabled(ok);
+              }
+              setPushLoading(false);
+            }}
+            disabled={pushLoading}
+            title={pushEnabled ? "Push включены — нажми чтобы отключить" : "Включить push-уведомления"}
+            aria-label={pushEnabled ? "Отключить push-уведомления" : "Включить push-уведомления"}
+            className="ml-auto w-11 h-11 flex items-center justify-center rounded-xl transition text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900"
+          >
+            {pushEnabled ? <Bell size={20} className="text-lime-400" /> : <BellOff size={20} />}
+          </button>
         )}
       </div>
 
+      {/* Ш4б: ближайшая тренировка — главный блок экрана */}
+      {nextOcc ? (
+        <div className="relative overflow-hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-4">
+          <div className="pointer-events-none absolute -right-16 -top-16 w-48 h-48 rounded-full bg-lime-400/15 blur-3xl" />
+          <span className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full bg-lime-400/15 text-lime-400 text-xs font-semibold">
+            <Clock size={13} /> {whenLabel(nextOcc)}
+          </span>
+          <div className="flex items-end gap-4 mt-3">
+            <p className="text-5xl font-extrabold tracking-tight leading-none">{nextOcc.time || "—"}</p>
+            <div className="min-w-0 pb-0.5">
+              <p className="text-lg font-bold leading-snug flex flex-wrap items-center gap-x-1.5">
+                {nextOcc.clientIds.map((id) => {
+                  const c = clients.find((x) => x.id === id);
+                  return <RemainingBadge key={id} remaining={c ? remainingOf(c.membership) : null} />;
+                })}
+                <span className="min-w-0">{names(nextOcc.clientIds)}</span>
+              </p>
+              {nextOcc.dayName && <p className="text-sm text-zinc-400 truncate">{nextOcc.dayName}</p>}
+            </div>
+          </div>
+          {onOpenOccurrence && (
+            <button
+              onClick={() => onOpenOccurrence(nextOcc.id, nextOcc.occDate)}
+              className="relative mt-4 w-full h-12 rounded-2xl bg-lime-400 text-zinc-950 font-bold flex items-center justify-center gap-2 hover:bg-lime-300 transition active:scale-[0.98]"
+            >
+              {nextOcc.date === todayStr ? <><Play size={18} /> Начать тренировку</> : <><CalendarClock size={18} /> Открыть запись</>}
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl px-4 py-8 text-center">
+          <CalendarClock size={28} className="mx-auto text-zinc-600 mb-2.5" />
+          <p className="text-sm text-zinc-500">Тренировок на неделю не запланировано</p>
+        </div>
+      )}
 
-      {/* B22: три цветные плашки (долг, окончание абонемента, дни рождения) свёрнуты в один блок.
-           Дни рождения раньше давали по плашке на человека — теперь одна строка на всех.
-           Счётчики видны в свёрнутом виде, имена раскрываются по тапу. */}
+      {/* Расписание дня: проведённые приглушены и с галочкой, предстоящие — с запуском */}
+      {todayOccurrences.length > 0 && (
+        <div>
+          <SectionTitle>Сегодня</SectionTitle>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
+            {todayOccurrences.map((o) => {
+              const finished = o.status !== "scheduled";
+              return (
+                <div key={`${o.id}-${o.occDate}`} className={`flex items-center gap-3 px-4 min-h-[60px] py-2 ${finished ? "opacity-60" : ""}`}>
+                  <span className="w-12 shrink-0 font-bold">{o.time}</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{names(o.clientIds)}</p>
+                    <p className="text-xs text-zinc-500 truncate">{statusText[o.status] ?? o.dayName ?? ""}</p>
+                  </div>
+                  {o.status === "done"
+                    ? <Check size={18} className="shrink-0 text-lime-400" />
+                    : !finished && onOpenOccurrence && (
+                      // B24: провести тренировку прямо из расписания
+                      <button
+                        onClick={() => onOpenOccurrence(o.id, o.occDate)}
+                        title="Провести тренировку"
+                        aria-label={`Провести тренировку в ${o.time}`}
+                        className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl text-zinc-500 hover:text-lime-400 hover:bg-lime-400/10 transition"
+                      >
+                        <Play size={18} />
+                      </button>
+                    )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {upcomingNotToday.length > 0 && (
+        <div>
+          <SectionTitle>На неделе</SectionTitle>
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
+            {upcomingNotToday.map((o) => (
+              <div key={`${o.id}-${o.occDate}`} className="flex items-center gap-3 px-4 py-3">
+                <span className="shrink-0 text-sm text-zinc-400 whitespace-nowrap">{dayLabel(o.date)}, <span className="font-semibold text-zinc-200">{o.time}</span></span>
+                <span className="min-w-0 truncate text-sm">{names(o.clientIds)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* B22 → Ш4б: «Требует внимания» — чипы-счётчики, тап раскрывает имена под ними */}
       {(debt.length > 0 || expiring.length > 0 || birthdays.length > 0) && (
-        <div className={`rounded-xl border ${debt.length > 0 ? "bg-orange-500/10 border-orange-500/20" : "bg-zinc-900 border-zinc-800"}`}>
-          <button
-            onClick={() => setShowAttention((v) => !v)}
-            aria-expanded={showAttention}
-            className="w-full flex items-center gap-2.5 px-3.5 py-3 text-left"
-          >
-            <TriangleAlert size={15} className={`shrink-0 ${debt.length > 0 ? "text-orange-400" : "text-zinc-500"}`} />
-            <span className={`text-sm font-semibold shrink-0 ${debt.length > 0 ? "text-orange-300" : "text-zinc-300"}`}>Требует внимания</span>
-            <span className="text-xs text-zinc-400 truncate">
-              {[
-                debt.length > 0 ? `Долг ${debt.length}` : null,
-                expiring.length > 0 ? `Заканчивается ${expiring.length}` : null,
-                birthdays.length > 0 ? `ДР ${birthdays.length}` : null,
-              ].filter(Boolean).join(" · ")}
-            </span>
-            {showAttention
-              ? <ChevronDown size={16} className="ml-auto shrink-0 text-zinc-500" />
-              : <ChevronRight size={16} className="ml-auto shrink-0 text-zinc-500" />}
-          </button>
-
-          {showAttention && (
-            <div className="px-3.5 pb-3 pt-0.5 space-y-2 border-t border-zinc-800/60">
-              {debt.length > 0 && (
-                <div className="flex items-start gap-2 pt-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-orange-400 shrink-0 mt-[7px]" />
-                  <p className="text-sm text-orange-300"><span className="font-semibold">Долг:</span> {debt.map((c, i) => (
-                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
-                  ))}</p>
-                </div>
-              )}
-              {expiring.length > 0 && (
-                <div className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 shrink-0 mt-[7px]" />
-                  <p className="text-sm text-yellow-300"><span className="font-semibold">Заканчивается:</span> {expiring.map((c, i) => (
-                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>
-                  ))}</p>
-                </div>
-              )}
-              {birthdays.length > 0 && (
-                <div className="flex items-start gap-2">
-                  <Cake size={13} className="text-pink-400 shrink-0 mt-1" />
-                  <p className="text-sm text-pink-300">{birthdays.map(({ c, days }, i) => (
-                    <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} className="font-semibold" /> — {days === 0 ? "сегодня" : `через ${days} д.`}</Fragment>
-                  ))}</p>
-                </div>
-              )}
+        <div>
+          <SectionTitle>Требует внимания</SectionTitle>
+          <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+            {([
+              debt.length > 0 && { k: "debt" as const, icon: <TriangleAlert size={15} className="text-orange-400" />, label: `Долг: ${debt.length}` },
+              expiring.length > 0 && { k: "exp" as const, icon: <Hourglass size={15} className="text-yellow-400" />, label: `Заканчивается: ${expiring.length}` },
+              birthdays.length > 0 && { k: "bday" as const, icon: <Cake size={15} className="text-pink-400" />, label: `ДР: ${birthdays.length}` },
+            ].filter(Boolean) as { k: "debt" | "exp" | "bday"; icon: ReactNode; label: string }[]).map((chip) => (
+              <button
+                key={chip.k}
+                onClick={() => setAttn((v) => (v === chip.k ? null : chip.k))}
+                aria-expanded={attn === chip.k}
+                className={`shrink-0 inline-flex items-center gap-1.5 h-10 px-3.5 rounded-full border text-sm font-medium transition ${attn === chip.k ? "bg-zinc-800 border-zinc-600 text-zinc-100" : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:border-zinc-700"}`}
+              >
+                {chip.icon} {chip.label}
+              </button>
+            ))}
+          </div>
+          {attn && (
+            <div className="mt-2 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-sm">
+              {attn === "debt" && <p className="text-orange-300">{debt.map((c, i) => <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>)}</p>}
+              {attn === "exp" && <p className="text-yellow-300">{expiring.map((c, i) => <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} /></Fragment>)}</p>}
+              {attn === "bday" && <p className="text-pink-300">{birthdays.map(({ c, days }, i) => (
+                <Fragment key={c.id}>{i > 0 && ", "}<ClientLink id={c.id} name={c.name} className="font-semibold" /> — {days === 0 ? "сегодня" : `через ${days} д.`}</Fragment>
+              ))}</p>}
             </div>
           )}
         </div>
       )}
-
 
       {/* B05: ряд недавних подопечных приходит слотом из App — там живут данные,
           история открытий и закрепление. Дашборд только ставит его на нужное место. */}
@@ -360,7 +392,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         className="w-full flex items-center gap-2.5 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-left transition hover:border-zinc-700"
       >
         <Wallet size={16} className="text-lime-400 shrink-0" />
-        <span className="text-xs font-semibold tracking-widest text-zinc-500 truncate">{periodLabel}</span>
+        <span className="text-sm font-semibold text-zinc-400 truncate">Доход: {periodLabel}</span>
         <span className="ml-auto text-base font-bold text-zinc-100 shrink-0">
           {hideRevenue ? "• • • •" : `${income.toLocaleString("ru-RU")} ₽`}
         </span>
@@ -373,7 +405,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
       {/* Revenue */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-xs font-semibold tracking-widest text-zinc-500">ДОХОД — {periodLabel}</p>
+          <p className="text-sm font-semibold text-zinc-400">Доход: {periodLabel}</p>
           <div className="flex gap-0.5 bg-zinc-800/60 rounded-lg p-0.5">
             {PERIODS.map(([k, l]) => (
               <button key={k} onClick={() => setPeriod(k)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${period === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
@@ -391,17 +423,17 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
             <div className="flex-1 grid grid-cols-3 gap-2">
               <div>
                 <div className="flex gap-0.5 mb-1.5">{[0,1,2,3].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full bg-lime-400" />)}</div>
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wide leading-none">Доход</p>
+                <p className="text-xs text-zinc-500 leading-none">Доход</p>
                 <p className="text-sm font-bold text-zinc-100 mt-1">{hideRevenue ? "• • • •" : `${income.toLocaleString("ru-RU")} ₽`}</p>
               </div>
               <div>
                 <div className="flex gap-0.5 mb-1.5">{[0,1,2,3].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full bg-amber-400" />)}</div>
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wide leading-none">Долг</p>
+                <p className="text-xs text-zinc-500 leading-none">Долг</p>
                 <p className="text-sm font-bold text-zinc-100 mt-1">{hideRevenue ? "•" : debt.length}</p>
               </div>
               <div>
                 <div className="flex gap-0.5 mb-1.5">{[0,1,2,3].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full bg-zinc-600" />)}</div>
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wide leading-none">Занятий</p>
+                <p className="text-xs text-zinc-500 leading-none">Занятий</p>
                 <p className="text-sm font-bold text-zinc-100 mt-1">{trainingsDone}</p>
               </div>
             </div>
@@ -409,7 +441,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
               {hideRevenue ? <Eye size={18} /> : <EyeOff size={18} />}
             </button>
           </div>
-          <button onClick={() => setShowAnalytics((v) => !v)} className="w-full mt-3 pt-3 border-t border-zinc-800 flex items-center justify-center gap-1.5 text-[11px] tracking-widest text-zinc-500 hover:text-zinc-300 transition uppercase">
+          <button onClick={() => setShowAnalytics((v) => !v)} className="w-full mt-3 pt-3 border-t border-zinc-800 flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition">
             <BarChart3 size={12} /> {showAnalytics ? "Скрыть аналитику" : "Показать аналитику"}
           </button>
         </div>
@@ -422,18 +454,18 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         <div>
           <button onClick={() => setShowPayments(p => !p)}
             className="flex items-center justify-between w-full mb-2">
-            <p className="text-xs font-semibold tracking-widest text-zinc-500">ОПЛАТЫ — {thisMonth.slice(5)}/{thisMonth.slice(0, 4)}</p>
+            <p className="text-sm font-semibold text-zinc-400">Оплаты за {thisMonth.slice(5)}.{thisMonth.slice(0, 4)}</p>
             {showPayments ? <ChevronDown size={14} className="text-zinc-600" /> : <ChevronRight size={14} className="text-zinc-600" />}
           </button>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-3">
               <Wallet size={16} className="text-lime-400 shrink-0" />
               <div className="flex-1">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Поступило</p>
+                <p className="text-xs text-zinc-500">Поступило</p>
                 <p className="text-lg font-bold text-zinc-50">{hideRevenue ? "• • • •" : `${cashReceived.toLocaleString("ru-RU")} ₽`}</p>
               </div>
               <div className="text-right">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Платежей</p>
+                <p className="text-xs text-zinc-500">Платежей</p>
                 <p className="text-lg font-bold text-zinc-50">{paymentsThisMonth.length}</p>
               </div>
             </div>
@@ -441,14 +473,14 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
               <div className="border-t border-zinc-800 pt-3 flex items-center gap-3">
                 <Clock size={16} className="text-orange-400 shrink-0" />
                 <div className="flex-1">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wide">Ожидается оплата</p>
+                  <p className="text-xs text-zinc-500">Ожидается оплата</p>
                   <p className="text-base font-bold text-orange-300">{hideRevenue ? "• • • •" : `${cashPending.toLocaleString("ru-RU")} ₽`}</p>
                 </div>
               </div>
             )}
             {upcomingRenewals.length > 0 && (
               <div className="border-t border-zinc-800 pt-3">
-                <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1.5">Продление подписки (7 дней)</p>
+                <p className="text-xs text-zinc-500 mb-1.5">Продление подписки (7 дней)</p>
                 <div className="space-y-1">
                   {upcomingRenewals.map((c) => (
                     <div key={c.id} className="flex items-center justify-between text-sm">
@@ -466,7 +498,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
       {/* Payments expanded list */}
       {showPayments && paymentsThisMonth.length > 0 && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-1.5">
-          <p className="text-[10px] text-zinc-500 uppercase tracking-wide mb-1">Все платежи за месяц</p>
+          <p className="text-xs text-zinc-500 mb-1">Все платежи за месяц</p>
           {[...paymentsThisMonth].sort((a, b) => b.date.localeCompare(a.date)).map((p, i) => {
             const cName = clientById[p.clientId]?.name ?? "—";
             const badge = p.payStatus === "deferred"
@@ -492,15 +524,15 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
 
       {/* Clients */}
       <div>
-        <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПОДОПЕЧНЫЕ</p>
+        <SectionTitle>Подопечные</SectionTitle>
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-lime-400">
             <p className="text-2xl font-bold text-zinc-50">{activeClients.length}<span className="text-sm font-normal text-zinc-600">/{clients.length}</span></p>
-            <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wide">Активных</p>
+            <p className="text-xs text-zinc-500 mt-1">Активных</p>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-cyan-400">
             <p className="text-2xl font-bold text-zinc-50">{trainedThisWeek}</p>
-            <p className="text-[10px] text-zinc-500 mt-1 uppercase tracking-wide">На неделе</p>
+            <p className="text-xs text-zinc-500 mt-1">На неделе</p>
           </div>
         </div>
       </div>
