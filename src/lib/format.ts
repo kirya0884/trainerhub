@@ -18,3 +18,20 @@ export const parseNum = (v: unknown): number | null => {
   const n = parseFloat(String(v).replace(",", ".").replace(/[^0-9.]/g, ""));
   return isNaN(n) ? null : n;
 };
+
+// Отдых в плане — свободный текст: «90», «90 с», «1:30», «2 мин», «1,5 мин», «2 мин 30 с».
+// Возвращает секунды; null — не задан или не разобрали. parseNum тут не годится:
+// он выбрасывает «:» и «мин», и «1:30» превращался в 130, «2 мин» — в 2.
+export const parseRest = (s: string): number | null => {
+  const t = (s || "").trim().toLowerCase().replace(",", ".");
+  if (!t) return null;
+  let sec: number;
+  const mmss = t.match(/^(\d+):(\d{1,2})$/);
+  const min = t.match(/(\d+(?:\.\d+)?)\s*[мm]/);
+  if (mmss) sec = Number(mmss[1]) * 60 + Number(mmss[2]);
+  else if (min) {
+    const after = t.slice((min.index ?? 0) + min[0].length).match(/(\d+)\s*[сs]/);
+    sec = parseFloat(min[1]) * 60 + (after ? Number(after[1]) : 0);
+  } else sec = parseFloat(t);
+  return sec >= 5 && sec <= 1800 ? Math.round(sec) : null;
+};

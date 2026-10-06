@@ -1,4 +1,4 @@
-import { parseNum, today } from "./format";
+import { parseNum, parseRest, today } from "./format";
 import type { Day, Metric } from "../types";
 
 type SetVal = { weight: string; reps: string };
@@ -21,7 +21,7 @@ export function buildMetrics(
       const w = parseNum(r.weight);
       if (w != null && (best == null || w > best.w)) best = { w, reps: r.reps };
     });
-    const rest = parseNum(ex.rest);
+    const rest = parseRest(ex.rest);
     metrics.push({
       date: today(),
       exercise: ex.name,

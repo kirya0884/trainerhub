@@ -3,7 +3,7 @@ import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
-import { parseNum, today } from "../lib/format";
+import { parseNum, parseRest, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
 
 const exLabel = (day: Day, idx: number) => {
@@ -36,21 +36,6 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 const tonnageOf = (rows: { weight: string; reps: string }[]) =>
   rows.reduce((sum, r) => { const w = parseNum(r.weight); const rp = parseNum(r.reps); return w != null && rp != null ? sum + w * rp : sum; }, 0);
 const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} кг`;
-// Отдых в плане — свободный текст: «90», «90 с», «1:30», «2 мин», «1,5 мин», «2 мин 30 с».
-// null — не задан или не разобрали: таймер тогда не запускаем (решение владельца).
-const parseRest = (s: string): number | null => {
-  const t = (s || "").trim().toLowerCase().replace(",", ".");
-  if (!t) return null;
-  let sec: number;
-  const mmss = t.match(/^(\d+):(\d{1,2})$/);
-  const min = t.match(/(\d+(?:\.\d+)?)\s*[мm]/);
-  if (mmss) sec = Number(mmss[1]) * 60 + Number(mmss[2]);
-  else if (min) {
-    const after = t.slice((min.index ?? 0) + min[0].length).match(/(\d+)\s*[сs]/);
-    sec = parseFloat(min[1]) * 60 + (after ? Number(after[1]) : 0);
-  } else sec = parseFloat(t);
-  return sec >= 5 && sec <= 1800 ? Math.round(sec) : null;
-};
 const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 // Два коротких сигнала. AudioContext создаётся по тапу (иначе браузер его заглушит).
 const beep = (ctx: AudioContext) => {
@@ -219,7 +204,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
       if (!rows.length) return;
       let best: { w: number; reps: string } | null = null;
       rows.forEach((r) => { const w = parseNum(r.weight); if (w != null && (best == null || w > best.w)) best = { w, reps: r.reps }; });
-      const rest = parseNum(ex.rest);
+      const rest = parseRest(ex.rest);
       metrics.push({
         date: today(), exercise: ex.name, weight: best ? String(best.w) : "",
         reps: best ? String(parseNum(best.reps) ?? "") : String(parseNum(rows[0].reps) ?? ""),
