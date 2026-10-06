@@ -190,7 +190,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
     toggleSetDone(ex.id, i, total);
     if (!was) startRest(ex);
   };
-  const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
+  const totalTonnage = day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [])), 0);
   const isCircuit = day.method === "circuit";
   const maxRounds = isCircuit && day.exercises.length ? Math.max(1, ...day.exercises.map((ex) => (vals[ex.id] || []).length)) : 0;
 
@@ -316,7 +316,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
             const n = rows.length;
             const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
             const md = meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0 };
-            const tonnage = tonnageOf(rows);
+            const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows); // функциональное: вес тут не про подходы, тоннаж не считаем
             const grouped = block.items.length > 1;
             const isCurrent = ex.id === currentId;
             const shell = grouped

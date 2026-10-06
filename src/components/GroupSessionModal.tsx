@@ -109,7 +109,7 @@ function ClientSlot({ client, trainerId, active, onFinished }: { client: SlotCli
                   const n = rows.length;
                   const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
                   const md = meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0 };
-                  const tonnage = tonnageOf(rows);
+                  const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows); // функциональное: вес тут не про подходы, тоннаж не считаем
                   return (
                     <div key={ex.id} className={block.items.length > 1 ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}` : `bg-zinc-900 border rounded-xl p-3 transition ${md.done ? "border-lime-400/40" : "border-zinc-800"}`}>
                       <div className="flex items-center justify-between gap-2 mb-2"><h3 className="font-semibold min-w-0 truncate"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3><span className="text-xs text-zinc-500 shrink-0 text-right">цель: {exSummary(ex)}{tonnage > 0 && <><br />тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></>}</span></div>

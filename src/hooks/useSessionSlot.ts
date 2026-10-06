@@ -89,7 +89,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     setMeta((m) => ({ ...m, [exId]: { ...m[exId], fires: { ...m[exId].fires, [idx]: v } } }));
 
   const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
-  const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0) : 0;
+  const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [])), 0) : 0;
 
   const finish = async () => {
     if (!day || !plan || busy) return;

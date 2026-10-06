@@ -158,7 +158,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     }, 1500);
     return () => { if (progressTimer.current) clearTimeout(progressTimer.current); };
   }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
-  const totalTonnage = day.exercises.reduce((sum, ex) => sum + tonnageOf(vals[ex.id] || []), 0);
+  const totalTonnage = day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [])), 0);
   const isCircuit = day.method === "circuit";
   const maxRounds = isCircuit && day.exercises.length ? Math.max(1, ...day.exercises.map((ex) => (vals[ex.id] || []).length)) : 0;
   // Блокируем скролл страницы когда сессия открыта
@@ -321,7 +321,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             const n = rows.length;
             const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
             const md = meta[ex.id] || { fires: {}, note: "", done: false };
-            const tonnage = tonnageOf(rows);
+            const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows); // функциональное: вес тут не про подходы, тоннаж не считаем
             return (
               <div key={ex.id} className={block.items.length > 1 ? `p-3 transition ${md.done ? "opacity-60" : ""}` : `bg-zinc-900 border rounded-xl p-3 transition ${md.done ? "border-[var(--accent)]/40 opacity-60" : "border-zinc-800"}`}>
                 <div className="flex items-start justify-between gap-2 mb-2">
