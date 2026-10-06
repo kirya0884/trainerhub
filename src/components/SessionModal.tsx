@@ -2,7 +2,8 @@ import { AlertTriangle, Check, CheckCircle2, Flame, Layers, MessageSquare, Minim
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useEffect, useRef, useState } from "react";
-import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
+import { GROUP_COLORS } from "../constants";
+import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { parseNum, parseRest, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
 
@@ -58,15 +59,6 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
         <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="p-1 transition" title={`${n} из 5`}>
           <Flame size={22} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
         </button>
-      ))}
-    </div>
-  );
-}
-function EmojiScale({ value, onChange, emojis }: { value: number; onChange: (v: number) => void; emojis: string[] }) {
-  return (
-    <div className="flex gap-1.5">
-      {emojis.map((em, i) => (
-        <button key={i} onClick={() => onChange(value === i + 1 ? 0 : i + 1)} className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition ${value === i + 1 ? "bg-lime-400/20 ring-2 ring-lime-400" : "bg-zinc-800 hover:bg-zinc-700 grayscale opacity-70"}`}>{em}</button>
       ))}
     </div>
   );
@@ -222,7 +214,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
     });
     const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
     try {
-      await Promise.resolve(onFinish(metrics, `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение ${MOOD_EMOJI[mood - 1]}` : ""}`, session));
+      await Promise.resolve(onFinish(metrics, `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`, session));
       clearPersist();
       onClose();
     } catch (e) {
@@ -396,8 +388,8 @@ export default function SessionModal({ day, onFinish, onClose }: {
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-3">
           <h3 className="font-semibold flex items-center gap-1.5"><MessageSquare size={16} className="text-lime-400" /> После тренировки</h3>
-          <div><p className="text-xs text-zinc-500 mb-1">Самочувствие</p><EmojiScale value={wellbeing} onChange={setWellbeing} emojis={WELL_EMOJI} /></div>
-          <div><p className="text-xs text-zinc-500 mb-1">Настроение</p><EmojiScale value={mood} onChange={setMood} emojis={MOOD_EMOJI} /></div>
+          <div><p className="text-xs text-zinc-500 mb-1">Самочувствие</p><FeelingScale kind="wellbeing" value={wellbeing} onChange={setWellbeing} /></div>
+          <div><p className="text-xs text-zinc-500 mb-1">Настроение</p><FeelingScale kind="mood" value={mood} onChange={setMood} /></div>
           <div><p className="text-xs text-zinc-500 mb-1">Оценка тренировки клиентом</p><div className="flex gap-1.5">{[1, 2, 3, 4, 5].map((n) => (<button key={n} onClick={() => setClientRating(n === clientRating ? 0 : n)} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${n <= clientRating ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"}`}>{n}</button>))}</div></div>
           <div><p className="text-xs text-zinc-500 mb-1">Отзыв клиента</p><textarea value={review} onChange={(e) => setReview(e.target.value)} rows={2} placeholder="Что сказал клиент: ощущения, пожелания, обратная связь..." className="w-full bg-zinc-800 rounded-lg px-2.5 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></div>
         </div>

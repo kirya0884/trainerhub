@@ -1,6 +1,7 @@
 import { Archive, BarChart3, BookOpen, GripVertical, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { GROUP_COLORS, GROUP_CYCLE, MOOD_EMOJI, WELL_EMOJI } from "../constants";
+import { GROUP_COLORS, GROUP_CYCLE } from "../constants";
+import { FeelingBadge } from "./FeelingScale";
 import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
 import { useProgress } from "../hooks/useProgress";
@@ -600,8 +601,8 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                         </div>
                         {hasEmoji && (
                           <div className="flex items-center gap-3 text-xs text-zinc-400 flex-wrap">
-                            {s.wellbeing && <span>Самочувствие <span className="text-base">{WELL_EMOJI[s.wellbeing - 1]}</span></span>}
-                            {s.mood && <span>Настроение <span className="text-base">{MOOD_EMOJI[s.mood - 1]}</span></span>}
+                            {s.wellbeing && <span>Самочувствие <FeelingBadge kind="wellbeing" value={s.wellbeing} /></span>}
+                            {s.mood && <span>Настроение <FeelingBadge kind="mood" value={s.mood} /></span>}
                             {!!s.clientRating && <span>Оценка <span className="text-lime-400 font-semibold">{s.clientRating}/5</span></span>}
                           </div>
                         )}

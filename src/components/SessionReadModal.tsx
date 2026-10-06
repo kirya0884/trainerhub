@@ -2,7 +2,8 @@ import { CheckCircle2, ChevronDown, ChevronRight, Circle, Eye, Flame, Layers, X 
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useState } from "react";
 import { fmtDate } from "../lib/format";
-import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
+import { GROUP_COLORS } from "../constants";
+import { FeelingBadge } from "./FeelingScale";
 import type { Session } from "../types";
 
 const SUPERSET_NAME: Record<number, string> = { 2: "Двусет", 3: "Трисет" };
@@ -177,10 +178,10 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
             <p className="text-sm font-semibold text-zinc-300">После тренировки</p>
             <div className="flex flex-wrap gap-3 text-sm text-zinc-400">
               {session.mood > 0 && (
-                <span>Настроение <span className="text-lg">{MOOD_EMOJI[session.mood - 1]}</span></span>
+                <span>Настроение <FeelingBadge kind="mood" value={session.mood} /></span>
               )}
               {session.wellbeing > 0 && (
-                <span>Самочувствие <span className="text-lg">{WELL_EMOJI[session.wellbeing - 1]}</span></span>
+                <span>Самочувствие <FeelingBadge kind="wellbeing" value={session.wellbeing} /></span>
               )}
               {session.clientRating > 0 && (
                 <span>Оценка <span className="text-lime-400 font-semibold">{session.clientRating}/5</span></span>

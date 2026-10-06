@@ -25,5 +25,3 @@ export const EXERCISE_METRICS = [
   { key: "sets", label: "Подходы", unit: "", color: "#c084fc" },
 ] as const;
 
-export const MOOD_EMOJI = ["😣", "😕", "😐", "🙂", "😄"];
-export const WELL_EMOJI = ["🥵", "😮‍💨", "😐", "💪", "⚡"];

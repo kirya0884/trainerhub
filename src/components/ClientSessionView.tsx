@@ -3,7 +3,8 @@ import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
 import { parseNum, today } from "../lib/format";
 import { buildMetrics } from "../lib/sessionUtils";
-import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
+import { GROUP_COLORS } from "../constants";
+import { FeelingScale } from "./FeelingScale";
 import type { Day, Metric, Session } from "../types";
 
 function StarRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
@@ -49,15 +50,6 @@ const tonnageOf = (rows: { weight: string; reps: string }[]) =>
   rows.reduce((sum, r) => { const w = parseNum(r.weight); const rp = parseNum(r.reps); return w != null && rp != null ? sum + w * rp : sum; }, 0);
 const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} кг`;
 
-function EmojiScale({ value, onChange, emojis }: { value: number; onChange: (v: number) => void; emojis: string[] }) {
-  return (
-    <div className="flex gap-1.5 flex-wrap">
-      {emojis.map((em, i) => (
-        <button key={i} onClick={() => onChange(value === i + 1 ? 0 : i + 1)} className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition ${value === i + 1 ? "ring-2 ring-offset-1 ring-offset-zinc-900" : "bg-zinc-800 hover:bg-zinc-700 grayscale opacity-70"}`} style={value === i + 1 ? { background: "var(--accent)30", outline: "2px solid var(--accent)" } : undefined}>{em}</button>
-      ))}
-    </div>
-  );
-}
 
 function FlameRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -227,11 +219,11 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         <div className="flex-1 overflow-y-auto px-4 py-6 max-w-md w-full mx-auto space-y-5">
           <div>
             <p className="text-sm text-zinc-400 mb-2">Общая оценка тренировки</p>
-            <EmojiScale value={mood} onChange={setMood} emojis={MOOD_EMOJI} />
+            <FeelingScale kind="mood" value={mood} onChange={setMood} />
           </div>
           <div>
             <p className="text-sm text-zinc-400 mb-2">Самочувствие после тренировки</p>
-            <EmojiScale value={wellbeing} onChange={setWellbeing} emojis={WELL_EMOJI} />
+            <FeelingScale kind="wellbeing" value={wellbeing} onChange={setWellbeing} />
           </div>
           <div>
             <p className="text-sm text-zinc-400 mb-2">Комментарий тренеру (необязательно)</p>

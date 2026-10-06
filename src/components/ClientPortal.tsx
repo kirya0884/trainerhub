@@ -16,7 +16,8 @@ import type { PlanListItem, Payment, Measurement } from "../lib/clients";
 import type { NutritionLog } from "../lib/nutrition";
 import { usePlan } from "../hooks/usePlan";
 import { useProgress } from "../hooks/useProgress";
-import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
+import { GROUP_COLORS } from "../constants";
+import { FeelingBadge } from "./FeelingScale";
 import MetricsView from "./MetricsView";
 import { fmtDate, today as todayFn } from "../lib/format";
 import { supabase } from "../lib/supabase";
@@ -440,7 +441,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                         <p className="text-xs text-zinc-500">{fmtDate(s.date, true)} · {s.done}/{s.total} упр.{s.fromClient && " · сам"}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        {s.wellbeing ? <span className="text-base">{WELL_EMOJI[s.wellbeing - 1]}</span> : null}
+                        {s.wellbeing ? <FeelingBadge kind="wellbeing" value={s.wellbeing} withLabel={false} /> : null}
                         {!!s.clientRating && <span style={{ color: "var(--accent)" }} className="text-xs font-semibold">{s.clientRating}/5</span>}
                         <CheckCircle2 size={15} style={{ color: "var(--accent)" }} />
                       </div>
@@ -448,8 +449,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                     {isOpen && (
                       <div className="border-t border-zinc-800 px-3 py-3 space-y-3 bg-zinc-800/20">
                         <div className="flex gap-4 text-sm flex-wrap">
-                          {s.wellbeing ? <span className="text-zinc-400">Самочувствие <span className="text-base">{WELL_EMOJI[s.wellbeing - 1]}</span></span> : null}
-                          {s.mood ? <span className="text-zinc-400">Настроение <span className="text-base">{MOOD_EMOJI[s.mood - 1]}</span></span> : null}
+                          {s.wellbeing ? <span className="text-zinc-400">Самочувствие <FeelingBadge kind="wellbeing" value={s.wellbeing} /></span> : null}
+                          {s.mood ? <span className="text-zinc-400">Настроение <FeelingBadge kind="mood" value={s.mood} /></span> : null}
                           {!!s.clientRating && <span className="text-zinc-400">Оценка <span style={{ color: "var(--accent)" }} className="font-semibold">{s.clientRating}/5</span></span>}
                         </div>
                         {s.items && s.items.length > 0 && (

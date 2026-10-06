@@ -3,7 +3,8 @@ import { useModalA11y } from "../hooks/useModalA11y";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { buildMeta, buildVals, tonnageOf, useSessionSlot, type ExMeta, type SetVal } from "../hooks/useSessionSlot";
 import { useEffect, useState } from "react";
-import { GROUP_COLORS, MOOD_EMOJI, WELL_EMOJI } from "../constants";
+import { GROUP_COLORS } from "../constants";
+import { FeelingScale } from "./FeelingScale";
 import { parseNum } from "../lib/format";
 import { combinedRemaining } from "../lib/clients";
 import type { Day, Exercise } from "../types";
@@ -46,15 +47,6 @@ function FlameRate({ value, onChange }: { value: number; onChange: (v: number) =
         <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="transition" title={`${n} из 5`}>
           <Flame size={18} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
         </button>
-      ))}
-    </div>
-  );
-}
-function EmojiScale({ value, onChange, emojis }: { value: number; onChange: (v: number) => void; emojis: string[] }) {
-  return (
-    <div className="flex gap-1.5">
-      {emojis.map((em, i) => (
-        <button key={i} onClick={() => onChange(value === i + 1 ? 0 : i + 1)} className={`w-10 h-10 rounded-lg text-xl flex items-center justify-center transition ${value === i + 1 ? "bg-lime-400/20 ring-2 ring-lime-400" : "bg-zinc-800 hover:bg-zinc-700 grayscale opacity-70"}`}>{em}</button>
       ))}
     </div>
   );
@@ -161,8 +153,8 @@ function ClientSlot({ client, trainerId, active, onFinished }: { client: SlotCli
 
               <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-3">
                 <h3 className="font-semibold flex items-center gap-1.5"><MessageSquare size={16} className="text-lime-400" /> После тренировки</h3>
-                <div><p className="text-xs text-zinc-500 mb-1">Самочувствие</p><EmojiScale value={wellbeing} onChange={setWellbeing} emojis={WELL_EMOJI} /></div>
-                <div><p className="text-xs text-zinc-500 mb-1">Настроение</p><EmojiScale value={mood} onChange={setMood} emojis={MOOD_EMOJI} /></div>
+                <div><p className="text-xs text-zinc-500 mb-1">Самочувствие</p><FeelingScale kind="wellbeing" value={wellbeing} onChange={setWellbeing} /></div>
+                <div><p className="text-xs text-zinc-500 mb-1">Настроение</p><FeelingScale kind="mood" value={mood} onChange={setMood} /></div>
                 <div><p className="text-xs text-zinc-500 mb-1">Оценка тренировки клиентом</p><div className="flex gap-1.5">{[1, 2, 3, 4, 5].map((n) => (<button key={n} onClick={() => setClientRating(n === clientRating ? 0 : n)} className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${n <= clientRating ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"}`}>{n}</button>))}</div></div>
                 <div><p className="text-xs text-zinc-500 mb-1">Отзыв клиента</p><textarea value={review} onChange={(e) => setReview(e.target.value)} rows={2} placeholder="Что сказал клиент..." className="w-full bg-zinc-800 rounded-lg px-2.5 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></div>
               </div>
@@ -374,8 +366,8 @@ function PairSession({ a, b, trainerId, onFinishedOne }: {
                   Упр.: <span className="text-lime-400 font-semibold">{s.doneEx}/{s.day?.exercises.length ?? 0}</span>
                   {s.totalTonnage > 0 && <> · <span className="text-orange-400 font-semibold">{fmtTonnage(s.totalTonnage)}</span></>}
                 </p>
-                <div><p className="text-[11px] text-zinc-500 mb-1">Самочувствие</p><EmojiScale value={s.wellbeing} onChange={s.setWellbeing} emojis={WELL_EMOJI} /></div>
-                <div><p className="text-[11px] text-zinc-500 mb-1">Настроение</p><EmojiScale value={s.mood} onChange={s.setMood} emojis={MOOD_EMOJI} /></div>
+                <div><p className="text-[11px] text-zinc-500 mb-1">Самочувствие</p><FeelingScale kind="wellbeing" value={s.wellbeing} onChange={s.setWellbeing} compact /></div>
+                <div><p className="text-[11px] text-zinc-500 mb-1">Настроение</p><FeelingScale kind="mood" value={s.mood} onChange={s.setMood} compact /></div>
                 {s.finished ? (
                   <div className="flex items-center gap-1.5 text-xs text-lime-400"><CheckCircle2 size={14} /> записана</div>
                 ) : (
