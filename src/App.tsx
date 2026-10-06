@@ -144,11 +144,21 @@ export default function App() {
   // А3: разовая уборка хранилища при старте — брошенные черновики тренировок копились
   // без ограничения и были причиной переполнения квоты, из-за которого запись молча падала.
   useEffect(() => { cleanupStorage(); }, []);
-  const { view, push: setView, back: goBack } = useHistoryNav<View>(
+  const { view, push: setView, replace: replaceView, back: goBack } = useHistoryNav<View>(
     { kind: "dashboard" },
     (v) => viewToUrl(v as ViewLike),
     (h) => urlToView(h) as View,
   );
+  // Разовые флаги («открыть форму записи / плана / подопечного», «открыть запись»)
+  // экран забирает при открытии, а мы сразу стираем их из истории. Иначе «назад» на
+  // этот экран открывал форму снова, а повторное «+» на том же экране не срабатывало.
+  // Эффекты дочерних экранов выполняются раньше этого — флаг они успевают получить.
+  useEffect(() => {
+    const v = view as Record<string, unknown>;
+    if (!v.newForm && !v.newBooking && !v.newBookingClientId && !v.newPlan && !v.openOccurrence) return;
+    const { newForm: _f, newBooking: _b, newBookingClientId: _c, newPlan: _p, openOccurrence: _o, ...rest } = v;
+    replaceView(rest as View);
+  }, [view, replaceView]);
   const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
   // B17: общие данные грузим один раз здесь, а не в каждой вкладке заново.

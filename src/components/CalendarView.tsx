@@ -41,18 +41,24 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   useEffect(() => { saveViewState("calendar-mode", mode); }, [mode]);
   const today = todayFn();
   const [anchor, setAnchor] = useState(today);
-  const [modal, setModal] = useState<{ booking?: Booking; date?: string; time?: string; occDate?: string } | null>(null);
-  // B13: FAB просит сразу открыть форму новой записи на сегодня.
-  useEffect(() => { if (openBooking) setModal({ date: todayFn() }); }, [openBooking]);
+  const [modal, setModal] = useState<{ booking?: Booking; date?: string; time?: string; occDate?: string; clientId?: string } | null>(null);
+  // B13: FAB просит сразу открыть форму новой записи на сегодня. Подопечного запоминаем
+  // в самой форме: флаги из навигации App снимает сразу после открытия экрана.
+  useEffect(() => { if (openBooking) setModal({ date: todayFn(), clientId: newBookingClientId }); }, [openBooking]); // eslint-disable-line react-hooks/exhaustive-deps
   // B24: дашборд попросил открыть конкретную запись — ставим календарь на её дату
-  // и раскрываем карточку. Если запись успели удалить, find вернёт undefined и ничего не произойдёт.
+  // и раскрываем карточку. Запрос разовый: ждём загрузки записей, открываем и забываем —
+  // раньше карточка всплывала заново при каждом обновлении записей. Если запись успели
+  // удалить, find вернёт undefined — ничего не откроется.
+  const [pendingOcc, setPendingOcc] = useState(openOccurrence ?? null);
+  useEffect(() => { if (openOccurrence) setPendingOcc(openOccurrence); }, [openOccurrence]);
+  useEffect(() => { if (pendingOcc) setAnchor(pendingOcc.occDate); }, [pendingOcc]);
   useEffect(() => {
-    if (!openOccurrence) return;
-    const { id, occDate } = openOccurrence;
-    setAnchor(occDate);
+    if (!pendingOcc || bookingsHook.loading) return;
+    const { id, occDate } = pendingOcc;
     const occ = expandBookings(bookings, occDate, occDate).find((o) => o.id === id && o.occDate === occDate);
     if (occ) setQuickView(occ);
-  }, [openOccurrence, bookings]);
+    setPendingOcc(null);
+  }, [pendingOcc, bookings, bookingsHook.loading]);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
   const [groupSession, setGroupSession] = useState<Occurrence | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
@@ -407,7 +413,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
 
       {modal && (
         <BookingModal
-          defaultClientIds={!modal.booking && newBookingClientId ? [newBookingClientId] : undefined}
+          defaultClientIds={!modal.booking && modal.clientId ? [modal.clientId] : undefined}
           clients={clients}
           booking={modal.booking}
           defaultDate={modal.date}
