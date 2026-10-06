@@ -12,7 +12,6 @@ import type { PackageTemplate } from "../lib/payments";
 import ModalShell from "./ModalShell";
 import LiveWorkoutModal from "./LiveWorkoutModal";
 import type { ClientListItem } from "../lib/clients";
-import RemainingBadge from "./RemainingBadge";
 
 export default function ClientsList({ trainerId, clients, reloadClients, onOpenClient, openForm, onBookClient }: { trainerId: string; clients: ClientListItem[] | null; reloadClients: () => void; onOpenClient: (id: string) => void; openForm?: boolean; onBookClient?: (clientId: string) => void }) {
   const [showForm, setShowForm] = useState(!!openForm);
@@ -74,109 +73,152 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
     } catch (e) { console.error("[ClientsList] submit:", e); alert("Не удалось добавить подопечного."); }
   };
 
-  if (!clients) return <div className="text-zinc-500 text-sm p-4">Загрузка...</div>;
+  // Ш4в: скелетон по форме будущего списка вместо голого «Загрузка...»
+  if (!clients) return (
+    <div className="space-y-3 animate-pulse" role="status" aria-label="Загрузка подопечных">
+      <div className="h-8 w-44 bg-zinc-800 rounded-lg" />
+      <div className="h-11 bg-zinc-900 border border-zinc-800 rounded-xl" />
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
+        {[0, 1, 2, 3].map((i) => <div key={i} className="h-[68px]" />)}
+      </div>
+    </div>
+  );
+
+  const visible = clients
+    .filter((c) => showArchive ? c.status === "archived" : c.status !== "archived")
+    .filter((c) => !search.trim() || c.name.toLowerCase().includes(search.toLowerCase()))
+    .filter((c) => showArchive || !fmtFilter || c.format === fmtFilter);
+  // Ш4в: группы — кто тренируется сейчас, кому продлить (≤2 тренировок или долг), остальные.
+  // Каждый подопечный попадает ровно в одну группу; в архиве группировки нет.
+  const needsRenew = (c: ClientListItem) => c.remaining !== null && c.remaining !== "" && Number(c.remaining) <= 2 && c.status !== "left";
+  const groups: { title: string; items: ClientListItem[] }[] = showArchive
+    ? [{ title: "", items: visible }]
+    : [
+        { title: "Сейчас тренируется", items: visible.filter((c) => !!c.activeSession) },
+        { title: "Нужно продлить", items: visible.filter((c) => !c.activeSession && needsRenew(c)) },
+        { title: "Все", items: visible.filter((c) => !c.activeSession && !needsRenew(c)) },
+      ];
+  const shownGroups = groups.filter((g) => g.items.length > 0);
+  const FORMAT: Record<string, string> = { online: "онлайн", offline: "офлайн" };
+  const STATUS: Record<string, string> = { paused: "на паузе", left: "ушёл", archived: "архив" };
+  const segs: { key: string; label: string; on: boolean; pick: () => void }[] = [
+    { key: "all", label: "Все", on: !showArchive && !fmtFilter, pick: () => { setShowArchive(false); setFmtFilter(""); } },
+    { key: "online", label: "Онлайн", on: !showArchive && fmtFilter === "online", pick: () => { setShowArchive(false); setFmtFilter("online"); } },
+    { key: "offline", label: "Офлайн", on: !showArchive && fmtFilter === "offline", pick: () => { setShowArchive(false); setFmtFilter("offline"); } },
+    { key: "archive", label: "Архив", on: showArchive, pick: () => { setShowArchive(true); setShowForm(false); } },
+  ];
+
+  const row = (c: ClientListItem) => {
+    const rem = c.remaining !== null && c.remaining !== "" ? Number(c.remaining) : null;
+    const meta = [c.goal, FORMAT[c.format], STATUS[c.status]].filter(Boolean).join(" · ");
+    return (
+      // B11: строка едет влево, под ней панель действий
+      <div key={c.id} {...swipe.rowProps(c.id)} className="relative overflow-hidden">
+        <div className="absolute inset-y-0 right-0 flex items-stretch" style={{ width: swipe.PANEL_W }}>
+          <button onClick={() => { swipe.setOpenId(null); onBookClient?.(c.id); }}
+            className="flex-1 flex flex-col items-center justify-center gap-1 bg-cyan-500/20 text-cyan-300 active:bg-cyan-500/30 transition">
+            <CalendarCheck size={18} />
+            <span className="text-[11px] font-medium">Записать</span>
+          </button>
+        </div>
+        <div className="relative bg-zinc-900" style={{ transform: `translateX(${swipe.offsetFor(c.id)}px)`, transition: swipe.openId === c.id || swipe.offsetFor(c.id) === 0 ? "transform .18s ease-out" : "none" }}>
+          <button onClick={() => { if (swipe.openId === c.id) { swipe.setOpenId(null); return; } onOpenClient(c.id); }}
+            className={`w-full text-left flex items-center gap-3 px-3.5 min-h-[68px] py-2.5 hover:bg-zinc-800/40 transition ${c.status === "left" || c.status === "paused" ? "opacity-60" : ""}`}>
+            <span className="relative shrink-0">
+              {c.avatarUrl
+                ? <img src={c.avatarUrl} alt="" className="w-11 h-11 rounded-full object-cover" />
+                : <span className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-zinc-950" style={{ background: c.color }}>{c.name.charAt(0).toUpperCase()}</span>}
+              {!!c.activeSession && <span className="absolute -right-0.5 -bottom-0.5 w-3.5 h-3.5 rounded-full bg-cyan-400 border-[3px] border-zinc-900" />}
+            </span>
+            <span className="flex-1 min-w-0">
+              <span className="flex items-center gap-1.5 font-semibold truncate">
+                <span className="truncate">{c.name}</span>
+                {c.hasHealthFlags && <HeartPulse size={14} className="text-amber-400 shrink-0" aria-label="Есть ограничения по здоровью" />}
+              </span>
+              {c.activeSession
+                ? <span className="block text-sm text-cyan-400 truncate">Тренируется сейчас</span>
+                : <span className="block text-sm text-zinc-500 truncate">{meta || "—"}</span>}
+            </span>
+            {rem !== null && (
+              <span className="shrink-0 text-right leading-tight">
+                <span className={`block text-lg font-bold ${rem <= 0 ? "text-red-400" : rem <= 2 ? "text-orange-400" : "text-zinc-200"}`}>{rem}</span>
+                <span className="block text-[11px] text-zinc-500">{rem < 0 ? "долг" : "осталось"}</span>
+              </span>
+            )}
+            <ChevronRight size={18} className="text-zinc-600 shrink-0" />
+          </button>
+          {/* Действия под строкой — отдельными кнопками, не внутри кнопки строки */}
+          {(!!c.activeSession || (!showArchive && needsRenew(c))) && (
+            <div className="flex gap-2 px-3.5 pb-3 -mt-1 pl-[4.25rem]">
+              {!!c.activeSession && (
+                <button onClick={() => setLiveClient(c)} className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-cyan-400/15 text-cyan-300 text-sm font-medium hover:bg-cyan-400/25 transition">
+                  <Play size={14} /> Смотреть онлайн
+                </button>
+              )}
+              {!c.activeSession && needsRenew(c) && (
+                <button onClick={(e) => openRenew(e, c)} className="flex items-center gap-1.5 h-9 px-3 rounded-xl bg-orange-400/15 text-orange-300 text-sm font-medium hover:bg-orange-400/25 transition">
+                  <RefreshCw size={14} /> Продлить пакет
+                </button>
+              )}
+              {/* B11: на десктопе свайпа нет — запись отдельной кнопкой */}
+              {onBookClient && (
+                <button onClick={() => onBookClient(c.id)} className="hidden sm:flex items-center gap-1.5 h-9 px-3 rounded-xl bg-zinc-800 text-zinc-300 text-sm font-medium hover:bg-zinc-700 transition">
+                  <CalendarCheck size={14} /> Записать
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-bold">Подопечные <span className="text-zinc-600 font-normal">({clients.filter((c) => c.status !== "archived").length})</span></h2>
-        <div className="flex items-center gap-2">
-          <button onClick={() => { setShowArchive((v) => !v); setShowForm(false); }} className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm transition ${showArchive ? "bg-zinc-700 text-zinc-200" : "bg-zinc-800 text-zinc-400 hover:text-zinc-100"}`} title="Архив клиентов"><Archive size={15} /></button>
-          {!showArchive && <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 hover:bg-lime-300 transition text-sm"><Plus size={16} /> Добавить</button>}
-        </div>
+      <div className="flex items-center justify-between gap-2 mb-4">
+        <h2 className="text-2xl font-extrabold tracking-tight">Подопечные <span className="text-zinc-500 font-bold">{clients.filter((c) => c.status !== "archived").length}</span></h2>
+        {!showArchive && <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3.5 h-10 hover:bg-lime-300 transition text-sm"><Plus size={16} /> Добавить</button>}
       </div>
-      <div className="flex gap-2 mb-3">
-        <div className="relative flex-1">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по имени..." className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-8 pr-3 py-2 text-sm outline-none focus:border-zinc-700 placeholder:text-zinc-600" />
-        </div>
-        {!showArchive && (
-          <select value={fmtFilter} onChange={(e) => setFmtFilter(e.target.value)} className="bg-zinc-900 border border-zinc-800 rounded-xl px-2.5 py-2 text-sm outline-none focus:border-zinc-700 text-zinc-300 shrink-0">
-            <option value="">Все</option>
-            <option value="online">Онлайн</option>
-            <option value="offline">Офлайн</option>
-          </select>
-        )}
+      <div className="relative mb-3">
+        <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по имени" aria-label="Поиск по имени" className="w-full h-11 bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-3 outline-none focus:border-zinc-700 placeholder:text-zinc-600" />
+      </div>
+      {/* Ш4в: формат и архив — одним рядом сегментов вместо select и отдельной кнопки */}
+      <div className="flex gap-1.5 mb-4 overflow-x-auto -mx-1 px-1">
+        {segs.map((s) => (
+          <button key={s.key} onClick={s.pick} aria-pressed={s.on}
+            className={`shrink-0 flex items-center gap-1.5 h-9 px-3.5 rounded-full text-sm font-medium transition ${s.on ? "bg-zinc-100 text-zinc-950" : "bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-zinc-200"}`}>
+            {s.key === "archive" && <Archive size={14} />} {s.label}
+          </button>
+        ))}
       </div>
       {showForm && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-4 space-y-3">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Имя подопечного" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
-          <select value={goal} onChange={(e) => setGoal(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 space-y-3">
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Имя подопечного" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 h-11 outline-none focus:border-lime-400/50" />
+          <select value={goal} onChange={(e) => setGoal(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 h-11 outline-none focus:border-lime-400/50">
             {GOALS.map((g) => <option key={g}>{g}</option>)}
           </select>
           <div className="flex gap-2">
-            <button onClick={submit} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2 text-sm hover:bg-lime-300 transition">Сохранить</button>
-            <button onClick={() => setShowForm(false)} className="px-4 bg-zinc-800 rounded-lg py-2 text-sm text-zinc-400 hover:text-zinc-100 transition">Отмена</button>
+            <button onClick={submit} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-xl h-11 hover:bg-lime-300 transition">Сохранить</button>
+            <button onClick={() => setShowForm(false)} className="px-4 bg-zinc-800 rounded-xl h-11 text-zinc-400 hover:text-zinc-100 transition">Отмена</button>
           </div>
         </div>
       )}
-      <div className="space-y-2">
-        {showArchive && (
-          <p className="text-xs text-zinc-500 font-semibold tracking-wide mb-2 flex items-center gap-1.5"><Archive size={12} /> АРХИВ — клиенты скрыты из основного списка</p>
-        )}
-        {clients.filter((c) => c.status !== "archived").length === 0 && !showArchive && <p className="text-zinc-600 text-sm text-center py-8">Добавь первого подопечного, чтобы привязывать к нему планы</p>}
-        {clients
-          .filter((c) => showArchive ? c.status === "archived" : c.status !== "archived")
-          .filter((c) => !search.trim() || c.name.toLowerCase().includes(search.toLowerCase()))
-          .filter((c) => !fmtFilter || c.format === fmtFilter)
-          .map((c) => (
-          // B11: строка едет влево, под ней панель действий
-          <div key={c.id} {...swipe.rowProps(c.id)} className="relative overflow-hidden rounded-xl">
-            <div className="absolute inset-y-0 right-0 flex items-stretch" style={{ width: swipe.PANEL_W }}>
-              <button onClick={() => { swipe.setOpenId(null); onBookClient?.(c.id); }}
-                className="flex-1 flex flex-col items-center justify-center gap-1 bg-cyan-500/20 text-cyan-300 active:bg-cyan-500/30 transition">
-                <CalendarCheck size={18} />
-                <span className="text-[11px] font-medium">Записать</span>
-              </button>
-            </div>
-            <div className="relative" style={{ transform: `translateX(${swipe.offsetFor(c.id)}px)`, transition: swipe.openId === c.id || swipe.offsetFor(c.id) === 0 ? "transform .18s ease-out" : "none" }}>
-            <button onClick={() => { if (swipe.openId === c.id) { swipe.setOpenId(null); return; } onOpenClient(c.id); }} className={`w-full text-left flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:border-zinc-700 transition ${c.status === "left" ? "opacity-50" : ""}`}>
-              {c.avatarUrl
-                ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0 border border-zinc-700" />
-                : <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name.charAt(0).toUpperCase()}</div>
-              }
-              <div className="flex-1 min-w-0">
-                <p className="font-medium truncate flex items-center gap-1.5">
-                  <RemainingBadge remaining={c.remaining} />
-                  {c.name}
-                  {c.hasHealthFlags && <HeartPulse size={13} className="text-amber-400 shrink-0" />}
-                  {c.status === "paused" && <span className="text-[10px] uppercase tracking-wide bg-amber-500/15 text-amber-400 rounded px-1.5 py-0.5 shrink-0">пауза</span>}
-                  {c.status === "left" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">ушёл</span>}
-                  {c.status === "archived" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-500 rounded px-1.5 py-0.5 shrink-0">архив</span>}
-                  {c.format === "online" && <span className="text-[10px] uppercase tracking-wide bg-cyan-400/10 text-cyan-400 rounded px-1.5 py-0.5 shrink-0">онлайн</span>}
-                  {c.format === "offline" && <span className="text-[10px] uppercase tracking-wide bg-zinc-700/50 text-zinc-400 rounded px-1.5 py-0.5 shrink-0">офлайн</span>}
-                  {!!c.activeSession && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setLiveClient(c); }}
-                      className="text-[10px] uppercase tracking-wide bg-cyan-400/15 text-cyan-400 hover:bg-cyan-400/30 rounded px-1.5 py-0.5 shrink-0 flex items-center gap-1 transition"
-                      title="Смотреть тренировку онлайн"
-                    ><Play size={10} /> тренируется</button>
-                  )}
-                </p>
-                <p className="text-xs text-zinc-500">{c.goal}</p>
-              </div>
-              <div className="flex items-center gap-1 shrink-0">
-                {c.remaining !== null && c.remaining !== "" && Number(c.remaining) <= 2 && (
-                  <button
-                    onClick={(e) => openRenew(e, c)}
-                    className="flex items-center gap-1 text-[11px] font-semibold bg-orange-400/15 text-orange-400 hover:bg-orange-400/25 rounded-full px-2 py-0.5 transition"
-                    title="Быстрое продление пакета"
-                  >
-                    <RefreshCw size={10} /> Продлить
-                  </button>
-                )}
-                {/* B11: на десктопе жеста нет. Действие одно, поэтому кнопка ведёт
-                  прямо к нему — меню с единственным пунктом было бы лишним тапом. */}
-              {onBookClient && (
-                <button onClick={(e) => { e.stopPropagation(); onBookClient(c.id); }}
-                  title="Записать на тренировку" aria-label="Записать на тренировку"
-                  className="hidden sm:flex p-1.5 rounded-lg text-zinc-600 hover:bg-cyan-400/15 hover:text-cyan-400 active:text-cyan-400 transition-colors duration-100">
-                  <CalendarCheck size={15} />
-                </button>
-              )}
-              <ChevronRight size={18} className="text-zinc-600" />
-              </div>
-            </button>
+      {showArchive && (
+        <p className="text-sm text-zinc-500 mb-3 flex items-center gap-1.5"><Archive size={14} /> Архив: эти подопечные скрыты из основного списка</p>
+      )}
+      {clients.filter((c) => c.status !== "archived").length === 0 && !showArchive && (
+        <p className="text-zinc-500 text-sm text-center py-8">Добавь первого подопечного, чтобы привязывать к нему планы</p>
+      )}
+      {shownGroups.length === 0 && (search.trim() || fmtFilter || showArchive) && (
+        <p className="text-zinc-500 text-sm text-center py-8">{showArchive ? "В архиве пусто" : "Никого не нашлось"}</p>
+      )}
+      <div className="space-y-5">
+        {shownGroups.map((g) => (
+          <div key={g.title || "archive"}>
+            {g.title && <h3 className="text-[17px] font-bold mb-2">{g.title} <span className="text-zinc-500 font-semibold">{g.items.length}</span></h3>}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden divide-y divide-zinc-800">
+              {g.items.map(row)}
             </div>
           </div>
         ))}
