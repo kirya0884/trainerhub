@@ -38,8 +38,6 @@ export async function finishWorkout(opts: {
   // П3: проведённый день уходит в «Проведённые» насовсем
   updateDay(day.id, { archivedAt: new Date().toISOString() })
     .catch((e) => console.error("[finishWorkout] архивация дня:", e));
-  // Отметка записи в календаре — fire-and-forget, к списанию отношения не имеет
-  markSessionDone(trainerId, clientId, day.name, today());
 
   // Гард двойного списания, два источника:
   // 1) клиент уже залогировал эту сессию сам (fromClient);
@@ -74,6 +72,11 @@ export async function finishWorkout(opts: {
     membership = await decrementMembershipRemaining(clientId, membership);
     charged = true;
   }
+
+  // Отметка записи в календаре — только ПОСЛЕ гарда и списания. Раньше она шла
+  // до проверки, и гард 2 видел свою же свежую отметку «проведена» — тренировка
+  // не списывалась у записей с выбранным днём плана. Fire-and-forget.
+  markSessionDone(trainerId, clientId, day.name, today());
 
   notifyWorkoutFinished(planId);
   return { membership, charged };
