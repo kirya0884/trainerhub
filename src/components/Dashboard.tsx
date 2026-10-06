@@ -11,6 +11,7 @@ import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, isPushSupported
 import AnalyticsPanel from "./AnalyticsPanel";
 import { today, addDays } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
+import { remainingOf } from "../lib/clients";
 
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер"; };
 // Ш4б: обычный заголовок раздела вместо мелкого капса с разрядкой над каждым блоком
@@ -33,7 +34,6 @@ function DonutChart({ pct, size = 72 }: { pct: number; size?: number }) {
   );
 }
 
-const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions" && m.remaining !== "" && m.remaining != null ? String((Number(m.remaining) || 0) + (Number((m as any).extraRemaining) || 0)) : null);
 
 const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
 

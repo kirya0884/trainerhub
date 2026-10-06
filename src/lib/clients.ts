@@ -18,7 +18,7 @@ export interface ClientListItem {
 
 // remaining — остаток тренировок из абонемента (только для типа "sessions"); для подписки/без абонемента — null (бейдж не рисуем).
 // Суммируем основной блок и "доп. блок" (если оформили новый пакет по другой цене, пока старый не закончился — см. markPaid).
-const remainingOf = (membership: any) => {
+export const remainingOf = (membership: any): string | null => {
   if (membership?.type !== "sessions") return null;
   if ((membership.remaining === "" || membership.remaining == null) && !membership.extraRemaining) return null;
   return String((Number(membership.remaining) || 0) + (Number(membership.extraRemaining) || 0));

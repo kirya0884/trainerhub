@@ -35,3 +35,11 @@ export const parseRest = (s: string): number | null => {
   } else sec = parseFloat(t);
   return sec >= 5 && sec <= 1800 ? Math.round(sec) : null;
 };
+
+/** Инициалы для аватара-заглушки: «Марина Белова» → «МБ». */
+export const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
+/** Склонение по числу: plural(3, ["день", "дня", "дней"]) → «дня». */
+export const plural = (n: number, [one, few, many]: [string, string, string]) => {
+  const m10 = n % 10, m100 = n % 100;
+  return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
+};

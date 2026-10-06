@@ -9,7 +9,7 @@ import BookingModal, { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./Book
 import GroupSessionModal from "./GroupSessionModal";
 import ModalShell from "./ModalShell";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
-import { today as todayFn, addDays, addMonths, toDateStr } from "../lib/format";
+import { today as todayFn, addDays, addMonths, initials, plural, toDateStr } from "../lib/format";
 
 const WEEKDAYS_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 const WEEKDAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -17,7 +17,6 @@ const MODES = [["day", "День"], ["days3", "3 дня"], ["week", "Недел�
 type Mode = (typeof MODES)[number][0];
 
 const capFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const plural = (n: number) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? "тренировка" : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? "тренировки" : "тренировок"; };
 const startOfWeekMon = (s: string) => { const d = new Date(s + "T00:00:00"); const dow = (d.getDay() + 6) % 7; d.setDate(d.getDate() - dow); return toDateStr(d); };
 // month: "long" — полное название месяца (требование: не сокращать до "июн.")
 const fmt = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
@@ -267,7 +266,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
       {mode === "day" && (
         <div>
           <div className="flex items-baseline justify-between gap-2 mb-2.5 px-0.5">
-            <h3 className="text-[17px] font-bold">{dayTitle(anchor)}{anchorOccs.length > 0 && ` · ${anchorOccs.length} ${plural(anchorOccs.length)}`}</h3>
+            <h3 className="text-[17px] font-bold">{dayTitle(anchor)}{anchorOccs.length > 0 && ` · ${anchorOccs.length} ${plural(anchorOccs.length, ["тренировка", "тренировки", "тренировок"])}`}</h3>
           </div>
           {anchorOccs.length === 0 && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-6 text-center mb-2">
@@ -352,7 +351,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                             <span className="hidden sm:block text-xs font-semibold text-zinc-300 leading-tight">{o.time}</span>
                             {/* В неделе колонка ~44 px — имя ломалось по буквам, поэтому на телефоне инициалы */}
                             <span className={`block text-xs sm:text-sm text-zinc-100 leading-tight font-semibold break-words ${mode === "week" ? "hidden sm:block" : ""}`}>{o.clientIds.map(clientName).join(", ")}</span>
-                            {mode === "week" && <span className="sm:hidden block text-xs text-zinc-100 leading-tight font-bold">{o.clientIds.map((id) => clientName(id).split(" ").slice(0, 2).map((w) => w[0]).join("")).join(" ")}</span>}
+                            {mode === "week" && <span className="sm:hidden block text-xs text-zinc-100 leading-tight font-bold">{o.clientIds.map((id) => initials(clientName(id))).join(" ")}</span>}
                           </button>
                         );
                       })}

@@ -5,9 +5,9 @@ import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { cohortRetention, debtClients, monthlyRevenue, pendingPaymentClients, revenueBySource, topClientsByRevenue, trialConversionRate } from "../lib/analytics";
 import { exportAnalyticsCsv } from "../lib/exportAnalytics";
 import RemainingBadge from "./RemainingBadge";
+import { remainingOf } from "../lib/clients";
 import { chartColors } from "../lib/themeColor";
 
-const remainingOf = (m: DashboardClient["membership"]) => (m?.type === "sessions" && m.remaining !== "" && m.remaining != null ? String(m.remaining) : null);
 
 export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
   clients: DashboardClient[]; payments: DashboardPayment[]; attendanceRate: number | null;

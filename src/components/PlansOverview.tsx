@@ -9,16 +9,14 @@ import * as api from "../lib/clients";
 import { duplicatePlan } from "../lib/plans";
 import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
 import { SkeletonRows } from "./Skeleton";
-import { addDays, today } from "../lib/format";
+import { addDays, initials, plural, today } from "../lib/format";
 
-const initials = (name: string) => name.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase() || "?";
 const fmtDay = (d: string) => {
   const t = today();
   if (d === t) return "сегодня";
   if (d === addDays(t, -1)) return "вчера";
   return new Date(d + "T00:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "");
 };
-const daysWord = (n: number) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? "день" : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? "дня" : "дней"; };
 
 // Глобальная вкладка «Планы» — все программы тренера со всех клиентов в одном месте.
 export default function PlansOverview({ trainerId, clients, plans, reloadPlans, onOpenPlan, autoFocusNew }: {
@@ -90,7 +88,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
   const clientOptions = clients.filter((c) => !cq || c.name.toLowerCase().includes(cq));
 
   const Row = ({ p }: { p: PlanOverviewItem }) => {
-    const meta = [p.clientName, p.daysCount ? `${p.daysCount} ${daysWord(p.daysCount)}` : null, p.lastDate ? fmtDay(p.lastDate) : null].filter(Boolean).join(" · ");
+    const meta = [p.clientName, p.daysCount ? `${p.daysCount} ${plural(p.daysCount, ["день", "дня", "дней"])}` : null, p.lastDate ? fmtDay(p.lastDate) : null].filter(Boolean).join(" · ");
     return (
       <div className="relative flex items-center">
         <button onClick={() => onOpenPlan(p.id, p.clientId)} className={`flex-1 min-w-0 flex items-center gap-3 pl-4 pr-1 py-3 min-h-[72px] text-left hover:bg-zinc-800/40 transition ${dupId === p.id ? "opacity-50" : ""}`}>

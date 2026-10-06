@@ -6,7 +6,7 @@ import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
 import { useProgress } from "../hooks/useProgress";
 import { decrementMembershipRemaining, incrementMembershipRemaining, fetchClient, sessionPrice, combinedRemaining, type Membership } from "../lib/clients";
-import { fmtDate, today } from "../lib/format";
+import { fmtDate, initials, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
 import * as paymentsApi from "../lib/payments";
 import * as templatesApi from "../lib/templates";
@@ -432,7 +432,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
           <div className="flex flex-wrap items-center gap-2 mt-2.5">
             {clientName && (
               <span className="inline-flex items-center gap-2 h-8 pl-1 pr-3 rounded-full bg-zinc-900 border border-zinc-800 text-sm font-semibold max-w-full">
-                <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-zinc-950" style={{ background: clientColor || "#a3e635" }}>{clientName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}</span>
+                <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-zinc-950" style={{ background: clientColor || "#a3e635" }}>{initials(clientName)}</span>
                 <span className="truncate">{clientName}</span>
               </span>
             )}
