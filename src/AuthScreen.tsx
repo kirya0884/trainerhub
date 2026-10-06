@@ -19,7 +19,7 @@ export default function AuthScreen() {
   const [mode, setMode] = useState<"trainer" | "client">("trainer");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignup, setIsSignup] = useState(true);
+  const [isSignup, setIsSignup] = useState(false);
   const [useLink, setUseLink] = useState(false);
   const [forgotPw, setForgotPw] = useState(false);
   const [msg, setMsg] = useState("");
