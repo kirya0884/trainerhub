@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Camera, ClipboardList, Database, Image, KeyRound, LayoutGrid, Lock, LogOut, Moon, MoreHorizontal, Package, Palette, Plus, RefreshCw, ScrollText, Sparkles, Sun, Trash, Trash2, User, Users } from "lucide-react";
+import { Camera, ChevronDown, ChevronUp, ClipboardList, Database, Image, KeyRound, LayoutGrid, Lock, LogOut, Moon, MoreHorizontal, Package, Palette, Plus, RefreshCw, ScrollText, Sparkles, Sun, Trash, Trash2, User, Users } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
@@ -8,7 +8,7 @@ import SubscriptionModal from "./SubscriptionModal";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 import { checkForUpdate } from "../lib/swUpdate";
 
-export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange, tabs, onToggleTab, onOpenPin, onOpenTrash, onOpenBackup, onSignOut }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void; tabs?: { kind: string; label: string; icon: typeof User; visible: boolean }[]; onToggleTab?: (kind: string) => void; onOpenPin?: () => void; onOpenTrash?: () => void; onOpenBackup?: () => void; onSignOut?: () => void }) {
+export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange, tabs, onToggleTab, onMoveTab, onOpenPin, onOpenTrash, onOpenBackup, onSignOut }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void; tabs?: { kind: string; label: string; icon: typeof User; visible: boolean }[]; onToggleTab?: (kind: string) => void; onMoveTab?: (kind: string, dir: -1 | 1) => void; onOpenPin?: () => void; onOpenTrash?: () => void; onOpenBackup?: () => void; onSignOut?: () => void }) {
   const [showMenu, setShowMenu] = useState(false);
   const [updState, setUpdState] = useState<"idle" | "checking" | "latest" | "error">("idle");
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
@@ -213,17 +213,25 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
       </div>
 
       {/* B28: настройка разделов переехала сюда из шапки. Ш4а: управляет нижней панелью
-          (плиток на дашборде больше нет); здесь только видимость. */}
+          (плиток на дашборде больше нет): видимость и порядок стрелками. */}
       {tabs && onToggleTab && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
           <p className="text-sm text-zinc-400 flex items-center gap-1.5"><LayoutGrid size={15} className="text-lime-400" /> Разделы в нижней панели</p>
-          <p className="text-xs text-zinc-500">Снимите галочку, чтобы убрать раздел из нижней панели. «Главная» видна всегда.</p>
+          <p className="text-xs text-zinc-500">Галочка — показывать раздел, стрелки — порядок. «Главная» всегда первая.</p>
           <div className="space-y-0.5">
-            {tabs.map((t) => (
-              <label key={t.kind} className="flex items-center gap-2.5 px-2 py-2 rounded-lg hover:bg-zinc-800 cursor-pointer text-sm text-zinc-300 transition">
-                <input type="checkbox" checked={t.visible} onChange={() => onToggleTab(t.kind)} className="accent-lime-400 w-4 h-4" />
-                <t.icon size={15} className="text-zinc-500 shrink-0" /> {t.label}
-              </label>
+            {tabs.map((t, i) => (
+              <div key={t.kind} className="flex items-center gap-1 rounded-lg hover:bg-zinc-800 transition">
+                <label className="flex-1 flex items-center gap-2.5 px-2 py-2.5 cursor-pointer text-sm text-zinc-300">
+                  <input type="checkbox" checked={t.visible} onChange={() => onToggleTab(t.kind)} className="accent-lime-400 w-4 h-4" />
+                  <t.icon size={15} className="text-zinc-500 shrink-0" /> {t.label}
+                </label>
+                {onMoveTab && (
+                  <>
+                    <button onClick={() => onMoveTab(t.kind, -1)} disabled={i === 0} aria-label={`Переместить «${t.label}» выше`} className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:pointer-events-none transition"><ChevronUp size={18} /></button>
+                    <button onClick={() => onMoveTab(t.kind, 1)} disabled={i === tabs.length - 1} aria-label={`Переместить «${t.label}» ниже`} className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:pointer-events-none transition"><ChevronDown size={18} /></button>
+                  </>
+                )}
+              </div>
             ))}
           </div>
         </div>

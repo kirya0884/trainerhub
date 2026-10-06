@@ -171,9 +171,8 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<"dark" | "light">(
     () => (readJson<string>("trainerhub-theme-v1", "dark") === "light" ? "light" : "dark")
   );
-  // Порядок раньше менялся перетаскиванием плиток; плиток больше нет, сохранённый порядок
-  // по-прежнему задаёт порядок вкладок нижней панели.
-  const [tabOrder] = useState<TabKind[]>(loadTabOrder);
+  // Порядок вкладок нижней панели; меняется стрелками в профиле тренера (раньше — перетаскиванием плиток)
+  const [tabOrder, setTabOrder] = useState<TabKind[]>(loadTabOrder);
   const [hiddenTabs, setHiddenTabs] = useState<TabKind[]>(loadHiddenTabs);
   const [splash, setSplash] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
@@ -199,6 +198,15 @@ export default function App() {
   };
   const togglePinned = (clientId: string) => {
     setPinnedIds((prev) => { const next = prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [clientId, ...prev]; saveIds(PINNED_KEY, next); return next; });
+  };
+  // Сдвиг раздела на одну позицию среди настраиваемых (без «Главной» и профиля)
+  const moveTab = (kind: TabKind, dir: -1 | 1) => {
+    const list: TabKind[] = tabOrder.filter((k) => k !== "dashboard" && k !== "trainerProfile");
+    const other = list[list.indexOf(kind) + dir];
+    if (!list.includes(kind) || !other) return;
+    const next = tabOrder.map((k) => (k === kind ? other : k === other ? kind : k));
+    setTabOrder(next);
+    writeJson(TAB_ORDER_KEY, next);
   };
   const toggleTabVisible = (kind: TabKind) => {
     const isHidden = hiddenTabs.includes(kind);
@@ -432,7 +440,7 @@ export default function App() {
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "client_card" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} bookings={bookingsHook.bookings} allPlans={allPlans ?? []} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "open_booking"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} onBack={goBack} onOpenPlan={(planId) => go({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "trainerProfile" && (
-          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.filter((kind) => kind !== "dashboard" && kind !== "trainerProfile").map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
+          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.filter((kind) => kind !== "dashboard" && kind !== "trainerProfile").map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onMoveTab={(kind, dir) => moveTab(kind as TabKind, dir)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
           <div>
