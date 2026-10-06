@@ -4,6 +4,7 @@ import { useModalA11y } from "../hooks/useModalA11y";
 import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
+import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { parseNum, parseRest, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
 
@@ -37,20 +38,6 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 const tonnageOf = (rows: { weight: string; reps: string }[]) =>
   rows.reduce((sum, r) => { const w = parseNum(r.weight); const rp = parseNum(r.reps); return w != null && rp != null ? sum + w * rp : sum; }, 0);
 const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} кг`;
-const fmtClock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
-// Два коротких сигнала. AudioContext создаётся по тапу (иначе браузер его заглушит).
-const beep = (ctx: AudioContext) => {
-  [0, 0.28].forEach((t) => {
-    const o = ctx.createOscillator(); const g = ctx.createGain();
-    const at = ctx.currentTime + t;
-    o.frequency.value = 880;
-    g.gain.setValueAtTime(0.0001, at);
-    g.gain.exponentialRampToValueAtTime(0.35, at + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.0001, at + 0.2);
-    o.connect(g).connect(ctx.destination);
-    o.start(at); o.stop(at + 0.22);
-  });
-};
 
 function FlameRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
@@ -146,20 +133,8 @@ export default function SessionModal({ day, onFinish, onClose }: {
   // Выполненные упражнения сворачиваются в строку; тап раскрывает обратно (поправить вес, заметку)
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
 
-  // Таймер отдыха: стартует сам после отметки подхода, если в плане задан отдых.
-  // Считаем от момента окончания, а не тиками — после блокировки экрана остаток верный.
-  const [rest, setRest] = useState<{ endsAt: number; signaled: boolean } | null>(null);
-  const audioRef = useRef<AudioContext | null>(null);
-  useEffect(() => () => { audioRef.current?.close().catch(() => {}); }, []);
-  const restLeft = rest ? Math.max(0, Math.ceil((rest.endsAt - now) / 1000)) : 0;
-  useEffect(() => {
-    if (!rest) return;
-    if (!rest.signaled && now >= rest.endsAt) {
-      try { navigator.vibrate?.([200, 100, 200]); } catch { /* iOS не поддерживает */ }
-      if (audioRef.current) { try { beep(audioRef.current); } catch (e) { console.warn("[SessionModal] beep:", e); } }
-      setRest({ ...rest, signaled: true });
-    } else if (rest.signaled && now >= rest.endsAt + 6000) setRest(null);
-  }, [now, rest]);
+  // Таймер отдыха: стартует сам после отметки подхода, если в плане задан отдых (см. RestTimer).
+  const restTimer = useRestTimer();
   // Неотмеченные подходы по всей тренировке — после самого последнего отдых не нужен
   const openSets = () => day.exercises.reduce((n, ex) =>
     ex.kind === "functional" || !ex.name || meta[ex.id]?.done ? n
@@ -167,14 +142,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
   const startRest = (ex: Exercise) => {
     const sec = parseRest(ex.rest);
     if (!sec || openSets() <= 1) return;
-    try {
-      const AC = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!audioRef.current && AC) audioRef.current = new AC();
-      audioRef.current?.resume().catch(() => {});
-    } catch (e) { console.warn("[SessionModal] audio:", e); }
-    const t = Date.now();
-    setNow(t);
-    setRest({ endsAt: t + sec * 1000, signaled: false });
+    restTimer.start(sec);
   };
   // Отметка подхода + запуск отдыха (снятие отметки отдых не запускает)
   const tapSet = (ex: Exercise, i: number, total: number) => {
@@ -230,7 +198,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
         className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Play size={15} className="text-lime-400 shrink-0" />
         <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>
-        {restLeft > 0 && <span className="font-mono text-sm shrink-0 text-zinc-300">отдых {fmtClock(restLeft)}</span>}
+        {restTimer.left > 0 && <span className="font-mono text-sm shrink-0 text-zinc-300">отдых {fmtClock(restTimer.left)}</span>}
         <span className="font-mono text-lime-400 text-sm shrink-0">{timer}</span>
         <span className="text-xs text-zinc-500 shrink-0">{doneEx}/{day.exercises.length} упр.</span>
       </button>
@@ -395,20 +363,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
         </div>
       </div>
 
-      {rest && (
-        <div className="shrink-0 px-3 pb-2">
-          <div role="status" aria-live="polite" className={`max-w-2xl mx-auto flex items-center gap-3 rounded-2xl pl-4 pr-2 h-14 text-zinc-950 shadow-lg ${restLeft > 0 ? "bg-zinc-100" : "bg-lime-400"}`}>
-            <Timer size={20} className="shrink-0" />
-            {restLeft > 0
-              ? <div className="leading-tight"><p className="text-xs opacity-70">Отдых</p><p className="font-mono text-xl font-bold">{fmtClock(restLeft)}</p></div>
-              : <p className="font-bold">Отдых окончен</p>}
-            <div className="ml-auto flex gap-1.5">
-              {restLeft > 0 && <button onClick={() => setRest((r) => r && { endsAt: Math.max(r.endsAt, Date.now()) + 30000, signaled: false })} className="h-10 px-3 rounded-xl bg-black/10 font-semibold text-sm">+30 с</button>}
-              <button onClick={() => setRest(null)} className="h-10 px-3 rounded-xl bg-black/10 font-semibold text-sm">{restLeft > 0 ? "Пропустить" : "Закрыть"}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <RestBar timer={restTimer} />
       <div className="border-t border-zinc-800 bg-zinc-900 px-3 pt-2.5 shrink-0" style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))" }}><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-sm text-zinc-500"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} disabled={submitting} className="ml-auto h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl px-6 text-base hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"><CheckCircle2 size={18} /> {submitting ? "Сохранение..." : "Завершить"}</button></div></div>
     </div>
   );
