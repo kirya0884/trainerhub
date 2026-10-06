@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { writeJson } from "../lib/storage";
 import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Layers, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
@@ -11,7 +10,6 @@ import type { ClientActivity } from "../lib/clientPortal";
 import * as clientsApi from "../lib/clients";
 import { combinedRemaining } from "../lib/clients";
 import * as nutritionApi from "../lib/nutrition";
-import * as messagesApi from "../lib/messages";
 import type { PlanListItem, Payment, Measurement } from "../lib/clients";
 import type { NutritionLog } from "../lib/nutrition";
 import { usePlan } from "../hooks/usePlan";
@@ -23,10 +21,9 @@ import { addDays, fmtDate, today as todayFn } from "../lib/format";
 import { supabase } from "../lib/supabase";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
-import ChatThread from "./ChatThread";
 import { SkeletonRows } from "./Skeleton";
 
-type Tab = "profile" | "program" | "reporting" | "chat";
+type Tab = "profile" | "program" | "reporting";
 type ProgramSub = "active" | "completed" | "progress";
 type ReportSub = "body" | "nutrition" | "activity";
 
@@ -34,7 +31,6 @@ const TAB_DEFS: Record<Tab, { label: string; icon: typeof User }> = {
   profile: { label: "Профиль", icon: User },
   program: { label: "Программа", icon: Dumbbell },
   reporting: { label: "Отчётность", icon: BarChart3 },
-  chat: { label: "Чат", icon: MessageSquare },
 };
 
 const SUB_BTN = "px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0";
@@ -52,10 +48,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLog[]>([]);
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   // П9: у подопечного не было индикатора непрочитанных — он не узнавал, что тренер написал.
-  const [chatMsgs, setChatMsgs] = useState<{ sender: string; createdAt: string }[]>([]);
-  const chatReadKey = `trainerhub-chat-read-client-${client.id}`;
-  const [chatLastRead, setChatLastRead] = useState(() => { try { return localStorage.getItem(chatReadKey) || ""; } catch { return ""; } });
-  const unreadChat = chatMsgs.filter((m) => m.sender === "trainer" && m.createdAt > chatLastRead).length;
   const [activeSession, setActiveSession] = useState(client.activeSession);
   const [profile, setProfile] = useState({ phone: client.phone, telegram: client.telegram, whatsapp: client.whatsapp, avatarUrl: client.avatarUrl, accentColor: client.accentColor, name: client.name, goal: client.goal, health: client.health });
   const [showPinSettings, setShowPinSettings] = useState(false);
@@ -89,7 +81,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       clientsApi.fetchMeasurements(client.id).then(setMeasurements).catch((e) => console.error("[ClientPortal] fetchMeasurements:", e));
       nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
       portalApi.fetchClientActivities(client.id).then(setActivities).catch((e) => console.error("[ClientPortal] fetchActivities:", e));
-      messagesApi.fetchMessages(client.id).then((m) => setChatMsgs(m.map((x) => ({ sender: x.sender, createdAt: x.createdAt })))).catch((e) => console.error("[ClientPortal] fetchMessages:", e));
     };
     refresh(true);
     const id = setInterval(() => {
@@ -148,7 +139,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             return (
               <button key={k} onClick={() => { setTab(k); setShowNav(false); }} className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition ${tab === k ? "font-semibold" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { color: "var(--accent)" } : undefined}>
                 <t.icon size={16} className="shrink-0" /> {t.label}
-                {k === "chat" && unreadChat > 0 && <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">{unreadChat}</span>}
                 {tab === k && <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)" }} />}
               </button>
             );
@@ -176,7 +166,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           return (
             <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-semibold transition shrink-0 ${tab === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { background: "var(--accent)" } : undefined}>
               <t.icon size={15} /> {t.label}
-              {k === "chat" && unreadChat > 0 && <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">{unreadChat}</span>}
             </button>
           );
         })}
@@ -548,7 +537,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       )}
 
       {/* ── ЧАТ ── */}
-      {tab === "chat" && <ChatThread lastRead={chatLastRead} onRead={(iso) => { setChatLastRead(iso); writeJson(chatReadKey, iso); }} trainerId={client.trainerId} clientId={client.id} self="client" accent={profile.accentColor} />}
 
       {/* #6 Session overlay — renders on top; minimized shows bottom bar only */}
       {activeSession && activeDay && (

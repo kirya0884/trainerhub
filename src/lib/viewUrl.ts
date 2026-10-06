@@ -23,7 +23,7 @@ export type ViewLike =
   | { kind: "plan"; planId: string; clientId: string }
   | { kind: "trainerProfile" };
 
-const SUBS: Sub[] = ["overview", "bookings", "payments", "reporting", "plans", "chat"];
+const SUBS: Sub[] = ["overview", "bookings", "payments", "reporting", "plans"];
 
 export function viewToUrl(v: ViewLike): string {
   switch (v.kind) {

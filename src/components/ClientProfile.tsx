@@ -1,5 +1,4 @@
 import { ArrowLeft, Apple, MoreHorizontal, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
-import { readJson, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -18,9 +17,6 @@ import BodyTab from "./BodyTab";
 import NutritionTab from "./NutritionTab";
 import * as nutritionApi from "../lib/nutrition";
 import type { NutritionLog } from "../lib/nutrition";
-import ChatThread from "./ChatThread";
-import * as messagesApi from "../lib/messages";
-import type { ChatMessage } from "../lib/messages";
 import SessionHistoryModal from "./SessionHistoryModal";
 import { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
 import { expandBookings } from "../lib/bookings";
@@ -35,40 +31,20 @@ import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 import StartWorkoutModal from "./StartWorkoutModal";
 
-export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans" | "chat";
+export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans";
 
-const SUB_DEFS: Record<Sub, { label: string; icon: typeof Users }> = {
-  overview: { label: "Обзор", icon: Users },
-  bookings: { label: "Записи", icon: CalendarCheck },
-  payments: { label: "Оплаты", icon: Wallet },
-  reporting: { label: "Отчётность", icon: TrendingUp },
-  plans: { label: "Планы", icon: ClipboardList },
-  chat: { label: "Чат", icon: MessageCircle },
-};
-const DEFAULT_SUB_ORDER: Sub[] = ["overview", "bookings", "payments", "reporting", "plans", "chat"];
-const SUB_ORDER_KEY = "trainerhub-client-sub-order-v2";
-// ponytail: порядок и видимость под-вкладок карточки клиента — личная настройка устройства, как в App.tsx
-const loadSubOrder = (): Sub[] => {
-  const saved = readJson<Sub[] | null>(SUB_ORDER_KEY, null);
-  if (saved && saved.length === DEFAULT_SUB_ORDER.length && DEFAULT_SUB_ORDER.every((k) => saved.includes(k))) return saved;
-  return DEFAULT_SUB_ORDER;
-};
+// Порядок задан владельцем: обзор — отчёты — записи — планы. Оплаты открываются карточкой абонемента.
+const TABS: { k: Sub; label: string; icon: typeof Users }[] = [
+  { k: "overview", label: "Обзор", icon: Users },
+  { k: "reporting", label: "Отчёты", icon: TrendingUp },
+  { k: "bookings", label: "Записи", icon: CalendarCheck },
+  { k: "plans", label: "Планы", icon: ClipboardList },
+];
 export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient, bookings, allPlans, onOpenOccurrence }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void; bookings?: Booking[]; allPlans?: PlanOverviewItem[]; onOpenOccurrence?: (id: string, occDate: string) => void }) {
-  // B03: быстрые действия из шапки — счётчики, чтобы повторное нажатие срабатывало снова
-  const [measureTick, setMeasureTick] = useState(0);
   const [sub, setSub] = useState<Sub>(initialSub || "overview");
-  const [subOrder, setSubOrder] = useState<Sub[]>(loadSubOrder);
-  const [dragSub, setDragSub] = useState<Sub | null>(null);
   const [showSubSettings, setShowSubSettings] = useState(false);
   // Имя — крупным заголовком; правка по тапу (у полей ввода на iOS шрифт не меньше 16 px — см. index.css)
   const [editingName, setEditingName] = useState(false);
-  const reorderSubs = (target: Sub) => {
-    if (!dragSub || dragSub === target) return;
-    const next = subOrder.filter((k) => k !== dragSub);
-    next.splice(next.indexOf(target), 0, dragSub);
-    setSubOrder(next);
-    writeJson(SUB_ORDER_KEY, next);
-  };
   const [client, setClient] = useState<ClientFull | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLog[]>([]);
@@ -79,9 +55,6 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   const [showReport, setShowReport] = useState(false);
   const persist = useDebouncedPersist();
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const chatReadKey = `trainerhub-chat-read-${clientId}`;
-  const [chatLastRead, setChatLastRead] = useState(() => localStorage.getItem(chatReadKey) || "");
 
   useEffect(() => {
     let alive = true;
@@ -92,7 +65,6 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     api.fetchNotes(clientId).then((v) => { if (alive) setNotes(v); }).catch((e) => console.error("[ClientProfile] заметки:", e));
     api.fetchClientPlans(clientId).then((v) => { if (alive) setPlans(v); }).catch((e) => console.error("[ClientProfile] планы:", e));
     portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch((e) => console.error("[ClientProfile] активность:", e));
-    messagesApi.fetchMessages(clientId).then((v) => { if (alive) setChatMessages(v); }).catch((e) => console.error("[ClientProfile] сообщения:", e));
     return () => { alive = false; };
   }, [clientId]);
 
@@ -129,29 +101,12 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     catch (e) { console.error("[ClientProfile] deleteClient:", e); alert("Не удалось удалить карточку. Попробуй ещё раз."); }
   };
 
-  // Ш4 профиль: сводка по макету — абонемент, вес, посещаемость за 30 дней
+  // Абонемент под именем: остаток кольцом, нажатие — вкладка оплат
   const isSessions = client.membership.type !== "subscription";
   const remTotal = Number(client.membership.remainingTotal) || Number(client.membership.total) || 0;
   const hasRemaining = isSessions && client.membership.remaining !== "";
-  const weights = measurements
-    .map((m) => ({ date: m.date, w: Number(String(m.weight).replace(",", ".")) }))
-    .filter((x) => x.w > 0);
-  const lastW = weights[weights.length - 1];
-  const weightDelta = lastW && weights.length > 1 ? lastW.w - weights[0].w : null;
-  const spark = weights.slice(-8);
-  const sparkPts = (() => {
-    if (spark.length < 2) return "";
-    const ws = spark.map((x) => x.w); const lo = Math.min(...ws), hi = Math.max(...ws), span = hi - lo || 1;
-    return spark.map((x, i) => `${(i / (spark.length - 1)) * 100},${4 + (1 - (x.w - lo) / span) * 32}`).join(" ");
-  })();
-  const recent = expandBookings(bookings ?? [], addDays(today(), -29), today())
-    .filter((o) => o.clientIds.includes(clientId) && (o.status === "done" || o.status === "no-show"));
-  const attended = recent.filter((o) => o.status === "done").length;
-  const attendance = recent.length ? Math.round((attended / recent.length) * 100) : null;
   const ringPct = hasRemaining && remTotal > 0 ? Math.max(0, Math.min(1, remainingNum / remTotal)) : 0;
   const ringColor = outOfStock ? "text-red-400" : lowStock ? "text-orange-400" : "text-lime-400";
-  const fmtKg = (n: number) => n.toLocaleString("ru-RU", { maximumFractionDigits: 1 });
-  const unread = chatMessages.filter((m) => m.sender === "client" && m.createdAt > chatLastRead).length;
 
   return (
     <div>
@@ -209,23 +164,36 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         </select>
       </div>
 
-      {/* B03: частые действия. Запись — в календарь с выбранным клиентом,
-          оплата/замер/чат — переключение вкладки (замер — с раскрытой формой) */}
-      <div className="grid grid-cols-4 gap-2 mt-5">
-        {[
-          { label: "Записать", icon: CalendarCheck, onClick: () => onBookClient?.(clientId), disabled: !onBookClient },
-          { label: "Оплата", icon: Wallet, onClick: () => setSub("payments") },
-          { label: "Замер", icon: Ruler, onClick: () => { setSub("reporting"); setMeasureTick((v) => v + 1); } },
-          { label: "Чат", icon: MessageCircle, onClick: () => setSub("chat"), badge: unread },
-        ].map((a) => (
-          <button key={a.label} onClick={a.onClick} disabled={a.disabled}
-            className="relative flex flex-col items-center gap-1.5 py-3 rounded-2xl bg-zinc-900 border border-zinc-800 text-xs font-semibold text-zinc-400 hover:text-zinc-100 hover:border-zinc-700 transition disabled:opacity-40">
-            <a.icon size={20} className="text-zinc-100" />
-            {a.label}
-            {!!a.badge && <span className="absolute top-1.5 right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center">{a.badge}</span>}
-          </button>
-        ))}
-      </div>
+      {/* Абонемент под именем: остаток тренировок; нажатие — оплаты */}
+      <button onClick={() => setSub("payments")} aria-current={sub === "payments" ? "page" : undefined} className={`mt-4 w-full flex items-center gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition ${sub === "payments" ? "border-lime-400/50" : ""}`}>
+        {hasRemaining ? (
+          <span className="relative w-16 h-16 shrink-0">
+            <svg viewBox="0 0 64 64" className="w-16 h-16 -rotate-90" aria-hidden="true">
+              <circle cx="32" cy="32" r="27" fill="none" strokeWidth="7" className="stroke-current text-zinc-800" />
+              <circle cx="32" cy="32" r="27" fill="none" strokeWidth="7" strokeLinecap="round" className={`stroke-current ${ringColor}`}
+                strokeDasharray={`${ringPct * 169.6} 169.6`} />
+            </svg>
+            <span className={`absolute inset-0 flex items-center justify-center text-lg font-extrabold ${outOfStock ? "text-red-400" : ""}`}>{remainingNum}</span>
+          </span>
+        ) : (
+          <span className="w-16 h-16 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center"><Wallet size={24} className="text-zinc-400" /></span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block font-bold">
+            {hasRemaining
+              ? outOfStock ? (remainingNum < 0 ? `Долг: ${-remainingNum} тр.` : "Тренировки закончились") : `Осталось ${remainingNum}${remTotal ? ` из ${remTotal}` : ""}`
+              : !isSessions ? "Подписка" : "Абонемент не оформлен"}
+          </span>
+          <span className={`block text-sm truncate ${overdue ? "text-red-400" : "text-zinc-500"}`}>
+            {!isSessions
+              ? client.membership.nextPaymentDate ? `${overdue ? "Просрочена с" : "Следующая оплата"} ${fmtDate(client.membership.nextPaymentDate)}` : "Дата оплаты не указана"
+              : client.membership.packagePrice ? `Пакет за ${Number(client.membership.packagePrice).toLocaleString("ru-RU")} ₽` : "Нажмите, чтобы оформить"}
+          </span>
+        </span>
+        <span className={`shrink-0 h-9 px-3 rounded-xl text-sm font-semibold flex items-center ${outOfStock || lowStock || overdue ? "bg-orange-400/15 text-orange-300" : "bg-zinc-800 text-zinc-300"}`}>
+          {outOfStock || lowStock || overdue ? "Продлить" : "Оплаты"}
+        </span>
+      </button>
 
       {/* Начать тренировку по одному из действующих планов — без захода в редактор плана */}
       {activePlans.length > 0 && (
@@ -244,119 +212,25 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         </div>
       )}
 
-      {/* Сводка: абонемент (на всю ширину), вес и посещаемость */}
-      <div className="grid grid-cols-2 gap-2.5 mt-4">
-        <button onClick={() => setSub("payments")} className="col-span-2 flex items-center gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
-          {hasRemaining ? (
-            <span className="relative w-16 h-16 shrink-0">
-              <svg viewBox="0 0 64 64" className="w-16 h-16 -rotate-90" aria-hidden="true">
-                <circle cx="32" cy="32" r="27" fill="none" strokeWidth="7" className="stroke-current text-zinc-800" />
-                <circle cx="32" cy="32" r="27" fill="none" strokeWidth="7" strokeLinecap="round" className={`stroke-current ${ringColor}`}
-                  strokeDasharray={`${ringPct * 169.6} 169.6`} />
-              </svg>
-              <span className={`absolute inset-0 flex items-center justify-center text-lg font-extrabold ${outOfStock ? "text-red-400" : ""}`}>{remainingNum}</span>
-            </span>
-          ) : (
-            <span className="w-16 h-16 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center"><Wallet size={24} className="text-zinc-400" /></span>
-          )}
-          <span className="min-w-0 flex-1">
-            <span className="block font-bold">
-              {hasRemaining
-                ? outOfStock ? (remainingNum < 0 ? `Долг: ${-remainingNum} тр.` : "Тренировки закончились") : `Осталось ${remainingNum}${remTotal ? ` из ${remTotal}` : ""}`
-                : !isSessions ? "Подписка" : "Абонемент не оформлен"}
-            </span>
-            <span className={`block text-sm truncate ${overdue ? "text-red-400" : "text-zinc-500"}`}>
-              {!isSessions
-                ? client.membership.nextPaymentDate ? `${overdue ? "Просрочена с" : "Следующая оплата"} ${fmtDate(client.membership.nextPaymentDate)}` : "Дата оплаты не указана"
-                : client.membership.packagePrice ? `Пакет за ${Number(client.membership.packagePrice).toLocaleString("ru-RU")} ₽` : "Нажмите, чтобы оформить"}
-            </span>
-          </span>
-          <span className={`shrink-0 h-9 px-3 rounded-xl text-sm font-semibold flex items-center ${outOfStock || lowStock || overdue ? "bg-orange-400/15 text-orange-300" : "bg-zinc-800 text-zinc-300"}`}>
-            {outOfStock || lowStock || overdue ? "Продлить" : "Оплаты"}
-          </span>
-        </button>
-
-        <button onClick={() => { setSub("reporting"); }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
-          <span className="block text-sm text-zinc-400">Вес</span>
-          {lastW ? (
-            <>
-              <span className="block text-2xl font-extrabold tracking-tight mt-1">{fmtKg(lastW.w)} <span className="text-sm font-semibold text-zinc-500">кг</span></span>
-              {weightDelta !== null && <span className={`block text-xs font-semibold mt-0.5 ${weightDelta <= 0 ? "text-lime-400" : "text-orange-400"}`}>{weightDelta > 0 ? "+" : weightDelta < 0 ? "−" : ""}{fmtKg(Math.abs(weightDelta))} кг с {fmtDate(weights[0].date, true)}</span>}
-              {sparkPts && (
-                <svg viewBox="0 0 100 40" preserveAspectRatio="none" className="w-full h-9 mt-2" aria-hidden="true">
-                  <polyline points={sparkPts} fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" className="stroke-current text-lime-400" />
-                </svg>
-              )}
-            </>
-          ) : <span className="block text-sm text-zinc-500 mt-1">Замеров пока нет</span>}
-        </button>
-
-        <button onClick={() => setSub("bookings")} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
-          <span className="block text-sm text-zinc-400">Посещаемость</span>
-          {attendance !== null ? (
-            <>
-              <span className="block text-2xl font-extrabold tracking-tight mt-1">{attendance}%</span>
-              <span className="block text-xs text-zinc-500 mt-0.5">{attended} из {recent.length} за 30 дней</span>
-              <span className="flex gap-1 mt-3" aria-hidden="true">
-                {recent.slice(-8).map((o, i) => <span key={i} className={`flex-1 h-5 rounded-lg ${o.status === "done" ? "bg-lime-400" : "bg-zinc-800"}`} />)}
-              </span>
-            </>
-          ) : <span className="block text-sm text-zinc-500 mt-1">Нет тренировок за 30 дней</span>}
-        </button>
+      {/* Разделы карточки — четыре плитки в ряд, порядок фиксирован */}
+      <div className="grid grid-cols-4 gap-1.5 mt-4 mb-4 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl">
+        {TABS.map((t) => {
+          const active = sub === t.k;
+          return (
+            <button key={t.k} onClick={() => setSub(t.k)} aria-current={active ? "page" : undefined}
+              className={`flex flex-col items-center justify-center gap-1 h-14 rounded-xl text-[13px] font-semibold transition ${active ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"}`}>
+              <t.icon size={18} className="shrink-0" />
+              <span className="truncate max-w-full px-0.5">{t.label}</span>
+            </button>
+          );
+        })}
       </div>
 
-
-      {/* B29: разделы карточки — плитками, ничего не листается; активный — акцентом.
-          От пяти вкладок — по три в два ряда. Порядок меняется перетаскиванием. */}
-      {(() => {
-        const visibleSubs = subOrder;
-        if (!visibleSubs.length) return null;
-        const n = visibleSubs.length;
-        const cols = n === 1 ? "grid-cols-1" : n === 2 ? "grid-cols-2" : n === 3 ? "grid-cols-3" : n === 4 ? "grid-cols-4" : "grid-cols-3";
-        return (
-          <div className={`grid ${cols} gap-1.5 mt-5 mb-4 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl`}>
-            {visibleSubs.map((k) => {
-              const t = SUB_DEFS[k];
-              const active = sub === k;
-              return (
-                <button
-                  key={k}
-                  draggable
-                  onDragStart={() => setDragSub(k)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => { e.preventDefault(); reorderSubs(k); setDragSub(null); }}
-                  onDragEnd={() => setDragSub(null)}
-                  onClick={() => setSub(k)}
-                  aria-current={active ? "page" : undefined}
-                  title="Зажмите и перетащите, чтобы изменить порядок"
-                  className={`relative flex items-center justify-center gap-1.5 h-10 rounded-xl text-[13px] font-semibold transition cursor-grab ${active ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"} ${dragSub === k ? "opacity-40" : ""}`}
-                >
-                  <t.icon size={15} className="shrink-0" />
-                  <span className="truncate">{t.label}</span>
-                  {k === "chat" && unread > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">{unread}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        );
-      })()}
-
-      {sub === "bookings" && <BookingsTab clientId={clientId} bookings={bookings ?? []} onOpenOccurrence={onOpenOccurrence} />}
+      {sub === "bookings" && <BookingsTab clientId={clientId} bookings={bookings ?? []} onOpenOccurrence={onOpenOccurrence} onBook={onBookClient ? () => onBookClient(clientId) : undefined} />}
       {sub === "payments" && <MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} />}
       {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
-      {sub === "reporting" && <ReportingTab measureTick={measureTick} clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
+      {sub === "reporting" && <ReportingTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} clientName={client.name} allPlans={allPlans ?? []} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
-      {sub === "chat" && (
-        <ChatThread
-          trainerId={trainerId}
-          clientId={clientId}
-          self="trainer"
-          lastRead={chatLastRead}
-          onRead={(iso) => { setChatLastRead(iso); writeJson(chatReadKey, iso); }}
-        />
-      )}
     </div>
   );
 }
@@ -707,9 +581,14 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
 // новых запросов нет. Тап открывает запись в календаре механизмом из B24.
 // ponytail: разворачиваем повторы на год назад и вперёд — этого хватает для карточки,
 // полный горизонт живёт в календаре.
-function BookingsTab({ clientId, bookings, onOpenOccurrence }: {
-  clientId: string; bookings: Booking[]; onOpenOccurrence?: (id: string, occDate: string) => void;
+function BookingsTab({ clientId, bookings, onOpenOccurrence, onBook }: {
+  clientId: string; bookings: Booking[]; onOpenOccurrence?: (id: string, occDate: string) => void; onBook?: () => void;
 }) {
+  const bookBtn = onBook && (
+    <button onClick={onBook} className="w-full h-11 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-xl text-sm font-semibold text-zinc-100 hover:border-zinc-700 transition">
+      <Plus size={16} /> Записать на тренировку
+    </button>
+  );
   const todayStr = today();
   const mine = bookings.filter((b) => b.clientIds.includes(clientId));
   const occs = expandBookings(mine, addDays(todayStr, -365), addDays(todayStr, 365));
@@ -730,14 +609,18 @@ function BookingsTab({ clientId, bookings, onOpenOccurrence }: {
   );
 
   if (!occs.length) return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-8 text-center">
-      <CalendarCheck size={26} className="mx-auto text-zinc-700 mb-2" />
-      <p className="text-sm text-zinc-600">Записей в календаре пока нет</p>
+    <div className="space-y-3">
+      {bookBtn}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-8 text-center">
+        <CalendarCheck size={26} className="mx-auto text-zinc-700 mb-2" />
+        <p className="text-sm text-zinc-600">Записей в календаре пока нет</p>
+      </div>
     </div>
   );
 
   return (
     <div className="space-y-4">
+      {bookBtn}
       {upcoming.length > 0 && (
         <div>
           <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПРЕДСТОЯЩИЕ — {upcoming.length}</p>

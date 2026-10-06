@@ -245,7 +245,7 @@ export default function App() {
   }, [session]);
 
   // ponytail: поллинг раз в 15с — карточка клиента (абонемент/остаток тренировок и т.п.) должна
-  // подхватывать правки тренера без перезахода, см. ChatThread (тот же паттерн для чата).
+  // подхватывать правки тренера без перезахода.
   useEffect(() => {
     if (!session || isTrainer) return;
     const id = setInterval(() => { portalApi.fetchSelfClient(session.user.id).then(setSelfClient).catch((e) => console.error("[App] pollSelfClient:", e)); }, 15000);
