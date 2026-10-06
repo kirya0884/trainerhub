@@ -24,9 +24,23 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
   const [brand, setBrand] = useState({ brand: "", logoUrl: "" });
   const [stats, setStats] = useState<TrainerStats | null>(null);
-  const [savingProfile, setSavingProfile] = useState(false);
-  const [savingBrand, setSavingBrand] = useState(false);
-  const [savingRules, setSavingRules] = useState(false);
+  // Состояние каждой кнопки «Сохранить» отдельно: раньше цвет и правила делили одно,
+  // ошибка не показывалась, а успех не подтверждался — тренер не знал, сохранилось ли.
+  type SaveKey = "profile" | "brand" | "accent" | "rules";
+  const [saveState, setSaveState] = useState<Partial<Record<SaveKey, "saving" | "saved">>>({});
+  const runSave = async (key: SaveKey, fn: () => Promise<unknown>) => {
+    setSaveState((p) => ({ ...p, [key]: "saving" }));
+    try {
+      await fn();
+      setSaveState((p) => ({ ...p, [key]: "saved" }));
+      setTimeout(() => setSaveState((p) => (p[key] === "saved" ? { ...p, [key]: undefined } : p)), 2000);
+    } catch (e) {
+      console.error(`[TrainerProfile] save ${key}:`, e);
+      setSaveState((p) => ({ ...p, [key]: undefined }));
+      alert("Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.");
+    }
+  };
+  const saveLabel = (key: SaveKey, idle: string) => saveState[key] === "saving" ? "Сохранение..." : saveState[key] === "saved" ? "✓ Сохранено" : idle;
   const [showSubscription, setShowSubscription] = useState(false);
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   const [editingTpl, setEditingTpl] = useState<Record<string, PackageTemplate>>({});
@@ -62,15 +76,8 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
     setBrand((b) => ({ ...b, logoUrl: thumb }));
   };
 
-  const saveProfile = async () => {
-    if (!profile) return;
-    setSavingProfile(true);
-    try { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl); } finally { setSavingProfile(false); }
-  };
-  const saveBrand = async () => {
-    setSavingBrand(true);
-    try { await trainerApi.saveTrainerBrand(trainerId, brand); } finally { setSavingBrand(false); }
-  };
+  const saveProfile = () => { if (profile) runSave("profile", async () => { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl); }); };
+  const saveBrand = () => runSave("brand", () => trainerApi.saveTrainerBrand(trainerId, brand));
 
   if (!profile || !stats) return <div className="p-4"><ScreenSkeleton avatar /></div>;
 
@@ -117,7 +124,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             <input value={profile.whatsapp} onChange={(e) => setProfile({ ...profile, whatsapp: e.target.value })} placeholder="+7..." className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
         </div>
-        <button onClick={saveProfile} disabled={savingProfile} className="w-full text-zinc-950 font-semibold rounded-xl py-2.5 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingProfile ? "Сохранение..." : "Сохранить профиль"}</button>
+        <button onClick={saveProfile} disabled={saveState.profile === "saving"} className="w-full text-zinc-950 font-semibold rounded-xl py-2.5 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{saveLabel("profile", "Сохранить профиль")}</button>
       </div>
           )}
           {section === "brand" && (
@@ -136,7 +143,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         <label className="text-xs text-zinc-500 block">Название бренда
           <input value={brand.brand} onChange={(e) => setBrand({ ...brand, brand: e.target.value })} placeholder="Reps" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
         </label>
-        <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
+        <button onClick={saveBrand} disabled={saveState.brand === "saving"} className="w-full text-zinc-950 font-semibold rounded-xl py-2.5 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{saveLabel("brand", "Сохранить бренд")}</button>
       </div>
           )}
           {section === "accent" && (
@@ -155,7 +162,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             </button>
           </div>
         )}
-        <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl, profile.accentColor); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить цвет"}</button>
+        <button onClick={() => runSave("accent", async () => { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl, profile.accentColor); })} disabled={saveState.accent === "saving"} className="w-full text-zinc-950 font-semibold rounded-xl py-2.5 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{saveLabel("accent", "Сохранить цвет")}</button>
       </div>
           )}
           {section === "tabs" && tabs && onToggleTab && (
@@ -189,7 +196,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           placeholder={"Например:\n• Тренировка списывается при отмене менее чем за 24 часа\n• Пакет действителен 3 месяца с даты оплаты\n• Перенос возможен не более 2 раз в месяц"}
           className="w-full bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none"
         />
-        <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить правила"}</button>
+        <button onClick={() => runSave("rules", () => trainerApi.saveTrainerProfile(trainerId, profile))} disabled={saveState.rules === "saving"} className="w-full text-zinc-950 font-semibold rounded-xl py-2.5 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{saveLabel("rules", "Сохранить правила")}</button>
       </div>
           )}
           {section === "security" && (

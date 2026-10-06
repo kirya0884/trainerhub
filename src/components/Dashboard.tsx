@@ -245,14 +245,21 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           <button
             onClick={async () => {
               setPushLoading(true);
-              if (pushEnabled) {
-                await unsubscribeFromPush(trainerId);
-                setPushEnabled(false);
-              } else {
-                const ok = await subscribeToPush(trainerId);
-                setPushEnabled(ok);
+              // finally: при ошибке сети кнопка раньше навсегда оставалась в «загрузке»
+              try {
+                if (pushEnabled) {
+                  await unsubscribeFromPush(trainerId);
+                  setPushEnabled(false);
+                } else {
+                  const ok = await subscribeToPush(trainerId);
+                  setPushEnabled(ok);
+                }
+              } catch (e) {
+                console.error("[Dashboard] push:", e);
+                alert("Не удалось изменить уведомления. Попробуйте ещё раз.");
+              } finally {
+                setPushLoading(false);
               }
-              setPushLoading(false);
             }}
             disabled={pushLoading}
             title={pushEnabled ? "Push включены — нажми чтобы отключить" : "Включить push-уведомления"}
