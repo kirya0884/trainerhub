@@ -1,4 +1,4 @@
-import { Archive, BarChart3, BookOpen, GripVertical, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardList, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, TrendingUp, User, Wallet, X, Copy } from "lucide-react";
+import { Archive, ArrowLeft, Check, MoreVertical, BarChart3, BookOpen, GripVertical, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, Wallet, X, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
@@ -15,7 +15,6 @@ import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import * as plansApi from "../lib/plans";
 import type { Day, Metric, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
-import RemainingBadge from "./RemainingBadge";
 import ExerciseRow from "./ExerciseRow";
 import ExerciseHistoryModal from "./ExerciseHistoryModal";
 import { useDragSort } from "../hooks/useDragSort";
@@ -50,7 +49,7 @@ const groupBlocks = (exercises: Day["exercises"]) => {
   return blocks;
 };
 
-export default function PlanEditor({ planId, trainerId, clientId }: { planId: string; trainerId: string; clientId: string }) {
+export default function PlanEditor({ planId, trainerId, clientId, onBack }: { planId: string; trainerId: string; clientId: string; onBack?: () => void }) {
   const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, addMesocycle, updateMesocycle, deleteMesocycle, reorderMesocycles, reload } = usePlan(planId);
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const exDrag = useDragSort((dayId, from, to) => reorderExercises(dayId, from, to));
@@ -242,12 +241,19 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [addingSession, setAddingSession] = useState(false);
   const [clientName, setClientName] = useState("");
+  const [clientColor, setClientColor] = useState("");
+  // Шапка и меню дней/блоков: одно открытое меню за раз
+  const [editingName, setEditingName] = useState(false);
+  const [dayMenu, setDayMenu] = useState<string | null>(null);
+  const [mesoMenu, setMesoMenu] = useState<string | null>(null);
+  const [renamingDay, setRenamingDay] = useState<string | null>(null);
   // Ссылка должна быть стабильной: она уходит в мемоизированный ExerciseRow.
   const toggleCollapse = useCallback((id: string) => setCollapsed((c) => {
     const next = { ...c, [id]: !c[id] };
     localStorage.setItem(`trainerhub-collapsed-${planId}`, JSON.stringify(next));
     return next;
   }), [planId]);
+  const toggleExOpen = useCallback((id: string) => toggleCollapse(`x:${id}`), [toggleCollapse]);
   const cycleGroup = (dayId: string, exId: string, cur: string, exercises: Day["exercises"]) => {
     const i = GROUP_CYCLE.indexOf(cur || "");
     markSaving(); updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
@@ -264,7 +270,7 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
   useEffect(() => {
     let alive = true;
     fetchClient(clientId)
-      .then((c) => { if (alive) { setMembership(c.membership); setClientName(c.name); } })
+      .then((c) => { if (alive) { setMembership(c.membership); setClientName(c.name); setClientColor(c.color); } })
       .catch((e) => console.error("[PlanEditor] fetchClient:", e));
     return () => { alive = false; };
   }, [clientId]);
@@ -332,13 +338,13 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
   // ponytail: тело дня (упражнения) — общий рендер для инлайн-режима во вкладке «Тренировки» и для модалки редактирования из «Проведенные»
   const DayBody = ({ day }: { day: Day }) => (
-    <div className="p-3 space-y-2" {...exDrag.rootProps(day.id)}>
+    <div className="px-2 pb-2 pt-1 space-y-1 border-t border-zinc-800" {...exDrag.rootProps(day.id)}>
       {groupBlocks(day.exercises).map((block, bi) => {
         const rows = block.items.map((ex, k) => {
           const ei = block.startIdx + k;
           return (
             <ExerciseRow key={ex.id} ex={ex} label={exLabel(day, ei)} groupColor={ex.group ? GROUP_COLORS[ex.group] : null} suggestions={allNames} addToLibrary={addToLibrary}
-              index={ei} collapsed={!!collapsed[ex.id]} onToggleCollapse={toggleCollapse}
+              index={ei} collapsed={!collapsed[`x:${ex.id}`]} onToggleCollapse={toggleExOpen}
               dragging={exDrag.drag?.key === day.id && exDrag.drag.from === ei}
               dropBefore={exDrag.drag?.key === day.id && exDrag.drag.over === ei && exDrag.drag.from !== ei}
               dropAfter={exDrag.drag?.key === day.id && exDrag.drag.over === day.exercises.length && ei === day.exercises.length - 1 && exDrag.drag.from !== ei}
@@ -353,19 +359,19 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         if (block.group && block.items.length > 1) {
           const color = GROUP_COLORS[block.group];
           return (
-            <div key={bi} className="rounded-xl border-2 overflow-hidden" style={{ borderColor: color }}>
-              <div className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide flex items-center gap-1.5" style={{ background: `${color}26`, color }}>
-                <Layers size={12} /> {supersetName(block.items.length)} {block.group} · {block.items.length} упражнения подряд
+            <div key={bi} className="rounded-xl overflow-hidden" style={{ background: `${color}12`, boxShadow: `inset 3px 0 0 ${color}` }}>
+              <div className="pl-3.5 pr-2.5 pt-2 text-xs font-bold flex items-center gap-1.5" style={{ color }}>
+                <Layers size={13} /> {supersetName(block.items.length)} {block.group} · {block.items.length} подряд
               </div>
-              <div className="p-1.5 space-y-1.5">{rows}</div>
+              <div className="p-1 pl-2 space-y-1">{rows}</div>
             </div>
           );
         }
         return <div key={bi}>{rows}</div>;
       })}
-      <div className="flex gap-2">
-        <button onClick={() => setLibFor(day.id)} className="flex-1 flex items-center justify-center gap-1.5 text-sm text-zinc-300 bg-zinc-800/60 hover:bg-zinc-800 rounded-lg py-2 transition"><BookOpen size={15} /> Из библиотеки</button>
-        <button onClick={() => addExercise(day.id)} className="flex-1 flex items-center justify-center gap-1.5 text-sm text-zinc-400 hover:text-lime-400 border border-dashed border-zinc-700 hover:border-lime-400/40 rounded-lg py-2 transition"><Plus size={15} /> Вручную</button>
+      <div className="flex gap-2 pt-1">
+        <button onClick={() => setLibFor(day.id)} className="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-zinc-200 bg-zinc-800 hover:bg-zinc-700 rounded-xl h-11 transition"><BookOpen size={15} /> Из библиотеки</button>
+        <button onClick={() => addExercise(day.id)} className="flex-1 flex items-center justify-center gap-1.5 text-sm font-semibold text-zinc-400 hover:text-zinc-100 border-[1.5px] border-dashed border-zinc-700 hover:border-zinc-500 rounded-xl h-11 transition"><Plus size={15} /> Вручную</button>
       </div>
     </div>
   );
@@ -373,17 +379,18 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
 
   return (
     <div className="space-y-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
-        <div className="flex items-center gap-1.5">
-          <input value={plan.name} onChange={(e) => { markSaving(); updatePlanMeta({ name: e.target.value }); }} className="flex-1 min-w-0 bg-transparent text-xl font-bold outline-none border-b border-transparent focus:border-lime-400/50 pb-1" placeholder="Название плана" />
-          <span className={`text-xs shrink-0 transition-all duration-300 ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'}`}>
-            {saveStatus === 'saving' ? <span className="text-zinc-500">Сохранение…</span> : <span className="text-lime-400">✓ Сохранено</span>}
+      {/* Шапка: назад, статус сохранения и меню; ниже — название заголовком, чипы и вкладки */}
+      <div>
+        <div className="flex items-center gap-1 -ml-2.5">
+          {onBack && <button onClick={onBack} aria-label="Назад" title="Назад" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-xl text-zinc-300 hover:bg-zinc-800 transition"><ArrowLeft size={22} /></button>}
+          <span className={`ml-auto text-sm transition-opacity duration-300 ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'}`}>
+            {saveStatus === 'saving' ? <span className="text-zinc-500">Сохранение…</span> : <span className="text-zinc-400 flex items-center gap-1"><Check size={14} className="text-lime-400" /> Сохранено</span>}
           </span>
           {/* П4: пять иконок свёрнуты в меню — строка названия перестала быть панелью инструментов */}
           <div className="relative shrink-0">
             <button onClick={() => setShowPlanMenu((v) => !v)} aria-expanded={showPlanMenu} aria-label="Меню плана" title="Меню плана"
-              className={`p-1.5 rounded-lg transition ${showPlanMenu ? "bg-zinc-800 text-lime-400" : plan.visibleToClient === false ? "text-orange-400 hover:bg-zinc-800" : "text-zinc-400 hover:bg-zinc-800 hover:text-lime-400"}`}>
-              <MoreHorizontal size={18} />
+              className={`w-11 h-11 flex items-center justify-center rounded-xl transition ${showPlanMenu ? "bg-zinc-800 text-zinc-100" : plan.visibleToClient === false ? "text-orange-400 hover:bg-zinc-800" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"}`}>
+              <MoreHorizontal size={22} />
             </button>
             {showPlanMenu && (
               <>
@@ -411,41 +418,49 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               </>
             )}
           </div>
-          {clientName && (
-            <span className="flex items-center gap-1.5 text-sm text-zinc-400 shrink-0 max-w-[100px] sm:max-w-none">
-              {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />}
-              <User size={14} className="text-zinc-500 shrink-0" />
-              <span className="truncate">{clientName}</span>
-            </span>
-          )}
         </div>
-        {plan.visibleToClient === false && (
-          <div className="flex items-center gap-2 bg-orange-400/10 border border-orange-400/20 rounded-lg px-3 py-2 text-sm text-orange-400 mt-2">
-            <EyeOff size={14} /> Программа скрыта от клиента — открой меню «⋯» выше, чтобы показать
+        {editingName ? (
+          <input autoFocus value={plan.name} onChange={(e) => { markSaving(); updatePlanMeta({ name: e.target.value }); }} onBlur={() => setEditingName(false)} onKeyDown={(e) => e.key === "Enter" && setEditingName(false)}
+            aria-label="Название плана" placeholder="Название плана" className="mt-1 w-full h-12 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 font-bold outline-none focus:border-lime-400/60" />
+        ) : (
+          <button onClick={() => setEditingName(true)} title="Изменить название" className="mt-1 group flex items-center gap-2 max-w-full text-left">
+            <h2 className="text-2xl font-extrabold tracking-tight break-words min-w-0">{plan.name || "Без названия"}</h2>
+            <Pencil size={15} className="shrink-0 text-zinc-600 group-hover:text-zinc-400" />
+          </button>
+        )}
+        {(clientName || membership) && (
+          <div className="flex flex-wrap items-center gap-2 mt-2.5">
+            {clientName && (
+              <span className="inline-flex items-center gap-2 h-8 pl-1 pr-3 rounded-full bg-zinc-900 border border-zinc-800 text-sm font-semibold max-w-full">
+                <span className="w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[10px] font-bold text-zinc-950" style={{ background: clientColor || "#a3e635" }}>{clientName.split(" ").filter(Boolean).slice(0, 2).map((w) => w[0]).join("").toUpperCase()}</span>
+                <span className="truncate">{clientName}</span>
+              </span>
+            )}
+            {membership && (
+              <button onClick={() => setShowMembership(true)} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-zinc-900 border border-zinc-800 text-sm font-semibold hover:border-zinc-700 transition">
+                <Wallet size={14} className={membership.type !== "subscription" && combinedRemaining(membership) <= 2 ? "text-orange-400" : "text-zinc-400"} />
+                {membership.type === "subscription" ? `Оплата ${fmtDate(membership.nextPaymentDate)}` : `Осталось ${combinedRemaining(membership)}`}
+              </button>
+            )}
           </div>
         )}
-        {/* Р4: плитки вместо полосы, но однострочные — иначе плашка выросла бы вдвое */}
-        <div className="grid grid-cols-3 gap-1.5 mt-3">
+        {plan.visibleToClient === false && (
+          <div className="flex items-center gap-2 bg-orange-400/10 border border-orange-400/20 rounded-xl px-3 py-2.5 text-sm text-orange-400 mt-3">
+            <EyeOff size={15} className="shrink-0" /> Программа скрыта от клиента — показать можно в меню «⋯»
+          </div>
+        )}
+        <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mt-4">
           {([
-            { k: "workout" as const, icon: <ClipboardList size={14} />, label: "Тренировки" },
-            { k: "done" as const, icon: <CheckCircle2 size={14} />, label: "Проведённые" },
-            { k: "progress" as const, icon: <TrendingUp size={14} />, label: "Прогрессия" },
+            { k: "workout" as const, label: "Тренировки" },
+            { k: "done" as const, label: "Проведённые" },
+            { k: "progress" as const, label: "Прогресс" },
           ]).map((t) => (
             <button key={t.k} onClick={() => setSub(t.k)} aria-pressed={sub === t.k}
-              className={`flex items-center justify-center gap-1.5 rounded-xl border py-2 px-1 text-[13px] font-medium transition active:scale-[0.97] ${
-                sub === t.k ? "bg-lime-400 border-lime-400 text-zinc-950" : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"}`}>
-              {t.icon}<span className="truncate">{t.label}</span>
+              className={`flex-1 min-w-0 h-9 rounded-lg text-sm font-semibold truncate px-1 transition ${sub === t.k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>
+              {t.label}
             </button>
           ))}
         </div>
-        {membership && (
-          <button onClick={() => setShowMembership(true)}
-            className="w-full flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 active:text-lime-400 transition mt-2 px-0.5">
-            <Wallet size={13} className="text-lime-400 shrink-0" />
-            <span className="truncate">{membership.type === "subscription" ? `След. платёж: ${fmtDate(membership.nextPaymentDate)}` : `Абонемент: ${combinedRemaining(membership)} тр.`}</span>
-            <ChevronRight size={13} className="ml-auto shrink-0 text-zinc-600" />
-          </button>
-        )}
       </div>
 
       {showTemplates && (
@@ -652,11 +667,10 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
           const hidden = day.visibleToClient === false;
           return (
             <div key={day.id} data-dsday-idx={li}
-              className={`bg-zinc-900 border rounded-xl transition-shadow ${hidden ? "border-orange-400/20 opacity-80" : "border-zinc-800"} ${
+              className={`bg-zinc-900 border rounded-2xl transition-shadow ${hidden ? "border-orange-400/25" : "border-zinc-800"} ${
                 dayDrag.drag?.key === dkey && dayDrag.drag.from === li ? "opacity-40 ring-2 ring-lime-400" : ""} ${
                 dayDrag.drag?.key === dkey && dayDrag.drag.over === li && dayDrag.drag.from !== li ? "shadow-[0_-3px_0_0_var(--accent)]" : ""}`}>
-              <div className="flex items-center gap-1 px-3 py-2.5 bg-zinc-800/40 border-b border-zinc-800 rounded-t-xl">
-                <button onClick={() => toggleCollapse(day.id)} title={collapsed[day.id] ? "Развернуть день" : "Свернуть день"} className="p-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-400 active:text-lime-400 transition-colors duration-100 shrink-0">{isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}</button>
+              <div className="flex items-center gap-1 pl-0.5 pr-1.5 py-1.5">
                 {/* Н2: ручка вместо двух стрелок по 14 px — в них почти невозможно попасть пальцем.
                     Стрелки клавиатуры остались здесь же: перетаскивание с клавиатуры недоступно. */}
                 <button data-dsday-handle type="button"
@@ -666,32 +680,57 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
                     if (e.key === "ArrowUp") { const t = visibleNeighbour(plan.days, di, -1); if (t >= 0) { e.preventDefault(); reorderDays(di, t); } }
                     if (e.key === "ArrowDown") { const t = visibleNeighbour(plan.days, di, 1); if (t >= 0) { e.preventDefault(); reorderDays(di, t); } }
                   }}
-                  className="shrink-0 p-1.5 -mx-0.5 text-zinc-600 hover:text-zinc-300 active:text-lime-400 cursor-grab active:cursor-grabbing touch-none select-none transition-colors duration-100">
+                  className="shrink-0 w-8 h-11 flex items-center justify-center text-zinc-600 hover:text-zinc-300 active:text-lime-400 cursor-grab active:cursor-grabbing touch-none select-none transition-colors duration-100">
                   <GripVertical size={16} />
                 </button>
-                <input value={day.name} onChange={(e) => { markSaving(); updateDay(day.id, { name: e.target.value }); }} className={`flex-1 min-w-0 bg-transparent font-semibold outline-none border-b border-transparent focus:border-lime-400/50 pb-0.5 ${hidden ? "text-zinc-500" : ""}`} placeholder="Название дня" />
-                {hasMesos && (
-                  <select value={day.mesocycleId ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { mesocycleId: e.target.value || null }); }}
-                    className="bg-zinc-800 border border-zinc-700 rounded-md text-xs px-1.5 py-1 outline-none focus:border-cyan-400/40 text-zinc-300 shrink-0 max-w-[80px]">
-                    <option value="">—</option>
-                    {sortedMesos.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-                  </select>
+                {renamingDay === day.id ? (
+                  <input autoFocus value={day.name} onChange={(e) => { markSaving(); updateDay(day.id, { name: e.target.value }); }} onBlur={() => setRenamingDay(null)} onKeyDown={(e) => e.key === "Enter" && setRenamingDay(null)}
+                    aria-label="Название дня" className="flex-1 min-w-0 h-11 bg-zinc-800 rounded-xl px-3 font-semibold outline-none focus:ring-1 focus:ring-lime-400/40" />
+                ) : (
+                  <button onClick={() => toggleCollapse(day.id)} aria-expanded={isOpen} title={isOpen ? "Свернуть день" : "Развернуть день"} className="flex-1 min-w-0 text-left py-1">
+                    <span className="block font-bold truncate">{day.name || "Без названия"}</span>
+                    <span className={`block text-[13px] truncate ${hidden ? "text-orange-400" : "text-zinc-400"}`}>
+                      {[hidden ? "Скрыт от клиента" : null, `${day.exercises.length} упр.`, day.method === "circuit" ? "круговая" : null, day.dateOf ? fmtDate(day.dateOf, true) : null, lastSession ? `была ${fmtDate(lastSession.date, true)}` : null].filter(Boolean).join(" · ")}
+                    </span>
+                  </button>
                 )}
-                <button onClick={() => { markSaving(); updateDay(day.id, { visibleToClient: hidden ? true : false }); }}
-                  className={`p-1.5 rounded-md transition shrink-0 ${hidden ? "text-orange-400 hover:bg-orange-400/15" : "text-zinc-500 hover:bg-zinc-700 hover:text-lime-400"}`}
-                  title={hidden ? "Скрыт от клиента — показать" : "Скрыть день от клиента"}>
-                  {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                </button>
-                <button onClick={() => { markSaving(); updateDay(day.id, { method: day.method === "circuit" ? "" : "circuit" }); }}
-                  className={`p-1.5 rounded-md transition shrink-0 ${day.method === "circuit" ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700 hover:text-cyan-400"}`}
-                  title={day.method === "circuit" ? "Круговая тренировка — переключить на обычную" : "Сделать круговой тренировкой (подходы кругами)"}>
-                  <Repeat size={14} />
-                </button>
-                {lastSession && <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:inline" title="Дата последнего проведения">{fmtDate(lastSession.date, true)}</span>}
-                <input type="date" value={day.dateOf ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { dateOf: e.target.value || null }); }} className="bg-zinc-800 rounded-md text-xs px-1.5 py-1 outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0 text-zinc-300 w-36 hidden sm:block" />
-                <button onClick={() => { if (!workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Провести тренировку"><Play size={15} /></button>
-                <button onClick={() => copyDay(day)} className="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0" title="Копировать день"><Clipboard size={15} /></button>
-                <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><Trash2 size={15} /></button>
+                <button onClick={() => { if (!workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
+                  className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center hover:bg-lime-400/25 transition" title="Провести тренировку" aria-label="Провести тренировку"><Play size={18} /></button>
+                <div className="relative shrink-0">
+                  <button onClick={() => setDayMenu(dayMenu === day.id ? null : day.id)} aria-expanded={dayMenu === day.id} aria-label="Меню дня" title="Меню дня"
+                    className={`w-10 h-10 flex items-center justify-center rounded-xl transition ${dayMenu === day.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"}`}><MoreVertical size={19} /></button>
+                  {dayMenu === day.id && (
+                    <>
+                      <div className="fixed inset-0 z-10" onClick={() => setDayMenu(null)} />
+                      <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-60 shadow-xl">
+                        <button onClick={() => { setDayMenu(null); setRenamingDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Pencil size={15} className="text-zinc-500 shrink-0" /> Переименовать</button>
+                        <button onClick={() => { setDayMenu(null); markSaving(); updateDay(day.id, { visibleToClient: hidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm hover:bg-zinc-800 transition ${hidden ? "text-orange-400" : "text-zinc-200"}`}>
+                          {hidden ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />} {hidden ? "Показать клиенту" : "Скрыть от клиента"}
+                        </button>
+                        <button onClick={() => { setDayMenu(null); markSaving(); updateDay(day.id, { method: day.method === "circuit" ? "" : "circuit" }); }}
+                          title="Круговая: подходы идут кругами по всем упражнениям" className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm hover:bg-zinc-800 transition ${day.method === "circuit" ? "text-cyan-400" : "text-zinc-200"}`}>
+                          <Repeat size={15} className={`shrink-0 ${day.method === "circuit" ? "" : "text-zinc-500"}`} /> {day.method === "circuit" ? "Сделать обычной" : "Сделать круговой"}
+                        </button>
+                        <label className="w-full flex items-center gap-2.5 px-2.5 h-11 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                          <CalendarCheck size={15} className="text-zinc-500 shrink-0" /> Дата
+                          <input type="date" value={day.dateOf ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { dateOf: e.target.value || null }); }} className="ml-auto min-w-0 w-[8.5rem] bg-zinc-800 rounded-lg px-2 h-8 outline-none" title="Дата проведения" />
+                        </label>
+                        {hasMesos && (
+                          <label className="w-full flex items-center gap-2.5 px-2.5 h-11 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                            <Layers size={15} className="text-zinc-500 shrink-0" /> Блок
+                            <select value={day.mesocycleId ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { mesocycleId: e.target.value || null }); }} className="ml-auto min-w-0 max-w-[8.5rem] bg-zinc-800 rounded-lg px-2 h-8 outline-none">
+                              <option value="">Без блока</option>
+                              {sortedMesos.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                            </select>
+                          </label>
+                        )}
+                        <button onClick={() => { setDayMenu(null); copyDay(day); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Clipboard size={15} className="text-zinc-500 shrink-0" /> Копировать день</button>
+                        <div className="my-1 border-t border-zinc-800" />
+                        <button onClick={() => { setDayMenu(null); if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить день</button>
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
               {isOpen && DayBody({ day })}
             </div>
@@ -715,36 +754,36 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
               const mesoDays = plan.days.map((day, di) => ({ day, di })).filter(({ day }) => day.mesocycleId === meso.id);
               return (
                 <div key={meso.id} className="space-y-2">
-                  <div className={`flex items-center gap-2 border rounded-xl px-3 py-2 ${mesoHidden ? "border-orange-400/20 bg-orange-400/5" : "border-cyan-400/20 bg-zinc-900/80"}`}>
+                  <div className={`flex items-center gap-1 mt-3 pl-0.5 ${mesoHidden ? "text-orange-400" : "text-cyan-400"}`}>
                     <button onClick={() => toggleCollapse(meso.id)} title={collapsed[meso.id] ? "Развернуть блок" : "Свернуть блок"}
                       aria-label={collapsed[meso.id] ? "Развернуть блок" : "Свернуть блок"}
-                      className="p-1 -ml-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-400 active:text-cyan-400 transition-colors duration-100 shrink-0">
-                      {collapsed[meso.id] ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+                      className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition">
+                      {collapsed[meso.id] ? <ChevronRight size={17} /> : <ChevronDown size={17} />}
                     </button>
-                    <span className="flex flex-col -my-1 shrink-0">
-                      <button onClick={() => { const t = mi - 1; if (t >= 0) reorderMesocycles(mi, t); }} disabled={mi === 0}
-                        title="Блок выше" aria-label="Переместить блок выше"
-                        className="text-zinc-600 hover:text-zinc-300 active:text-cyan-400 disabled:opacity-30"><ChevronUp size={14} /></button>
-                      <button onClick={() => { const t = mi + 1; if (t < sortedMesos.length) reorderMesocycles(mi, t); }} disabled={mi === sortedMesos.length - 1}
-                        title="Блок ниже" aria-label="Переместить блок ниже"
-                        className="text-zinc-600 hover:text-zinc-300 active:text-cyan-400 disabled:opacity-30"><ChevronDown size={14} /></button>
-                    </span>
-                    <Layers size={14} className={`shrink-0 ${mesoHidden ? "text-orange-400" : "text-cyan-400"}`} />
-                    <input value={meso.name} onChange={(e) => updateMesocycle(meso.id, { name: e.target.value })}
-                      className="flex-1 min-w-0 bg-transparent text-sm font-semibold outline-none border-b border-transparent focus:border-cyan-400/50 pb-0.5"
-                      style={{ color: mesoHidden ? "#fb923c" : "#67e8f9" }} placeholder="Название блока" />
-                    <span className="text-xs text-zinc-600 shrink-0">{mesoDays.length} дн.</span>
-                    <button onClick={() => { markSaving(); updateMesocycle(meso.id, { visibleToClient: mesoHidden ? true : false }); }}
-                      className={`p-1.5 rounded-md transition shrink-0 ${mesoHidden ? "text-orange-400" : "text-zinc-500 hover:text-lime-400"}`}
-                      title={mesoHidden ? "Скрыт от клиента — показать" : "Скрыть блок от клиента"}>
-                      {mesoHidden ? <EyeOff size={13} /> : <Eye size={13} />}
-                    </button>
-                    <button onClick={() => { markSaving(); updateMesocycle(meso.id, { archivedAt: new Date().toISOString() }); }}
-                      title="Убрать блок в архив вместе с днями" aria-label="Убрать блок в архив"
-                      className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 active:text-lime-400 transition shrink-0"><Archive size={13} /></button>
-                    <button onClick={() => duplicateMeso(meso.id)} disabled={!!dupBusy} title="Дублировать блок с днями" className="p-1 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition shrink-0 disabled:opacity-40"><Copy size={13} /></button>
-                    <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
-                      className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
+                    <Layers size={15} className="shrink-0" />
+                    <input value={meso.name} onChange={(e) => updateMesocycle(meso.id, { name: e.target.value })} aria-label="Название блока"
+                      className="flex-1 min-w-0 bg-transparent font-bold outline-none border-b border-transparent focus:border-current pb-0.5 ml-1" placeholder="Название блока" />
+                    <span className="text-[13px] text-zinc-500 shrink-0">{mesoDays.length} дн.{mesoHidden && " · скрыт"}</span>
+                    <div className="relative shrink-0">
+                      <button onClick={() => setMesoMenu(mesoMenu === meso.id ? null : meso.id)} aria-expanded={mesoMenu === meso.id} aria-label="Меню блока" title="Меню блока"
+                        className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition"><MoreVertical size={18} /></button>
+                      {mesoMenu === meso.id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setMesoMenu(null)} />
+                          <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-56 shadow-xl">
+                            <button disabled={mi === 0} onClick={() => { setMesoMenu(null); reorderMesocycles(mi, mi - 1); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><ChevronUp size={15} className="text-zinc-500 shrink-0" /> Блок выше</button>
+                            <button disabled={mi === sortedMesos.length - 1} onClick={() => { setMesoMenu(null); reorderMesocycles(mi, mi + 1); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><ChevronDown size={15} className="text-zinc-500 shrink-0" /> Блок ниже</button>
+                            <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { visibleToClient: mesoHidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm hover:bg-zinc-800 transition ${mesoHidden ? "text-orange-400" : "text-zinc-200"}`}>
+                              {mesoHidden ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />} {mesoHidden ? "Показать клиенту" : "Скрыть от клиента"}
+                            </button>
+                            <button onClick={() => { setMesoMenu(null); duplicateMeso(meso.id); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать с днями</button>
+                            <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { archivedAt: new Date().toISOString() }); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Archive size={15} className="text-zinc-500 shrink-0" /> В архив с днями</button>
+                            <div className="my-1 border-t border-zinc-800" />
+                            <button onClick={() => { setMesoMenu(null); if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить блок</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
                   </div>
                   {!collapsed[meso.id] && (() => {
                     const vis = mesoDays.filter(({ day }) => !isArchived(day));
@@ -782,9 +821,9 @@ export default function PlanEditor({ planId, trainerId, clientId }: { planId: st
         </div>
       ) : (
         <div className="flex gap-2">
-          <button onClick={() => setNewDayName("")} className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl py-2 text-sm font-medium text-zinc-300 hover:text-lime-400 transition"><Plus size={15} /> Добавить день</button>
-          <button onClick={() => setShowDayLibrary(true)} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-2 px-3 text-sm font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><BookOpen size={14} /> Шаблоны</button>
-          <button onClick={handleAddMesocycle} disabled={addBusy} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl py-2 px-3 text-sm font-medium text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap disabled:opacity-40"><Layers size={14} /> Блок</button>
+          <button onClick={() => setNewDayName("")} className="flex-1 flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-lime-400/40 rounded-xl h-11 text-sm font-semibold text-zinc-200 hover:text-lime-400 transition"><Plus size={16} /> Добавить день</button>
+          <button onClick={() => setShowDayLibrary(true)} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl h-11 px-3 text-sm font-semibold text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap"><BookOpen size={14} /> Шаблоны</button>
+          <button onClick={handleAddMesocycle} disabled={addBusy} className="flex items-center justify-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-cyan-400/40 rounded-xl h-11 px-3 text-sm font-semibold text-zinc-400 hover:text-cyan-400 transition whitespace-nowrap disabled:opacity-40"><Layers size={14} /> Блок</button>
         </div>
       )}
       {pasteInput !== null ? (

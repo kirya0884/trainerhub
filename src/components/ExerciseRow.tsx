@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, ChevronRight, GripVertical, Layers, Plus, TrendingUp, Video, X } from "lucide-react";
+import { Activity, ChevronDown, GripVertical, Layers, Plus, TrendingUp, Video, X } from "lucide-react";
 import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
@@ -22,6 +22,9 @@ function ExerciseRow({
 }) {
   const [acOpen, setAcOpen] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
+  // Новое упражнение (без названия) открыто, пока его не свернут вручную, — иначе
+  // оно схлопнулось бы в строку на первой же набранной букве.
+  const [forceOpen, setForceOpen] = useState(() => !ex.name.trim());
   const q = ex.name.trim().toLowerCase();
   const matches = q ? suggestions.filter((n) => n.toLowerCase().includes(q)).sort((a, b) => (a.toLowerCase().startsWith(q) === b.toLowerCase().startsWith(q) ? 0 : a.toLowerCase().startsWith(q) ? -1 : 1)).slice(0, 8) : [];
   const exactExists = suggestions.some((n) => n.toLowerCase() === q);
@@ -38,28 +41,52 @@ function ExerciseRow({
   const updateSetRow = (sid: string, patch: Partial<{ weight: string; reps: string }>) =>
     update({ setRows: ex.setRows.map((s) => (s.id === sid ? { ...s, ...patch } : s)) });
   const removeSetRow = (sid: string) => update({ setRows: ex.setRows.filter((s) => s.id !== sid) });
+  const dragCls = `${dragging ? "opacity-40 ring-2 ring-lime-400" : ""} ${dropBefore ? "shadow-[0_-2px_0_0_var(--accent)]" : ""} ${dropAfter ? "shadow-[0_2px_0_0_var(--accent)]" : ""}`;
+  const handle = (
+    <button data-ds-handle type="button"
+      title="Перетащить. С клавиатуры — стрелки вверх и вниз"
+      aria-label="Перетащить упражнение. Стрелки вверх и вниз меняют порядок"
+      onKeyDown={(e) => {
+        if (e.key === "ArrowUp" && canMoveUp) { e.preventDefault(); onMoveUp(); }
+        if (e.key === "ArrowDown" && canMoveDown) { e.preventDefault(); onMoveDown(); }
+      }}
+      className="shrink-0 p-1.5 -ml-1 text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing touch-none select-none">
+      <GripVertical size={16} />
+    </button>
+  );
+
+  // Свёрнутое упражнение — одна строка «4 × 8 · 60 кг»; нажатие раскрывает редактирование.
+  // Без названия всегда раскрыто: только что добавленное упражнение сразу готово к вводу.
+  if (collapsed && !forceOpen && onToggleCollapse && ex.name.trim()) {
+    const summary = ex.kind === "functional"
+      ? [ex.duration, ex.weight].filter(Boolean).join(" · ")
+      : ex.detailed
+        ? `${ex.setRows.length} подх.${ex.setRows[0]?.weight ? ` · ${ex.setRows[0].weight}` : ""}`
+        : [ex.sets && ex.reps ? `${ex.sets} × ${ex.reps}` : ex.sets || ex.reps, ex.weight].filter(Boolean).join(" · ");
+    return (
+      <div data-ds-idx={index} className={`flex items-center gap-1 rounded-xl transition-shadow ${dragCls}`}>
+        {handle}
+        <button type="button" onClick={() => onToggleCollapse(ex.id)} aria-label={`${ex.name}: развернуть`}
+          className="flex-1 min-w-0 flex items-center gap-2.5 py-2 pr-1.5 text-left rounded-lg hover:bg-zinc-800/50 transition">
+          <span className="w-7 h-7 shrink-0 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">{label}</span>
+          <span className="flex-1 min-w-0 font-semibold truncate">{ex.name}</span>
+          {summary && <span className="shrink-0 text-sm font-semibold text-zinc-400 whitespace-nowrap">{summary}</span>}
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div data-ds-idx={index}
-      className={`bg-zinc-800/40 rounded-lg p-2.5 space-y-2 transition-shadow ${dragging ? "opacity-40 ring-2 ring-lime-400" : ""} ${dropBefore ? "shadow-[0_-2px_0_0_var(--accent)]" : ""} ${dropAfter ? "shadow-[0_2px_0_0_var(--accent)]" : ""}`}
+      className={`bg-zinc-800/40 rounded-xl p-2.5 space-y-2 transition-shadow ${dragCls}`}
       style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}>
       <div className="flex items-center gap-1">
-        <button data-ds-handle type="button"
-          title="Перетащить. С клавиатуры — стрелки вверх и вниз"
-          aria-label="Перетащить упражнение. Стрелки вверх и вниз меняют порядок"
-          onKeyDown={(e) => {
-            if (e.key === "ArrowUp" && canMoveUp) { e.preventDefault(); onMoveUp(); }
-            if (e.key === "ArrowDown" && canMoveDown) { e.preventDefault(); onMoveDown(); }
-          }}
-          className="shrink-0 p-1.5 -ml-1 text-zinc-600 hover:text-zinc-300 cursor-grab active:cursor-grabbing touch-none select-none">
-          <GripVertical size={16} />
-        </button>
+        {handle}
         {onToggleCollapse && (
-          <button onClick={() => onToggleCollapse(ex.id)} type="button"
-            title={collapsed ? "Развернуть упражнение" : "Свернуть упражнение"}
-            aria-label={collapsed ? "Развернуть упражнение" : "Свернуть упражнение"}
+          <button onClick={() => { if (forceOpen) setForceOpen(false); else onToggleCollapse(ex.id); }} type="button"
+            title="Свернуть упражнение" aria-label="Свернуть упражнение"
             className="shrink-0 p-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-500 hover:text-zinc-300 active:text-lime-400 transition-colors duration-100">
-            {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
+            <ChevronDown size={15} />
           </button>
         )}
         <button onClick={cycleGroup} title="Суперсет: объединить упражнения в группу" className={`shrink-0 min-w-7 h-7 px-1 rounded-md text-xs font-bold flex items-center justify-center transition ${ex.group ? "text-zinc-950" : "text-zinc-500 bg-zinc-800 hover:bg-zinc-700"}`} style={ex.group ? { background: groupColor ?? undefined } : undefined}>{label}</button>
@@ -82,7 +109,7 @@ function ExerciseRow({
         </div>
 
       {/* П1: свёрнутое упражнение показывает только строку с названием и кнопками */}
-      {!collapsed && (<>
+      {(!collapsed || forceOpen || !onToggleCollapse) && (<>
         {showVideo && (
           <div className="pl-6 space-y-1.5">
             <input value={ex.video} onChange={(e) => { const v = e.target.value; startTransition(() => update({ video: v })); }} placeholder="Ссылка на видео (YouTube или .mp4)" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
