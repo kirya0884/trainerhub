@@ -7,6 +7,12 @@ import { fetchProgress, logSession } from "./progress";
 import { notifyWorkoutFinished } from "./clientsBus";
 import type { Day, Metric, Session } from "../types";
 
+// Записи тренировок, сохранённые в попытке, которая потом сорвалась (например, на
+// списании). Повтор «Завершить» не пишет запись второй раз — иначе в истории дубль.
+// Ключ снимается после полного успеха, так что вторая тренировка того же дня в тот
+// же день запишется как обычно.
+const loggedPending = new Set<string>();
+
 /**
  * Д3: единственное место, где завершается проведённая тренировка.
  *
@@ -34,7 +40,11 @@ export async function finishWorkout(opts: {
 }): Promise<{ membership: Membership | null; charged: boolean }> {
   const { trainerId, clientId, planId, day, metrics, note, session } = opts;
 
-  await logSession(planId, metrics, note, { ...session, dayId: day.id });
+  const logKey = `${clientId}|${planId}|${day.id}|${session.date}`;
+  if (!loggedPending.has(logKey)) {
+    await logSession(planId, metrics, note, { ...session, dayId: day.id });
+    loggedPending.add(logKey);
+  }
 
   // П3: проведённый день уходит в «Проведённые» насовсем
   updateDay(day.id, { archivedAt: new Date().toISOString() })
@@ -81,6 +91,7 @@ export async function finishWorkout(opts: {
   // не списывалась у записей с выбранным днём плана. Fire-and-forget.
   markSessionDone(trainerId, clientId, day.name, today());
 
+  loggedPending.delete(logKey);
   notifyWorkoutFinished(planId);
   return { membership, charged };
 }

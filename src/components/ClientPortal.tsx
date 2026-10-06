@@ -53,6 +53,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sessionMinimized, setSessionMinimized] = useState(false);
+  // Запись тренировки уже сохранена, а завершение сорвалось — повтор не пишет её второй раз
+  const sessionLoggedRef = useRef(false);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const toggleDay = (id: string) => setExpandedDays((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -548,11 +550,15 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           day={activeDay}
           startedAt={activeSession.startedAt}
           onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch((e) => console.error("[ClientPortal] прогресс тренировки не ушёл тренеру:", e))}
-          onCancel={async () => { try { await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { setActiveSession(null); setSessionMinimized(false); } }}
+          onCancel={async () => { try { await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { sessionLoggedRef.current = false; setActiveSession(null); setSessionMinimized(false); } }}
           onFinish={async (metrics, session) => {
             try {
-              await portalApi.logClientSession(activeSession.planId, metrics, session);
+              if (!sessionLoggedRef.current) {
+                await portalApi.logClientSession(activeSession.planId, metrics, session);
+                sessionLoggedRef.current = true;
+              }
               await portalApi.finishClientSession(client.id);
+              sessionLoggedRef.current = false;
               portalApi.markClientBookingDone(client.trainerId, client.id, activeSession.dayName, session.date);
               await progressHook.reload();
               setActiveSession(null);
