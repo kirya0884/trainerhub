@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Camera, ChevronDown, ChevronUp, ClipboardList, Database, Image, KeyRound, LayoutGrid, Lock, LogOut, Moon, MoreHorizontal, Package, Palette, Plus, RefreshCw, ScrollText, Sparkles, Sun, Trash, Trash2, User, Users } from "lucide-react";
+import { ArrowLeft, Camera, ChevronDown, ChevronRight, ChevronUp, Database, Image, KeyRound, LayoutGrid, Lock, LogOut, Moon, Package, Palette, Pencil, Plus, RefreshCw, ScrollText, Sparkles, Sun, Trash, Trash2, User } from "lucide-react";
 import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
@@ -9,8 +9,17 @@ import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, dele
 import { checkForUpdate } from "../lib/swUpdate";
 import { ScreenSkeleton } from "./Skeleton";
 
+const SECTIONS = {
+  personal: "Личные данные", packages: "Шаблоны пакетов", rules: "Правила для клиентов",
+  brand: "Бренд для PDF и кабинета", accent: "Цвет и тема", tabs: "Нижняя панель", security: "PIN-код и пароль",
+} as const;
+type Section = keyof typeof SECTIONS;
+
 export default function TrainerProfile({ trainerId, email, onSaved, themeMode, onThemeChange, tabs, onToggleTab, onMoveTab, onOpenPin, onOpenTrash, onOpenBackup, onSignOut }: { trainerId: string; email: string; onSaved?: (name: string, avatarUrl: string, accentColor?: string) => void; themeMode?: "dark" | "light"; onThemeChange?: (mode: "dark" | "light") => void; tabs?: { kind: string; label: string; icon: typeof User; visible: boolean }[]; onToggleTab?: (kind: string) => void; onMoveTab?: (kind: string, dir: -1 | 1) => void; onOpenPin?: () => void; onOpenTrash?: () => void; onOpenBackup?: () => void; onSignOut?: () => void }) {
-  const [showMenu, setShowMenu] = useState(false);
+  // Открытый раздел настроек; null — общий список
+  const [section, setSection] = useState<Section | null>(null);
+  // Раздел открывается с начала, а не с того места, где была строка в списке
+  useEffect(() => { window.scrollTo(0, 0); }, [section]);
   const [updState, setUpdState] = useState<"idle" | "checking" | "latest" | "error">("idle");
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
   const [brand, setBrand] = useState({ brand: "", logoUrl: "" });
@@ -67,49 +76,13 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
 
   return (
     <div className="space-y-4 max-w-2xl">
-      {/* B30: меню «⋯» переехало сюда из шапки приложения */}
-      <div className="flex items-center gap-2">
-        <h2 className="text-lg font-bold flex items-center gap-1.5"><User size={18} className="text-lime-400" /> Профиль тренера</h2>
-        {onOpenPin && (
-          <div className="relative shrink-0 ml-auto">
-            <button onClick={() => setShowMenu((v) => !v)} aria-expanded={showMenu} aria-label="Меню" title="Меню" className={`p-2 rounded-lg transition ${showMenu ? "bg-zinc-800 text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
-              <MoreHorizontal size={18} />
-            </button>
-            {showMenu && (
-              <>
-                <div className="fixed inset-0 z-10" onClick={() => setShowMenu(false)} />
-                <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-52 shadow-xl">
-                  <button onClick={() => { setShowMenu(false); onOpenPin?.(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
-                    <Lock size={15} className="text-zinc-500 shrink-0" /> PIN-код на вход
-                  </button>
-                  <button onClick={() => { setShowMenu(false); onOpenTrash?.(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
-                    <Trash size={15} className="text-zinc-500 shrink-0" /> Корзина
-                  </button>
-                  <button onClick={() => { setShowMenu(false); onOpenBackup?.(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
-                    <Database size={15} className="text-zinc-500 shrink-0" /> Бэкап
-                  </button>
-                  <div className="my-1 border-t border-zinc-800" />
-                  <button onClick={() => { setShowMenu(false); onSignOut?.(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition">
-                    <LogOut size={15} className="text-zinc-500 shrink-0" /> Выйти
-                  </button>
-                </div>
-              </>
-            )}
+      {section ? (
+        <>
+          <div className="flex items-center gap-1 -ml-2.5">
+            <button onClick={() => setSection(null)} aria-label="Назад к профилю" title="Назад" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-xl text-zinc-300 hover:bg-zinc-800 transition"><ArrowLeft size={22} /></button>
+            <h2 className="text-xl font-extrabold tracking-tight truncate">{SECTIONS[section]}</h2>
           </div>
-        )}
-      </div>
-
-      <button onClick={() => setShowSubscription(true)} className="w-full flex items-center justify-center gap-2 bg-zinc-900 border border-lime-400/30 hover:border-lime-400/60 text-lime-400 font-semibold rounded-xl py-3 text-sm transition">
-        <Sparkles size={16} /> Подписка на Reps
-      </button>
-
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"><p className="text-2xl font-bold text-lime-400 flex items-center gap-1.5"><Users size={16} /> {stats.activeClients}</p><p className="text-xs text-zinc-500 mt-1">активных</p></div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"><p className="text-2xl font-bold text-zinc-100">{stats.totalClients}</p><p className="text-xs text-zinc-500 mt-1">всего клиентов</p></div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"><p className="text-2xl font-bold text-cyan-400 flex items-center gap-1.5"><ClipboardList size={16} /> {stats.plansCount}</p><p className="text-xs text-zinc-500 mt-1">планов</p></div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4"><p className="text-2xl font-bold text-orange-400">{stats.sessionsDone}</p><p className="text-xs text-zinc-500 mt-1">тренировок</p></div>
-      </div>
-
+          {section === "personal" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
         <div className="flex items-center gap-3">
           {profile.avatarUrl ? (
@@ -146,9 +119,9 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         </div>
         <button onClick={saveProfile} disabled={savingProfile} className="w-full text-zinc-950 font-semibold rounded-lg py-2.5 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingProfile ? "Сохранение..." : "Сохранить профиль"}</button>
       </div>
-
+          )}
+          {section === "brand" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><Image size={15} className="text-cyan-400" /> Бренд для PDF и портала клиента</p>
         <div className="flex items-center gap-3">
           {brand.logoUrl ? (
             <img src={brand.logoUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-zinc-700" />
@@ -165,9 +138,9 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         </label>
         <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
       </div>
-
+          )}
+          {section === "accent" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><Palette size={15} className="text-lime-400" /> Цвет и тема интерфейса</p>
         <div className="flex flex-wrap gap-2">
           {["#a3e635","#22d3ee","#fb923c","#f472b6","#a78bfa","#facc15","#34d399","#f87171","#60a5fa","#e879f9"].map((c) => (
             <button key={c} onClick={() => setProfile({ ...profile, accentColor: c })} className="w-8 h-8 rounded-full border-2 transition" style={{ background: c, borderColor: profile.accentColor === c ? "#fff" : "transparent" }} title={c} />
@@ -184,40 +157,9 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         )}
         <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl, profile.accentColor); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить цвет"}</button>
       </div>
-
-      {/* B33: ручное обновление. Автоматическая кнопка появляется только когда браузер
-          сам заметил новую версию — на iOS это может занять время. Здесь тренер
-          обновляется сам, не дожидаясь. */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><RefreshCw size={15} className="text-lime-400" /> Приложение</p>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs text-zinc-500 min-w-0">
-            {updState === "checking" && "Проверяем..."}
-            {updState === "latest" && "У вас последняя версия"}
-            {updState === "error" && "Не удалось проверить. Попробуйте позже"}
-            {updState === "idle" && "Если интерфейс выглядит устаревшим — проверьте обновления"}
-          </span>
-          <button
-            onClick={async () => {
-              setUpdState("checking");
-              const r = await checkForUpdate();
-              // При "updating" страница перезагрузится сама, состояние менять незачем
-              if (r === "latest" || r === "unsupported") setUpdState("latest");
-              else if (r === "error") setUpdState("error");
-            }}
-            disabled={updState === "checking"}
-            className="flex items-center gap-1.5 shrink-0 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm text-zinc-200 transition disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={updState === "checking" ? "animate-spin" : ""} /> Проверить обновления
-          </button>
-        </div>
-      </div>
-
-      {/* B28: настройка разделов переехала сюда из шапки. Ш4а: управляет нижней панелью
-          (плиток на дашборде больше нет): видимость и порядок стрелками. */}
-      {tabs && onToggleTab && (
+          )}
+          {section === "tabs" && tabs && onToggleTab && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-          <p className="text-sm text-zinc-400 flex items-center gap-1.5"><LayoutGrid size={15} className="text-lime-400" /> Разделы в нижней панели</p>
           <p className="text-xs text-zinc-500">Галочка — показывать раздел, стрелки — порядок. «Главная» всегда первая.</p>
           <div className="space-y-0.5">
             {tabs.map((t, i) => (
@@ -236,10 +178,9 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             ))}
           </div>
         </div>
-      )}
-
+          )}
+          {section === "rules" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><ScrollText size={15} className="text-lime-400" /> Правила проведения и списания тренировок</p>
         <p className="text-xs text-zinc-500">Эти правила видят все ваши подопечные в личном кабинете</p>
         <textarea
           value={profile.trainingRules}
@@ -250,9 +191,15 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         />
         <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить правила"}</button>
       </div>
-
+          )}
+          {section === "security" && (
+            <>
+              {onOpenPin && (
+                <button onClick={onOpenPin} className="w-full flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 min-h-[56px] text-left hover:border-zinc-700 transition">
+                  <Lock size={18} className="text-zinc-400 shrink-0" /><span className="flex-1 font-medium">PIN-код на вход</span><ChevronRight size={18} className="text-zinc-500 shrink-0" />
+                </button>
+              )}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><KeyRound size={15} className="text-orange-400" /> Аккаунт</p>
         <p className="text-xs text-zinc-500">Email: <span className="text-zinc-300">{email}</span></p>
         <div className="space-y-2">
           <p className="text-xs text-zinc-500">Сменить пароль</p>
@@ -285,10 +232,10 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           <LogOut size={14} /> Выйти на всех устройствах
         </button>
       </div>
-
-
+            </>
+          )}
+          {section === "packages" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
-        <p className="text-sm text-zinc-400 flex items-center gap-1.5"><Package size={15} className="text-lime-400" /> Шаблоны пакетов тренировок</p>
         <p className="text-xs text-zinc-500">Создайте шаблоны один раз — применяйте в карточке подопечного одним кликом</p>
         {templates.map((t) => {
           const draft = editingTpl[t.id] ?? t;
@@ -337,8 +284,89 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           <Plus size={14} /> Добавить шаблон
         </button>
       </div>
+          )}
+        </>
+      ) : (
+        <>
+          {/* Кто я: фото, имя, специализация; правка — по карандашу */}
+          <div className="flex items-center gap-3.5 pt-1">
+            {profile.avatarUrl
+              ? <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover shrink-0" />
+              : <div className="w-16 h-16 rounded-full bg-zinc-800 shrink-0 flex items-center justify-center text-2xl font-bold text-lime-400">{(profile.name || email)[0]?.toUpperCase()}</div>}
+            <div className="min-w-0 flex-1">
+              <p className="text-[22px] font-extrabold tracking-tight truncate">{profile.name || "Ваше имя"}</p>
+              <p className="text-sm text-zinc-400 truncate">{profile.specialization || email}</p>
+            </div>
+            <button onClick={() => setSection("personal")} aria-label="Изменить личные данные" title="Изменить" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition"><Pencil size={19} /></button>
+          </div>
 
+          <div className="grid grid-cols-3 gap-2">
+            {([[stats.activeClients, "активных"], [stats.plansCount, "планов"], [stats.sessionsDone, "тренировок"]] as const).map(([v, l]) => (
+              <div key={l} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
+                <p className="text-[22px] font-extrabold tracking-tight">{v}</p>
+                <p className="text-[13px] text-zinc-400">{l}</p>
+              </div>
+            ))}
+          </div>
+
+          <button onClick={() => setShowSubscription(true)} className="w-full flex items-center gap-3 bg-zinc-900 border border-lime-400/40 hover:border-lime-400/70 rounded-2xl p-3.5 text-left transition">
+            <span className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center"><Sparkles size={20} /></span>
+            <span className="flex-1 min-w-0"><span className="block font-bold">Подписка Reps</span><span className="block text-[13px] text-zinc-400">Тариф и оплата</span></span>
+            <ChevronRight size={18} className="text-zinc-500 shrink-0" />
+          </button>
+
+          <SettingsGroup title="Работа">
+            <SettingsRow icon={Package} label="Шаблоны пакетов" value={templates.length ? String(templates.length) : undefined} onClick={() => setSection("packages")} />
+            <SettingsRow icon={ScrollText} label="Правила для клиентов" onClick={() => setSection("rules")} />
+            <SettingsRow icon={Image} label="Бренд для PDF и кабинета" onClick={() => setSection("brand")} />
+          </SettingsGroup>
+
+          <SettingsGroup title="Оформление">
+            <SettingsRow icon={Palette} label="Цвет акцента" value={<span className="w-[18px] h-[18px] rounded-full ring-2 ring-zinc-700" style={{ background: profile.accentColor || "#a3e635" }} />} onClick={() => setSection("accent")} />
+            {onThemeChange && <SettingsRow icon={themeMode === "light" ? Sun : Moon} label="Тема" value={themeMode === "light" ? "Светлая" : "Тёмная"} onClick={() => onThemeChange(themeMode === "light" ? "dark" : "light")} />}
+            {tabs && onToggleTab && <SettingsRow icon={LayoutGrid} label="Нижняя панель" value={`${tabs.filter((t) => t.visible).length} разд.`} onClick={() => setSection("tabs")} />}
+          </SettingsGroup>
+
+          <SettingsGroup title="Аккаунт">
+            <SettingsRow icon={KeyRound} label="PIN-код и пароль" onClick={() => setSection("security")} />
+            {onOpenBackup && <SettingsRow icon={Database} label="Бэкап" onClick={onOpenBackup} />}
+            {onOpenTrash && <SettingsRow icon={Trash} label="Корзина" onClick={onOpenTrash} />}
+            {/* B33: ручное обновление — на iOS браузер может долго не замечать новую версию */}
+            <SettingsRow icon={RefreshCw} label="Обновления" spin={updState === "checking"}
+              value={updState === "checking" ? "Проверяем…" : updState === "latest" ? "Последняя версия" : updState === "error" ? "Не удалось" : "Проверить"}
+              onClick={async () => {
+                if (updState === "checking") return;
+                setUpdState("checking");
+                const r = await checkForUpdate();
+                // При "updating" страница перезагрузится сама, состояние менять незачем
+                if (r === "latest" || r === "unsupported") setUpdState("latest");
+                else if (r === "error") setUpdState("error");
+              }} />
+            {onSignOut && <SettingsRow icon={LogOut} label="Выйти" danger onClick={onSignOut} />}
+          </SettingsGroup>
+        </>
+      )}
       {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
     </div>
+  );
+}
+
+function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="text-[13px] font-semibold text-zinc-500 mb-2 px-1">{title}</p>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800 overflow-hidden">{children}</div>
+    </div>
+  );
+}
+
+function SettingsRow({ icon: Icon, label, value, onClick, danger, spin }: { icon: typeof User; label: string; value?: React.ReactNode; onClick: () => void; danger?: boolean; spin?: boolean }) {
+  return (
+    <button onClick={onClick} className="w-full flex items-center gap-3 px-4 min-h-[54px] text-left hover:bg-zinc-800/40 transition">
+      <span className={`w-8 h-8 shrink-0 rounded-lg bg-zinc-800 flex items-center justify-center ${danger ? "text-red-400" : "text-zinc-100"}`}><Icon size={17} className={spin ? "animate-spin" : ""} /></span>
+      <span className={`flex-1 min-w-0 font-medium truncate ${danger ? "text-red-400" : ""}`}>{label}</span>
+      {value != null && (typeof value === "string" ? <span className="text-sm text-zinc-500 shrink-0">{value}</span> : value)}
+      {!danger && <ChevronRight size={18} className="text-zinc-500 shrink-0" />}
+    </button>
   );
 }
