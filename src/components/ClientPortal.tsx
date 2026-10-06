@@ -19,7 +19,7 @@ import { useProgress } from "../hooks/useProgress";
 import { GROUP_COLORS } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
 import MetricsView from "./MetricsView";
-import { fmtDate, today as todayFn } from "../lib/format";
+import { addDays, fmtDate, today as todayFn } from "../lib/format";
 import { supabase } from "../lib/supabase";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
@@ -161,7 +161,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button onClick={() => setShowNav(true)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition"><Menu size={20} /></button>
+          <button onClick={() => setShowNav(true)} aria-label="Меню" className="w-11 h-11 -ml-2 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition"><Menu size={22} /></button>
           {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-7 h-7 rounded-lg object-cover" />}
           <p className="font-bold" style={{ color: "var(--accent)" }}>{brand.brand}</p>
         </div>
@@ -173,7 +173,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
         {(Object.keys(TAB_DEFS) as Tab[]).map((k) => {
           const t = TAB_DEFS[k];
           return (
-            <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0 ${tab === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { background: "var(--accent)" } : undefined}>
+            <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-semibold transition shrink-0 ${tab === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { background: "var(--accent)" } : undefined}>
               <t.icon size={15} /> {t.label}
               {k === "chat" && unreadChat > 0 && <span className="min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none">{unreadChat}</span>}
             </button>
@@ -184,39 +184,53 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       {/* ── ПРОФИЛЬ ── */}
       {tab === "profile" && (
         <div className="space-y-3">
-          {/* Hero */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+          {/* Приветствие обычным заголовком, как на главной тренера */}
+          <div className="flex items-center gap-3 pt-1">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm text-zinc-500">{(() => { const w = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" }); return w.charAt(0).toUpperCase() + w.slice(1); })()}</p>
+              <h1 className="text-2xl font-extrabold tracking-tight truncate">Привет, {(profile.name || client.name).split(" ")[0]}</h1>
+              {profile.goal && <p className="text-sm text-zinc-400 truncate">{profile.goal}</p>}
+            </div>
             {profile.avatarUrl
-              ? <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 shrink-0" style={{ borderColor: "var(--accent)" }} />
-              : <div className="w-16 h-16 rounded-full shrink-0 flex items-center justify-center text-2xl font-bold border-2" style={{ borderColor: "var(--accent)", color: "var(--accent)", background: "#18181b" }}>{(profile.name || client.name)[0]}</div>
-            }
-            <div className="min-w-0">
-              <p className="text-[10px] font-semibold tracking-widest" style={{ color: "var(--accent)" }}>ПРИВЕТ 👋</p>
-              <p className="text-xl font-bold text-zinc-50 mt-0.5 truncate">{(profile.name || client.name).split(" ")[0]}</p>
-              {profile.goal && <p className="text-xs text-zinc-500 mt-0.5 truncate">{profile.goal}</p>}
-            </div>
+              ? <img src={profile.avatarUrl} alt="" className="w-14 h-14 rounded-full object-cover shrink-0" />
+              : <div className="w-14 h-14 rounded-full shrink-0 flex items-center justify-center text-xl font-bold bg-zinc-900 text-lime-400">{(profile.name || client.name)[0]}</div>}
           </div>
-          {/* Ближайшая + Абонемент */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 border-t-2" style={{ borderTopColor: "var(--accent)" }}>
-              <p className="text-[10px] font-semibold tracking-widest text-zinc-500 mb-2">БЛИЖАЙШАЯ</p>
-              {upcoming
-                ? <div><p className="text-sm font-bold text-zinc-100">{fmtDate(upcoming.date)}</p><p className="text-xs text-zinc-400 mt-0.5">в {upcoming.time}</p></div>
-                : <p className="text-sm text-zinc-600 mt-1">Нет записей</p>
-              }
-            </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 border-t-2 border-t-cyan-400">
-              <p className="text-[10px] font-semibold tracking-widest text-zinc-500 mb-2">АБОНЕМЕНТ</p>
-              <p className="text-sm font-bold text-zinc-100">{m.type === "subscription" ? "Подписка" : "Занятия"}</p>
-              {m.remaining !== "" && m.remaining != null
-                ? <p className="text-xs text-zinc-400 mt-0.5">осталось {combinedRemaining(m as clientsApi.Membership)}</p>
-                : <p className="text-xs text-zinc-600 mt-0.5">активен</p>
-              }
-            </div>
+
+          {/* Ближайшая тренировка — главный блок */}
+          <div className="relative overflow-hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-4">
+            <div className="pointer-events-none absolute -right-16 -top-16 w-48 h-48 rounded-full bg-lime-400/15 blur-3xl" />
+            <p className="text-sm text-zinc-400">Ближайшая тренировка</p>
+            {upcoming ? (
+              <div className="flex items-end gap-3 mt-2">
+                <p className="text-5xl font-extrabold tracking-tight leading-none">{upcoming.time || "—"}</p>
+                <p className="text-base font-semibold text-zinc-300 pb-0.5">{upcoming.date === todayFn() ? "Сегодня" : upcoming.date === addDays(todayFn(), 1) ? "Завтра" : fmtDate(upcoming.date)}</p>
+              </div>
+            ) : <p className="text-lg font-semibold text-zinc-300 mt-2">Пока нет записей</p>}
+            <button onClick={() => setTab("program")} className="relative mt-4 w-full h-12 rounded-2xl bg-lime-400 text-zinc-950 font-bold flex items-center justify-center gap-2 hover:bg-lime-300 transition active:scale-[0.98]">
+              <Play size={18} /> К программе тренировок
+            </button>
+          </div>
+
+          {/* Абонемент: большая цифра остатка или подписка с датой оплаты */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center gap-4">
+            {m.type !== "subscription" && m.remaining !== "" && m.remaining != null ? (
+              <>
+                <p className={`text-4xl font-extrabold tracking-tight ${combinedRemaining(m as clientsApi.Membership) <= 2 ? "text-orange-400" : ""}`}>{combinedRemaining(m as clientsApi.Membership)}</p>
+                <div className="min-w-0">
+                  <p className="font-semibold">Осталось тренировок</p>
+                  <p className="text-sm text-zinc-500">{combinedRemaining(m as clientsApi.Membership) <= 2 ? "Скоро понадобится продление" : "по абонементу"}</p>
+                </div>
+              </>
+            ) : (
+              <div className="min-w-0">
+                <p className="font-semibold">{m.type === "subscription" ? "Подписка" : "Абонемент"}</p>
+                <p className="text-sm text-zinc-500">{m.nextPaymentDate ? `Следующая оплата ${fmtDate(m.nextPaymentDate)}` : "активен"}</p>
+              </div>
+            )}
           </div>
           {/* Платежи */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
-            <p className="text-xs text-zinc-500 font-semibold tracking-widest flex items-center gap-1.5"><CreditCard size={13} /> ОПЛАТА</p>
+            <p className="font-semibold flex items-center gap-1.5"><CreditCard size={16} className="text-zinc-400" /> Оплаты</p>
             <div className="text-sm space-y-0.5">
               <p className="text-zinc-300">Тип: {m.type === "subscription" ? "Подписка" : "По тренировкам"}</p>
               {m.remaining !== "" && m.remaining != null && <p className="text-zinc-300">Осталось: {combinedRemaining(m as clientsApi.Membership)} тр.</p>}
@@ -390,12 +404,12 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                     {todayDay && (
                       <div className="border rounded-xl p-3 flex items-center gap-3" style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)" }}>
                         <div className="flex-1 min-w-0">
-                          <p className="text-[10px] font-semibold tracking-widest mb-0.5" style={{ color: "var(--accent)" }}>СЕГОДНЯ</p>
+                          <p className="text-xs font-semibold mb-0.5" style={{ color: "var(--accent)" }}>Сегодня</p>
                           <p className="font-semibold text-zinc-100 truncate">{todayDay.name}</p>
                           <p className="text-xs text-zinc-500 mt-0.5">{todayDay.exercises.length} упр.</p>
                         </div>
-                        <button onClick={() => startDay(todayDay.id, todayDay.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-4 py-2 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}>
-                          <Play size={14} /> Начать
+                        <button onClick={() => startDay(todayDay.id, todayDay.name)} className="flex items-center gap-1.5 text-zinc-950 font-bold rounded-xl px-4 h-11 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}>
+                          <Play size={16} /> Начать
                         </button>
                       </div>
                     )}
@@ -410,7 +424,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                             <div key={meso.id} className="rounded-xl border border-cyan-400/20 overflow-hidden">
                               <div className="px-3 py-2 flex items-center gap-1.5 bg-cyan-400/5 border-b border-cyan-400/15">
                                 <Layers size={12} className="text-cyan-400/70 shrink-0" />
-                                <span className="text-xs font-semibold text-cyan-400/70 uppercase tracking-wider">{meso.name}</span>
+                                <span className="text-sm font-semibold text-cyan-300">{meso.name}</span>
                               </div>
                               <div className="p-2 space-y-2">
                                 {days.map(renderDay)}
