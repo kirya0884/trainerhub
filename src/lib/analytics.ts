@@ -1,4 +1,7 @@
 import type { DashboardClient, DashboardPayment } from "./dashboard";
+// Ключ месяца — из локальной даты: toISOString на UTC+ сдвигал 1-е число в прошлый месяц,
+// и доход сентября стоял под подписью «октябрь».
+import { toDateStr } from "./format";
 
 // Чистые функции аналитики дашборда — без сетевых вызовов, работают над уже загруженными clients/payments.
 
@@ -6,7 +9,7 @@ export function monthlyRevenue(payments: DashboardPayment[], months = 6) {
   const now = new Date();
   const buckets = Array.from({ length: months }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
-    return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("ru-RU", { month: "short" }), total: 0 };
+    return { key: toDateStr(d).slice(0, 7), label: d.toLocaleDateString("ru-RU", { month: "short" }), total: 0 };
   });
   const byKey = Object.fromEntries(buckets.map((b) => [b.key, b]));
   for (const p of payments) { if (p.payStatus !== "paid") continue; const b = byKey[p.date?.slice(0, 7)]; if (b) b.total += p.amount; }
@@ -30,7 +33,7 @@ export function cohortRetention(clients: DashboardClient[], months = 6) {
   const now = new Date();
   const buckets = Array.from({ length: months }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
-    return { key: d.toISOString().slice(0, 7), label: d.toLocaleDateString("ru-RU", { month: "short" }), total: 0, active: 0 };
+    return { key: toDateStr(d).slice(0, 7), label: d.toLocaleDateString("ru-RU", { month: "short" }), total: 0, active: 0 };
   });
   const byKey = Object.fromEntries(buckets.map((b) => [b.key, b]));
   for (const c of clients) {
