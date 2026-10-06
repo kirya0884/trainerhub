@@ -28,7 +28,8 @@ export async function finishWorkout(opts: {
   metrics: Omit<Metric, "id">[];
   note: string;
   session: Omit<Session, "id">;
-  /** Абонемент, если он уже загружен вызывающим — иначе подтянем сами. */
+  /** Абонемент, загруженный вызывающим, — только для ответа, если списания не было.
+   *  Для самого списания всегда читаем свежий: этот мог устареть за время тренировки. */
   membership?: Membership | null;
 }): Promise<{ membership: Membership | null; charged: boolean }> {
   const { trainerId, clientId, planId, day, metrics, note, session } = opts;
@@ -61,8 +62,10 @@ export async function finishWorkout(opts: {
     }
   }
 
+  // Списываем только от свежего абонемента: переданный загружен в начале тренировки,
+  // и если за это время его продлили, запись «старый минус один» стёрла бы продление.
   let membership = opts.membership ?? null;
-  if (membership === null && !skip) {
+  if (!skip) {
     try { membership = (await fetchClient(clientId)).membership; }
     catch (e) { console.error("[finishWorkout] чтение абонемента:", e); skip = true; }
   }
