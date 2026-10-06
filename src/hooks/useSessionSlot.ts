@@ -9,7 +9,7 @@ import { feelingLabel } from "../components/FeelingScale";
 import type { Day, Plan, Session } from "../types";
 
 export type SetVal = { weight: string; reps: string };
-export type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number };
+export type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number; setsDone?: Record<number, boolean> };
 
 export const tonnageOf = (rows: SetVal[]) =>
   rows.reduce((sum, r) => {
@@ -32,7 +32,7 @@ export const buildVals = (day: Day): Record<string, SetVal[]> => {
 
 export const buildMeta = (day: Day): Record<string, ExMeta> => {
   const m: Record<string, ExMeta> = {};
-  day.exercises.forEach((ex) => { m[ex.id] = { done: false, note: "", fires: {}, rpe: 0 }; });
+  day.exercises.forEach((ex) => { m[ex.id] = { done: false, note: "", fires: {}, rpe: 0, setsDone: {} }; });
   return m;
 };
 
@@ -87,6 +87,18 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   const setMetaFor = (exId: string, patch: Partial<ExMeta>) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], ...patch } }));
   const setFire = (exId: string, idx: number, v: number) =>
     setMeta((m) => ({ ...m, [exId]: { ...m[exId], fires: { ...m[exId].fires, [idx]: v } } }));
+  // Отметка подхода, как в индивидуальной тренировке: все подходы отмечены — упражнение выполнено
+  const toggleSetDone = (exId: string, setIdx: number, total: number) =>
+    setMeta((m) => {
+      const cur = m[exId] || { done: false, note: "", fires: {}, rpe: 0, setsDone: {} };
+      const sd = { ...(cur.setsDone || {}), [setIdx]: !cur.setsDone?.[setIdx] };
+      const allDone = Array.from({ length: total }, (_, i) => i).every((i) => sd[i]);
+      return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
+    });
+  // Неотмеченные подходы у этого подопечного — после последнего отдых не нужен
+  const openSets = () => (day ? day.exercises.reduce((n, ex) =>
+    ex.kind === "functional" || !ex.name || meta[ex.id]?.done ? n
+      : n + (vals[ex.id] || []).filter((_, i) => !meta[ex.id]?.setsDone?.[i]).length, 0) : 0);
 
   const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
   const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [])), 0) : 0;
@@ -121,7 +133,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   return {
     plans, planId, setPlanId, plan, dayId, setDayId, day,
     membership, finished, busy,
-    vals, meta, setVal, setMetaFor, setFire,
+    vals, meta, setVal, setMetaFor, setFire, toggleSetDone, openSets,
     mood, setMood, wellbeing, setWellbeing, review, setReview, clientRating, setClientRating,
     doneEx, totalTonnage, finish,
   };
