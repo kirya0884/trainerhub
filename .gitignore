@@ -1,3 +1,5 @@
 node_modules
 dist
+# сервис-воркер dev-режима vite-plugin-pwa (devOptions.enabled)
+dev-dist
 .env

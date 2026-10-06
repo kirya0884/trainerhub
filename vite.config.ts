@@ -12,7 +12,6 @@ export default defineConfig({
       filename: "sw.ts",
       injectManifest: {
         globPatterns: ["**/*.{js,css,html,png,svg,ico,woff2}"],
-        globIgnores: ["**/logo.mp4", "**/splash.mp4"],
       },
       // Manifest синхронизирован с public/manifest.json
       manifest: {
