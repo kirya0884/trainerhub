@@ -3,3 +3,5 @@ dist
 # сервис-воркер dev-режима vite-plugin-pwa (devOptions.enabled)
 dev-dist
 .env
+# кэш инкрементальной сборки tsc — меняется при каждой проверке типов
+tsconfig.tsbuildinfo
