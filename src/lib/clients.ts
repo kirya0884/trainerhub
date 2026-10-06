@@ -138,6 +138,10 @@ export interface PlanOverviewItem extends PlanListItem {
   clientName: string;
   clientColor: string;
   clientRemaining: string | null;
+  /** Рабочих (не проведённых) дней в плане — для строки в «Планах». */
+  daysCount?: number;
+  /** Дата последней проведённой тренировки по плану. */
+  lastDate?: string | null;
 }
 
 // Все планы тренера со всех клиентов — для глобальной вкладки «Планы».
@@ -145,15 +149,30 @@ export async function fetchAllPlans(trainerId: string): Promise<PlanOverviewItem
   // Без implicit embed clients(...) — у Supabase/PostgREST он падает с "more than one relationship was found",
   // если на clients ссылается больше одной колонки. Джойним вручную по уже отдельно загруженным клиентам.
   const [{ data, error }, clients] = await Promise.all([
-    supabase.from("plans").select("id,name,archived,client_id").eq("trainer_id", trainerId).is("deleted_at", null).order("created_at", { ascending: false }),
+    supabase.from("plans").select("id,name,archived,client_id,visible_to_client").eq("trainer_id", trainerId).is("deleted_at", null).order("created_at", { ascending: false }),
     fetchClients(trainerId),
   ]);
   if (error) throw error;
   const byId = new Map(clients.map((c) => [c.id, c]));
+  // Число дней и последняя тренировка — только для подписи в строке, поэтому ошибка
+  // этих запросов не роняет список: строка просто останется без них.
+  const ids = (data ?? []).map((p) => p.id);
+  const [{ data: days }, { data: sessions }] = ids.length
+    ? await Promise.all([
+        supabase.from("plan_days").select("plan_id,archived_at").in("plan_id", ids),
+        supabase.from("plan_sessions").select("plan_id,date").in("plan_id", ids).is("deleted_at", null),
+      ])
+    : [{ data: [] as any[] }, { data: [] as any[] }];
+  const daysCount: Record<string, number> = {};
+  for (const d of days ?? []) if (!d.archived_at) daysCount[d.plan_id] = (daysCount[d.plan_id] ?? 0) + 1;
+  const lastDate: Record<string, string> = {};
+  for (const s of sessions ?? []) if (s.date && (!lastDate[s.plan_id] || s.date > lastDate[s.plan_id])) lastDate[s.plan_id] = s.date;
   return (data ?? []).map((p) => ({
     id: p.id, name: p.name, archived: p.archived, clientId: p.client_id,
+    visibleToClient: p.visible_to_client !== false,
     clientName: byId.get(p.client_id)?.name ?? "—", clientColor: byId.get(p.client_id)?.color ?? "#71717a",
     clientRemaining: byId.get(p.client_id)?.remaining ?? null,
+    daysCount: daysCount[p.id] ?? 0, lastDate: lastDate[p.id] ?? null,
   }));
 }
 
