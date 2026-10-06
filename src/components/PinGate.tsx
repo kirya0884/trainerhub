@@ -35,10 +35,10 @@ export default function PinGate({ id, table = "trainers", children }: { id: stri
         <input
           autoFocus type="text" inputMode="numeric" value={pin}
           onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 8)); setErr(""); }}
-          className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-center text-2xl tracking-widest outline-none focus:ring-1 focus:ring-lime-400/40"
+          className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-center text-2xl tracking-widest outline-none focus:ring-1 focus:ring-lime-400/40"
         />
         {err && <p className="text-orange-400 text-sm">{err}</p>}
-        <button type="submit" className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 hover:bg-lime-300 transition">Войти</button>
+        <button type="submit" className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 hover:bg-lime-300 transition">Войти</button>
       </form>
     </div>
   );

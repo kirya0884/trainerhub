@@ -57,8 +57,8 @@ export default function NutritionTab({ clientId, logs, setLogs, readOnly }: {
 
       {!readOnly && showForm && (
         <div className="bg-zinc-800/40 rounded-xl p-3 space-y-2 relative">
-          <button onClick={() => { setShowForm(false); setForm(emptyLog()); }} className="absolute top-2 right-2 p-1 rounded-md hover:bg-zinc-700 text-zinc-400 transition" title="Закрыть"><X size={16} /></button>
-          <label className="text-xs text-zinc-500 block pr-7">Дата<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent,#a3e635)]" /></label>
+          <button onClick={() => { setShowForm(false); setForm(emptyLog()); }} className="absolute top-2 right-2 p-1 rounded-lg hover:bg-zinc-700 text-zinc-400 transition" title="Закрыть"><X size={16} /></button>
+          <label className="text-xs text-zinc-500 block pr-7">Дата<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent,#a3e635)]" /></label>
           <div className="grid grid-cols-2 gap-2">
             {(["protein", "fat", "carbs"] as const).map((key) => {
               const labels: Record<string, string> = { protein: "Белки, г", fat: "Жиры, г", carbs: "Углев., г" };
@@ -76,22 +76,22 @@ export default function NutritionTab({ clientId, logs, setLogs, readOnly }: {
             })}
             <div>
               <p className="text-xs text-zinc-500 mb-1">Ккал (авто)</p>
-              <div className="bg-zinc-700/50 rounded-md px-2 py-1.5 text-sm text-zinc-400 h-[34px] flex items-center">{form.calories || 0}</div>
+              <div className="bg-zinc-700/50 rounded-lg px-2 py-1.5 text-sm text-zinc-400 h-[34px] flex items-center">{form.calories || 0}</div>
             </div>
           </div>
-          <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm hover:opacity-90 transition" style={{ background: "var(--accent, #a3e635)" }}>Сохранить запись</button>
+          <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm hover:opacity-90 transition" style={{ background: "var(--accent, #a3e635)" }}>Сохранить запись</button>
         </div>
       )}
 
       <div className="flex items-center gap-2 text-xs">
         <span className="text-zinc-500">Период:</span>
-        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-zinc-800 rounded-md px-2 py-1 text-zinc-300 outline-none" />
+        <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-zinc-800 rounded-lg px-2 py-1 text-zinc-300 outline-none" />
         <span className="text-zinc-500">—</span>
-        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-zinc-800 rounded-md px-2 py-1 text-zinc-300 outline-none" />
+        <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-zinc-800 rounded-lg px-2 py-1 text-zinc-300 outline-none" />
       </div>
 
       <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 w-full overflow-x-auto">
-        {FIELDS.map((f) => <button key={f.key} onClick={() => setMetric(f.key)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition whitespace-nowrap shrink-0 ${metric === f.key ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{f.label}</button>)}
+        {FIELDS.map((f) => <button key={f.key} onClick={() => setMetric(f.key)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition whitespace-nowrap shrink-0 ${metric === f.key ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{f.label}</button>)}
       </div>
 
       <div className="bg-zinc-800/30 rounded-xl p-3 pt-4">
@@ -109,7 +109,7 @@ export default function NutritionTab({ clientId, logs, setLogs, readOnly }: {
               <span>{l.calories}</span><span>{l.protein}</span><span>{l.fat}</span>
               <span className="flex items-center justify-between">
                 {l.carbs}
-                {!readOnly && <button onClick={() => remove(l.id)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={13} /></button>}
+                {!readOnly && <button onClick={() => remove(l.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={13} /></button>}
               </span>
             </div>
           ))

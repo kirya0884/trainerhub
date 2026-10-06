@@ -16,7 +16,7 @@ export default function SessionHistoryModal({ trainerId, clientId, onClose }: { 
         {sessions === null && <SkeletonRows />}
         {sessions?.length === 0 && <p className="text-sm text-zinc-600">Проведённых тренировок пока нет</p>}
         {sessions?.map((s, i) => (
-          <div key={i} className="flex items-center justify-between bg-zinc-800/50 rounded-lg px-3 py-2 text-sm">
+          <div key={i} className="flex items-center justify-between bg-zinc-800/50 rounded-xl px-3 py-2 text-sm">
             <span className="text-zinc-200">{fmtDate(s.date)}</span>
             {s.time && <span className="text-zinc-500 font-mono text-xs">{s.time}</span>}
           </div>

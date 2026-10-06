@@ -239,7 +239,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
             {templates.length === 0 ? (
               <p className="text-xs text-zinc-500">Нет шаблонов. Создайте их в Профиле тренера → Шаблоны пакетов.</p>
             ) : (
-              <select value={selectedTplId} onChange={(e) => setSelectedTplId(e.target.value)} className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none">
+              <select value={selectedTplId} onChange={(e) => setSelectedTplId(e.target.value)} className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none">
                 {templates.map((t) => {
                   const fp = t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price;
                   return <option key={t.id} value={t.id} className="bg-zinc-900">{t.name} · {t.sessions} тр.{fp ? ` — ${fp.toLocaleString("ru-RU")}₽` : ""}{t.split ? " · сплит" : ""}</option>;
@@ -247,8 +247,8 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
               </select>
             )}
             <div className="flex gap-2">
-              <button onClick={() => setRenewing(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg py-2.5 text-sm transition">Отмена</button>
-              <button onClick={doRenew} disabled={renewBusy || !selectedTplId} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-lime-300 transition disabled:opacity-50">
+              <button onClick={() => setRenewing(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-xl py-2.5 text-sm transition">Отмена</button>
+              <button onClick={doRenew} disabled={renewBusy || !selectedTplId} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition disabled:opacity-50">
                 {renewBusy ? "Оформление..." : "✓ Оплачено"}
               </button>
             </div>

@@ -58,7 +58,7 @@ export default function PlanCreateModal({ trainerId, clientId, clientName, allPl
   }
 
   const Card = ({ icon, title, note, onClick }: { icon: React.ReactNode; title: string; note: string; onClick: () => void }) => (
-    <button onClick={onClick} className="w-full flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-xl p-3.5 text-left hover:border-zinc-700 transition">
+    <button onClick={onClick} className="w-full flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 text-left hover:border-zinc-700 transition">
       <span className="shrink-0 mt-0.5">{icon}</span>
       <span className="min-w-0">
         <span className="block text-sm font-medium text-zinc-100">{title}</span>
@@ -98,7 +98,7 @@ export default function PlanCreateModal({ trainerId, clientId, clientName, allPl
 
         {source === "copy" && (
           <>
-            <div className="flex items-center gap-2 bg-zinc-800 rounded-lg px-3 py-2">
+            <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 py-2">
               <Search size={15} className="text-zinc-500 shrink-0" />
               <input
                 autoFocus

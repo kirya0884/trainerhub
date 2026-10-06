@@ -53,7 +53,7 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
       footer={!detail && (
         <div className="border-t border-zinc-800 shrink-0">
           <div className="p-3 flex gap-2">
-            <input value={custom} onChange={(e) => setCustom(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveCustom()} placeholder="Добавить своё упражнение..." className="flex-1 min-w-0 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={custom} onChange={(e) => setCustom(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveCustom()} placeholder="Добавить своё упражнение..." className="flex-1 min-w-0 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
             <button onClick={saveCustom} className="bg-zinc-700 text-zinc-100 font-medium rounded-lg px-3 text-sm hover:bg-zinc-600 transition shrink-0">+ Своё</button>
           </div>
         </div>
@@ -81,7 +81,7 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
               )
             )}
             <div className="flex gap-2">
-              <input value={mediaUrlInput} onChange={(e) => setMediaUrlInput(e.target.value)} onBlur={() => mediaUrlInput !== (media[detail.name] || "") && saveMedia(detail.name, mediaUrlInput)} placeholder="Ссылка на видео (YouTube) или фото" className="flex-1 min-w-0 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
+              <input value={mediaUrlInput} onChange={(e) => setMediaUrlInput(e.target.value)} onBlur={() => mediaUrlInput !== (media[detail.name] || "") && saveMedia(detail.name, mediaUrlInput)} placeholder="Ссылка на видео (YouTube) или фото" className="flex-1 min-w-0 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
               <label className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg px-3 text-sm transition cursor-pointer shrink-0">
                 <Camera size={15} />
                 <input type="file" accept="image/*" onChange={onMediaFile} className="hidden" />
@@ -94,21 +94,21 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
               <ul className="space-y-1.5">{detail.cues.map((c, i) => <li key={i} className="text-sm text-zinc-300 flex gap-2"><span className="text-lime-400 shrink-0">•</span> {c}</li>)}</ul>
             </div>
           ) : <p className="text-sm text-zinc-600">Для своего упражнения методичка не задана.</p>}
-          {detail.notes && <p className="text-xs text-amber-400 bg-amber-400/10 rounded-lg px-3 py-2">⚠ {detail.notes}</p>}
-          <button onClick={() => { onPick(detail.name); setDetail(null); }} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-lime-300 transition flex items-center justify-center gap-1.5"><Plus size={16} /> Добавить в день</button>
+          {detail.notes && <p className="text-xs text-amber-400 bg-amber-400/10 rounded-xl px-3 py-2">⚠ {detail.notes}</p>}
+          <button onClick={() => { onPick(detail.name); setDetail(null); }} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition flex items-center justify-center gap-1.5"><Plus size={16} /> Добавить в день</button>
         </div>
       ) : (
         <>
           <div className="p-3 border-b border-zinc-800 space-y-2 shrink-0">
-            <div className="relative"><Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск упражнения..." className="w-full bg-zinc-800 rounded-lg pl-8 pr-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" /></div>
+            <div className="relative"><Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500" /><input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск упражнения..." className="w-full bg-zinc-800 rounded-xl pl-8 pr-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" /></div>
             <div className="flex gap-1.5 overflow-x-auto pb-1">{groups.map((g) => (<button key={g} onClick={() => setGroup(g)} className={`px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap transition ${group === g ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-400 hover:text-zinc-100"}`}>{g}</button>))}</div>
           </div>
           <div className="p-3 overflow-y-auto flex-1 min-h-0 space-y-1.5">
             {filtered.map((i) => (
-              <div key={i.name + i.group} className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 hover:bg-zinc-800/70 transition">
+              <div key={i.name + i.group} className="flex items-center gap-2 bg-zinc-800/40 rounded-xl px-3 py-2 hover:bg-zinc-800/70 transition">
                 <button onClick={() => setDetail(i)} className="flex-1 min-w-0 text-left"><p className="text-sm font-medium truncate flex items-center gap-1.5">{i.name}{media[i.name] && <Film size={12} className="text-cyan-400 shrink-0" />}</p><p className="text-[11px] text-zinc-500 truncate">{[i.group, i.equipment].filter(Boolean).join(" · ") || "своё"}</p></button>
-                <button onClick={() => setDetail(i)} className="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-400 transition shrink-0" title="Подробнее"><Info size={15} /></button>
-                <button onClick={() => onPick(i.name)} className="p-1.5 rounded-md bg-lime-400/15 text-lime-400 hover:bg-lime-400/25 transition shrink-0" title="Добавить в день"><Plus size={15} /></button>
+                <button onClick={() => setDetail(i)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-400 transition shrink-0" title="Подробнее"><Info size={15} /></button>
+                <button onClick={() => onPick(i.name)} className="p-1.5 rounded-lg bg-lime-400/15 text-lime-400 hover:bg-lime-400/25 transition shrink-0" title="Добавить в день"><Plus size={15} /></button>
               </div>
             ))}
             {filtered.length === 0 && <p className="text-sm text-zinc-600 text-center py-6">Ничего не найдено. Можно добавить своё упражнение внизу.</p>}

@@ -31,13 +31,13 @@ export default function ProgramCatalogModal({ trainerId, clientId, onClose, onCl
           <p className="text-sm text-zinc-300">{detail.description}</p>
           <div className="space-y-2">
             {detail.days.map((d, i) => (
-              <div key={i} className="bg-zinc-800/40 rounded-lg px-3 py-2">
+              <div key={i} className="bg-zinc-800/40 rounded-xl px-3 py-2">
                 <p className="text-sm font-medium mb-1">{d.name}</p>
                 <p className="text-xs text-zinc-500">{d.exercises.map((e) => e.name).join(", ")}</p>
               </div>
             ))}
           </div>
-          <button onClick={() => clone(detail)} disabled={cloning} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-lime-300 transition disabled:opacity-50 flex items-center justify-center gap-1.5"><Plus size={16} /> {cloning ? "Клонирую..." : "Клонировать клиенту"}</button>
+          <button onClick={() => clone(detail)} disabled={cloning} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition disabled:opacity-50 flex items-center justify-center gap-1.5"><Plus size={16} /> {cloning ? "Клонирую..." : "Клонировать клиенту"}</button>
         </div>
       ) : (
         <>
@@ -48,7 +48,7 @@ export default function ProgramCatalogModal({ trainerId, clientId, onClose, onCl
           </div>
           <div className="p-3 overflow-y-auto flex-1 min-h-0 space-y-1.5">
             {filtered.map((p) => (
-              <button key={p.id} onClick={() => setDetail(p)} className="w-full text-left flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2.5 hover:bg-zinc-800/70 transition">
+              <button key={p.id} onClick={() => setDetail(p)} className="w-full text-left flex items-center gap-2 bg-zinc-800/40 rounded-xl px-3 py-2.5 hover:bg-zinc-800/70 transition">
                 <div className="flex-1 min-w-0"><p className="text-sm font-medium">{p.name}</p><p className="text-[11px] text-zinc-500 truncate">{p.description}</p></div>
                 <span className="text-xs bg-lime-400/15 text-lime-400 rounded-full px-2 py-0.5 shrink-0">{GOAL_LABELS[p.goal]}</span>
               </button>

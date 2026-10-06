@@ -396,21 +396,21 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowPlanMenu(false)} />
                 <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-56 shadow-xl">
-                  <button onClick={() => { setShowPlanMenu(false); setShowTemplates(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                  <button onClick={() => { setShowPlanMenu(false); setShowTemplates(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 transition">
                     <FileStack size={15} className="text-zinc-500 shrink-0" /> Шаблоны
                   </button>
-                  <button onClick={() => { setShowPlanMenu(false); setShowVersions(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                  <button onClick={() => { setShowPlanMenu(false); setShowVersions(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 transition">
                     <History size={15} className="text-zinc-500 shrink-0" /> История версий
                   </button>
-                  <button onClick={() => { setShowPlanMenu(false); setShowMeso(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                  <button onClick={() => { setShowPlanMenu(false); setShowMeso(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 transition">
                     <Repeat size={15} className="text-zinc-500 shrink-0" /> Генератор мезоцикла
                   </button>
-                  <button onClick={() => { setShowPlanMenu(false); setShowPrint(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                  <button onClick={() => { setShowPlanMenu(false); setShowPrint(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 transition">
                     <Printer size={15} className="text-zinc-500 shrink-0" /> Печать / PDF
                   </button>
                   <div className="my-1 border-t border-zinc-800" />
                   <button onClick={() => { setShowPlanMenu(false); markSaving(); updatePlanMeta({ visibleToClient: plan.visibleToClient === false ? true : false }); }}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm hover:bg-zinc-800 transition ${plan.visibleToClient === false ? "text-orange-400" : "text-zinc-300"}`}>
+                    className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-zinc-800 transition ${plan.visibleToClient === false ? "text-orange-400" : "text-zinc-300"}`}>
                     {plan.visibleToClient === false ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />}
                     {plan.visibleToClient === false ? "Показать клиенту" : "Скрыть от клиента"}
                   </button>
@@ -519,7 +519,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       {deletingSessionId && <DeleteSessionModal onConfirm={confirmDeleteSession} onClose={() => setDeletingSessionId(null)} />}
 
       {sub === "progress" && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
           <h3 className="font-semibold flex items-center gap-1.5 mb-3"><BarChart3 size={16} className="text-lime-400" /> Прогрессия</h3>
           <MetricsView days={plan.days} metrics={metrics} addMetric={addMetric} deleteMetric={deleteMetric} />
         </div>
@@ -527,24 +527,24 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
 
       {sub === "done" && (
         <div className="space-y-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
             <h3 className="font-semibold flex items-center gap-1.5"><CheckCircle2 size={16} className="text-lime-400" /> Проведённые дни{plan.days.filter(isArchived).length > 0 && <span className="text-zinc-500 font-normal">· {plan.days.filter(isArchived).length}</span>}</h3>
             {plan.days.filter(isArchived).length === 0 && <p className="text-sm text-zinc-600 text-center py-4">Пока пусто. Проведённые дни уходят сюда из «Тренировок» и остаются здесь — их можно посмотреть, скопировать или вернуть обратно.</p>}
             {plan.days.filter(isArchived).map((day) => (
               <div key={day.id} className="flex items-center gap-1.5 bg-zinc-800/40 rounded-xl px-3 py-2.5">
                 <span className="flex-1 min-w-0 font-semibold truncate">{day.name}</span>
                 <span className="flex items-center gap-1 text-[11px] font-medium text-lime-400 bg-lime-400/10 rounded-full px-2 py-1 shrink-0"><CheckCircle2 size={12} /> {day.archivedAt ? fmtDate(day.archivedAt.slice(0, 10)) : "Проведена"}</span>
-                <button onClick={() => setEditingDayId(day.id)} className="p-1.5 rounded-md hover:bg-cyan-400/15 hover:text-cyan-400 text-zinc-500 transition shrink-0" title="Редактировать в отдельном окне"><Pencil size={15} /></button>
-                <button onClick={() => updateDay(day.id, { archivedAt: null })} className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Вернуть в Тренировки"><RotateCcw size={15} /></button>
-                <button onClick={() => duplicateDay(day)} disabled={!!dupBusy} title="Дублировать день" className="p-1.5 rounded-md hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0 disabled:opacity-40"><Copy size={15} /></button>
-                <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={15} /></button>
+                <button onClick={() => setEditingDayId(day.id)} className="p-1.5 rounded-lg hover:bg-cyan-400/15 hover:text-cyan-400 text-zinc-500 transition shrink-0" title="Редактировать в отдельном окне"><Pencil size={15} /></button>
+                <button onClick={() => updateDay(day.id, { archivedAt: null })} className="p-1.5 rounded-lg hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Вернуть в Тренировки"><RotateCcw size={15} /></button>
+                <button onClick={() => duplicateDay(day)} disabled={!!dupBusy} title="Дублировать день" className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0 disabled:opacity-40"><Copy size={15} /></button>
+                <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={15} /></button>
               </div>
             ))}
           </div>
 
           {/* Р2: архив блоков — рядом с проведёнными днями, одно место для всего убранного */}
           {(plan.mesocycles ?? []).some((m) => m.archivedAt) && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
               <h3 className="font-semibold flex items-center gap-1.5"><Archive size={16} className="text-cyan-400" /> Архив блоков
                 <span className="text-zinc-500 font-normal">· {(plan.mesocycles ?? []).filter((m) => m.archivedAt).length}</span>
               </h3>
@@ -557,10 +557,10 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                     <span className="text-xs text-zinc-500 shrink-0">{cnt} дн.</span>
                     <button onClick={() => { markSaving(); updateMesocycle(meso.id, { archivedAt: null }); }}
                       title="Вернуть блок в Тренировки" aria-label="Вернуть блок в Тренировки"
-                      className="p-1.5 rounded-md hover:bg-lime-400/15 hover:text-lime-400 active:text-lime-400 text-zinc-500 transition shrink-0"><RotateCcw size={15} /></button>
+                      className="p-1.5 rounded-lg hover:bg-lime-400/15 hover:text-lime-400 active:text-lime-400 text-zinc-500 transition shrink-0"><RotateCcw size={15} /></button>
                     <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
                       title="Удалить блок" aria-label="Удалить блок"
-                      className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 active:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
+                      className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 active:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
                   </div>
                 );
               })}
@@ -578,13 +578,13 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                   <button onClick={(e) => { e.stopPropagation(); setShowSessionTrash((v) => !v); }} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"><Trash size={13} /> Корзина ({deletedSessions.length})</button>
                 )}
                 {showSessionTrash && (
-                  <div className="bg-zinc-950/40 border border-zinc-800 rounded-xl p-3 space-y-1.5">
+                  <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-3 space-y-1.5">
                     {deletedSessions.map((d) => (
                       <div key={d.id} className="flex items-center justify-between gap-2 text-xs bg-zinc-800/40 rounded-lg px-2.5 py-1.5">
                         <div className="min-w-0"><p className="text-zinc-300 truncate">{d.dayName || "Тренировка"} · {fmtDate(d.date)}</p><p className="text-zinc-500">Причина: {d.deleteReason} · удалено {fmtDate(d.deletedAt.slice(0, 10))}</p></div>
                         <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => restoreSession(d.id)} className="p-1 rounded hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={13} /></button>
-                          <button onClick={() => window.confirm("Удалить безвозвратно?") && purgeSession(d.id)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={13} /></button>
+                          <button onClick={() => restoreSession(d.id)} className="p-1 rounded-lg hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={13} /></button>
+                          <button onClick={() => window.confirm("Удалить безвозвратно?") && purgeSession(d.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={13} /></button>
                         </div>
                       </div>
                     ))}
@@ -609,10 +609,10 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                             </div>
                           </div>
                           <div className="flex items-center gap-0.5 shrink-0">
-                            <button onClick={() => setViewingSession(s)} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-lime-400 transition" title="Просмотреть тренировку"><Eye size={13} /></button>
-                            <button onClick={() => copySessionAsDay(s)} className="p-1.5 rounded hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition" title="Копировать тренировку как день"><Clipboard size={13} /></button>
-                            <button onClick={() => setEditingSessionId(editing ? null : s.id)} className={`p-1.5 rounded transition ${editing ? "bg-cyan-400/20 text-cyan-400" : "hover:bg-zinc-700 text-zinc-500"}`} title="Редактировать отзыв"><Pencil size={13} /></button>
-                            <button onClick={() => setDeletingSessionId(s.id)} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><X size={13} /></button>
+                            <button onClick={() => setViewingSession(s)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-600 hover:text-lime-400 transition" title="Просмотреть тренировку"><Eye size={13} /></button>
+                            <button onClick={() => copySessionAsDay(s)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition" title="Копировать тренировку как день"><Clipboard size={13} /></button>
+                            <button onClick={() => setEditingSessionId(editing ? null : s.id)} className={`p-1.5 rounded-lg transition ${editing ? "bg-cyan-400/20 text-cyan-400" : "hover:bg-zinc-700 text-zinc-500"}`} title="Редактировать отзыв"><Pencil size={13} /></button>
+                            <button onClick={() => setDeletingSessionId(s.id)} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><X size={13} /></button>
                           </div>
                         </div>
                         {hasEmoji && (
@@ -632,7 +632,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                         {s.items?.some((i) => i.rpe > 0) && (
                           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
                             {s.items.filter((i) => i.rpe > 0).map((i, idx) => (
-                              <span key={idx} className="flex items-center gap-1 bg-zinc-700/40 rounded px-1.5 py-0.5">
+                              <span key={idx} className="flex items-center gap-1 bg-zinc-700/40 rounded-lg px-1.5 py-0.5">
                                 <span className="text-zinc-400 truncate max-w-[80px]">{i.name}:</span>
                                 <span className="text-cyan-400 font-semibold">RPE {i.rpe}</span>
                               </span>
@@ -640,7 +640,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                           </div>
                         )}
                         {editing ? (
-                          <textarea value={s.review} onChange={(e) => updateSessionReview(s.id, e.target.value)} rows={2} placeholder="Отзыв клиента..." className="w-full text-sm bg-zinc-900/60 rounded-lg p-2 outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
+                          <textarea value={s.review} onChange={(e) => updateSessionReview(s.id, e.target.value)} rows={2} placeholder="Отзыв клиента..." className="w-full text-sm bg-zinc-900/60 rounded-xl p-2 outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
                         ) : (
                           s.review && <p className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2.5 whitespace-pre-wrap">{s.review}</p>
                         )}
@@ -703,20 +703,20 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                     <>
                       <div className="fixed inset-0 z-10" onClick={() => setDayMenu(null)} />
                       <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-60 shadow-xl">
-                        <button onClick={() => { setDayMenu(null); setRenamingDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Pencil size={15} className="text-zinc-500 shrink-0" /> Переименовать</button>
-                        <button onClick={() => { setDayMenu(null); markSaving(); updateDay(day.id, { visibleToClient: hidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm hover:bg-zinc-800 transition ${hidden ? "text-orange-400" : "text-zinc-200"}`}>
+                        <button onClick={() => { setDayMenu(null); setRenamingDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Pencil size={15} className="text-zinc-500 shrink-0" /> Переименовать</button>
+                        <button onClick={() => { setDayMenu(null); markSaving(); updateDay(day.id, { visibleToClient: hidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm hover:bg-zinc-800 transition ${hidden ? "text-orange-400" : "text-zinc-200"}`}>
                           {hidden ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />} {hidden ? "Показать клиенту" : "Скрыть от клиента"}
                         </button>
                         <button onClick={() => { setDayMenu(null); markSaving(); updateDay(day.id, { method: day.method === "circuit" ? "" : "circuit" }); }}
-                          title="Круговая: подходы идут кругами по всем упражнениям" className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm hover:bg-zinc-800 transition ${day.method === "circuit" ? "text-cyan-400" : "text-zinc-200"}`}>
+                          title="Круговая: подходы идут кругами по всем упражнениям" className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm hover:bg-zinc-800 transition ${day.method === "circuit" ? "text-cyan-400" : "text-zinc-200"}`}>
                           <Repeat size={15} className={`shrink-0 ${day.method === "circuit" ? "" : "text-zinc-500"}`} /> {day.method === "circuit" ? "Сделать обычной" : "Сделать круговой"}
                         </button>
-                        <label className="w-full flex items-center gap-2.5 px-2.5 h-11 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                        <label className="w-full flex items-center gap-2.5 px-2.5 h-11 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                           <CalendarCheck size={15} className="text-zinc-500 shrink-0" /> Дата
                           <input type="date" value={day.dateOf ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { dateOf: e.target.value || null }); }} className="ml-auto min-w-0 w-[8.5rem] bg-zinc-800 rounded-lg px-2 h-8 outline-none" title="Дата проведения" />
                         </label>
                         {hasMesos && (
-                          <label className="w-full flex items-center gap-2.5 px-2.5 h-11 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                          <label className="w-full flex items-center gap-2.5 px-2.5 h-11 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                             <Layers size={15} className="text-zinc-500 shrink-0" /> Блок
                             <select value={day.mesocycleId ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { mesocycleId: e.target.value || null }); }} className="ml-auto min-w-0 max-w-[8.5rem] bg-zinc-800 rounded-lg px-2 h-8 outline-none">
                               <option value="">Без блока</option>
@@ -724,9 +724,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                             </select>
                           </label>
                         )}
-                        <button onClick={() => { setDayMenu(null); copyDay(day); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Clipboard size={15} className="text-zinc-500 shrink-0" /> Копировать день</button>
+                        <button onClick={() => { setDayMenu(null); copyDay(day); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Clipboard size={15} className="text-zinc-500 shrink-0" /> Копировать день</button>
                         <div className="my-1 border-t border-zinc-800" />
-                        <button onClick={() => { setDayMenu(null); if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить день</button>
+                        <button onClick={() => { setDayMenu(null); if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить день</button>
                       </div>
                     </>
                   )}
@@ -771,15 +771,15 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setMesoMenu(null)} />
                           <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-56 shadow-xl">
-                            <button disabled={mi === 0} onClick={() => { setMesoMenu(null); reorderMesocycles(mi, mi - 1); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><ChevronUp size={15} className="text-zinc-500 shrink-0" /> Блок выше</button>
-                            <button disabled={mi === sortedMesos.length - 1} onClick={() => { setMesoMenu(null); reorderMesocycles(mi, mi + 1); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><ChevronDown size={15} className="text-zinc-500 shrink-0" /> Блок ниже</button>
-                            <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { visibleToClient: mesoHidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm hover:bg-zinc-800 transition ${mesoHidden ? "text-orange-400" : "text-zinc-200"}`}>
+                            <button disabled={mi === 0} onClick={() => { setMesoMenu(null); reorderMesocycles(mi, mi - 1); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><ChevronUp size={15} className="text-zinc-500 shrink-0" /> Блок выше</button>
+                            <button disabled={mi === sortedMesos.length - 1} onClick={() => { setMesoMenu(null); reorderMesocycles(mi, mi + 1); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><ChevronDown size={15} className="text-zinc-500 shrink-0" /> Блок ниже</button>
+                            <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { visibleToClient: mesoHidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm hover:bg-zinc-800 transition ${mesoHidden ? "text-orange-400" : "text-zinc-200"}`}>
                               {mesoHidden ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />} {mesoHidden ? "Показать клиенту" : "Скрыть от клиента"}
                             </button>
-                            <button onClick={() => { setMesoMenu(null); duplicateMeso(meso.id); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать с днями</button>
-                            <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { archivedAt: new Date().toISOString() }); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Archive size={15} className="text-zinc-500 shrink-0" /> В архив с днями</button>
+                            <button onClick={() => { setMesoMenu(null); duplicateMeso(meso.id); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать с днями</button>
+                            <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { archivedAt: new Date().toISOString() }); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Archive size={15} className="text-zinc-500 shrink-0" /> В архив с днями</button>
                             <div className="my-1 border-t border-zinc-800" />
-                            <button onClick={() => { setMesoMenu(null); if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить блок</button>
+                            <button onClick={() => { setMesoMenu(null); if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить блок</button>
                           </div>
                         </>
                       )}
@@ -815,8 +815,8 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         <div className="flex gap-2 bg-zinc-900 border border-zinc-800 rounded-xl p-2">
           <input autoFocus value={newDayName} onChange={(e) => setNewDayName(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && newDayName.trim()) handleCreateDay(); if (e.key === "Escape") setNewDayName(null); }}
-            placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <button onClick={handleCreateDay} disabled={!newDayName.trim() || addBusy} className="px-3 py-2 text-sm rounded-lg bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Добавляю…" : "Создать"}</button>
+            placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <button onClick={handleCreateDay} disabled={!newDayName.trim() || addBusy} className="px-3 py-2 text-sm rounded-xl bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Добавляю…" : "Создать"}</button>
           <button onClick={() => setNewDayName(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
         </div>
       ) : (
@@ -830,8 +830,8 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         <div className="flex gap-2 bg-zinc-900 border border-cyan-400/30 rounded-xl p-2">
           <input autoFocus value={pasteInput} onChange={(e) => setPasteInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && pasteInput.trim()) handlePasteDay(); if (e.key === "Escape") setPasteInput(null); }}
-            placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
-          <button onClick={handlePasteDay} disabled={!pasteInput.trim() || addBusy} className="px-3 py-2 text-sm rounded-lg bg-cyan-400 text-zinc-950 font-semibold hover:bg-cyan-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Вставляю…" : "Вставить"}</button>
+            placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
+          <button onClick={handlePasteDay} disabled={!pasteInput.trim() || addBusy} className="px-3 py-2 text-sm rounded-xl bg-cyan-400 text-zinc-950 font-semibold hover:bg-cyan-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Вставляю…" : "Вставить"}</button>
           <button onClick={() => setPasteInput(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
         </div>
       ) : (
@@ -854,11 +854,11 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       {viewingSession && <SessionReadModal session={viewingSession} onClose={() => setViewingSession(null)} />}
       {historyFor !== null && <ExerciseHistoryModal name={historyFor} sessions={sessions} metrics={metrics} onClose={() => setHistoryFor(null)} />}
       {/* П4: заметка внизу — заполняется редко, а сверху занимала строку наравне с названием */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
         <label htmlFor="plan-note" className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">Заметка к плану</label>
         <input id="plan-note" value={plan.note} onChange={(e) => { markSaving(); updatePlanMeta({ note: e.target.value }); }}
           placeholder="Напр. прогрессия каждые 2 недели"
-          className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
+          className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
       </div>
 
       {toast && <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-zinc-800 text-zinc-100 text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg border border-zinc-700 pointer-events-none">{toast}</div>}

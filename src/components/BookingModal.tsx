@@ -84,14 +84,14 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
 
         <div className="grid grid-cols-2 gap-2">
           <label className="text-xs text-zinc-500">Время
-            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
           </label>
           <NumField label="Минут" value={duration} onChange={(e) => setDuration(e.target.value)} placeholder="60" />
         </div>
 
         {booking && (
           <label className="text-xs text-zinc-500">Статус
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40">
               {Object.entries(BOOKING_STATUS_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
             </select>
           </label>
@@ -104,7 +104,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
         )}
         {!booking && recurring && (
           <label className="text-xs text-zinc-500">До какой даты
-            <input type="date" value={recurUntil} onChange={(e) => setRecurUntil(e.target.value)} className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
+            <input type="date" value={recurUntil} onChange={(e) => setRecurUntil(e.target.value)} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
           </label>
         )}
 
@@ -118,7 +118,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
                 setSelectedDayId(e.target.value);
                 setSelectedDayName(opt.dataset.name || "");
               }}
-              className="w-full bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40"
+              className="w-full bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40"
             >
               <option value="">— не выбрано —</option>
               {clientPlans.flatMap((p) => p.days.map((d) => (
@@ -127,13 +127,13 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
             </select>
           </div>
         )}
-        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Заметка" rows={2} className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Заметка" rows={2} className="w-full bg-zinc-800 rounded-xl px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
       </div>
       <div className="px-4 py-3 border-t border-zinc-800 flex items-center gap-2 shrink-0">
         {booking && onDelete && (
           <button onClick={onDelete} title="Удалить запись" aria-label="Удалить запись" className="p-2.5 rounded-lg hover:bg-red-500/20 text-zinc-500 hover:text-red-400 transition"><Trash2 size={16} /></button>
         )}
-        <button onClick={save} className="flex-1 bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 hover:bg-cyan-300 transition">Сохранить</button>
+        <button onClick={save} className="flex-1 bg-cyan-400 text-zinc-950 font-semibold rounded-xl py-2.5 hover:bg-cyan-300 transition">Сохранить</button>
       </div>
     </ModalShell>
   );

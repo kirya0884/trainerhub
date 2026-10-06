@@ -63,7 +63,7 @@ function GoalInput({ label, unit, placeholder, value, onChange, readOnly }: {
   return (
     <div className="flex flex-col gap-1">
       <label className="text-xs text-zinc-500">{label}</label>
-      <div className={`flex items-center gap-1.5 rounded-lg px-2.5 py-2 border ${readOnly ? "bg-zinc-800/40 border-zinc-700/40" : "bg-zinc-800 border-zinc-700 focus-within:border-lime-400/40"}`}>
+      <div className={`flex items-center gap-1.5 rounded-xl px-2.5 py-2 border ${readOnly ? "bg-zinc-800/40 border-zinc-700/40" : "bg-zinc-800 border-zinc-700 focus-within:border-lime-400/40"}`}>
         <input type="number" inputMode="numeric" min="0" value={value} onChange={(e) => onChange?.(e.target.value)}
           placeholder={placeholder} readOnly={readOnly}
           className={`w-full bg-transparent text-sm outline-none ${readOnly ? "text-zinc-500 cursor-default" : ""}`} />
@@ -190,7 +190,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
                 ))}
               </div>
             </div>
-            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-4 py-2 text-sm hover:bg-lime-300 transition disabled:opacity-50">
+            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-lime-300 transition disabled:opacity-50">
               <Save size={14} /> {saving ? "Сохранение…" : "Сохранить цели"}
             </button>
           </div>
@@ -202,7 +202,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
         <span className="text-xs text-zinc-500 shrink-0">Период:</span>
         <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5">
           {([7, 14, 30] as Period[]).map((p) => (
-            <button key={p} onClick={() => setPeriod(p)} className={`px-3 py-1 rounded-md text-sm font-medium transition ${period === p ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>
+            <button key={p} onClick={() => setPeriod(p)} className={`px-3 py-1 rounded-lg text-sm font-medium transition ${period === p ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>
               {p} дн.
             </button>
           ))}
@@ -220,7 +220,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
       ) : (
         <div className="space-y-3">
           {hasNutGoals && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold mb-1"><Apple size={14} className="text-lime-400" /> Питание</h3>
               {!nutrition.length && <p className="text-xs text-zinc-600 mb-3">Клиент не вёл дневник питания в этом периоде</p>}
               <p className="text-[10px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
@@ -234,7 +234,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
           )}
 
           {hasActGoals && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold mb-1"><Footprints size={14} className="text-lime-400" /> Активность</h3>
               {!activities.length && <p className="text-xs text-zinc-600 mb-3">Клиент не логировал активность в этом периоде</p>}
               <p className="text-[10px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
@@ -246,7 +246,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
           )}
 
           {hasSessionGoal && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold mb-3"><Dumbbell size={14} className="text-lime-400" /> Тренировки</h3>
               <div className="flex items-center gap-4">
                 <div className="relative shrink-0">

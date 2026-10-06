@@ -95,9 +95,9 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
         <h1 className="text-2xl font-extrabold tracking-tight text-center">Reps</h1>
         <p className="text-sm text-zinc-400 text-center">Придумай новый пароль</p>
         <form onSubmit={submit} className="space-y-3">
-          <input type="password" required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <input type="password" required value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Повтори пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <button disabled={busy} type="submit" className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 disabled:opacity-50">
+          <input type="password" required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="password" required value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Повтори пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <button disabled={busy} type="submit" className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 disabled:opacity-50">
             {busy ? "Сохранение..." : "Сохранить новый пароль"}
           </button>
         </form>
@@ -308,7 +308,7 @@ export default function App() {
             Вход выполнен ({session.user.email}), но карточка подопечного не найдена. Проверьте у тренера, что в вашей карточке указан именно этот email для входа.
           </p>
           <div className="flex gap-2 justify-center pt-1">
-            <button onClick={() => checkAccess(session.user.id)} className="bg-cyan-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 text-sm hover:bg-cyan-300 transition">Повторить</button>
+            <button onClick={() => checkAccess(session.user.id)} className="bg-cyan-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-cyan-300 transition">Повторить</button>
             <button onClick={() => supabase.auth.signOut()} className="text-sm text-zinc-500 hover:text-zinc-300 px-3 py-2">Выйти</button>
           </div>
         </div>

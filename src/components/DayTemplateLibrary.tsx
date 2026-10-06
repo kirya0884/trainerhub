@@ -127,29 +127,29 @@ export default function DayTemplateLibrary({
                 <div key={ex.tempId} className="flex items-center gap-1.5 bg-zinc-800/50 rounded-lg p-2">
                   <span className="text-zinc-600 text-xs w-4 shrink-0 text-right">{i + 1}</span>
                   <input value={ex.name} onChange={(e) => updateEx(ex.tempId, { name: e.target.value })}
-                    placeholder="Упражнение" className="flex-1 min-w-0 bg-zinc-900 rounded-md px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+                    placeholder="Упражнение" className="flex-1 min-w-0 bg-zinc-900 rounded-xl px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
                   <input value={ex.sets} onChange={(e) => updateEx(ex.tempId, { sets: e.target.value })}
-                    placeholder="×" className="w-10 bg-zinc-900 rounded-md px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                    placeholder="×" className="w-10 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
                   <input value={ex.reps} onChange={(e) => updateEx(ex.tempId, { reps: e.target.value })}
-                    placeholder="пов." className="w-14 bg-zinc-900 rounded-md px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                    placeholder="пов." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
                   <input value={ex.weight} onChange={(e) => updateEx(ex.tempId, { weight: e.target.value })}
-                    placeholder="кг" className="w-14 bg-zinc-900 rounded-md px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                    placeholder="кг" className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
                   <input value={ex.rest} onChange={(e) => updateEx(ex.tempId, { rest: e.target.value })}
-                    placeholder="отд." className="w-14 bg-zinc-900 rounded-md px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
-                  <button onClick={() => removeEx(ex.tempId)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
+                    placeholder="отд." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                  <button onClick={() => removeEx(ex.tempId)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
                 </div>
               ))}
               {editing.exercises.length === 0 && (
                 <p className="text-zinc-600 text-sm text-center py-3">Нет упражнений — добавь первое</p>
               )}
-              <button onClick={addEx} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-lime-400 border border-dashed border-zinc-700 hover:border-lime-400/40 rounded-lg py-2 px-3 w-full justify-center transition">
+              <button onClick={addEx} className="flex items-center gap-1.5 text-sm text-zinc-400 hover:text-lime-400 border border-dashed border-zinc-700 hover:border-lime-400/40 rounded-xl py-2 px-3 w-full justify-center transition">
                 <Plus size={14} /> Добавить упражнение
               </button>
             </div>
             <div className="flex gap-2 pt-2 border-t border-zinc-800">
-              <button onClick={() => setEditing(null)} className="flex-1 py-2 text-sm rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition">Отмена</button>
+              <button onClick={() => setEditing(null)} className="flex-1 py-2 text-sm rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition">Отмена</button>
               <button onClick={handleSave} disabled={!editing.name.trim() || saving}
-                className="flex-1 py-2 text-sm rounded-lg bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40">
+                className="flex-1 py-2 text-sm rounded-xl bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40">
                 {saving ? "Сохранение…" : "Сохранить шаблон"}
               </button>
             </div>
@@ -195,7 +195,7 @@ export default function DayTemplateLibrary({
                       onChange={(e) => setInsertFor((s) => s ? { ...s, name: e.target.value } : s)}
                       onKeyDown={(e) => { if (e.key === "Enter") handleInsert(); if (e.key === "Escape") setInsertFor(null); }}
                       placeholder="Название дня в плане"
-                      className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-sm outline-none focus:border-cyan-400/50" />
+                      className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-1.5 text-sm outline-none focus:border-cyan-400/50" />
                     <button onClick={handleInsert} disabled={!insertFor.name.trim() || saving}
                       className="px-3 py-1.5 text-sm rounded-lg bg-cyan-400 text-zinc-950 font-semibold hover:bg-cyan-300 transition disabled:opacity-40">
                       {saving ? "…" : "Вставить"}
@@ -204,7 +204,7 @@ export default function DayTemplateLibrary({
                   </div>
                 ) : (
                   <button onClick={() => setInsertFor({ id: t.id, name: t.name })}
-                    className="w-full text-sm py-1.5 rounded-lg bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-400 font-medium transition">
+                    className="w-full text-sm py-1.5 rounded-xl bg-cyan-400/10 hover:bg-cyan-400/20 text-cyan-400 font-medium transition">
                     Вставить в план
                   </button>
                 )}

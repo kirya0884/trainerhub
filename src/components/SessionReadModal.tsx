@@ -84,7 +84,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                   </span>
                 )}
                 {item.rpe > 0 && (
-                  <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded px-1.5 py-0.5 shrink-0">RPE {item.rpe}</span>
+                  <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded-lg px-1.5 py-0.5 shrink-0">RPE {item.rpe}</span>
                 )}
                 {tonnage > 0 && (
                   <span className="text-[11px] text-zinc-500 shrink-0">
@@ -97,7 +97,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                 <div className="p-3 space-y-1.5">
                   {/* Плановый итог если нет подетальных данных */}
                   {!hasPlanned && !hasActual && item.plannedSummary && (
-                    <p className="text-sm text-zinc-400 bg-zinc-800/40 rounded-md px-2.5 py-2">
+                    <p className="text-sm text-zinc-400 bg-zinc-800/40 rounded-xl px-2.5 py-2">
                       <span className="text-zinc-600 text-xs mr-1.5">план</span>{item.plannedSummary}
                     </p>
                   )}
@@ -162,7 +162,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
 
                   {/* Заметка */}
                   {item.note && (
-                    <p className="text-xs text-zinc-400 bg-zinc-800/50 rounded-md px-2.5 py-1.5 mt-1">
+                    <p className="text-xs text-zinc-400 bg-zinc-800/50 rounded-lg px-2.5 py-1.5 mt-1">
                       {item.note}
                     </p>
                   )}
@@ -174,7 +174,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
 
         {/* Итоги тренировки */}
         {(session.mood > 0 || session.wellbeing > 0 || session.review || session.clientRating > 0) && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 space-y-2">
             <p className="text-sm font-semibold text-zinc-300">После тренировки</p>
             <div className="flex flex-wrap gap-3 text-sm text-zinc-400">
               {session.mood > 0 && (

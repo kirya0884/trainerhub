@@ -110,8 +110,8 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
           <>
             <div className="fixed inset-0 z-10" onClick={() => setMenuId(null)} />
             <div className="absolute right-2 top-full -mt-2 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-48 shadow-xl">
-              <button onClick={() => duplicate(p)} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Copy size={15} className="text-zinc-500" /> Дублировать</button>
-              <button onClick={() => deletePlan(p.id, p.name)} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} /> Удалить</button>
+              <button onClick={() => duplicate(p)} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Copy size={15} className="text-zinc-500" /> Дублировать</button>
+              <button onClick={() => deletePlan(p.id, p.name)} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} /> Удалить</button>
             </div>
           </>
         )}

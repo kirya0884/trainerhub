@@ -175,11 +175,11 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowSubSettings(false)} />
                 <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-56 shadow-xl">
-                  <button onClick={() => { setShowSubSettings(false); setShowReport(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                  <button onClick={() => { setShowSubSettings(false); setShowReport(true); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 transition">
                     <Printer size={15} className="text-zinc-500 shrink-0" /> Отчёт по прогрессу
                   </button>
                   <div className="my-1 border-t border-zinc-800" />
-                  <button onClick={() => { setShowSubSettings(false); deleteClient(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-sm text-red-400 hover:bg-red-500/10 transition">
+                  <button onClick={() => { setShowSubSettings(false); deleteClient(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition">
                     <Trash2 size={15} className="shrink-0" /> Удалить подопечного
                   </button>
                 </div>
@@ -298,7 +298,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
               <span className="block text-2xl font-extrabold tracking-tight mt-1">{attendance}%</span>
               <span className="block text-xs text-zinc-500 mt-0.5">{attended} из {recent.length} за 30 дней</span>
               <span className="flex gap-1 mt-3" aria-hidden="true">
-                {recent.slice(-8).map((o, i) => <span key={i} className={`flex-1 h-5 rounded ${o.status === "done" ? "bg-lime-400" : "bg-zinc-800"}`} />)}
+                {recent.slice(-8).map((o, i) => <span key={i} className={`flex-1 h-5 rounded-lg ${o.status === "done" ? "bg-lime-400" : "bg-zinc-800"}`} />)}
               </span>
             </>
           ) : <span className="block text-sm text-zinc-500 mt-1">Нет тренировок за 30 дней</span>}
@@ -411,11 +411,11 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
 
   return (
     <div className="space-y-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <h3 className="font-semibold text-sm flex items-center gap-1.5"><Users size={15} className="text-cyan-400" /> Статус и источник</h3>
         <div className="grid sm:grid-cols-2 gap-2">
           <label className="text-xs text-zinc-500">Статус
-            <select value={client.status} onChange={(e) => patch({ status: e.target.value, ...(e.target.value !== "paused" ? { pauseReason: "" } : {}) }, true)} className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40">
+            <select value={client.status} onChange={(e) => patch({ status: e.target.value, ...(e.target.value !== "paused" ? { pauseReason: "" } : {}) }, true)} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40">
               <option value="active" className="bg-zinc-900">Активен</option>
               <option value="paused" className="bg-zinc-900">Приостановил</option>
               <option value="left" className="bg-zinc-900">Ушёл</option>
@@ -423,10 +423,10 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
             </select>
           </label>
           <label className="text-xs text-zinc-500">Источник (как нашёл)
-            <input value={client.source} onChange={(e) => patch({ source: e.target.value })} placeholder="реклама, рекомендация, соцсети..." className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={client.source} onChange={(e) => patch({ source: e.target.value })} placeholder="реклама, рекомендация, соцсети..." className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
           <label className="text-xs text-zinc-500">Формат
-            <select value={client.format ?? ""} onChange={(e) => patch({ format: e.target.value }, true)} className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40">
+            <select value={client.format ?? ""} onChange={(e) => patch({ format: e.target.value }, true)} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40">
               <option value="" className="bg-zinc-900">Не указан</option>
               <option value="online" className="bg-zinc-900">Онлайн</option>
               <option value="offline" className="bg-zinc-900">Офлайн</option>
@@ -435,7 +435,7 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
         </div>
         {client.status === "paused" && (
           <label className="text-xs text-zinc-500 block">Причина паузы
-            <input value={client.pauseReason} onChange={(e) => patch({ pauseReason: e.target.value })} placeholder="напр. травма, отпуск" className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={client.pauseReason} onChange={(e) => patch({ pauseReason: e.target.value })} placeholder="напр. травма, отпуск" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
         )}
         <label className="flex items-center gap-2 text-sm text-zinc-300 cursor-pointer">
@@ -443,14 +443,14 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
         </label>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <h3 className="font-semibold text-sm flex items-center gap-1.5"><Phone size={15} className="text-lime-400" /> Контакты</h3>
         <div className="grid sm:grid-cols-3 gap-2">
-          <label className="text-xs text-zinc-500">Телефон<input value={client.phone} onChange={(e) => patch({ phone: e.target.value })} placeholder="+7..." className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
-          <label className="text-xs text-zinc-500">Telegram<input value={client.telegram} onChange={(e) => patch({ telegram: e.target.value })} placeholder="@username" className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
-          <label className="text-xs text-zinc-500">WhatsApp<input value={client.whatsapp} onChange={(e) => patch({ whatsapp: e.target.value })} placeholder="79001234567" className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
+          <label className="text-xs text-zinc-500">Телефон<input value={client.phone} onChange={(e) => patch({ phone: e.target.value })} placeholder="+7..." className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
+          <label className="text-xs text-zinc-500">Telegram<input value={client.telegram} onChange={(e) => patch({ telegram: e.target.value })} placeholder="@username" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
+          <label className="text-xs text-zinc-500">WhatsApp<input value={client.whatsapp} onChange={(e) => patch({ whatsapp: e.target.value })} placeholder="79001234567" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
         </div>
-        <label className="text-xs text-zinc-500 block">Email для входа в портал клиента<input type="email" value={client.email} onChange={(e) => patch({ email: e.target.value.trim() })} placeholder="client@mail.com" className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" /></label>
+        <label className="text-xs text-zinc-500 block">Email для входа в портал клиента<input type="email" value={client.email} onChange={(e) => patch({ email: e.target.value.trim() })} placeholder="client@mail.com" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" /></label>
         <InviteBlock clientId={clientId} email={client.email} hasAccount={client.hasAccount} />
         <p className="text-[11px] text-zinc-600 -mt-1">{client.hasAccount ? "Доступ уже выдан — логин и пароль отправлены на почту." : "Сгенерируем логин/пароль и отправим клиенту на почту."}</p>
         <div className="flex flex-wrap gap-2">
@@ -461,26 +461,26 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <h3 className="font-semibold text-sm flex items-center gap-1.5"><HeartPulse size={15} className="text-amber-400" /> Анкета здоровья / противопоказания</h3>
-        <label className="text-xs text-zinc-500 block">Травмы / диагнозы<textarea value={client.health.injuries} onChange={(e) => patchHealth({ injuries: e.target.value })} rows={2} placeholder="напр. грыжа L4–L5, проблемы с коленом" className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></label>
-        <label className="text-xs text-zinc-500 block">Ограничения (что нельзя)<textarea value={client.health.restrictions} onChange={(e) => patchHealth({ restrictions: e.target.value })} rows={2} placeholder="напр. без осевой нагрузки, без прыжков" className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></label>
-        <label className="text-xs text-zinc-500 block">Прочее<textarea value={client.health.notes} onChange={(e) => patchHealth({ notes: e.target.value })} rows={2} placeholder="аллергии, особенности, цели по самочувствию" className="w-full mt-0.5 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></label>
+        <label className="text-xs text-zinc-500 block">Травмы / диагнозы<textarea value={client.health.injuries} onChange={(e) => patchHealth({ injuries: e.target.value })} rows={2} placeholder="напр. грыжа L4–L5, проблемы с коленом" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></label>
+        <label className="text-xs text-zinc-500 block">Ограничения (что нельзя)<textarea value={client.health.restrictions} onChange={(e) => patchHealth({ restrictions: e.target.value })} rows={2} placeholder="напр. без осевой нагрузки, без прыжков" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></label>
+        <label className="text-xs text-zinc-500 block">Прочее<textarea value={client.health.notes} onChange={(e) => patchHealth({ notes: e.target.value })} rows={2} placeholder="аллергии, особенности, цели по самочувствию" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></label>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <h3 className="font-semibold text-sm flex items-center gap-1.5"><MessageSquare size={15} className="text-cyan-400" /> Заметки / история общения</h3>
         <div className="flex gap-2">
-          <input value={noteText} onChange={(e) => setNoteText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addNote()} placeholder="Что обсудили, договорённости..." className="flex-1 bg-zinc-800 rounded-lg px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input value={noteText} onChange={(e) => setNoteText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addNote()} placeholder="Что обсудили, договорённости..." className="flex-1 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           <button onClick={addNote} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 text-sm transition">Добавить</button>
         </div>
         <div className="space-y-1.5 max-h-64 overflow-y-auto">
           {notes.length === 0 && <p className="text-xs text-zinc-600">Заметок пока нет</p>}
           {notes.map((n) => (
-            <div key={n.id} className="flex items-start gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
+            <div key={n.id} className="flex items-start gap-2 bg-zinc-800/40 rounded-xl px-3 py-2 text-sm">
               <span className="text-zinc-500 text-xs shrink-0 w-20">{fmtDate(n.date)}</span>
               <span className="flex-1 text-zinc-200">{n.text}</span>
-              <button onClick={() => deleteNote(n.id)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
+              <button onClick={() => deleteNote(n.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
             </div>
           ))}
         </div>
@@ -513,7 +513,7 @@ function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, 
       <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">
         {REPORT_TABS.map(({ key, label, icon: Icon }) => (
           <button key={key} onClick={() => setReportSub(key)}
-            className={`px-3 py-1.5 rounded-md text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap shrink-0 ${reportSub === key ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition whitespace-nowrap shrink-0 ${reportSub === key ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>
             <Icon size={14} /> {label}
           </button>
         ))}
@@ -606,14 +606,14 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
 
   return (
     <div className="space-y-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-sm flex items-center gap-1.5"><Wallet size={15} className="text-lime-400" /> Тип оплаты</h3>
           <button onClick={() => setShowPromotions(true)} className={`flex items-center gap-1 text-xs font-medium rounded-lg px-2 py-1 transition ${activePromo ? "bg-orange-400/20 text-orange-300" : "text-zinc-500 hover:text-zinc-300"}`}><Percent size={13} /> Акции{activePromo ? " ✓" : ""}</button>
         </div>
         <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 w-fit">
-          <button onClick={() => patchMembership({ type: "sessions" }, true)} className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${m.type !== "subscription" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>По тренировкам</button>
-          <button onClick={() => patchMembership({ type: "subscription" }, true)} className={`px-3 py-1.5 rounded-md text-sm font-medium transition ${m.type === "subscription" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>Подписка</button>
+          <button onClick={() => patchMembership({ type: "sessions" }, true)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${m.type !== "subscription" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>По тренировкам</button>
+          <button onClick={() => patchMembership({ type: "subscription" }, true)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${m.type === "subscription" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>Подписка</button>
         </div>
 
         {m.type === "subscription" ? (
@@ -625,7 +625,7 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
         ) : (
           <>
             {templates.length > 0 && (
-              <select onChange={(e) => e.target.value && applyTemplate(e.target.value)} defaultValue="" className="w-full bg-zinc-800 rounded-lg px-2.5 py-2 text-sm outline-none">
+              <select onChange={(e) => e.target.value && applyTemplate(e.target.value)} defaultValue="" className="w-full bg-zinc-800 rounded-xl px-2.5 py-2 text-sm outline-none">
                 <option value="" className="bg-zinc-900">Применить шаблон пакета...</option>
                 {templates.map((t) => {
                   const finalPrice = t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price;
@@ -642,14 +642,14 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
             {Number(m.extraRemaining) > 0 && (
               <p className="text-xs text-cyan-300/80">+ {m.extraRemaining} тренировки доп. блока по {Math.round(Number(m.extraPricePerSession) || 0).toLocaleString("ru-RU")}₽/занятие (старый пакет, другая цена)</p>
             )}
-            <button onClick={() => setShowHistory(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg py-1.5 text-sm font-medium transition">
+            <button onClick={() => setShowHistory(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl py-1.5 text-sm font-medium transition">
               <CalendarCheck size={14} /> Посмотреть даты проведённых тренировок
             </button>
             {showHistory && <SessionHistoryModal trainerId={trainerId} clientId={clientId} onClose={() => setShowHistory(false)} />}
             <button onClick={saveAsTemplate} className="text-xs text-zinc-500 hover:text-zinc-300 transition">Сохранить текущий пакет как шаблон</button>
-            <button onClick={() => (m.split ? unlinkPartner() : patchMembership({ split: true }, true))} className={`w-full flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-sm font-medium transition ${m.split ? "bg-cyan-400/20 text-cyan-300" : "bg-zinc-800 text-zinc-400"}`}>Сплит на двоих{m.split && m.partnerClientId ? ` — ${m.partnerName}` : ""}</button>
+            <button onClick={() => (m.split ? unlinkPartner() : patchMembership({ split: true }, true))} className={`w-full flex items-center justify-center gap-1.5 rounded-xl py-1.5 text-sm font-medium transition ${m.split ? "bg-cyan-400/20 text-cyan-300" : "bg-zinc-800 text-zinc-400"}`}>Сплит на двоих{m.split && m.partnerClientId ? ` — ${m.partnerName}` : ""}</button>
             {m.split && !m.partnerClientId && (
-              <select onChange={(e) => e.target.value && linkPartner(e.target.value)} defaultValue="" className="w-full bg-zinc-800 rounded-lg px-2.5 py-2 text-sm outline-none">
+              <select onChange={(e) => e.target.value && linkPartner(e.target.value)} defaultValue="" className="w-full bg-zinc-800 rounded-xl px-2.5 py-2 text-sm outline-none">
                 <option value="" className="bg-zinc-900">Выбрать партнёра по сплиту...</option>
                 {otherClients.map((c) => <option key={c.id} value={c.id} className="bg-zinc-900">{c.name}</option>)}
               </select>
@@ -659,40 +659,40 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
             )}
           </>
         )}
-        <input value={m.note} onChange={(e) => patchMembership({ note: e.target.value })} placeholder="заметка по абонементу (необязательно)" className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+        <input value={m.note} onChange={(e) => patchMembership({ note: e.target.value })} placeholder="заметка по абонементу (необязательно)" className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
 
         <div className={`grid gap-1.5 ${!basePrice ? "opacity-40 pointer-events-none" : ""}`} style={{ gridTemplateColumns: "1fr auto auto" }}>
-          <button onClick={() => doMarkPaid("paid")} disabled={!basePrice} className="flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-lime-300 transition">
+          <button onClick={() => doMarkPaid("paid")} disabled={!basePrice} className="flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition">
             <CheckCircle2 size={15} /> Оплачено{preview && preview.amount !== basePrice ? ` — ${preview.amount.toLocaleString("ru-RU")}₽ (${preview.label})` : basePrice ? ` — ${basePrice.toLocaleString("ru-RU")}₽` : ""}
           </button>
-          <button onClick={() => doMarkPaid("deferred")} disabled={!basePrice} title="Оплатит позже — блок начислен, оплата ожидается" className="flex items-center justify-center gap-1 bg-orange-400/20 text-orange-300 font-semibold rounded-lg py-2.5 px-3 text-sm hover:bg-orange-400/30 transition">
+          <button onClick={() => doMarkPaid("deferred")} disabled={!basePrice} title="Оплатит позже — блок начислен, оплата ожидается" className="flex items-center justify-center gap-1 bg-orange-400/20 text-orange-300 font-semibold rounded-xl py-2.5 px-3 text-sm hover:bg-orange-400/30 transition">
             <Clock size={15} /> Позже
           </button>
-          <button onClick={() => doMarkPaid("installment")} disabled={!basePrice} title="Оплата частями — блок начислен, оплата разбита" className="flex items-center justify-center gap-1 bg-cyan-400/20 text-cyan-300 font-semibold rounded-lg py-2.5 px-3 text-sm hover:bg-cyan-400/30 transition">
+          <button onClick={() => doMarkPaid("installment")} disabled={!basePrice} title="Оплата частями — блок начислен, оплата разбита" className="flex items-center justify-center gap-1 bg-cyan-400/20 text-cyan-300 font-semibold rounded-xl py-2.5 px-3 text-sm hover:bg-cyan-400/30 transition">
             <SplitSquareVertical size={15} /> Частями
           </button>
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
         <h3 className="font-semibold text-sm flex items-center gap-1.5"><Receipt size={15} className="text-cyan-400" /> Журнал платежей</h3>
         {payments.length === 0 && <p className="text-xs text-zinc-600">Платежей пока нет</p>}
         {payments.map((p) => (
-          <div key={p.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
+          <div key={p.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-xl px-3 py-2 text-sm">
             <span className="text-zinc-400 shrink-0 w-20">{fmtDate(p.date)}</span>
             <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
               <span className="font-medium">{p.amount.toLocaleString("ru-RU")}₽</span>
               <span className="text-zinc-500 text-xs">{p.type === "subscription" ? "подписка" : "пакет"}</span>
-              {p.payStatus === "deferred" && <span className="text-[10px] font-semibold bg-orange-400/20 text-orange-300 rounded px-1.5 py-0.5">ожидается</span>}
-              {p.payStatus === "installment" && <span className="text-[10px] font-semibold bg-cyan-400/20 text-cyan-300 rounded px-1.5 py-0.5">частями</span>}
+              {p.payStatus === "deferred" && <span className="text-[10px] font-semibold bg-orange-400/20 text-orange-300 rounded-lg px-1.5 py-0.5">ожидается</span>}
+              {p.payStatus === "installment" && <span className="text-[10px] font-semibold bg-cyan-400/20 text-cyan-300 rounded-lg px-1.5 py-0.5">частями</span>}
               {p.promoApplied && <span className="text-orange-400 text-xs">· {p.promoApplied}</span>}
               {p.note && <span className="text-zinc-500 text-xs truncate">· {p.note}</span>}
             </span>
-            {p.payStatus !== "paid" && <button onClick={() => doMarkPaymentPaid(p.id)} className="p-1 rounded hover:bg-lime-400/20 text-zinc-500 hover:text-lime-400 transition shrink-0" title="Отметить оплаченным"><CheckCircle2 size={14} /></button>}
-            <button onClick={() => setReceipt(p)} className="p-1 rounded hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Чек"><Printer size={14} /></button>
-            <button onClick={() => splitPayment(p)} className="p-1 rounded hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Разделить"><Scissors size={14} /></button>
-            <button onClick={() => editPayment(p)} className="p-1 rounded hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Редактировать"><Pencil size={14} /></button>
-            <button onClick={() => deletePayment(p.id)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
+            {p.payStatus !== "paid" && <button onClick={() => doMarkPaymentPaid(p.id)} className="p-1 rounded-lg hover:bg-lime-400/20 text-zinc-500 hover:text-lime-400 transition shrink-0" title="Отметить оплаченным"><CheckCircle2 size={14} /></button>}
+            <button onClick={() => setReceipt(p)} className="p-1 rounded-lg hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Чек"><Printer size={14} /></button>
+            <button onClick={() => splitPayment(p)} className="p-1 rounded-lg hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Разделить"><Scissors size={14} /></button>
+            <button onClick={() => editPayment(p)} className="p-1 rounded-lg hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Редактировать"><Pencil size={14} /></button>
+            <button onClick={() => deletePayment(p.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
           </div>
         ))}
       </div>
@@ -772,20 +772,20 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 text-sm hover:bg-lime-300 transition cursor-pointer"><Camera size={15} /> Загрузить фото<input type="file" accept="image/*" onChange={onUpload} className="hidden" /></label>
+        <label className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-lime-300 transition cursor-pointer"><Camera size={15} /> Загрузить фото<input type="file" accept="image/*" onChange={onUpload} className="hidden" /></label>
         <div className="flex gap-2 flex-1 min-w-[160px]">
-          <input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addByUrl()} placeholder="или вставь ссылку на фото" className="flex-1 min-w-0 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input value={photoUrl} onChange={(e) => setPhotoUrl(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addByUrl()} placeholder="или вставь ссылку на фото" className="flex-1 min-w-0 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
           <button onClick={addByUrl} className="bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 text-sm text-zinc-200 transition">+</button>
         </div>
       </div>
       <p className="text-[11px] text-zinc-600">Загруженные фото сжимаются и хранятся в базе. Для большого архива лучше использовать ссылки.</p>
 
       {sorted.length >= 2 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
           <p className="text-xs text-zinc-500 mb-2">Сравнение: до → после</p>
           <div className="grid grid-cols-2 gap-2">
-            <div><img src={sorted[0].url} alt="до" className="w-full h-48 object-cover rounded-lg bg-zinc-800" /><p className="text-[11px] text-zinc-500 mt-1 text-center">{fmtDate(sorted[0].date)} · до</p></div>
-            <div><img src={sorted[sorted.length - 1].url} alt="после" className="w-full h-48 object-cover rounded-lg bg-zinc-800" /><p className="text-[11px] text-lime-400 mt-1 text-center">{fmtDate(sorted[sorted.length - 1].date)} · после</p></div>
+            <div><img src={sorted[0].url} alt="до" className="w-full h-48 object-cover rounded-xl bg-zinc-800" /><p className="text-[11px] text-zinc-500 mt-1 text-center">{fmtDate(sorted[0].date)} · до</p></div>
+            <div><img src={sorted[sorted.length - 1].url} alt="после" className="w-full h-48 object-cover rounded-xl bg-zinc-800" /><p className="text-[11px] text-lime-400 mt-1 text-center">{fmtDate(sorted[sorted.length - 1].date)} · после</p></div>
           </div>
         </div>
       )}
@@ -794,9 +794,9 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
         <div className="grid grid-cols-3 gap-2">
           {[...sorted].reverse().map((p) => (
             <div key={p.id} className="relative group">
-              <img src={p.url} alt="" className="w-full h-32 object-cover rounded-lg bg-zinc-800" />
-              <div className="absolute bottom-1 left-1 right-1 text-[10px] text-white bg-black/50 rounded px-1 py-0.5 text-center">{fmtDate(p.date)}</div>
-              <button onClick={() => remove(p.id)} className="absolute top-1 right-1 p-1.5 rounded-md bg-black/50 text-white hover:bg-red-500 transition"><X size={13} /></button>
+              <img src={p.url} alt="" className="w-full h-32 object-cover rounded-xl bg-zinc-800" />
+              <div className="absolute bottom-1 left-1 right-1 text-[10px] text-white bg-black/50 rounded-lg px-1 py-0.5 text-center">{fmtDate(p.date)}</div>
+              <button onClick={() => remove(p.id)} className="absolute top-1 right-1 p-1.5 rounded-lg bg-black/50 text-white hover:bg-red-500 transition"><X size={13} /></button>
             </div>
           ))}
         </div>
@@ -838,13 +838,13 @@ function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, 
 
   return (
     <div>
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 mb-4 space-y-2">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 space-y-2">
         <p className="text-sm text-zinc-400">Новый план тренировок</p>
         <div className="flex gap-2">
-          <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createPlan()} placeholder="Название плана" className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
-          <button onClick={createPlan} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-2 text-sm hover:bg-lime-300 transition shrink-0"><Plus size={15} /> Создать</button>
+          <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createPlan()} placeholder="Название плана" className="flex-1 min-w-0 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
+          <button onClick={createPlan} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-lime-300 transition shrink-0"><Plus size={15} /> Создать</button>
         </div>
-        <button onClick={() => setShowCatalog(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg py-2 text-sm transition"><Sparkles size={15} className="text-lime-400" /> Создать из готового</button>
+        <button onClick={() => setShowCatalog(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl py-2 text-sm transition"><Sparkles size={15} className="text-lime-400" /> Создать из готового</button>
       </div>
       {showCatalog && (
         <PlanCreateModal
@@ -863,12 +863,12 @@ function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, 
         <div className="space-y-2">
           {plans.length === 0 && <p className="text-zinc-600 text-sm text-center py-8">Планов пока нет</p>}
           {plans.map((p) => (
-            <button key={p.id} onClick={() => onOpenPlan(p.id)} className="w-full text-left bg-zinc-900 border border-zinc-800 rounded-xl p-3 hover:border-zinc-700 transition flex items-center justify-between gap-2">
+            <button key={p.id} onClick={() => onOpenPlan(p.id)} className="w-full text-left bg-zinc-900 border border-zinc-800 rounded-2xl p-3 hover:border-zinc-700 transition flex items-center justify-between gap-2">
               <span className="font-medium truncate">{p.name}</span>
               <span className="flex items-center gap-2 shrink-0">
-                {p.archived && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded px-1.5 py-0.5">архив</span>}
-                <span onClick={(e) => duplicate(p.id, p.name, e)} className={`p-1 rounded hover:bg-zinc-700 hover:text-zinc-200 text-zinc-500 transition ${dupId === p.id ? "opacity-40" : ""}`} title="Дублировать план"><Copy size={14} /></span>
-                <span onClick={(e) => deletePlan(p.id, p.name, e)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить"><Trash2 size={14} /></span>
+                {p.archived && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded-lg px-1.5 py-0.5">архив</span>}
+                <span onClick={(e) => duplicate(p.id, p.name, e)} className={`p-1 rounded-lg hover:bg-zinc-700 hover:text-zinc-200 text-zinc-500 transition ${dupId === p.id ? "opacity-40" : ""}`} title="Дублировать план"><Copy size={14} /></span>
+                <span onClick={(e) => deletePlan(p.id, p.name, e)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить"><Trash2 size={14} /></span>
               </span>
             </button>
           ))}

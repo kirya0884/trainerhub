@@ -37,10 +37,10 @@ export default function TrashModal({ trainerId, onClose }: { trainerId: string; 
             <p className="text-zinc-400 mb-2">Удалённые подопечные</p>
             <div className="space-y-1.5">
               {clients.map((c) => (
-                <div key={c.id} className="flex items-center gap-2 bg-zinc-800/60 rounded-lg px-3 py-2">
+                <div key={c.id} className="flex items-center gap-2 bg-zinc-800/60 rounded-xl px-3 py-2">
                   <span className="flex-1 truncate">{c.name}</span>
-                  <button onClick={() => restoreClient(c.id)} className="p-1.5 rounded hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={15} /></button>
-                  <button onClick={() => purgeClient(c.id, c.name)} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={15} /></button>
+                  <button onClick={() => restoreClient(c.id)} className="p-1.5 rounded-lg hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={15} /></button>
+                  <button onClick={() => purgeClient(c.id, c.name)} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={15} /></button>
                 </div>
               ))}
             </div>
@@ -52,10 +52,10 @@ export default function TrashModal({ trainerId, onClose }: { trainerId: string; 
             <p className="text-zinc-400 mb-2">Удалённые планы</p>
             <div className="space-y-1.5">
               {plans.map((p) => (
-                <div key={p.id} className="flex items-center gap-2 bg-zinc-800/60 rounded-lg px-3 py-2">
+                <div key={p.id} className="flex items-center gap-2 bg-zinc-800/60 rounded-xl px-3 py-2">
                   <span className="flex-1 truncate">{p.name}</span>
-                  <button onClick={() => restorePlan(p.id)} className="p-1.5 rounded hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={15} /></button>
-                  <button onClick={() => purgePlan(p.id, p.name)} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={15} /></button>
+                  <button onClick={() => restorePlan(p.id)} className="p-1.5 rounded-lg hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={15} /></button>
+                  <button onClick={() => purgePlan(p.id, p.name)} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={15} /></button>
                 </div>
               ))}
             </div>

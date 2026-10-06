@@ -83,11 +83,11 @@ export default function ExerciseHistoryModal({
       <div className="p-4 space-y-3">
         <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5">
           <button onClick={() => setView("sets")}
-            className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium flex items-center justify-center gap-1.5 transition ${view === "sets" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-200"}`}>
+            className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition ${view === "sets" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-200"}`}>
             <ListOrdered size={14} /> Подходы
           </button>
           <button onClick={() => setView("chart")}
-            className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium flex items-center justify-center gap-1.5 transition ${view === "chart" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-200"}`}>
+            className={`flex-1 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center justify-center gap-1.5 transition ${view === "chart" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-200"}`}>
             <BarChart3 size={14} /> График
           </button>
         </div>

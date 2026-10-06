@@ -57,7 +57,7 @@ export default function ClientSettingsModal({ clientId, initial, onClose, onSave
           ) : (
             <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 text-xl font-bold">{form.name?.[0] || "?"}</div>
           )}
-          <label className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg px-3 py-2 text-sm transition cursor-pointer">
+          <label className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl px-3 py-2 text-sm transition cursor-pointer">
             <Camera size={15} /> Сменить фото
             <input type="file" accept="image/*" onChange={onAvatarFile} className="hidden" />
           </label>
@@ -66,10 +66,10 @@ export default function ClientSettingsModal({ clientId, initial, onClose, onSave
         {/* Основные */}
         <div className="grid grid-cols-1 gap-2">
           <label className="block text-xs text-zinc-500">Имя
-            <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ваше имя" className="w-full mt-0.5 bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
+            <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ваше имя" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
           </label>
           <label className="block text-xs text-zinc-500">Цель
-            <select value={form.goal} onChange={(e) => setForm((p) => ({ ...p, goal: e.target.value }))} className="w-full mt-0.5 bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties}>
+            <select value={form.goal} onChange={(e) => setForm((p) => ({ ...p, goal: e.target.value }))} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties}>
               <option value="">— не указана —</option>
               {GOALS.map((g) => <option key={g} value={g}>{g}</option>)}
             </select>
@@ -79,17 +79,17 @@ export default function ClientSettingsModal({ clientId, initial, onClose, onSave
         {/* Контакты */}
         <div className="space-y-2">
           <p className="text-xs text-zinc-500 font-medium">Контакты</p>
-          <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Телефон +7..." className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
-          <input value={form.telegram} onChange={(e) => setForm((p) => ({ ...p, telegram: e.target.value }))} placeholder="Telegram @username" className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
-          <input value={form.whatsapp} onChange={(e) => setForm((p) => ({ ...p, whatsapp: e.target.value }))} placeholder="WhatsApp +7..." className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
+          <input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} placeholder="Телефон +7..." className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
+          <input value={form.telegram} onChange={(e) => setForm((p) => ({ ...p, telegram: e.target.value }))} placeholder="Telegram @username" className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
+          <input value={form.whatsapp} onChange={(e) => setForm((p) => ({ ...p, whatsapp: e.target.value }))} placeholder="WhatsApp +7..." className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
         </div>
 
         {/* Здоровье */}
         <div className="space-y-2">
           <p className="text-xs text-zinc-500 font-medium">Здоровье</p>
-          <input value={form.health.injuries} onChange={(e) => patchHealth({ injuries: e.target.value })} placeholder="Травмы / ограничения" className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
-          <input value={form.health.restrictions} onChange={(e) => patchHealth({ restrictions: e.target.value })} placeholder="Противопоказания" className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
-          <input value={form.health.notes} onChange={(e) => patchHealth({ notes: e.target.value })} placeholder="Заметки о здоровье" className="w-full bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
+          <input value={form.health.injuries} onChange={(e) => patchHealth({ injuries: e.target.value })} placeholder="Травмы / ограничения" className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
+          <input value={form.health.restrictions} onChange={(e) => patchHealth({ restrictions: e.target.value })} placeholder="Противопоказания" className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
+          <input value={form.health.notes} onChange={(e) => patchHealth({ notes: e.target.value })} placeholder="Заметки о здоровье" className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
         </div>
 
         {/* Цвет */}
@@ -106,7 +106,7 @@ export default function ClientSettingsModal({ clientId, initial, onClose, onSave
           </div>
         </div>
 
-        <button onClick={save} disabled={busy} className="w-full text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:opacity-90 transition disabled:opacity-50" style={{ background: accent }}>
+        <button onClick={save} disabled={busy} className="w-full text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:opacity-90 transition disabled:opacity-50" style={{ background: accent }}>
           {busy ? "Сохранение..." : "Сохранить"}
         </button>
       </div>

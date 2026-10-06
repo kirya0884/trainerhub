@@ -28,7 +28,7 @@ export function PrintBrandHeader({ brand, date }: { brand: { brand: string; logo
   return (
     <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-300">
       <div className="flex items-center gap-2">
-        {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-8 h-8 rounded object-cover" />}
+        {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-8 h-8 rounded-lg object-cover" />}
         <span className="font-bold">{brand.brand}</span>
       </div>
       {date && <span className="text-sm text-zinc-500">{date}</span>}

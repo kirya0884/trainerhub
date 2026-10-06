@@ -30,7 +30,7 @@ export default function ClientProgressPrintView({ clientId, planIds, clientName,
       <div className="print-area max-w-2xl mx-auto bg-white text-zinc-900 p-6 my-4 rounded-xl">
         <div className="flex items-center justify-between mb-4 pb-3 border-b border-zinc-300">
           <div className="flex items-center gap-2">
-            {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-8 h-8 rounded object-cover" />}
+            {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-8 h-8 rounded-lg object-cover" />}
             <span className="font-bold">{brand.brand}</span>
           </div>
           <span className="text-sm text-zinc-500">{new Date().toLocaleDateString("ru-RU")}</span>
@@ -39,8 +39,8 @@ export default function ClientProgressPrintView({ clientId, planIds, clientName,
         <p className="text-sm text-zinc-600 mb-4">Подопечный: {clientName}</p>
 
         <div className="flex gap-4 mb-4 text-sm">
-          <div className="bg-zinc-100 rounded-lg px-3 py-2"><span className="text-zinc-500">Тренировок проведено: </span><span className="font-semibold">{sessions.length}</span></div>
-          {attendanceRate != null && <div className="bg-zinc-100 rounded-lg px-3 py-2"><span className="text-zinc-500">Посещаемость: </span><span className="font-semibold">{attendanceRate}%</span></div>}
+          <div className="bg-zinc-100 rounded-xl px-3 py-2"><span className="text-zinc-500">Тренировок проведено: </span><span className="font-semibold">{sessions.length}</span></div>
+          {attendanceRate != null && <div className="bg-zinc-100 rounded-xl px-3 py-2"><span className="text-zinc-500">Посещаемость: </span><span className="font-semibold">{attendanceRate}%</span></div>}
         </div>
 
         {usedMetrics.length > 0 && (

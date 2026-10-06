@@ -34,16 +34,16 @@ export default function PinSettingsModal({ id, table = "trainers", onClose }: { 
         <input
           type="text" inputMode="numeric" placeholder="Новый PIN (4-8 цифр)" value={pin}
           onChange={(e) => { setPinVal(e.target.value.replace(/\D/g, "").slice(0, 8)); setErr(""); }}
-          className="w-full bg-zinc-800 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-lime-400/40"
+          className="w-full bg-zinc-800 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-lime-400/40"
         />
         <input
           type="text" inputMode="numeric" placeholder="Повторите PIN" value={confirm}
           onChange={(e) => { setConfirm(e.target.value.replace(/\D/g, "").slice(0, 8)); setErr(""); }}
-          className="w-full bg-zinc-800 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-lime-400/40"
+          className="w-full bg-zinc-800 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-lime-400/40"
         />
         {err && <p className="text-orange-400">{err}</p>}
-        <button onClick={save} disabled={busy} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-lg py-2.5 hover:bg-lime-300 transition disabled:opacity-50">{hasPin ? "Сменить PIN" : "Установить PIN"}</button>
-        {hasPin && <button onClick={clear} disabled={busy} className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg py-2.5 transition disabled:opacity-50">Снять PIN-защиту</button>}
+        <button onClick={save} disabled={busy} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 hover:bg-lime-300 transition disabled:opacity-50">{hasPin ? "Сменить PIN" : "Установить PIN"}</button>
+        {hasPin && <button onClick={clear} disabled={busy} className="w-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl py-2.5 transition disabled:opacity-50">Снять PIN-защиту</button>}
       </div>
     </ModalShell>
   );

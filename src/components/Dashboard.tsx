@@ -48,7 +48,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
       type="button"
       onClick={() => onOpenClient(id)}
       title={`Открыть карточку: ${name}`}
-      className={`inline py-1 -my-1 rounded text-left underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current transition ${className}`}
+      className={`inline py-1 -my-1 rounded-lg text-left underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current transition ${className}`}
     >{name}</button>
   );
   const [data, setData] = useState<{ clients: DashboardClient[]; payments: DashboardPayment[] } | null>(null);
@@ -131,21 +131,21 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         // заранее неизвестно, поэтому скачок уменьшается, но не исчезает полностью.
         <div className="animate-pulse space-y-5" aria-hidden="true">
           <div className="pt-1">
-            <div className="h-3 w-32 bg-zinc-800 rounded" />
+            <div className="h-3 w-32 bg-zinc-800 rounded-lg" />
           </div>
           <div className="space-y-2">
-            <div className="h-3 w-32 bg-zinc-800 rounded" />
+            <div className="h-3 w-32 bg-zinc-800 rounded-lg" />
             <div className="h-24 bg-zinc-900 border border-zinc-800 rounded-2xl" />
           </div>
           <div className="space-y-2">
-            <div className="h-3 w-28 bg-zinc-800 rounded" />
+            <div className="h-3 w-28 bg-zinc-800 rounded-lg" />
             <div className="grid grid-cols-2 gap-2">
               <div className="h-20 bg-zinc-900 border border-zinc-800 rounded-2xl" />
               <div className="h-20 bg-zinc-900 border border-zinc-800 rounded-2xl" />
             </div>
           </div>
           <div className="space-y-2">
-            <div className="h-3 w-36 bg-zinc-800 rounded" />
+            <div className="h-3 w-36 bg-zinc-800 rounded-lg" />
             <div className="space-y-1.5">
               <div className="h-11 bg-zinc-900 border border-zinc-800 rounded-xl" />
               <div className="h-11 bg-zinc-900 border border-zinc-800 rounded-xl" />
@@ -408,7 +408,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           <p className="text-sm font-semibold text-zinc-400">Доход: {periodLabel}</p>
           <div className="flex gap-0.5 bg-zinc-800/60 rounded-lg p-0.5">
             {PERIODS.map(([k, l]) => (
-              <button key={k} onClick={() => setPeriod(k)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition ${period === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
+              <button key={k} onClick={() => setPeriod(k)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${period === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
             ))}
           </div>
         </div>
@@ -502,9 +502,9 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           {[...paymentsThisMonth].sort((a, b) => b.date.localeCompare(a.date)).map((p, i) => {
             const cName = clientById[p.clientId]?.name ?? "—";
             const badge = p.payStatus === "deferred"
-              ? <span className="text-[10px] text-orange-400 bg-orange-400/10 rounded px-1 shrink-0">ожидание</span>
+              ? <span className="text-[10px] text-orange-400 bg-orange-400/10 rounded-lg px-1 shrink-0">ожидание</span>
               : p.payStatus === "installment"
-              ? <span className="text-[10px] text-yellow-400 bg-yellow-400/10 rounded px-1 shrink-0">рассрочка</span>
+              ? <span className="text-[10px] text-yellow-400 bg-yellow-400/10 rounded-lg px-1 shrink-0">рассрочка</span>
               : null;
             return (
               <div key={i} className="flex items-center gap-2 text-sm">

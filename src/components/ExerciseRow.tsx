@@ -67,7 +67,7 @@ function ExerciseRow({
       <div data-ds-idx={index} className={`flex items-center gap-1 rounded-xl transition-shadow ${dragCls}`}>
         {handle}
         <button type="button" onClick={() => onToggleCollapse(ex.id)} aria-label={`${ex.name}: развернуть`}
-          className="flex-1 min-w-0 flex items-center gap-2.5 py-2 pr-1.5 text-left rounded-lg hover:bg-zinc-800/50 transition">
+          className="flex-1 min-w-0 flex items-center gap-2.5 py-2 pr-1.5 text-left rounded-xl hover:bg-zinc-800/50 transition">
           <span className="w-7 h-7 shrink-0 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">{label}</span>
           <span className="flex-1 min-w-0 font-semibold truncate">{ex.name}</span>
           {summary && <span className="shrink-0 text-sm font-semibold text-zinc-400 whitespace-nowrap">{summary}</span>}
@@ -85,21 +85,21 @@ function ExerciseRow({
         {onToggleCollapse && (
           <button onClick={() => { if (forceOpen) setForceOpen(false); else onToggleCollapse(ex.id); }} type="button"
             title="Свернуть упражнение" aria-label="Свернуть упражнение"
-            className="shrink-0 p-1 rounded-md hover:bg-zinc-700 active:bg-zinc-700 text-zinc-500 hover:text-zinc-300 active:text-lime-400 transition-colors duration-100">
+            className="shrink-0 p-1 rounded-lg hover:bg-zinc-700 active:bg-zinc-700 text-zinc-500 hover:text-zinc-300 active:text-lime-400 transition-colors duration-100">
             <ChevronDown size={15} />
           </button>
         )}
-        <button onClick={cycleGroup} title="Суперсет: объединить упражнения в группу" className={`shrink-0 min-w-7 h-7 px-1 rounded-md text-xs font-bold flex items-center justify-center transition ${ex.group ? "text-zinc-950" : "text-zinc-500 bg-zinc-800 hover:bg-zinc-700"}`} style={ex.group ? { background: groupColor ?? undefined } : undefined}>{label}</button>
-        <button onClick={() => setShowVideo((v) => !v)} title="Видео-превью" className={`p-1.5 rounded-md transition shrink-0 ${showVideo ? "text-lime-400 bg-lime-400/10" : ex.video ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Video size={15} /></button>
-        <button onClick={() => update({ kind: ex.kind === "functional" ? "" : "functional" })} title="Функциональное упражнение (время/пульс вместо подходов)" className={`p-1.5 rounded-md transition shrink-0 ${ex.kind === "functional" ? "text-orange-400 bg-orange-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Activity size={15} /></button>
-        {ex.kind !== "functional" && <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-md transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>}
-        <button onClick={() => { if (window.confirm(`Удалить упражнение «${ex.name || "без названия"}»? Подходы и комментарии удалятся вместе с ним.`)) remove(); }} title="Удалить упражнение" aria-label="Удалить упражнение" className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
+        <button onClick={cycleGroup} title="Суперсет: объединить упражнения в группу" className={`shrink-0 min-w-7 h-7 px-1 rounded-lg text-xs font-bold flex items-center justify-center transition ${ex.group ? "text-zinc-950" : "text-zinc-500 bg-zinc-800 hover:bg-zinc-700"}`} style={ex.group ? { background: groupColor ?? undefined } : undefined}>{label}</button>
+        <button onClick={() => setShowVideo((v) => !v)} title="Видео-превью" className={`p-1.5 rounded-lg transition shrink-0 ${showVideo ? "text-lime-400 bg-lime-400/10" : ex.video ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Video size={15} /></button>
+        <button onClick={() => update({ kind: ex.kind === "functional" ? "" : "functional" })} title="Функциональное упражнение (время/пульс вместо подходов)" className={`p-1.5 rounded-lg transition shrink-0 ${ex.kind === "functional" ? "text-orange-400 bg-orange-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Activity size={15} /></button>
+        {ex.kind !== "functional" && <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-lg transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>}
+        <button onClick={() => { if (window.confirm(`Удалить упражнение «${ex.name || "без названия"}»? Подходы и комментарии удалятся вместе с ним.`)) remove(); }} title="Удалить упражнение" aria-label="Удалить упражнение" className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
       </div>
 
       {/* Р5: имя на своей строке. В общем ряду с семью кнопками ему оставалось
           около 150 px на экране 360 px — набирать длинные названия было нечем. */}
         <div className="relative w-full">
-          <input value={ex.name} onChange={(e) => { const v = e.target.value; startTransition(() => update({ name: v })); setAcOpen(true); }} onFocus={() => setAcOpen(true)} onBlur={() => setTimeout(() => setAcOpen(false), 150)} placeholder="Название упражнения" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input value={ex.name} onChange={(e) => { const v = e.target.value; startTransition(() => update({ name: v })); setAcOpen(true); }} onFocus={() => setAcOpen(true)} onBlur={() => setTimeout(() => setAcOpen(false), 150)} placeholder="Название упражнения" className="w-full bg-zinc-800 rounded-xl px-2.5 py-1.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
           {acOpen && q && !exactExists && (
             <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
               {matches.map((n) => (<button key={n} onMouseDown={(e) => { e.preventDefault(); update({ name: n }); setAcOpen(false); }} className="w-full text-left text-sm px-3 py-2 hover:bg-zinc-800 text-zinc-200 transition">{n}</button>))}
@@ -112,12 +112,12 @@ function ExerciseRow({
       {(!collapsed || forceOpen || !onToggleCollapse) && (<>
         {showVideo && (
           <div className="pl-6 space-y-1.5">
-            <input value={ex.video} onChange={(e) => { const v = e.target.value; startTransition(() => update({ video: v })); }} placeholder="Ссылка на видео (YouTube или .mp4)" className="w-full bg-zinc-800 rounded-md px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
+            <input value={ex.video} onChange={(e) => { const v = e.target.value; startTransition(() => update({ video: v })); }} placeholder="Ссылка на видео (YouTube или .mp4)" className="w-full bg-zinc-800 rounded-xl px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
             {ex.video && (
               /\.(mp4|webm|ogg)$/i.test(ex.video) ? (
-                <video src={ex.video} controls className="w-full max-h-56 rounded-lg bg-black" />
+                <video src={ex.video} controls className="w-full max-h-56 rounded-xl bg-black" />
               ) : (
-                <iframe src={toEmbedUrl(ex.video)} className="w-full aspect-video rounded-lg" allowFullScreen loading="lazy" title={ex.name || "Видео упражнения"} />
+                <iframe src={toEmbedUrl(ex.video)} className="w-full aspect-video rounded-xl" allowFullScreen loading="lazy" title={ex.name || "Видео упражнения"} />
               )
             )}
           </div>
@@ -134,16 +134,16 @@ function ExerciseRow({
             {ex.setRows.map((s, i) => (
               <div key={s.id} className="flex items-center gap-2">
                 <span className="text-xs text-zinc-400 w-5 text-center shrink-0 font-medium">{i + 1}</span>
-                <input value={s.weight} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="вес" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                <input value={s.weight} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { weight: v })); }} placeholder="вес" className="h-9 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
                 <span className="text-xs text-zinc-500">×</span>
-                <input value={s.reps} inputMode="numeric" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-md px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
-                <button onClick={() => removeSetRow(s.id)} className="ml-auto p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition" title="Удалить подход"><X size={13} /></button>
+                <input value={s.reps} inputMode="numeric" onChange={(e) => { const v = e.target.value; startTransition(() => updateSetRow(s.id, { reps: v })); }} placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                <button onClick={() => removeSetRow(s.id)} className="ml-auto p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition" title="Удалить подход"><X size={13} /></button>
               </div>
             ))}
             <div className="flex items-center gap-3 mt-0.5">
               <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-lime-400 transition"><Plus size={13} /> подход</button>
               <span className="text-[10px] uppercase tracking-wide text-zinc-500 ml-auto">Отдых</span>
-              <input value={ex.rest} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-md px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+              <input value={ex.rest} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-lg px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
             </div>
           </div>
         ) : (

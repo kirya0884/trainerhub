@@ -62,7 +62,7 @@ export default function ChatThread({ trainerId, clientId, self, accent = "#a3e63
               <span className="flex-1 h-px bg-zinc-700" />
             </div>
           )}
-          <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm ${m.sender === self ? "ml-auto text-zinc-950" : "bg-zinc-800 text-zinc-100"}`} style={m.sender === self ? { background: accent } : undefined}>
+          <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${m.sender === self ? "ml-auto text-zinc-950" : "bg-zinc-800 text-zinc-100"}`} style={m.sender === self ? { background: accent } : undefined}>
             {m.text}
             <p className={`text-[10px] mt-0.5 ${m.sender === self ? "text-zinc-950/60" : "text-zinc-500"}`}>{new Date(m.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</p>
           </div>
@@ -71,7 +71,7 @@ export default function ChatThread({ trainerId, clientId, self, accent = "#a3e63
         <div ref={bottomRef} />
       </div>
       <div className="border-t border-zinc-800 p-2 flex gap-2 shrink-0">
-        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Сообщение..." className="flex-1 min-w-0 bg-zinc-800 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+        <input value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && send()} placeholder="Сообщение..." className="flex-1 min-w-0 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
         <button onClick={send} title="Отправить" aria-label="Отправить сообщение" className="rounded-lg px-3 text-zinc-950 font-semibold transition shrink-0" style={{ background: accent }}><Send size={16} /></button>
       </div>
     </div>

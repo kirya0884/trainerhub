@@ -83,64 +83,64 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             <h2 className="text-xl font-extrabold tracking-tight truncate">{SECTIONS[section]}</h2>
           </div>
           {section === "personal" && (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-3">
           {profile.avatarUrl ? (
             <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover border border-zinc-700" />
           ) : (
             <div className="w-16 h-16 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-500 text-xl font-bold">{(profile.name || email)[0]?.toUpperCase()}</div>
           )}
-          <label className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg px-3 py-2 text-sm transition cursor-pointer">
+          <label className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl px-3 py-2 text-sm transition cursor-pointer">
             <Camera size={15} /> Сменить фото
             <input type="file" accept="image/*" onChange={onPhotoFile} className="hidden" />
           </label>
         </div>
         <div className="grid sm:grid-cols-2 gap-2">
           <label className="text-xs text-zinc-500">Имя
-            <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Введите имя" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Введите имя" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
           <label className="text-xs text-zinc-500">Специализация
-            <input value={profile.specialization} onChange={(e) => setProfile({ ...profile, specialization: e.target.value })} placeholder="Например, силовой тренинг" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={profile.specialization} onChange={(e) => setProfile({ ...profile, specialization: e.target.value })} placeholder="Например, силовой тренинг" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
         </div>
         <label className="text-xs text-zinc-500 block">О себе
-          <textarea value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} rows={3} placeholder="Короткий рассказ о себе и подходе к тренировкам" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" />
+          <textarea value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} rows={3} placeholder="Короткий рассказ о себе и подходе к тренировкам" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" />
         </label>
         <div className="grid sm:grid-cols-3 gap-2">
           <label className="text-xs text-zinc-500">Телефон
-            <input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} placeholder="+7..." className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} placeholder="+7..." className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
           <label className="text-xs text-zinc-500">Telegram
-            <input value={profile.telegram} onChange={(e) => setProfile({ ...profile, telegram: e.target.value })} placeholder="@username" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={profile.telegram} onChange={(e) => setProfile({ ...profile, telegram: e.target.value })} placeholder="@username" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
           <label className="text-xs text-zinc-500">WhatsApp
-            <input value={profile.whatsapp} onChange={(e) => setProfile({ ...profile, whatsapp: e.target.value })} placeholder="+7..." className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={profile.whatsapp} onChange={(e) => setProfile({ ...profile, whatsapp: e.target.value })} placeholder="+7..." className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
         </div>
-        <button onClick={saveProfile} disabled={savingProfile} className="w-full text-zinc-950 font-semibold rounded-lg py-2.5 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingProfile ? "Сохранение..." : "Сохранить профиль"}</button>
+        <button onClick={saveProfile} disabled={savingProfile} className="w-full text-zinc-950 font-semibold rounded-xl py-2.5 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingProfile ? "Сохранение..." : "Сохранить профиль"}</button>
       </div>
           )}
           {section === "brand" && (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <div className="flex items-center gap-3">
           {brand.logoUrl ? (
-            <img src={brand.logoUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-zinc-700" />
+            <img src={brand.logoUrl} alt="" className="w-12 h-12 rounded-xl object-cover border border-zinc-700" />
           ) : (
-            <div className="w-12 h-12 rounded-lg bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs">лого</div>
+            <div className="w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center text-zinc-600 text-xs">лого</div>
           )}
-          <label className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg px-3 py-2 text-sm transition cursor-pointer">
+          <label className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl px-3 py-2 text-sm transition cursor-pointer">
             <Camera size={15} /> Загрузить логотип
             <input type="file" accept="image/*" onChange={onLogoFile} className="hidden" />
           </label>
         </div>
         <label className="text-xs text-zinc-500 block">Название бренда
-          <input value={brand.brand} onChange={(e) => setBrand({ ...brand, brand: e.target.value })} placeholder="Reps" className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
+          <input value={brand.brand} onChange={(e) => setBrand({ ...brand, brand: e.target.value })} placeholder="Reps" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" />
         </label>
-        <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
+        <button onClick={saveBrand} disabled={savingBrand} className="w-full bg-cyan-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-cyan-300 transition disabled:opacity-50">{savingBrand ? "Сохранение..." : "Сохранить бренд"}</button>
       </div>
           )}
           {section === "accent" && (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <div className="flex flex-wrap gap-2">
           {["#a3e635","#22d3ee","#fb923c","#f472b6","#a78bfa","#facc15","#34d399","#f87171","#60a5fa","#e879f9"].map((c) => (
             <button key={c} onClick={() => setProfile({ ...profile, accentColor: c })} className="w-8 h-8 rounded-full border-2 transition" style={{ background: c, borderColor: profile.accentColor === c ? "#fff" : "transparent" }} title={c} />
@@ -155,11 +155,11 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             </button>
           </div>
         )}
-        <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl, profile.accentColor); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить цвет"}</button>
+        <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl, profile.accentColor); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить цвет"}</button>
       </div>
           )}
           {section === "tabs" && tabs && onToggleTab && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
           <p className="text-xs text-zinc-500">Галочка — показывать раздел, стрелки — порядок. «Главная» всегда первая.</p>
           <div className="space-y-0.5">
             {tabs.map((t, i) => (
@@ -170,8 +170,8 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
                 </label>
                 {onMoveTab && (
                   <>
-                    <button onClick={() => onMoveTab(t.kind, -1)} disabled={i === 0} aria-label={`Переместить «${t.label}» выше`} className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:pointer-events-none transition"><ChevronUp size={18} /></button>
-                    <button onClick={() => onMoveTab(t.kind, 1)} disabled={i === tabs.length - 1} aria-label={`Переместить «${t.label}» ниже`} className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:pointer-events-none transition"><ChevronDown size={18} /></button>
+                    <button onClick={() => onMoveTab(t.kind, -1)} disabled={i === 0} aria-label={`Переместить «${t.label}» выше`} className="w-10 h-10 flex items-center justify-center rounded-xl text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:pointer-events-none transition"><ChevronUp size={18} /></button>
+                    <button onClick={() => onMoveTab(t.kind, 1)} disabled={i === tabs.length - 1} aria-label={`Переместить «${t.label}» ниже`} className="w-10 h-10 flex items-center justify-center rounded-xl text-zinc-400 hover:text-zinc-100 disabled:opacity-25 disabled:pointer-events-none transition"><ChevronDown size={18} /></button>
                   </>
                 )}
               </div>
@@ -180,16 +180,16 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         </div>
           )}
           {section === "rules" && (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <p className="text-xs text-zinc-500">Эти правила видят все ваши подопечные в личном кабинете</p>
         <textarea
           value={profile.trainingRules}
           onChange={(e) => setProfile({ ...profile, trainingRules: e.target.value })}
           rows={6}
           placeholder={"Например:\n• Тренировка списывается при отмене менее чем за 24 часа\n• Пакет действителен 3 месяца с даты оплаты\n• Перенос возможен не более 2 раз в месяц"}
-          className="w-full bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none"
+          className="w-full bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none"
         />
-        <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить правила"}</button>
+        <button onClick={async () => { setSavingRules(true); try { await trainerApi.saveTrainerProfile(trainerId, profile); } finally { setSavingRules(false); } }} disabled={savingRules} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{savingRules ? "Сохранение..." : "Сохранить правила"}</button>
       </div>
           )}
           {section === "security" && (
@@ -199,12 +199,12 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
                   <Lock size={18} className="text-zinc-400 shrink-0" /><span className="flex-1 font-medium">PIN-код на вход</span><ChevronRight size={18} className="text-zinc-500 shrink-0" />
                 </button>
               )}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <p className="text-xs text-zinc-500">Email: <span className="text-zinc-300">{email}</span></p>
         <div className="space-y-2">
           <p className="text-xs text-zinc-500">Сменить пароль</p>
-          <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <input type="password" value={newPw2} onChange={(e) => setNewPw2(e.target.value)} placeholder="Повтори пароль" className="w-full bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="password" value={newPw} onChange={(e) => setNewPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="password" value={newPw2} onChange={(e) => setNewPw2(e.target.value)} placeholder="Повтори пароль" className="w-full bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           {pwMsg && <p className="text-xs text-cyan-400">{pwMsg}</p>}
           <button
             disabled={pwBusy || !newPw}
@@ -217,7 +217,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
               else { setPwMsg("Пароль изменён"); setNewPw(""); setNewPw2(""); }
               setPwBusy(false);
             }}
-            className="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium rounded-lg py-2 text-sm transition disabled:opacity-50"
+            className="w-full bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium rounded-xl py-2 text-sm transition disabled:opacity-50"
           >
             {pwBusy ? "Сохранение..." : "Сменить пароль"}
           </button>
@@ -235,7 +235,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             </>
           )}
           {section === "packages" && (
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <p className="text-xs text-zinc-500">Создайте шаблоны один раз — применяйте в карточке подопечного одним кликом</p>
         {templates.map((t) => {
           const draft = editingTpl[t.id] ?? t;
@@ -248,18 +248,18 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           return (
             <div key={t.id} className="bg-zinc-800/60 rounded-lg p-3 space-y-2">
               <div className="flex items-center gap-2">
-                <input value={draft.name} onChange={(e) => setDraft({ name: e.target.value })} onBlur={save} className="flex-1 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" placeholder="Название" />
-                <button onClick={() => deletePackageTemplate(t.id).then(() => setTemplates((p) => p.filter((x) => x.id !== t.id))).catch((e) => console.error("[TrainerProfile] deleteTemplate:", e))} className="p-1.5 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
+                <input value={draft.name} onChange={(e) => setDraft({ name: e.target.value })} onBlur={save} className="flex-1 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" placeholder="Название" />
+                <button onClick={() => deletePackageTemplate(t.id).then(() => setTemplates((p) => p.filter((x) => x.id !== t.id))).catch((e) => console.error("[TrainerProfile] deleteTemplate:", e))} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <label className="text-xs text-zinc-500">Тренировок
-                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.sessions ?? String(draft.sessions || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: e.target.value}}))} onBlur={() => { const v = Math.max(1, parseInt(rawTpl[t.id]?.sessions ?? "") || draft.sessions); setDraft({ sessions: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.sessions ?? String(draft.sessions || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: e.target.value}}))} onBlur={() => { const v = Math.max(1, parseInt(rawTpl[t.id]?.sessions ?? "") || draft.sessions); setDraft({ sessions: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Цена пакета ₽
-                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.price ?? String(draft.price || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: e.target.value}}))} onBlur={() => { const v = parseInt(rawTpl[t.id]?.price ?? "") || 0; setDraft({ price: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.price ?? String(draft.price || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: e.target.value}}))} onBlur={() => { const v = parseInt(rawTpl[t.id]?.price ?? "") || 0; setDraft({ price: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Скидка %
-                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.discount ?? String(draft.discount || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: e.target.value}}))} onBlur={() => { const v = Math.min(100, Math.max(0, parseInt(rawTpl[t.id]?.discount ?? "") || 0)); setDraft({ discount: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.discount ?? String(draft.discount || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: e.target.value}}))} onBlur={() => { const v = Math.min(100, Math.max(0, parseInt(rawTpl[t.id]?.discount ?? "") || 0)); setDraft({ discount: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
               </div>
               <div className="flex items-center justify-between">
@@ -279,7 +279,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             await savePackageTemplate(trainerId, { name: "Новый пакет", sessions: 8, price: 0, discount: 0, split: false });
             fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[TrainerProfile] fetchTemplates:", e));
           }}
-          className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg py-2 text-sm transition"
+          className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl py-2 text-sm transition"
         >
           <Plus size={14} /> Добавить шаблон
         </button>

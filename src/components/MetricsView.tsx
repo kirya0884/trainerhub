@@ -52,8 +52,8 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
       {showForm && (
         <div className="bg-zinc-800/40 rounded-xl p-3 space-y-2">
           <div className="grid grid-cols-2 gap-2">
-            <label className="text-xs text-zinc-500">Дата<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
-            <label className="text-xs text-zinc-500">Упражнение<select value={form.exercise} onChange={(e) => setForm({ ...form, exercise: e.target.value })} className="w-full mt-0.5 bg-zinc-800 rounded-md px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40">{exercises.map((ex) => <option key={ex} value={ex}>{ex}</option>)}</select></label>
+            <label className="text-xs text-zinc-500">Дата<input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
+            <label className="text-xs text-zinc-500">Упражнение<select value={form.exercise} onChange={(e) => setForm({ ...form, exercise: e.target.value })} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40">{exercises.map((ex) => <option key={ex} value={ex}>{ex}</option>)}</select></label>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <NumField label="Вес кг" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} placeholder="65" />
@@ -61,12 +61,12 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
             <NumField label="Отдых с" value={form.rest} onChange={(e) => setForm({ ...form, rest: e.target.value })} placeholder="120" />
             <NumField label="Подходы" value={form.sets} onChange={(e) => setForm({ ...form, sets: e.target.value })} placeholder="4" />
           </div>
-          <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-lg py-2 text-sm transition" style={{ background: "var(--accent)" }}>Сохранить замер</button>
+          <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm transition" style={{ background: "var(--accent)" }}>Сохранить замер</button>
         </div>
       )}
       <div className="flex flex-wrap items-center gap-2">
         <select value={curExercise} onChange={(e) => setSel(e.target.value)} className="bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-1.5 text-sm outline-none focus:border-zinc-500 max-w-full">{exercises.map((ex) => <option key={ex} value={ex}>{ex}</option>)}</select>
-        <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">{EXERCISE_METRICS.map((x) => <button key={x.key} onClick={() => setMetric(x.key)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition whitespace-nowrap ${metric === x.key ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={metric === x.key ? { background: "var(--accent)" } : undefined}>{x.label}</button>)}</div>
+        <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 overflow-x-auto">{EXERCISE_METRICS.map((x) => <button key={x.key} onClick={() => setMetric(x.key)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition whitespace-nowrap ${metric === x.key ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={metric === x.key ? { background: "var(--accent)" } : undefined}>{x.label}</button>)}</div>
       </div>
       <div className="bg-zinc-800/30 rounded-xl p-3 pt-4">
         <TrendChart data={series} color={m.color} height={230} formatter={(v) => `${v}${m.unit ? " " + m.unit : ""}`} emptyText={`Нет данных по «${m.label}». Добавь замер или проведи тренировку.`} />
@@ -76,7 +76,7 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
           <p className="text-xs text-zinc-500 mb-1.5">Замеры ({entries.length})</p>
           <div className="space-y-1.5">
             {entries.map((e) => (
-              <div key={e.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
+              <div key={e.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-xl px-3 py-2 text-sm">
                 <span className="text-zinc-400 shrink-0 w-14">{e.date.slice(5)}</span>
                 <span className="flex-1 min-w-0 flex flex-wrap gap-x-3 gap-y-0.5 text-zinc-300">
                   {e.weight !== "" && <span>{e.weight} кг</span>}
@@ -84,7 +84,7 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
                   {e.sets !== "" && <span>{e.sets} подх.</span>}
                   {e.rest !== "" && <span>отдых {e.rest} с</span>}
                 </span>
-                <button onClick={() => deleteMetric(e.id)} className="p-1 rounded hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
+                <button onClick={() => deleteMetric(e.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
               </div>
             ))}
           </div>

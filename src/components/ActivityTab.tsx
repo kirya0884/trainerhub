@@ -52,7 +52,7 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
   return (
     <div className="space-y-4">
       {!readOnly && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
           <p className="text-sm text-zinc-400 flex items-center gap-1.5"><Activity size={14} style={{ color: accentColor }} /> Добавить активность</p>
 
           {/* Пресеты */}
@@ -65,13 +65,13 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <input value={type} onChange={(e) => setType(e.target.value)} placeholder="Тип активности" className="bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
-            <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Значение (8000)" className="bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
-            <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Единица (шагов, км...)" className="bg-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
+            <input value={type} onChange={(e) => setType(e.target.value)} placeholder="Тип активности" className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
+            <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Значение (8000)" className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
+            <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Единица (шагов, км...)" className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
           </div>
 
-          <button onClick={add} disabled={busy || !type.trim() || !value.trim()} className="w-full flex items-center justify-center gap-1.5 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:opacity-90 transition disabled:opacity-40" style={{ background: accentColor }}>
+          <button onClick={add} disabled={busy || !type.trim() || !value.trim()} className="w-full flex items-center justify-center gap-1.5 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:opacity-90 transition disabled:opacity-40" style={{ background: accentColor }}>
             <Plus size={15} /> Добавить
           </button>
         </div>

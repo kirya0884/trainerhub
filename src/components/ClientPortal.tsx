@@ -230,7 +230,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             )}
           </div>
           {/* Платежи */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
             <p className="font-semibold flex items-center gap-1.5"><CreditCard size={16} className="text-zinc-400" /> Оплаты</p>
             <div className="text-sm space-y-0.5">
               <p className="text-zinc-300">Тип: {m.type === "subscription" ? "Подписка" : "По тренировкам"}</p>
@@ -250,7 +250,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             )}
           </div>
           {/* Контакты + здоровье */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-3">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
             {(profile.phone || profile.telegram || profile.whatsapp) && (
               <div className="flex flex-wrap gap-2">
                 {profile.phone && <a href={`tel:${profile.phone}`} className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm transition text-zinc-300"><Phone size={14} /> {profile.phone}</a>}
@@ -271,8 +271,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                 <p className="text-xs text-zinc-300 whitespace-pre-line">{brand.trainingRules}</p>
               </div>
             )}
-            <button onClick={() => setShowSettings(true)} className="w-full flex items-center justify-center gap-1.5 text-zinc-950 font-semibold rounded-lg py-2.5 text-sm hover:opacity-90 transition" style={{ background: "var(--accent)" }}><Settings size={15} /> Редактировать профиль</button>
-            <button onClick={() => setShowPinSettings(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg py-2.5 text-sm transition"><Lock size={14} /> PIN-код на вход</button>
+            <button onClick={() => setShowSettings(true)} className="w-full flex items-center justify-center gap-1.5 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:opacity-90 transition" style={{ background: "var(--accent)" }}><Settings size={15} /> Редактировать профиль</button>
+            <button onClick={() => setShowPinSettings(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl py-2.5 text-sm transition"><Lock size={14} /> PIN-код на вход</button>
             <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition py-1"><LogOut size={14} /> Выйти</button>
           </div>
         </div>
@@ -335,7 +335,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                   return blocks;
                 };
                 const renderEx = (ex: typeof visibleDays[0]["exercises"][0], label: string) => (
-                  <div key={ex.id} className="bg-zinc-800/40 rounded-lg px-3 py-2 text-sm">
+                  <div key={ex.id} className="bg-zinc-800/40 rounded-xl px-3 py-2 text-sm">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-zinc-600 font-bold w-4 shrink-0">{label}</span>
                       <p className="font-medium flex-1 min-w-0 truncate">{ex.name || "—"}</p>
@@ -385,7 +385,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                   return (
                     <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
                       <div className="flex items-center gap-2 px-3 py-2.5">
-                        <button onClick={() => toggleDay(day.id)} className="p-1 rounded-md hover:bg-zinc-800 text-zinc-400 shrink-0 transition">
+                        <button onClick={() => toggleDay(day.id)} className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0 transition">
                           {dayOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                         </button>
                         <h3 className="font-semibold flex-1 min-w-0 truncate">{day.name}</h3>
@@ -473,7 +473,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                             {s.items.map((item, idx) => {
                               const hasActual = item.actualSets && item.actualSets.some((r) => r.weight || r.reps);
                               return (
-                                <div key={idx} className="bg-zinc-900 rounded-lg px-3 py-2 text-xs space-y-1">
+                                <div key={idx} className="bg-zinc-900 rounded-xl px-3 py-2 text-xs space-y-1">
                                   <p className="font-medium text-sm text-zinc-200">{item.name}</p>
                                   {item.plannedSummary && (
                                     <p className="text-zinc-500">План: {item.plannedSummary}</p>
@@ -510,7 +510,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                   <p className="text-sm text-zinc-400 mb-2">Заметки тренера</p>
                   <div className="space-y-1.5">
                     {progressHook.progress.map((p) => (
-                      <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm">
+                      <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-sm">
                         <p className="text-xs text-zinc-500">{fmtDate(p.date)}</p><p>{p.text}</p>
                       </div>
                     ))}

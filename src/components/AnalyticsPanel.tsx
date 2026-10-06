@@ -26,7 +26,7 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
   const cc = chartColors();
   return (
     <div className="space-y-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 space-y-2">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 space-y-2">
         <div className="flex items-center gap-2">
           <span className="text-xs text-zinc-500 shrink-0">Период:</span>
           <div className="grid grid-cols-2 gap-1.5 flex-1 min-w-0 overflow-hidden">
@@ -34,12 +34,12 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
             <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-full min-w-0 bg-zinc-800 rounded-lg px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
           </div>
         </div>
-        <button onClick={() => exportAnalyticsCsv(clients, payments, from, to)} className="w-full flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 rounded-lg px-3 py-2 text-sm font-semibold hover:bg-lime-300 transition">
+        <button onClick={() => exportAnalyticsCsv(clients, payments, from, to)} className="w-full flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 rounded-xl px-3 py-2 text-sm font-semibold hover:bg-lime-300 transition">
           <Download size={14} /> Скачать Excel
         </button>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
         <p className="text-xs text-zinc-500 mb-2">Доход по месяцам</p>
         {hasRevenue ? (
           <div style={{ height: 140 }} className="text-lime-400">
@@ -59,18 +59,18 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
           <p className="text-xs text-zinc-500">Конверсия из пробных</p>
           <p className="text-2xl font-bold text-lime-400 mt-0.5">{conversion != null ? `${conversion}%` : "—"}</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
           <p className="text-xs text-zinc-500">Посещаемость (30 дн.)</p>
           <p className="text-2xl font-bold text-cyan-400 mt-0.5">{attendanceRate != null ? `${attendanceRate}%` : "—"}</p>
         </div>
       </div>
 
       {debt.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
           <div className="flex items-center gap-1.5 mb-2">
             <AlertTriangle size={13} className="text-orange-400 shrink-0" />
             <p className="text-xs text-zinc-500">Исчерпан пакет ({debt.length})</p>
@@ -88,7 +88,7 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
       )}
 
       {pendingClients.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
           <p className="text-xs text-zinc-500 mb-2">Ожидают оплаты</p>
           <div className="space-y-1.5">
             {pendingClients.map(({ c, amount }) => (
@@ -103,7 +103,7 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
       )}
 
       {top.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
           <p className="text-xs text-zinc-500 mb-2">Топ клиентов по выручке</p>
           <div className="space-y-1.5">
             {top.map(({ c, total }) => (
@@ -119,7 +119,7 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
       )}
 
       {bySource.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
           <p className="text-xs text-zinc-500 mb-2">Доход по источникам</p>
           <div className="space-y-1.5">
             {bySource.map(({ source, total }) => (
@@ -133,7 +133,7 @@ export default function AnalyticsPanel({ clients, payments, attendanceRate }: {
       )}
 
       {cohorts.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
           <p className="text-xs text-zinc-500 mb-2">Удержание по когортам (месяц прихода)</p>
           <div className="space-y-1.5">
             {cohorts.map((c) => (

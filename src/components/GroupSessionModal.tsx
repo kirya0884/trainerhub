@@ -169,7 +169,7 @@ function ClientSlot({ client, trainerId, active, onFinished, startRest }: { clie
                                   <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <button onClick={() => tapSet(s, ex, i, rows.length, startRest)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
-                                    className={`h-10 w-10 rounded-lg flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                                    className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                                     <Check size={20} strokeWidth={2.5} />
                                   </button>
                                 </div>
@@ -186,7 +186,7 @@ function ClientSlot({ client, trainerId, active, onFinished, startRest }: { clie
                       )}
                       <div className="mt-2 flex items-center gap-2 overflow-x-auto pb-0.5">
                         <span className="text-xs text-zinc-500 shrink-0">RPE</span>
-                        <div className="flex gap-0.5">{Array.from({ length: 11 }, (_, n) => n).map((n) => (<button key={n} onClick={() => setMetaFor(ex.id, { rpe: n === md.rpe ? 0 : n })} title={`RPE ${n}`} className={`w-7 h-7 rounded-md text-xs font-semibold transition shrink-0 ${n === md.rpe ? "bg-cyan-400 text-zinc-950" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"}`}>{n}</button>))}</div>
+                        <div className="flex gap-0.5">{Array.from({ length: 11 }, (_, n) => n).map((n) => (<button key={n} onClick={() => setMetaFor(ex.id, { rpe: n === md.rpe ? 0 : n })} title={`RPE ${n}`} className={`w-7 h-7 rounded-lg text-xs font-semibold transition shrink-0 ${n === md.rpe ? "bg-cyan-400 text-zinc-950" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"}`}>{n}</button>))}</div>
                       </div>
                       <input value={md.note} onChange={(e) => setMetaFor(ex.id, { note: e.target.value })} placeholder="Примечание по упражнению..." className="w-full mt-2 bg-zinc-800/60 rounded-lg px-3 h-9 outline-none focus:ring-2 focus:ring-lime-400/60" />
                     </div>
@@ -210,8 +210,8 @@ function ClientSlot({ client, trainerId, active, onFinished, startRest }: { clie
                 <h3 className="font-semibold flex items-center gap-1.5"><MessageSquare size={16} className="text-lime-400" /> После тренировки</h3>
                 <div><p className="text-xs text-zinc-500 mb-1">Самочувствие</p><FeelingScale kind="wellbeing" value={wellbeing} onChange={setWellbeing} /></div>
                 <div><p className="text-xs text-zinc-500 mb-1">Настроение</p><FeelingScale kind="mood" value={mood} onChange={setMood} /></div>
-                <div><p className="text-xs text-zinc-500 mb-1">Оценка тренировки клиентом</p><div className="flex gap-1.5">{[1, 2, 3, 4, 5].map((n) => (<button key={n} onClick={() => setClientRating(n === clientRating ? 0 : n)} className={`flex-1 h-10 rounded-lg text-sm font-semibold transition ${n <= clientRating ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"}`}>{n}</button>))}</div></div>
-                <div><p className="text-xs text-zinc-500 mb-1">Отзыв клиента</p><textarea value={review} onChange={(e) => setReview(e.target.value)} rows={2} placeholder="Что сказал клиент..." className="w-full bg-zinc-800 rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-lime-400/60 resize-none" /></div>
+                <div><p className="text-xs text-zinc-500 mb-1">Оценка тренировки клиентом</p><div className="flex gap-1.5">{[1, 2, 3, 4, 5].map((n) => (<button key={n} onClick={() => setClientRating(n === clientRating ? 0 : n)} className={`flex-1 h-10 rounded-xl text-sm font-semibold transition ${n <= clientRating ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"}`}>{n}</button>))}</div></div>
+                <div><p className="text-xs text-zinc-500 mb-1">Отзыв клиента</p><textarea value={review} onChange={(e) => setReview(e.target.value)} rows={2} placeholder="Что сказал клиент..." className="w-full bg-zinc-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-lime-400/60 resize-none" /></div>
               </div>
 
               <div className="flex items-center gap-3">
@@ -331,9 +331,9 @@ function SetRowsFor({ name, color, ex, slot, startRest }: {
               <div key={i} className="flex flex-col gap-1 shrink-0 w-16">
                 <div className="h-4 flex items-center justify-center text-[11px] text-zinc-500">{i + 1}</div>
                 <input value={r.weight} onChange={(e) => slot.setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг"
-                  className={`h-10 w-full bg-zinc-800 rounded-lg text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                  className={`h-10 w-full bg-zinc-800 rounded-xl text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                 <input value={r.reps} onChange={(e) => slot.setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт"
-                  className={`h-10 w-full bg-zinc-800 rounded-lg text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                  className={`h-10 w-full bg-zinc-800 rounded-xl text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                 <button onClick={() => tapSet(slot, ex, i, rows.length, startRest)} aria-pressed={isDone} aria-label={`${name}: ${isDone ? "снять отметку с подхода" : "подход выполнен"} ${i + 1}`}
                   className={`h-9 rounded-lg flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                   <Check size={18} strokeWidth={2.5} />

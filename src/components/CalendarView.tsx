@@ -485,8 +485,8 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
           <div className="p-4 space-y-4">
             <p className="text-sm text-zinc-300">{confirmPending.text}</p>
             <div className="flex gap-2">
-              <button onClick={() => setConfirmPending(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-lg py-2.5 text-sm transition">Отмена</button>
-              <button onClick={() => { confirmPending.onConfirm(); setConfirmPending(null); }} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-semibold rounded-lg py-2.5 text-sm transition">Подтвердить</button>
+              <button onClick={() => setConfirmPending(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-xl py-2.5 text-sm transition">Отмена</button>
+              <button onClick={() => { confirmPending.onConfirm(); setConfirmPending(null); }} className="flex-1 bg-red-500 hover:bg-red-400 text-white font-semibold rounded-xl py-2.5 text-sm transition">Подтвердить</button>
             </div>
           </div>
         </ModalShell>
