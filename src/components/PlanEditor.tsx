@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Check, MoreVertical, BarChart3, BookOpen, GripVertical, CalendarCheck, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, Wallet, X, Copy } from "lucide-react";
+import { Archive, ArrowLeft, Check, MoreVertical, BarChart3, BookOpen, GripVertical, CalendarCheck, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, Wallet, X, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
@@ -216,8 +216,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     } finally { setAddBusy(false); }
   };
   const [libFor, setLibFor] = useState<string | null>(null);
-  const [sub, setSub] = useState<"workout" | "done" | "progress">("workout");
-  const [editingDayId, setEditingDayId] = useState<string | null>(null);
+  const [sub, setSub] = useState<"workout" | "progress" | "archive">("workout");
   const [showMembership, setShowMembership] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
@@ -324,12 +323,12 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
 
   const sortedSessions = useMemo(() => [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1)), [sessions]);
   const lastSessionOf = (day: Day) => sortedSessions.find((s) => s.dayName === day.name);
-  // П3: день скрыт из «Тренировок», только если он помечен проведённым явно.
-  const isArchived = (day: Day) => !!day.archivedAt;
-  // Сосед ищется среди неархивных: обмен со скрытым днём выглядел бы как «кнопка не работает».
+  // Проведённый день остаётся в «Тренировках» с датой и галочкой. archivedAt ставился
+  // раньше при завершении — такие дни тоже считаются проведёнными.
+  const doneDateOf = (day: Day) => lastSessionOf(day)?.date ?? day.archivedAt ?? null;
   const visibleNeighbour = (days: Day[], di: number, dir: -1 | 1) => {
-    for (let i = di + dir; i >= 0 && i < days.length; i += dir) if (!isArchived(days[i])) return i;
-    return -1;
+    const i = di + dir;
+    return i >= 0 && i < days.length ? i : -1;
   };
 
   if (loading) return <div className="p-4"><ScreenSkeleton /></div>;
@@ -375,7 +374,6 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       </div>
     </div>
   );
-  const editingDay = editingDayId ? plan.days.find((d) => d.id === editingDayId) || null : null;
 
   return (
     <div className="space-y-4">
@@ -452,7 +450,6 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1 mt-4">
           {([
             { k: "workout" as const, label: "Тренировки" },
-            { k: "done" as const, label: "Проведённые" },
             { k: "progress" as const, label: "Прогресс" },
           ]).map((t) => (
             <button key={t.k} onClick={() => setSub(t.k)} aria-pressed={sub === t.k}
@@ -460,6 +457,12 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
               {t.label}
             </button>
           ))}
+          {/* Архив блоков — иконкой: открывают редко, отдельная вкладка не нужна */}
+          <button onClick={() => setSub("archive")} aria-pressed={sub === "archive"} aria-label="Архив блоков" title="Архив блоков"
+            className={`relative w-10 h-9 shrink-0 rounded-lg flex items-center justify-center transition ${sub === "archive" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>
+            <Archive size={17} />
+            {(plan.mesocycles ?? []).some((m) => m.archivedAt) && sub !== "archive" && <span className="absolute top-1.5 right-2 w-1.5 h-1.5 rounded-full bg-cyan-400" />}
+          </button>
         </div>
       </div>
 
@@ -525,24 +528,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         </div>
       )}
 
-      {sub === "done" && (
+      {sub === "archive" && (
         <div className="space-y-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
-            <h3 className="font-semibold flex items-center gap-1.5"><CheckCircle2 size={16} className="text-lime-400" /> Проведённые дни{plan.days.filter(isArchived).length > 0 && <span className="text-zinc-500 font-normal">· {plan.days.filter(isArchived).length}</span>}</h3>
-            {plan.days.filter(isArchived).length === 0 && <p className="text-sm text-zinc-600 text-center py-4">Пока пусто. Проведённые дни уходят сюда из «Тренировок» и остаются здесь — их можно посмотреть, скопировать или вернуть обратно.</p>}
-            {plan.days.filter(isArchived).map((day) => (
-              <div key={day.id} className="flex items-center gap-1.5 bg-zinc-800/40 rounded-xl px-3 py-2.5">
-                <span className="flex-1 min-w-0 font-semibold truncate">{day.name}</span>
-                <span className="flex items-center gap-1 text-[11px] font-medium text-lime-400 bg-lime-400/10 rounded-full px-2 py-1 shrink-0"><CheckCircle2 size={12} /> {day.archivedAt ? fmtDate(day.archivedAt.slice(0, 10)) : "Проведена"}</span>
-                <button onClick={() => setEditingDayId(day.id)} className="p-1.5 rounded-lg hover:bg-cyan-400/15 hover:text-cyan-400 text-zinc-500 transition shrink-0" title="Редактировать в отдельном окне"><Pencil size={15} /></button>
-                <button onClick={() => updateDay(day.id, { archivedAt: null })} className="p-1.5 rounded-lg hover:bg-lime-400/15 hover:text-lime-400 text-zinc-500 transition shrink-0" title="Вернуть в Тренировки"><RotateCcw size={15} /></button>
-                <button onClick={() => duplicateDay(day)} disabled={!!dupBusy} title="Дублировать день" className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-500 hover:text-zinc-300 transition shrink-0 disabled:opacity-40"><Copy size={15} /></button>
-                <button onClick={() => { if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={15} /></button>
-              </div>
-            ))}
-          </div>
-
-          {/* Р2: архив блоков — рядом с проведёнными днями, одно место для всего убранного */}
+          {/* Р2: блок уходит в архив вместе с днями и возвращается оттуда целиком */}
           {(plan.mesocycles ?? []).some((m) => m.archivedAt) && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
               <h3 className="font-semibold flex items-center gap-1.5"><Archive size={16} className="text-cyan-400" /> Архив блоков
@@ -567,90 +555,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
             </div>
           )}
 
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl">
-            <button onClick={() => setOpenHistory((v) => !v)} className="w-full flex items-center justify-between gap-2 p-4">
-              <h3 className="font-semibold flex items-center gap-1.5"><HeartPulse size={16} className="text-lime-400" /> История тренировок {sortedSessions.length > 0 && <span className="text-zinc-500 font-normal">({sortedSessions.length})</span>}</h3>
-              {openHistory ? <ChevronDown size={18} className="text-zinc-400" /> : <ChevronRight size={18} className="text-zinc-400" />}
-            </button>
-            {openHistory && (
-              <div className="px-4 pb-4 space-y-3">
-                {deletedSessions.length > 0 && (
-                  <button onClick={(e) => { e.stopPropagation(); setShowSessionTrash((v) => !v); }} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"><Trash size={13} /> Корзина ({deletedSessions.length})</button>
-                )}
-                {showSessionTrash && (
-                  <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-3 space-y-1.5">
-                    {deletedSessions.map((d) => (
-                      <div key={d.id} className="flex items-center justify-between gap-2 text-xs bg-zinc-800/40 rounded-lg px-2.5 py-1.5">
-                        <div className="min-w-0"><p className="text-zinc-300 truncate">{d.dayName || "Тренировка"} · {fmtDate(d.date)}</p><p className="text-zinc-500">Причина: {d.deleteReason} · удалено {fmtDate(d.deletedAt.slice(0, 10))}</p></div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => restoreSession(d.id)} className="p-1 rounded-lg hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={13} /></button>
-                          <button onClick={() => window.confirm("Удалить безвозвратно?") && purgeSession(d.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={13} /></button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {sortedSessions.length === 0 && <p className="text-sm text-zinc-600 text-center py-4">Пока нет проведённых тренировок.</p>}
-                <div className="space-y-2">
-                  {sortedSessions.map((s) => {
-                    const editing = editingSessionId === s.id;
-                    const hasEmoji = s.wellbeing || s.mood || !!s.clientRating;
-                    return (
-                      <div key={s.id} className="bg-zinc-800/40 rounded-xl p-3 space-y-2">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-sm leading-snug">{s.dayName || "Тренировка"}</p>
-                            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                              <span className="text-xs text-zinc-500">{fmtDate(s.date)}</span>
-                              <span className="text-zinc-700">·</span>
-                              <span className="text-xs text-zinc-500">{s.done}/{s.total} упр.</span>
-                              {s.fromClient && <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            <button onClick={() => setViewingSession(s)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-600 hover:text-lime-400 transition" title="Просмотреть тренировку"><Eye size={13} /></button>
-                            <button onClick={() => copySessionAsDay(s)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition" title="Копировать тренировку как день"><Clipboard size={13} /></button>
-                            <button onClick={() => setEditingSessionId(editing ? null : s.id)} className={`p-1.5 rounded-lg transition ${editing ? "bg-cyan-400/20 text-cyan-400" : "hover:bg-zinc-700 text-zinc-500"}`} title="Редактировать отзыв"><Pencil size={13} /></button>
-                            <button onClick={() => setDeletingSessionId(s.id)} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><X size={13} /></button>
-                          </div>
-                        </div>
-                        {hasEmoji && (
-                          <div className="flex items-center gap-3 text-xs text-zinc-400 flex-wrap">
-                            {s.wellbeing && <span>Самочувствие <FeelingBadge kind="wellbeing" value={s.wellbeing} /></span>}
-                            {s.mood && <span>Настроение <FeelingBadge kind="mood" value={s.mood} /></span>}
-                            {!!s.clientRating && <span>Оценка <span className="text-lime-400 font-semibold">{s.clientRating}/5</span></span>}
-                          </div>
-                        )}
-                        {s.items?.some((i) => i.effort) && (
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
-                            {s.items.filter((i) => i.effort).map((i, idx) => (
-                              <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400" />)}</span>
-                            ))}
-                          </div>
-                        )}
-                        {s.items?.some((i) => i.rpe > 0) && (
-                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
-                            {s.items.filter((i) => i.rpe > 0).map((i, idx) => (
-                              <span key={idx} className="flex items-center gap-1 bg-zinc-700/40 rounded-lg px-1.5 py-0.5">
-                                <span className="text-zinc-400 truncate max-w-[80px]">{i.name}:</span>
-                                <span className="text-cyan-400 font-semibold">RPE {i.rpe}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {editing ? (
-                          <textarea value={s.review} onChange={(e) => updateSessionReview(s.id, e.target.value)} rows={2} placeholder="Отзыв клиента..." className="w-full text-sm bg-zinc-900/60 rounded-xl p-2 outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
-                        ) : (
-                          s.review && <p className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2.5 whitespace-pre-wrap">{s.review}</p>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
+          {!(plan.mesocycles ?? []).some((m) => m.archivedAt) && (
+            <p className="text-sm text-zinc-500 text-center py-8">Архив пуст. Блок попадает сюда через меню «⋮» блока → «В архив с днями».</p>
+          )}
         </div>
       )}
 
@@ -663,7 +570,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         const hasMesos = sortedMesos.length > 0;
         const renderDayCard = (day: Day, di: number, li = 0, dkey = "") => {
           const isOpen = !collapsed[day.id];
-          const lastSession = lastSessionOf(day);
+          const doneDate = doneDateOf(day);
           const hidden = day.visibleToClient === false;
           return (
             <div key={day.id} data-dsday-idx={li}
@@ -690,12 +597,18 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                   <button onClick={() => toggleCollapse(day.id)} aria-expanded={isOpen} title={isOpen ? "Свернуть день" : "Развернуть день"} className="flex-1 min-w-0 text-left py-1">
                     <span className="block font-bold truncate">{day.name || "Без названия"}</span>
                     <span className={`block text-[13px] truncate ${hidden ? "text-orange-400" : "text-zinc-400"}`}>
-                      {[hidden ? "Скрыт от клиента" : null, `${day.exercises.length} упр.`, day.method === "circuit" ? "круговая" : null, day.dateOf ? fmtDate(day.dateOf, true) : null, lastSession ? `была ${fmtDate(lastSession.date, true)}` : null].filter(Boolean).join(" · ")}
+                      {[hidden ? "Скрыт от клиента" : null, `${day.exercises.length} упр.`, day.method === "circuit" ? "круговая" : null, day.dateOf ? fmtDate(day.dateOf, true) : null].filter(Boolean).join(" · ")}
+                      {doneDate && <span className="text-lime-400"> · проведена {fmtDate(doneDate, true)}</span>}
                     </span>
                   </button>
                 )}
-                <button onClick={() => { if (!workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
-                  className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center hover:bg-lime-400/25 transition" title="Провести тренировку" aria-label="Провести тренировку"><Play size={18} /></button>
+                {doneDate ? (
+                  <button onClick={() => { if (window.confirm(`«${day.name}» уже проведена ${fmtDate(doneDate, true)}. Провести ещё раз?`) && !workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
+                    className="w-10 h-10 shrink-0 rounded-xl bg-lime-400 text-zinc-950 flex items-center justify-center hover:bg-lime-300 transition" title={`Проведена ${fmtDate(doneDate, true)} — провести ещё раз`} aria-label={`Проведена ${fmtDate(doneDate, true)}. Провести ещё раз`}><Check size={19} strokeWidth={2.75} /></button>
+                ) : (
+                  <button onClick={() => { if (!workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
+                    className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center hover:bg-lime-400/25 transition" title="Провести тренировку" aria-label="Провести тренировку"><Play size={18} /></button>
+                )}
                 <div className="relative shrink-0">
                   <button onClick={() => setDayMenu(dayMenu === day.id ? null : day.id)} aria-expanded={dayMenu === day.id} aria-label="Меню дня" title="Меню дня"
                     className={`w-10 h-10 flex items-center justify-center rounded-xl transition ${dayMenu === day.id ? "bg-zinc-800 text-zinc-100" : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100"}`}><MoreVertical size={19} /></button>
@@ -724,6 +637,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                             </select>
                           </label>
                         )}
+                        <button onClick={() => { setDayMenu(null); duplicateDay(day); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать день</button>
                         <button onClick={() => { setDayMenu(null); copyDay(day); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Clipboard size={15} className="text-zinc-500 shrink-0" /> Копировать день</button>
                         <div className="my-1 border-t border-zinc-800" />
                         <button onClick={() => { setDayMenu(null); if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить день</button>
@@ -738,7 +652,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         };
 
         if (!hasMesos) {
-          const flat = plan.days.map((day, di) => ({ day, di })).filter(({ day }) => !isArchived(day));
+          const flat = plan.days.map((day, di) => ({ day, di }));
           dayLists.current["flat"] = flat.map((x) => x.di);
           return (
             <div className="space-y-2" {...dayDrag.rootProps("flat")}>
@@ -786,7 +700,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                     </div>
                   </div>
                   {!collapsed[meso.id] && (() => {
-                    const vis = mesoDays.filter(({ day }) => !isArchived(day));
+                    const vis = mesoDays;
                     dayLists.current[meso.id] = vis.map((x) => x.di);
                     return (
                       <div className="space-y-2" {...dayDrag.rootProps(meso.id)}>
@@ -798,7 +712,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
               );
             })}
             {(() => {
-              const loose = plan.days.map((day, di) => ({ day, di })).filter(({ day }) => !day.mesocycleId && !isArchived(day));
+              const loose = plan.days.map((day, di) => ({ day, di })).filter(({ day }) => !day.mesocycleId);
               if (!loose.length) return null;
               dayLists.current["loose"] = loose.map((x) => x.di);
               return (
@@ -837,6 +751,91 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       ) : (
         dayClipboard && <button onClick={() => setPasteInput(dayClipboard.name)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 border border-cyan-400/30 hover:border-cyan-400/60 rounded-xl py-2.5 text-sm font-medium text-cyan-400 transition"><ClipboardPaste size={15} /> Вставить: {dayClipboard.name}</button>
       )}
+      {/* История проведённых тренировок — внизу «Тренировок» (раньше жила во вкладке «Проведённые») */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl">
+        <button onClick={() => setOpenHistory((v) => !v)} className="w-full flex items-center justify-between gap-2 p-4">
+          <h3 className="font-semibold flex items-center gap-1.5"><HeartPulse size={16} className="text-lime-400" /> История тренировок {sortedSessions.length > 0 && <span className="text-zinc-500 font-normal">({sortedSessions.length})</span>}</h3>
+          {openHistory ? <ChevronDown size={18} className="text-zinc-400" /> : <ChevronRight size={18} className="text-zinc-400" />}
+        </button>
+        {openHistory && (
+          <div className="px-4 pb-4 space-y-3">
+            {deletedSessions.length > 0 && (
+              <button onClick={(e) => { e.stopPropagation(); setShowSessionTrash((v) => !v); }} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300"><Trash size={13} /> Корзина ({deletedSessions.length})</button>
+            )}
+            {showSessionTrash && (
+              <div className="bg-zinc-950/40 border border-zinc-800 rounded-2xl p-3 space-y-1.5">
+                {deletedSessions.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between gap-2 text-xs bg-zinc-800/40 rounded-lg px-2.5 py-1.5">
+                    <div className="min-w-0"><p className="text-zinc-300 truncate">{d.dayName || "Тренировка"} · {fmtDate(d.date)}</p><p className="text-zinc-500">Причина: {d.deleteReason} · удалено {fmtDate(d.deletedAt.slice(0, 10))}</p></div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button onClick={() => restoreSession(d.id)} className="p-1 rounded-lg hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={13} /></button>
+                      <button onClick={() => window.confirm("Удалить безвозвратно?") && purgeSession(d.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {sortedSessions.length === 0 && <p className="text-sm text-zinc-600 text-center py-4">Пока нет проведённых тренировок.</p>}
+            <div className="space-y-2">
+              {sortedSessions.map((s) => {
+                const editing = editingSessionId === s.id;
+                const hasEmoji = s.wellbeing || s.mood || !!s.clientRating;
+                return (
+                  <div key={s.id} className="bg-zinc-800/40 rounded-xl p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm leading-snug">{s.dayName || "Тренировка"}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                          <span className="text-xs text-zinc-500">{fmtDate(s.date)}</span>
+                          <span className="text-zinc-700">·</span>
+                          <span className="text-xs text-zinc-500">{s.done}/{s.total} упр.</span>
+                          {s.fromClient && <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button onClick={() => setViewingSession(s)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-600 hover:text-lime-400 transition" title="Просмотреть тренировку"><Eye size={13} /></button>
+                        <button onClick={() => copySessionAsDay(s)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-600 hover:text-zinc-300 transition" title="Копировать тренировку как день"><Clipboard size={13} /></button>
+                        <button onClick={() => setEditingSessionId(editing ? null : s.id)} className={`p-1.5 rounded-lg transition ${editing ? "bg-cyan-400/20 text-cyan-400" : "hover:bg-zinc-700 text-zinc-500"}`} title="Редактировать отзыв"><Pencil size={13} /></button>
+                        <button onClick={() => setDeletingSessionId(s.id)} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><X size={13} /></button>
+                      </div>
+                    </div>
+                    {hasEmoji && (
+                      <div className="flex items-center gap-3 text-xs text-zinc-400 flex-wrap">
+                        {s.wellbeing && <span>Самочувствие <FeelingBadge kind="wellbeing" value={s.wellbeing} /></span>}
+                        {s.mood && <span>Настроение <FeelingBadge kind="mood" value={s.mood} /></span>}
+                        {!!s.clientRating && <span>Оценка <span className="text-lime-400 font-semibold">{s.clientRating}/5</span></span>}
+                      </div>
+                    )}
+                    {s.items?.some((i) => i.effort) && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        {s.items.filter((i) => i.effort).map((i, idx) => (
+                          <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400" />)}</span>
+                        ))}
+                      </div>
+                    )}
+                    {s.items?.some((i) => i.rpe > 0) && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        {s.items.filter((i) => i.rpe > 0).map((i, idx) => (
+                          <span key={idx} className="flex items-center gap-1 bg-zinc-700/40 rounded-lg px-1.5 py-0.5">
+                            <span className="text-zinc-400 truncate max-w-[80px]">{i.name}:</span>
+                            <span className="text-cyan-400 font-semibold">RPE {i.rpe}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {editing ? (
+                      <textarea value={s.review} onChange={(e) => updateSessionReview(s.id, e.target.value)} rows={2} placeholder="Отзыв клиента..." className="w-full text-sm bg-zinc-900/60 rounded-xl p-2 outline-none focus:ring-1 focus:ring-cyan-400/40 resize-none" />
+                    ) : (
+                      s.review && <p className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2.5 whitespace-pre-wrap">{s.review}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
       </>}
 
       {libFor && (
@@ -845,11 +844,6 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
           onClose={() => setLibFor(null)} />
       )}
 
-      {editingDay && (
-        <ModalShell title={editingDay.name || "Тренировка"} icon={<Pencil size={17} className="text-lime-400" />} onClose={() => setEditingDayId(null)} wide>
-          <div className="overflow-y-auto flex-1 min-h-0">{DayBody({ day: editingDay })}</div>
-        </ModalShell>
-      )}
 
       {viewingSession && <SessionReadModal session={viewingSession} onClose={() => setViewingSession(null)} />}
       {historyFor !== null && <ExerciseHistoryModal name={historyFor} sessions={sessions} metrics={metrics} onClose={() => setHistoryFor(null)} />}

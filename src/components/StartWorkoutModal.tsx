@@ -28,10 +28,10 @@ export default function StartWorkoutModal({ clientId, clientName, plans, onClose
     return () => { alive = false; };
   }, [planId]);
 
-  // Только рабочие дни: без проведённых и без дней из блоков в архиве
+  // Все дни, кроме дней из блоков в архиве (проведённые дни остаются в плане)
   const archivedMesos = new Set((plan?.mesocycles ?? []).filter((m) => m.archivedAt).map((m) => m.id));
   const mesoName = (id?: string | null) => plan?.mesocycles?.find((m) => m.id === id)?.name;
-  const days = (plan?.days ?? []).filter((d) => !d.archivedAt && !(d.mesocycleId && archivedMesos.has(d.mesocycleId)));
+  const days = (plan?.days ?? []).filter((d) => !(d.mesocycleId && archivedMesos.has(d.mesocycleId)));
 
   const start = (dayId: string) => {
     const day = days.find((d) => d.id === dayId);

@@ -2,7 +2,6 @@ import { fetchClientDoneSessions, markSessionDone } from "./bookings";
 import { decrementMembershipRemaining, fetchClient } from "./clients";
 import type { Membership } from "./clients";
 import { today } from "./format";
-import { updateDay } from "./plans";
 import { fetchProgress, logSession } from "./progress";
 import { notifyWorkoutFinished } from "./clientsBus";
 import type { Day, Metric, Session } from "../types";
@@ -46,9 +45,8 @@ export async function finishWorkout(opts: {
     loggedPending.add(logKey);
   }
 
-  // П3: проведённый день уходит в «Проведённые» насовсем
-  updateDay(day.id, { archivedAt: new Date().toISOString() })
-    .catch((e) => console.error("[finishWorkout] архивация дня:", e));
+  // День больше не уходит в «Проведённые»: он остаётся в плане, а отметку
+  // «проведена <дата>» редактор берёт из истории тренировок.
 
   // Гард двойного списания, два источника:
   // 1) клиент уже залогировал эту сессию сам (fromClient);
