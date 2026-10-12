@@ -33,3 +33,13 @@ export function buildMetrics(
   });
   return metrics;
 }
+
+/** Тоннаж = сумма (вес × повторы). С setsDone — только по отмеченным подходам:
+ *  вес и повторы подставлены из плана заранее, и без этого тоннаж с первой секунды
+ *  показывал плановый итог, а не сделанное. */
+export const tonnageOf = (rows: SetVal[], setsDone?: Record<number, boolean>) =>
+  rows.reduce((sum, r, i) => {
+    if (setsDone && !setsDone[i]) return sum;
+    const w = parseNum(r.weight); const rp = parseNum(r.reps);
+    return w != null && rp != null ? sum + w * rp : sum;
+  }, 0);

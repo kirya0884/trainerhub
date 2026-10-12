@@ -3,20 +3,13 @@ import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
 import { parseNum, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
-import { buildMetrics } from "../lib/sessionUtils";
+import { buildMetrics, tonnageOf } from "../lib/sessionUtils";
 import { finishWorkout } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
 import type { Day, Plan, Session } from "../types";
 
 export type SetVal = { weight: string; reps: string };
 export type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number; setsDone?: Record<number, boolean> };
-
-export const tonnageOf = (rows: SetVal[]) =>
-  rows.reduce((sum, r) => {
-    const w = parseNum(r.weight);
-    const rp = parseNum(r.reps);
-    return w != null && rp != null ? sum + w * rp : sum;
-  }, 0);
 
 export const buildVals = (day: Day): Record<string, SetVal[]> => {
   const init: Record<string, SetVal[]> = {};
@@ -101,7 +94,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
       : n + (vals[ex.id] || []).filter((_, i) => !meta[ex.id]?.setsDone?.[i]).length, 0) : 0);
 
   const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
-  const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [])), 0) : 0;
+  const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [], meta[ex.id]?.setsDone)), 0) : 0;
 
   const finish = async () => {
     if (!day || !plan || busy) return;

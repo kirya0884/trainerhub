@@ -1,7 +1,8 @@
-import { Check, CheckCircle2, Flame, Layers, MessageSquare, Timer, Users, X } from "lucide-react";
+import { Check, CheckCircle2, MessageSquare, Timer, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { loadViewState, saveViewState } from "../lib/viewState";
-import { tonnageOf, useSessionSlot } from "../hooks/useSessionSlot";
+import { useSessionSlot } from "../hooks/useSessionSlot";
+import { FlameRate, SupersetRounds, tonnageOf } from "./SessionParts";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
@@ -41,18 +42,6 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 // Тоннаж = сумма (вес × повторы) по всем подходам с заполненными числами.
 const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} кг`;
 
-function FlameRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="p-0.5 transition" title={`${n} из 5`}>
-          <Flame size={18} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
-        </button>
-      ))}
-    </div>
-  );
-}
-
 type Slot = ReturnType<typeof useSessionSlot>;
 // Отметка подхода + запуск общего таймера отдыха (если отдых задан и это не последний подход подопечного)
 const tapSet = (slot: Slot, ex: Exercise, i: number, total: number, startRest: (sec: number) => void) => {
@@ -77,6 +66,9 @@ function ClientSlot({ client, trainerId, active, onFinished, startRest }: { clie
   // Как в индивидуальной: текущее — первое невыполненное, выполненные сворачиваются
   const currentId = day?.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
+  // Только что отмеченное остаётся открытым (огоньки за последние подходы); раскрытые
+  // выполненные сворачиваются, когда отмечают подход в другом упражнении
+  const tap = (ex: Exercise, i: number, total: number) => { tapSet(s, ex, i, total, startRest); setOpenDone({ [ex.id]: true }); };
 
   return (
     <div className={active ? "space-y-2.5" : "hidden"}>
@@ -112,17 +104,19 @@ function ClientSlot({ client, trainerId, active, onFinished, startRest }: { clie
               )}
               {day.exercises.length === 0 && <p className="text-zinc-500 text-center py-10">В этом дне нет упражнений.</p>}
               {groupBlocks(day.exercises).map((block, bi) => {
+                if (block.group && block.items.length > 1) return (
+                  <SupersetRounds key={bi} title={`${supersetName(block.items.length)} ${block.group}`} color={GROUP_COLORS[block.group]}
+                    items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
+                    onSetVal={setVal} onTapSet={tap} onFire={setFire} onNote={(id, note) => setMetaFor(id, { note })} />
+                );
                 const cards = block.items.map((ex, k) => {
                   const idx = block.startIdx + k;
                   const rows = vals[ex.id] || [];
                   const n = rows.length;
                   const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
                   const md = meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0, setsDone: {} };
-                  const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows); // функциональное: вес тут не про подходы, тоннаж не считаем
-                  const grouped = block.items.length > 1;
-                  const shell = grouped
-                    ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}`
-                    : `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : ex.id === currentId ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
+                  const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows, meta[ex.id]?.setsDone); // функциональное: вес тут не про подходы, тоннаж не считаем
+                  const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : ex.id === currentId ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
                   if (md.done && !openDone[ex.id]) {
                     const fact = rows.filter((r) => r.weight || r.reps).map((r) => `${r.weight || "—"}×${r.reps || "—"}`).join(", ");
                     return (
@@ -168,7 +162,7 @@ function ClientSlot({ client, trainerId, active, onFinished, startRest }: { clie
                                   <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
                                   <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
-                                  <button onClick={() => tapSet(s, ex, i, rows.length, startRest)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
+                                  <button onClick={() => tap(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
                                     className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                                     <Check size={20} strokeWidth={2.5} />
                                   </button>
@@ -192,17 +186,6 @@ function ClientSlot({ client, trainerId, active, onFinished, startRest }: { clie
                     </div>
                   );
                 });
-                if (block.group && block.items.length > 1) {
-                  const color = GROUP_COLORS[block.group];
-                  return (
-                    <div key={bi} className="rounded-2xl border-2 overflow-hidden" style={{ borderColor: color }}>
-                      <div className="px-2.5 py-1 text-xs font-bold flex items-center gap-1.5" style={{ background: `${color}26`, color }}>
-                        <Layers size={12} /> {supersetName(block.items.length)} {block.group}
-                      </div>
-                      <div className="bg-zinc-900 divide-y divide-zinc-800">{cards}</div>
-                    </div>
-                  );
-                }
                 return <div key={bi}>{cards}</div>;
               })}
 

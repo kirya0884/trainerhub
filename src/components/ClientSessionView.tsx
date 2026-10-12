@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, CheckCircle2, Flame, Layers, Minimize2, Play, Send, Timer, X } from "lucide-react";
+import { AlertTriangle, Check, CheckCircle2, Minimize2, Play, Send, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
 import { parseNum, parseRest, today } from "../lib/format";
@@ -6,6 +6,7 @@ import { buildMetrics } from "../lib/sessionUtils";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
+import { FlameRate, SupersetRounds, tonnageOf } from "./SessionParts";
 import type { Day, Metric, Session } from "../types";
 
 const exLabel = (day: Day, idx: number) => {
@@ -35,22 +36,8 @@ const groupBlocks = (exercises: Day["exercises"]) => {
   });
   return blocks;
 };
-const tonnageOf = (rows: { weight: string; reps: string }[]) =>
-  rows.reduce((sum, r) => { const w = parseNum(r.weight); const rp = parseNum(r.reps); return w != null && rp != null ? sum + w * rp : sum; }, 0);
 const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} кг`;
 
-
-function FlameRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="p-0.5" title={`${n} из 5`}>
-          <Flame size={18} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
-        </button>
-      ))}
-    </div>
-  );
-}
 
 type SetVal = { weight: string; reps: string };
 type ExMeta = { fires: Record<number, number>; note: string; done: boolean; setsDone?: Record<number, boolean> };
@@ -137,6 +124,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const tapSet = (ex: Day["exercises"][number], i: number, total: number) => {
     const was = meta[ex.id]?.setsDone?.[i] ?? false;
     toggleSetDone(ex.id, i, total);
+    setOpenDone({ [ex.id]: true });
     const sec = parseRest(ex.rest);
     if (!was && sec && openSets() > 1) restTimer.start(sec);
   };
@@ -153,7 +141,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     }, 1500);
     return () => { if (progressTimer.current) clearTimeout(progressTimer.current); };
   }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
-  const totalTonnage = day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [])), 0);
+  const totalTonnage = day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [], meta[ex.id]?.setsDone)), 0);
   const isCircuit = day.method === "circuit";
   const maxRounds = isCircuit && day.exercises.length ? Math.max(1, ...day.exercises.map((ex) => (vals[ex.id] || []).length)) : 0;
   // Блокируем скролл страницы когда сессия открыта
@@ -319,18 +307,20 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             </div>
           </div>
         )) : groupBlocks(day.exercises).map((block, bi) => {
+          if (block.group && block.items.length > 1) return (
+            <SupersetRounds key={bi} title={`${supersetName(block.items.length)} ${block.group}`} color={GROUP_COLORS[block.group]}
+              items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
+              onSetVal={setVal} onTapSet={tapSet} onFire={setFire} onNote={(id, note) => setMetaFor(id, { note })} />
+          );
           const cards = block.items.map((ex, k) => {
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
             const n = rows.length;
             const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
             const md = meta[ex.id] || { fires: {}, note: "", done: false };
-            const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows); // функциональное: вес тут не про подходы, тоннаж не считаем
-            const grouped = block.items.length > 1;
+            const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows, meta[ex.id]?.setsDone); // функциональное: вес тут не про подходы, тоннаж не считаем
             const isCurrent = ex.id === currentId;
-            const shell = grouped
-              ? `p-3 transition ${md.done ? "bg-lime-400/5" : ""}`
-              : `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
+            const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
             // Выполненное — строкой с фактическими подходами; тап раскрывает обратно
             if (md.done && !openDone[ex.id]) {
               const fact = rows.filter((r) => r.weight || r.reps).map((r) => `${r.reps || "—"}×${r.weight || "—"}`).join(", ");
@@ -389,17 +379,6 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
               </div>
             );
           });
-          if (block.group && block.items.length > 1) {
-            const color = GROUP_COLORS[block.group];
-            return (
-              <div key={bi} className="rounded-2xl border-2 overflow-hidden" style={{ borderColor: color }}>
-                <div className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide flex items-center gap-1.5" style={{ background: `${color}26`, color }}>
-                  <Layers size={12} /> {supersetName(block.items.length)} {block.group}
-                </div>
-                <div className="bg-zinc-900 divide-y divide-zinc-800">{cards}</div>
-              </div>
-            );
-          }
           return <div key={bi}>{cards}</div>;
         })}
       </div>
