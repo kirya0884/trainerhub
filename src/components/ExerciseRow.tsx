@@ -1,4 +1,4 @@
-import { Activity, ChevronDown, GripVertical, Layers, Plus, TrendingUp, Video, X } from "lucide-react";
+import { Activity, GripVertical, Layers, Pencil, Plus, TrendingUp, Video, X } from "lucide-react";
 import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
@@ -25,6 +25,10 @@ function ExerciseRow({
   // Новое упражнение (без названия) открыто, пока его не свернут вручную, — иначе
   // оно схлопнулось бы в строку на первой же набранной букве.
   const [forceOpen, setForceOpen] = useState(() => !ex.name.trim());
+  // Название — текстом (нажатие сворачивает/раскрывает, как у дня); правка — по карандашу.
+  // Новое упражнение без названия сразу в режиме правки.
+  const [editingName, setEditingName] = useState(() => !ex.name.trim());
+  const collapseNow = () => { setEditingName(false); if (forceOpen) setForceOpen(false); else onToggleCollapse?.(ex.id); };
   const q = ex.name.trim().toLowerCase();
   const matches = q ? suggestions.filter((n) => n.toLowerCase().includes(q)).sort((a, b) => (a.toLowerCase().startsWith(q) === b.toLowerCase().startsWith(q) ? 0 : a.toLowerCase().startsWith(q) ? -1 : 1)).slice(0, 8) : [];
   const exactExists = suggestions.some((n) => n.toLowerCase() === q);
@@ -72,6 +76,8 @@ function ExerciseRow({
           <span className="flex-1 min-w-0 font-semibold truncate">{ex.name}</span>
           {summary && <span className="shrink-0 text-sm font-semibold text-zinc-400 whitespace-nowrap">{summary}</span>}
         </button>
+        <button type="button" onClick={() => { setEditingName(true); onToggleCollapse(ex.id); }} title="Переименовать" aria-label={`Переименовать «${ex.name || "упражнение"}»`}
+          className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 transition"><Pencil size={14} /></button>
       </div>
     );
   }
@@ -82,31 +88,37 @@ function ExerciseRow({
       style={groupColor ? { borderLeft: `3px solid ${groupColor}` } : undefined}>
       <div className="flex items-center gap-1">
         {handle}
-        {onToggleCollapse && (
-          <button onClick={() => { if (forceOpen) setForceOpen(false); else onToggleCollapse(ex.id); }} type="button"
-            title="Свернуть упражнение" aria-label="Свернуть упражнение"
-            className="shrink-0 p-1 rounded-lg hover:bg-zinc-700 active:bg-zinc-700 text-zinc-500 hover:text-zinc-300 active:text-lime-400 transition-colors duration-100">
-            <ChevronDown size={15} />
+        {editingName ? (
+          <div className="relative flex-1 min-w-0">
+            <input autoFocus value={ex.name} onChange={(e) => { const v = e.target.value; startTransition(() => update({ name: v })); setAcOpen(true); }} onFocus={() => setAcOpen(true)}
+              onBlur={() => setTimeout(() => { setAcOpen(false); if (ex.name.trim()) setEditingName(false); }, 150)}
+              onKeyDown={(e) => { if (e.key === "Enter" && ex.name.trim()) { setAcOpen(false); setEditingName(false); } }}
+              placeholder="Название упражнения" aria-label="Название упражнения" className="w-full h-9 bg-zinc-800 rounded-xl px-2.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
+            {acOpen && q && !exactExists && (
+              <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
+                {matches.map((n) => (<button key={n} onMouseDown={(e) => { e.preventDefault(); update({ name: n }); setAcOpen(false); }} className="w-full text-left text-sm px-3 py-2 hover:bg-zinc-800 text-zinc-200 transition">{n}</button>))}
+                {matches.length === 0 && (<button onMouseDown={(e) => { e.preventDefault(); addToLibrary(ex.name.trim()); setAcOpen(false); }} className="w-full text-left text-sm px-3 py-2 hover:bg-zinc-800 text-lime-400 transition flex items-center gap-1.5"><Plus size={14} /> Добавить «{ex.name.trim()}» в библиотеку</button>)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <button type="button" onClick={onToggleCollapse ? collapseNow : undefined} title={onToggleCollapse ? "Свернуть упражнение" : undefined}
+            aria-label={onToggleCollapse ? `${ex.name}: свернуть` : undefined}
+            className="flex-1 min-w-0 py-1.5 pl-1 text-left rounded-lg font-semibold truncate">
+            {ex.name}
           </button>
         )}
+        {!editingName && <button type="button" onClick={() => setEditingName(true)} title="Переименовать" aria-label={`Переименовать «${ex.name || "упражнение"}»`}
+          className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-700 hover:text-zinc-200 transition"><Pencil size={14} /></button>}
+      </div>
+      <div className="flex items-center gap-1 pl-7">
         <button onClick={cycleGroup} title="Суперсет: объединить упражнения в группу" className={`shrink-0 min-w-7 h-7 px-1 rounded-lg text-xs font-bold flex items-center justify-center transition ${ex.group ? "text-zinc-950" : "text-zinc-500 bg-zinc-800 hover:bg-zinc-700"}`} style={ex.group ? { background: groupColor ?? undefined } : undefined}>{label}</button>
         <button onClick={() => setShowVideo((v) => !v)} title="Видео-превью" className={`p-1.5 rounded-lg transition shrink-0 ${showVideo ? "text-lime-400 bg-lime-400/10" : ex.video ? "text-cyan-400 bg-cyan-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Video size={15} /></button>
         <button onClick={() => update({ kind: ex.kind === "functional" ? "" : "functional" })} title="Функциональное упражнение (время/пульс вместо подходов)" className={`p-1.5 rounded-lg transition shrink-0 ${ex.kind === "functional" ? "text-orange-400 bg-orange-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Activity size={15} /></button>
         {ex.kind !== "functional" && <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-lg transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>}
+        <span className="flex-1" />
         <button onClick={() => { if (window.confirm(`Удалить упражнение «${ex.name || "без названия"}»? Подходы и комментарии удалятся вместе с ним.`)) remove(); }} title="Удалить упражнение" aria-label="Удалить упражнение" className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
       </div>
-
-      {/* Р5: имя на своей строке. В общем ряду с семью кнопками ему оставалось
-          около 150 px на экране 360 px — набирать длинные названия было нечем. */}
-        <div className="relative w-full">
-          <input value={ex.name} onChange={(e) => { const v = e.target.value; startTransition(() => update({ name: v })); setAcOpen(true); }} onFocus={() => setAcOpen(true)} onBlur={() => setTimeout(() => setAcOpen(false), 150)} placeholder="Название упражнения" className="w-full bg-zinc-800 rounded-xl px-2.5 py-1.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
-          {acOpen && q && !exactExists && (
-            <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
-              {matches.map((n) => (<button key={n} onMouseDown={(e) => { e.preventDefault(); update({ name: n }); setAcOpen(false); }} className="w-full text-left text-sm px-3 py-2 hover:bg-zinc-800 text-zinc-200 transition">{n}</button>))}
-              {matches.length === 0 && (<button onMouseDown={(e) => { e.preventDefault(); addToLibrary(ex.name.trim()); setAcOpen(false); }} className="w-full text-left text-sm px-3 py-2 hover:bg-zinc-800 text-lime-400 transition flex items-center gap-1.5"><Plus size={14} /> Добавить «{ex.name.trim()}» в библиотеку</button>)}
-            </div>
-          )}
-        </div>
 
       {/* П1: свёрнутое упражнение показывает только строку с названием и кнопками */}
       {(!collapsed || forceOpen || !onToggleCollapse) && (<>
