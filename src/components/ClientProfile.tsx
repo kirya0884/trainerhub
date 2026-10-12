@@ -202,7 +202,9 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
           <Play size={18} /> Начать тренировку
         </button>
       )}
-      {showStart && <StartWorkoutModal clientId={clientId} clientName={client.name} plans={activePlans} onClose={() => setShowStart(false)} />}
+      {showStart && <StartWorkoutModal trainerId={trainerId} self={{ id: clientId, name: client.name, color: client.color, remaining: api.remainingOf(client.membership) }}
+        partner={client.membership.split && client.membership.partnerClientId ? { id: client.membership.partnerClientId, name: client.membership.partnerName || "партнёр" } : null}
+        plans={activePlans} onClose={() => setShowStart(false)} />}
 
       {!!client.activeSession && (
         <div className="w-full flex items-center gap-2 rounded-xl px-3.5 py-2.5 mt-4 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
