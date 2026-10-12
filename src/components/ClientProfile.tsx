@@ -410,6 +410,9 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   const [receipt, setReceipt] = useState<Payment | null>(null);
   const [otherClients, setOtherClients] = useState<api.ClientListItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
+  // Дата нового платежа — по умолчанию сегодня. Раньше поле показывало и отправляло
+  // дату прошлой оплаты из абонемента, и продление записывалось задним числом.
+  const [payDate, setPayDate] = useState(today);
 
   const load = () => {
     paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[PaymentsTab] fetchTemplates:", e));
@@ -451,7 +454,7 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   };
 
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
-    try { const merged = await paymentsApi.markPaid(clientId, m, promotions, payStatus); patchMembership(merged, true); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+    try { const merged = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus); patchMembership(merged, true); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); alert("Не удалось записать оплату."); }
   };
   const doMarkPaymentPaid = async (id: string) => {
@@ -494,7 +497,7 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <DateField label="След. платёж" value={m.nextPaymentDate} onChange={(e) => patchMembership({ nextPaymentDate: e.target.value })} />
             <NumField label="Сумма ₽" value={m.pricePerSession} onChange={(e) => patchMembership({ pricePerSession: e.target.value })} placeholder="5000" />
-            <DateField label="Дата оплаты" value={m.paymentDate} onChange={(e) => patchMembership({ paymentDate: e.target.value })} />
+            <DateField label="Дата оплаты" value={payDate} onChange={(e) => setPayDate(e.target.value || today())} />
           </div>
         ) : (
           <>
@@ -511,7 +514,7 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
             <div className="grid grid-cols-2 gap-2">
               <NumField label="Кол-во в пакете" value={m.total} onChange={(e) => patchMembership({ total: e.target.value })} placeholder="0" />
               <NumField label="Цена пакета ₽" value={m.packagePrice} onChange={(e) => patchMembership({ packagePrice: e.target.value })} placeholder="24000" />
-              <div className="col-span-2"><DateField label="Дата оплаты" value={m.paymentDate} onChange={(e) => patchMembership({ paymentDate: e.target.value })} /></div>
+              <div className="col-span-2"><DateField label="Дата оплаты" value={payDate} onChange={(e) => setPayDate(e.target.value || today())} /></div>
             </div>
             {Number(m.extraRemaining) > 0 && (
               <p className="text-xs text-cyan-300/80">+ {m.extraRemaining} тренировки доп. блока по {Math.round(Number(m.extraPricePerSession) || 0).toLocaleString("ru-RU")}₽/занятие (старый пакет, другая цена)</p>
