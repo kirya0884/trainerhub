@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
 import { parseNum, today } from "../lib/format";
@@ -38,25 +39,38 @@ export const buildMeta = (day: Day): Record<string, ExMeta> => {
  * при ошибке любой из проверок списание пропускается — недосписать безопаснее,
  * чем списать дважды.
  */
-export function useSessionSlot(clientId: string, trainerId: string, onFinished: () => void) {
+// Черновик слота совместной тренировки: всё введённое, чтобы пережить перезагрузку,
+// сворачивание и переключение «Рядом» ↔ «Вкладки» (там слоты монтируются заново).
+type SlotDraft = {
+  planId: string; dayId: string; vals: Record<string, SetVal[]>; meta: Record<string, ExMeta>;
+  mood: number; wellbeing: number; review: string; clientRating: number; finished: boolean;
+};
+const draftPrefix = (groupId: string, clientId: string) => `th-gslot-${groupId}-${clientId}`;
+export const readSlotDraft = (groupId: string, clientId: string) => readJson<SlotDraft | null>(`${draftPrefix(groupId, clientId)}-vals`, null);
+export const clearSlotDrafts = (groupId: string, clientIds: string[]) => clientIds.forEach((id) => removeKey(`${draftPrefix(groupId, id)}-vals`));
+
+export function useSessionSlot(clientId: string, trainerId: string, onFinished: () => void, groupId?: string) {
+  // Черновик читаем один раз при монтировании
+  const [draft] = useState(() => (groupId ? readSlotDraft(groupId, clientId) : null));
+  const restored = useRef(false);
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
   const [planId, setPlanId] = useState("");
   const [plan, setPlan] = useState<Plan | null>(null);
   const [dayId, setDayId] = useState("");
   const [membership, setMembership] = useState<Membership | null>(null);
-  const [finished, setFinished] = useState(false);
+  const [finished, setFinished] = useState(draft?.finished ?? false);
   const [busy, setBusy] = useState(false);
   const [vals, setVals] = useState<Record<string, SetVal[]>>({});
   const [meta, setMeta] = useState<Record<string, ExMeta>>({});
-  const [mood, setMood] = useState(0);
-  const [wellbeing, setWellbeing] = useState(0);
-  const [review, setReview] = useState("");
-  const [clientRating, setClientRating] = useState(0);
+  const [mood, setMood] = useState(draft?.mood ?? 0);
+  const [wellbeing, setWellbeing] = useState(draft?.wellbeing ?? 0);
+  const [review, setReview] = useState(draft?.review ?? "");
+  const [clientRating, setClientRating] = useState(draft?.clientRating ?? 0);
 
   useEffect(() => {
     clientsApi.fetchClientPlans(clientId).then((list) => {
       setPlans(list);
-      const first = list.find((p) => !p.archived) || list[0];
+      const first = (draft && list.find((p) => p.id === draft.planId)) || list.find((p) => !p.archived) || list[0];
       if (first) setPlanId(first.id);
     }).catch((e) => console.error("[useSessionSlot] fetchPlans:", e));
     clientsApi.fetchClient(clientId).then((c) => setMembership(c.membership)).catch((e) => console.error("[useSessionSlot] fetchClient:", e));
@@ -64,16 +78,35 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
 
   useEffect(() => {
     if (!planId) { setPlan(null); setDayId(""); return; }
-    plansApi.fetchPlan(planId).then((p) => { setPlan(p); setDayId(p.days[0]?.id || ""); }).catch((e) => console.error("[useSessionSlot] fetchPlan:", e));
+    plansApi.fetchPlan(planId).then((p) => {
+      setPlan(p);
+      const fromDraft = !restored.current && draft?.planId === planId && p.days.some((d) => d.id === draft.dayId);
+      setDayId(fromDraft ? draft!.dayId : p.days[0]?.id || "");
+    }).catch((e) => console.error("[useSessionSlot] fetchPlan:", e));
   }, [planId]);
 
   const day = plan?.days.find((d) => d.id === dayId) || null;
 
   useEffect(() => {
     if (!day) return;
+    // Первый раз — из черновика, если он про этот же день
+    if (!restored.current && draft && draft.dayId === day.id && draft.vals) {
+      restored.current = true;
+      setVals(draft.vals); setMeta(draft.meta);
+      return;
+    }
+    restored.current = true;
     setVals(buildVals(day));
     setMeta(buildMeta(day));
   }, [day?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!groupId || !dayId || !Object.keys(vals).length) return;
+    // Сразу, без задержки: при переключении «Рядом» ↔ «Вкладки» слот размонтируется,
+    // и отложенная запись потеряла бы последний ввод
+    const p = draftPrefix(groupId, clientId);
+    if (writeJson(`${p}-vals`, { planId, dayId, vals, meta, mood, wellbeing, review, clientRating, finished } satisfies SlotDraft)) touchDraft(p);
+  }, [groupId, clientId, planId, dayId, vals, meta, mood, wellbeing, review, clientRating, finished]);
 
   const setVal = (exId: string, i: number, patch: Partial<SetVal>) =>
     setVals((a) => ({ ...a, [exId]: (a[exId] ?? []).map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));

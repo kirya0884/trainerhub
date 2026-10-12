@@ -1,12 +1,12 @@
-import { Check, CheckCircle2, MessageSquare, Timer, Users, X } from "lucide-react";
+import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { loadViewState, saveViewState } from "../lib/viewState";
-import { useSessionSlot } from "../hooks/useSessionSlot";
+import { readSlotDraft, useSessionSlot } from "../hooks/useSessionSlot";
 import { FlameRate, SupersetRounds, tonnageOf } from "./SessionParts";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
-import { RestBar, useRestTimer } from "./RestTimer";
+import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { parseRest } from "../lib/format";
 import { combinedRemaining } from "../lib/clients";
 import type { Day, Exercise } from "../types";
@@ -56,10 +56,10 @@ export type SlotClient = { id: string; name: string; color: string; remaining?: 
 
 // Один "слот" — полностью независимая тренировка одного подопечного: свой план/день/веса/повторы.
 // Слоты не размонтируются при переключении вкладок (см. ниже className="hidden"), поэтому ввод не теряется.
-function ClientSlot({ client, trainerId, active, onFinished, startRest }: { client: SlotClient; trainerId: string; active: boolean; onFinished: () => void; startRest: (sec: number) => void }) {
+function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest }: { client: SlotClient; trainerId: string; groupId: string; active: boolean; onFinished: () => void; startRest: (sec: number) => void }) {
   // Д1: всё состояние слота живёт в хуке — так родитель может держать сразу двоих
   // и показывать их подходы рядом, а не по вкладкам.
-  const s = useSessionSlot(client.id, trainerId, onFinished);
+  const s = useSessionSlot(client.id, trainerId, onFinished, groupId);
   const { plans, planId, setPlanId, plan, dayId, setDayId, day, membership, finished, busy,
     vals, meta, setVal, setMetaFor, setFire, mood, setMood, wellbeing, setWellbeing,
     review, setReview, clientRating, setClientRating, doneEx, totalTonnage, finish } = s;
@@ -211,12 +211,22 @@ function ClientSlot({ client, trainerId, active, onFinished, startRest }: { clie
 
 // Тренировка 2-4 подопечных одновременно: вкладки сверху переключают активного,
 // но все слоты остаются смонтированными (скрыты через "hidden"), поэтому введённые веса/повторы не теряются.
-export default function GroupSessionModal({ clients, trainerId, onClose, onClientFinished }: { clients: SlotClient[]; trainerId: string; onClose: () => void; onClientFinished?: (clientId: string) => void }) {
+// Живёт на уровне приложения (ActiveWorkoutHost), как одиночная: сворачивается в плашку,
+// переживает переходы по разделам, а введённое лежит в черновиках слотов (groupId).
+export default function GroupSessionModal({ groupId, clients, trainerId, onClose, onClientFinished }: { groupId: string; clients: SlotClient[]; trainerId: string; onClose: () => void; onClientFinished?: (clientId: string) => void }) {
   // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
   // Вызов до любых ранних return — иначе порядок хуков поедет.
-  const { panelProps } = useModalA11y(onClose, "Групповое проведение тренировки");
+  const { panelProps } = useModalA11y(() => setMinimized(true), "Совместная тренировка");
   const [activeId, setActiveId] = useState(clients[0]?.id || "");
-  const [finishedIds, setFinishedIds] = useState<string[]>([]);
+  // После перезагрузки — кто уже записан, из черновиков
+  const [finishedIds, setFinishedIds] = useState<string[]>(() => clients.filter((c) => readSlotDraft(groupId, c.id)?.finished).map((c) => c.id));
+  const [minimized, setMinimized] = useState(false);
+  // Свёрнутая тренировка не держит прокрутку страницы
+  useEffect(() => { document.body.style.overflow = minimized ? "" : "hidden"; return () => { document.body.style.overflow = ""; }; }, [minimized]);
+  const allDone = clients.every((c) => finishedIds.includes(c.id));
+  const exit = () => {
+    if (allDone || window.confirm("Прервать совместную тренировку? Кто ещё не завершил, записан не будет.")) onClose();
+  };
   // Д2: «Рядом» доступен только для пары — хук слота вызывается статично дважды.
   const isPair = clients.length === 2;
   const [side, setSide] = useState(() => isPair && loadViewState<boolean>("group-side-by-side", true));
@@ -229,11 +239,25 @@ export default function GroupSessionModal({ clients, trainerId, onClose, onClien
   };
 
   return (
-    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col outline-none">
+    <>
+    {/* Свёрнутая — плашка внизу; сам экран остаётся смонтированным, чтобы не терять ввод */}
+    {minimized && (
+      <button onClick={() => setMinimized(false)} style={{ bottom: "var(--tabbar-h, 0px)" }}
+        className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
+        <Users size={16} className="text-lime-400 shrink-0" />
+        <span className="flex-1 font-semibold truncate text-sm">{clients.map((c) => c.name).join(" и ")}</span>
+        {restTimer.left > 0 && <span className="font-mono text-sm shrink-0 text-zinc-300">отдых {fmtClock(restTimer.left)}</span>}
+        <span className="text-xs text-zinc-500 shrink-0">{finishedIds.length}/{clients.length} записаны</span>
+      </button>
+    )}
+    <div {...panelProps} className={`fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex-col outline-none ${minimized ? "hidden" : "flex"}`}>
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 pt-3 pb-2.5 shrink-0 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0"><Users size={18} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">Групповая тренировка</h2></div>
-          <button onClick={onClose} aria-label="Закрыть" className="w-11 h-11 -mr-2 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400 shrink-0"><X size={22} /></button>
+          <div className="flex items-center gap-2 min-w-0"><Users size={18} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">Совместная тренировка</h2></div>
+          <div className="flex items-center gap-1 -mr-2 shrink-0">
+            <button onClick={() => setMinimized(true)} aria-label="Свернуть" title="Свернуть" className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><Minimize2 size={20} /></button>
+            <button onClick={exit} aria-label={allDone ? "Закрыть" : "Прервать тренировку"} title={allDone ? "Закрыть" : "Прервать"} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><X size={22} /></button>
+          </div>
         </div>
         {isPair && (
           <div className="flex gap-1 p-1 bg-zinc-800/60 rounded-xl">
@@ -257,13 +281,14 @@ export default function GroupSessionModal({ clients, trainerId, onClose, onClien
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 max-w-2xl w-full mx-auto">
-        {isPair && side && <PairSession a={clients[0]} b={clients[1]} trainerId={trainerId} onFinishedOne={markFinished} startRest={restTimer.start} />}
+        {isPair && side && <PairSession a={clients[0]} b={clients[1]} trainerId={trainerId} groupId={groupId} onFinishedOne={markFinished} startRest={restTimer.start} />}
         {!(isPair && side) && clients.map((c) => (
-          <ClientSlot key={c.id} client={c} trainerId={trainerId} active={c.id === activeId} onFinished={() => markFinished(c.id)} startRest={restTimer.start} />
+          <ClientSlot key={c.id} client={c} trainerId={trainerId} groupId={groupId} active={c.id === activeId} onFinished={() => markFinished(c.id)} startRest={restTimer.start} />
         ))}
       </div>
       <div style={{ paddingBottom: "env(safe-area-inset-bottom)" }}><RestBar timer={restTimer} /></div>
     </div>
+    </>
   );
 }
 
@@ -354,11 +379,11 @@ function PlanPicker({ c, slot }: { c: SlotClient; slot: Slot }) {
   );
 }
 
-function PairSession({ a, b, trainerId, onFinishedOne, startRest }: {
-  a: SlotClient; b: SlotClient; trainerId: string; onFinishedOne: (id: string) => void; startRest: (sec: number) => void;
+function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest }: {
+  a: SlotClient; b: SlotClient; trainerId: string; groupId: string; onFinishedOne: (id: string) => void; startRest: (sec: number) => void;
 }) {
-  const sa = useSessionSlot(a.id, trainerId, () => onFinishedOne(a.id));
-  const sb = useSessionSlot(b.id, trainerId, () => onFinishedOne(b.id));
+  const sa = useSessionSlot(a.id, trainerId, () => onFinishedOne(a.id), groupId);
+  const sb = useSessionSlot(b.id, trainerId, () => onFinishedOne(b.id), groupId);
 
   // Объединение по названию: порядок по дню первой, недостающие у второй — в конец.
   const merged = (() => {

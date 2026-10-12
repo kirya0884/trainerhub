@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cleanupStorage, readJson, writeJson } from "./lib/storage";
 import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin, Search } from "lucide-react";
 import { supabase } from "./lib/supabase";
@@ -29,6 +29,8 @@ import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
 import SessionModal from "./components/SessionModal";
+import GroupSessionModal from "./components/GroupSessionModal";
+import { clearSlotDrafts } from "./hooks/useSessionSlot";
 import { finishWorkout } from "./lib/finishWorkout";
 import { ActiveWorkoutProvider, useActiveWorkout } from "./hooks/useActiveWorkout";
 import { urlToView, viewToUrl, type ViewLike } from "./lib/viewUrl";
@@ -114,9 +116,35 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
  * свёрнутая плашка висит внизу поверх всего и открывается с любого экрана.
  * Раньше SessionModal жил внутри PlanEditor и исчезал при уходе с экрана плана.
  */
-function ActiveWorkoutHost({ trainerId, accent }: { trainerId: string; accent: string }) {
+function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients }: { trainerId: string; accent: string; bookingsHook: ReturnType<typeof useBookings>; reloadClients: () => void }) {
   const { active, stop } = useActiveWorkout();
+  // Совместная: кто уже записан — чтобы отметить запись календаря, когда завершат все
+  const finished = useRef<Set<string>>(new Set());
   if (!active) return null;
+  if (active.kind === "group") {
+    const g = active;
+    const close = () => { clearSlotDrafts(g.id, g.clients.map((c) => c.id)); finished.current = new Set(); stop(); };
+    return (
+      <div style={{ "--accent": accent } as React.CSSProperties}>
+        <GroupSessionModal key={g.id} groupId={g.id} trainerId={trainerId} clients={g.clients} onClose={close}
+          onClientFinished={async (clientId) => {
+            finished.current.add(clientId);
+            reloadClients();
+            const b = g.booking;
+            if (!b || !b.clientIds.every((id) => finished.current.has(id))) return;
+            // Все из записи календаря завершили — запись проведена
+            try {
+              if (b.isOccurrence) {
+                const base = bookingsHook.bookings.find((x) => x.id === b.id);
+                if (base) await bookingsHook.doneOccurrence(base, b.occDate);
+              } else {
+                await bookingsHook.updateBooking(b.id, { status: "done" }, b.clientIds);
+              }
+            } catch (e) { console.error("[ActiveWorkoutHost] отметка записи:", e); }
+          }} />
+      </div>
+    );
+  }
   // Акцент задаётся на контейнере приложения, а этот хост рендерится вне его —
   // без своей переменной тренер с нестандартным цветом увидел бы цвет по умолчанию.
   return (
@@ -523,7 +551,7 @@ export default function App() {
     </div>
     </PinGate>
     {/* Д3: вне переключателя экранов — переживает любую навигацию */}
-    <ActiveWorkoutHost trainerId={session.user.id} accent={trainerAccent} />
+    <ActiveWorkoutHost trainerId={session.user.id} accent={trainerAccent} bookingsHook={bookingsHook} reloadClients={reloadClients} />
     </ActiveWorkoutProvider>
     </>
   );

@@ -6,7 +6,7 @@ import type { Booking, Occurrence } from "../lib/bookings";
 import * as clientsApi from "../lib/clients";
 import type { ClientListItem } from "../lib/clients";
 import BookingModal, { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
-import GroupSessionModal from "./GroupSessionModal";
+import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import ModalShell from "./ModalShell";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
 import { today as todayFn, addDays, addMonths, initials, plural, toDateStr } from "../lib/format";
@@ -59,11 +59,20 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
     setPendingOcc(null);
   }, [pendingOcc, bookings, bookingsHook.loading]);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
-  const [groupSession, setGroupSession] = useState<Occurrence | null>(null);
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [confirmPending, setConfirmPending] = useState<{ text: string; onConfirm: () => void } | null>(null);
-  const [finishedSessionClients, setFinishedSessionClients] = useState<Set<string>>(new Set());
   const askConfirm = (text: string, onConfirm: () => void) => setConfirmPending({ text, onConfirm });
+  // Тренировка по записи — совместная (на всех из записи) и живёт на уровне приложения:
+  // сворачивается, переживает переходы и перезагрузку; запись отмечается, когда завершат все
+  const workout = useActiveWorkout();
+  const startGroup = (o: Occurrence) => {
+    const ok = workout.start({
+      kind: "group", id: String(Date.now()),
+      clients: o.clientIds.map((id) => { const c = clients.find((x) => x.id === id); return { id, name: clientName(id), color: c?.color || "#a3e635", remaining: c?.remaining ?? null }; }),
+      booking: { id: o.id, occDate: o.occDate, isOccurrence: o.isOccurrence, clientIds: o.clientIds },
+    });
+    if (!ok) alert("Одна тренировка уже идёт — заверши или сверни её.");
+  };
 
   const weekStart = startOfWeekMon(anchor);
   const weekEnd = addDays(weekStart, 6);
@@ -198,7 +207,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                   {sub && <p className={`text-sm truncate ${o.status === "no-show" ? "text-orange-400" : "text-zinc-400"}`}>{capFirst(sub)}</p>}
                 </div>
                 {o.status === "scheduled" ? (
-                  <button onClick={(e) => { e.stopPropagation(); setGroupSession(o); }} aria-label="Начать тренировку" title="Начать тренировку"
+                  <button onClick={(e) => { e.stopPropagation(); startGroup(o); }} aria-label="Начать тренировку" title="Начать тренировку"
                     className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center hover:bg-lime-400/25 transition">
                     <Play size={18} />
                   </button>
@@ -399,7 +408,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                 );
               })}
             </div>
-            <button onClick={() => { setGroupSession(quickView); setQuickView(null); }} className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98]"><Play size={18} /> Начать тренировку</button>
+            <button onClick={() => { startGroup(quickView); setQuickView(null); }} className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98]"><Play size={18} /> Начать тренировку</button>
             <div className="flex gap-2">
               <button onClick={() => { setModal({ booking: findBookingById(quickView.id), occDate: quickView.occDate }); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition"><Pencil size={15} /> Изменить</button>
               {quickView.isOccurrence && (
@@ -457,31 +466,6 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
             } catch (e) { console.error("[CalendarView] onSave:", e); alert("Не удалось сохранить запись."); }
           }}
           onDelete={modal.booking ? () => askConfirm("Удалить запись? Это действие необратимо.", async () => { await deleteBooking(modal.booking!.id); setModal(null); }) : undefined}
-        />
-      )}
-
-      {groupSession && (
-        <GroupSessionModal
-          trainerId={trainerId}
-          clients={groupSession.clientIds.map((id) => ({ id, name: clientName(id), color: clients.find((c) => c.id === id)?.color || "#a3e635", remaining: clients.find((c) => c.id === id)?.remaining ?? null }))}
-          onClientFinished={async (clientId) => {
-            try {
-              const next = new Set([...finishedSessionClients, clientId]);
-              setFinishedSessionClients(next);
-              // Когда все клиенты этой записи завершили тренировку — помечаем букинг проведённым
-              if (groupSession.clientIds.every((id) => next.has(id))) {
-                if (groupSession.isOccurrence) {
-                  const base = findBookingById(groupSession.id);
-                  if (base) await doneOccurrence(base, groupSession.occDate);
-                } else {
-                  await updateBooking(groupSession.id, { status: "done" }, groupSession.clientIds);
-                }
-                setFinishedSessionClients(new Set());
-                reloadClients();
-              }
-            } catch (e) { console.error("[CalendarView] onClientFinished:", e); }
-          }}
-          onClose={() => { setGroupSession(null); setFinishedSessionClients(new Set()); }}
         />
       )}
 
