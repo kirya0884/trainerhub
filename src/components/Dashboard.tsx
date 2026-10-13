@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, Suspense, useEffect, useRef, useState } from "react";
 import { BarChart3, Bell, BellOff, Cake, CalendarClock, Check, ChevronDown, ChevronRight, Clock, Eye, EyeOff, Hourglass, Play, TriangleAlert, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
@@ -8,10 +8,13 @@ import type { Booking } from "../lib/bookings";
 import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import { supabase } from "../lib/supabase";
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, isPushSupported } from "../lib/pushSubscribe";
-import AnalyticsPanel from "./AnalyticsPanel";
+import { lazyRetry } from "../lib/lazy";
+import { SkeletonRows } from "./Skeleton";
 import { today, addDays } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
 import { remainingOf } from "../lib/clients";
+// Аналитика с графиками открывается по кнопке — грузим её только тогда (графики тяжёлые)
+const AnalyticsPanel = lazyRetry(() => import("./AnalyticsPanel"));
 
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер"; };
 // Ш4б: обычный заголовок раздела вместо мелкого капса с разрядкой над каждым блоком
@@ -454,7 +457,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         </div>
       </div>
 
-      {showAnalytics && <AnalyticsPanel clients={clients} payments={payments} attendanceRate={attendanceRate} />}
+      {showAnalytics && <Suspense fallback={<SkeletonRows rows={3} />}><AnalyticsPanel clients={clients} payments={payments} attendanceRate={attendanceRate} /></Suspense>}
 
       {/* Payments dashboard */}
       {(cashReceived > 0 || upcomingRenewals.length > 0) && (

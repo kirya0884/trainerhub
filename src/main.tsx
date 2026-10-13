@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import ErrorScreen from "./components/ErrorScreen";
 // Шрифт в бандле, а не с Google Fonts: PWA должна работать в зале без сети,
 // а woff2 попадают в precache сервис-воркера (globPatterns в vite.config.ts)
 import "@fontsource-variable/onest";
@@ -9,7 +10,7 @@ import { registerSW } from "virtual:pwa-register";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <ErrorScreen><App /></ErrorScreen>
   </React.StrictMode>
 );
 

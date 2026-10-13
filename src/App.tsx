@@ -1,41 +1,46 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { cleanupStorage, readJson, writeJson } from "./lib/storage";
 import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin, Search } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
-import PlanEditor from "./components/PlanEditor";
-import PlansOverview from "./components/PlansOverview";
 import ClientsList from "./components/ClientsList";
-import ClientProfile from "./components/ClientProfile";
 import Dashboard from "./components/Dashboard";
-import CalendarView from "./components/CalendarView";
-import ClientPortal from "./components/ClientPortal";
 import { useBookings } from "./hooks/useBookings";
 import { useClients } from "./hooks/useClients";
 import { usePlans } from "./hooks/usePlans";
-import SearchOverlay from "./components/SearchOverlay";
 import { logEvent } from "./lib/events";
 import { loadViewState, saveViewState } from "./lib/viewState";
-import SubscriptionModal from "./components/SubscriptionModal";
-import BackupModal from "./components/BackupModal";
 import PinGate from "./components/PinGate";
 import PinSettingsModal from "./components/PinSettingsModal";
-import TrashModal from "./components/TrashModal";
-import TrainerProfile from "./components/TrainerProfile";
 import * as portalApi from "./lib/clientPortal";
 import * as trainerApi from "./lib/trainer";
 import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
-import SessionModal from "./components/SessionModal";
-import GroupSessionModal from "./components/GroupSessionModal";
 import { clearSlotDrafts } from "./hooks/useSessionSlot";
 import { finishWorkout } from "./lib/finishWorkout";
 import { ActiveWorkoutProvider, useActiveWorkout } from "./hooks/useActiveWorkout";
 import { urlToView, viewToUrl, type ViewLike } from "./lib/viewUrl";
 import { useHistoryNav } from "./hooks/useHistoryNav";
 import { useSwipeBack } from "./hooks/useSwipeBack";
+import { lazyRetry } from "./lib/lazy";
+import { ScreenSkeleton } from "./components/Skeleton";
+
+// Разделы и окна грузятся при первом открытии (см. lib/lazy) — главная и список
+// подопечных остаются в основном файле, чтобы первый экран открывался сразу.
+const PlanEditor = lazyRetry(() => import("./components/PlanEditor"));
+const PlansOverview = lazyRetry(() => import("./components/PlansOverview"));
+const ClientProfile = lazyRetry(() => import("./components/ClientProfile"));
+const CalendarView = lazyRetry(() => import("./components/CalendarView"));
+const ClientPortal = lazyRetry(() => import("./components/ClientPortal"));
+const SearchOverlay = lazyRetry(() => import("./components/SearchOverlay"));
+const SubscriptionModal = lazyRetry(() => import("./components/SubscriptionModal"));
+const BackupModal = lazyRetry(() => import("./components/BackupModal"));
+const TrashModal = lazyRetry(() => import("./components/TrashModal"));
+const TrainerProfile = lazyRetry(() => import("./components/TrainerProfile"));
+const SessionModal = lazyRetry(() => import("./components/SessionModal"));
+const GroupSessionModal = lazyRetry(() => import("./components/GroupSessionModal"));
 
 type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "trainerProfile";
@@ -331,7 +336,7 @@ export default function App() {
     return (
       <PinGate id={selfClient.id} table="clients">
         <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6">
-          <ClientPortal client={selfClient} />
+          <Suspense fallback={<ScreenSkeleton />}><ClientPortal client={selfClient} /></Suspense>
         </div>
       </PinGate>
     );
@@ -463,6 +468,7 @@ export default function App() {
             <Sparkles size={10} className="text-lime-400" /> Старт
           </button>
         </div>
+        <Suspense fallback={<div className="pt-2"><ScreenSkeleton /></div>}>
         {showSearch && (
           <SearchOverlay
             clients={clients ?? []}
@@ -498,6 +504,7 @@ export default function App() {
         {view.kind === "plan" && (
           <PlanEditor planId={view.planId} trainerId={session.user.id} clientId={view.clientId} onBack={goBack} />
         )}
+        </Suspense>
       </div>
 
       {/* Ш4а: нижняя панель вместо плиток на дашборде и плавающей «+» — разделы доступны
@@ -551,7 +558,7 @@ export default function App() {
     </div>
     </PinGate>
     {/* Д3: вне переключателя экранов — переживает любую навигацию */}
-    <ActiveWorkoutHost trainerId={session.user.id} accent={trainerAccent} bookingsHook={bookingsHook} reloadClients={reloadClients} />
+    <Suspense fallback={null}><ActiveWorkoutHost trainerId={session.user.id} accent={trainerAccent} bookingsHook={bookingsHook} reloadClients={reloadClients} /></Suspense>
     </ActiveWorkoutProvider>
     </>
   );
