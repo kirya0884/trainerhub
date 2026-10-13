@@ -1,4 +1,4 @@
-import { ArrowLeft, Apple, MoreHorizontal, CalendarCheck, Camera, CheckCircle2, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Receipt, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
+import { ArrowLeft, Check, Settings2, Apple, MoreHorizontal, CalendarCheck, Camera, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -11,6 +11,7 @@ import { useDebouncedPersist } from "../hooks/useDebouncedPersist";
 import NumField from "./NumField";
 import DateField from "./DateField";
 import PromotionsModal from "./PromotionsModal";
+import ModalShell from "./ModalShell";
 import ReceiptPrintView from "./ReceiptPrintView";
 import ClientProgressPrintView from "./ClientProgressPrintView";
 import BodyTab from "./BodyTab";
@@ -415,6 +416,8 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   // Дата нового платежа — по умолчанию сегодня. Раньше поле показывало и отправляло
   // дату прошлой оплаты из абонемента, и продление записывалось задним числом.
   const [payDate, setPayDate] = useState(today);
+  const [showPkg, setShowPkg] = useState(false);
+  const [payMenu, setPayMenu] = useState<string | null>(null);
 
   const load = () => {
     paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[PaymentsTab] fetchTemplates:", e));
@@ -483,99 +486,166 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     catch (e) { console.error("[PaymentsTab] deletePayment:", e); alert("Не удалось удалить платёж."); }
   };
 
+  const isSub = m.type === "subscription";
+  const total = Number(m.total) || 0;
+  const pkgPrice = Number(m.packagePrice) || 0;
+  const perSession = !isSub && total > 0 && pkgPrice > 0 ? Math.round(pkgPrice / total) : 0;
+  const rub = (n: number) => `${n.toLocaleString("ru-RU")} ₽`;
+  const tplPrice = (t: PackageTemplate) => (t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price);
+  // Выбранный пакет: шаблон, совпавший с текущим пакетом абонемента, иначе — сам текущий
+  const matchedTpl = templates.find((t) => t.sessions === total && tplPrice(t) === pkgPrice && !!t.split === !!m.split);
+  const payAmount = preview ? preview.amount : basePrice;
+
   return (
     <div className="space-y-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-sm flex items-center gap-1.5"><Wallet size={15} className="text-lime-400" /> Тип оплаты</h3>
-          <button onClick={() => setShowPromotions(true)} className={`flex items-center gap-1 text-xs font-medium rounded-lg px-2 py-1 transition ${activePromo ? "bg-orange-400/20 text-orange-300" : "text-zinc-500 hover:text-zinc-300"}`}><Percent size={13} /> Акции{activePromo ? " ✓" : ""}</button>
-        </div>
-        <div className="flex gap-1 bg-zinc-800/50 rounded-lg p-0.5 w-fit">
-          <button onClick={() => patchMembership({ type: "sessions" }, true)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${m.type !== "subscription" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>По тренировкам</button>
-          <button onClick={() => patchMembership({ type: "subscription" }, true)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${m.type === "subscription" ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>Подписка</button>
-        </div>
+      {/* Пакет: что куплено и за сколько; редкие настройки — под ⚙ */}
+      <button onClick={() => setShowPkg(true)} className="w-full flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3.5 text-left hover:border-zinc-700 transition">
+        <span className="w-10 h-10 shrink-0 rounded-xl bg-zinc-800 flex items-center justify-center"><Wallet size={19} className="text-zinc-300" /></span>
+        <span className="flex-1 min-w-0">
+          <span className="block font-semibold truncate">
+            {isSub ? `Подписка${Number(m.pricePerSession) ? ` · ${rub(Number(m.pricePerSession))}` : ""}` : total ? `Пакет ${total} тр.${pkgPrice ? ` · ${rub(pkgPrice)}` : ""}` : "Пакет не настроен"}
+          </span>
+          <span className="block text-[13px] text-zinc-400 truncate">
+            {isSub
+              ? m.nextPaymentDate ? `Следующий платёж ${fmtDate(m.nextPaymentDate)}` : "Дата платежа не указана"
+              : [perSession ? `${rub(perSession)} за тренировку` : "Нажмите, чтобы указать количество и цену", m.split ? (m.partnerName ? `сплит с ${m.partnerName}` : "сплит") : ""].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+        <Settings2 size={19} className="text-zinc-500 shrink-0" />
+      </button>
+      {Number(m.extraRemaining) > 0 && (
+        <p className="text-[13px] text-cyan-300/90 px-1 -mt-2">+ {m.extraRemaining} тр. доп. блока по {rub(Math.round(Number(m.extraPricePerSession) || 0))} — старый пакет с другой ценой</p>
+      )}
 
-        {m.type === "subscription" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <DateField label="След. платёж" value={m.nextPaymentDate} onChange={(e) => patchMembership({ nextPaymentDate: e.target.value })} />
-            <NumField label="Сумма ₽" value={m.pricePerSession} onChange={(e) => patchMembership({ pricePerSession: e.target.value })} placeholder="5000" />
-            <DateField label="Дата оплаты" value={payDate} onChange={(e) => setPayDate(e.target.value || today())} />
-          </div>
-        ) : (
-          <>
-            {templates.length > 0 && (
-              <select onChange={(e) => e.target.value && applyTemplate(e.target.value)} defaultValue="" className="w-full bg-zinc-800 rounded-xl px-2.5 py-2 text-sm outline-none">
-                <option value="" className="bg-zinc-900">Применить шаблон пакета...</option>
-                {templates.map((t) => {
-                  const finalPrice = t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price;
-                  const discountLabel = t.discount ? ` −${t.discount}%→${finalPrice.toLocaleString("ru-RU")}₽` : t.price ? ` — ${t.price.toLocaleString("ru-RU")}₽` : "";
-                  return <option key={t.id} value={t.id} className="bg-zinc-900">{t.name} · {t.sessions}тр{discountLabel}{t.split ? " · сплит" : ""}</option>;
-                })}
-              </select>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              <NumField label="Кол-во в пакете" value={m.total} onChange={(e) => patchMembership({ total: e.target.value })} placeholder="0" />
-              <NumField label="Цена пакета ₽" value={m.packagePrice} onChange={(e) => patchMembership({ packagePrice: e.target.value })} placeholder="24000" />
-              <div className="col-span-2"><DateField label="Дата оплаты" value={payDate} onChange={(e) => setPayDate(e.target.value || today())} /></div>
+      {/* Принять оплату: пакет, дата, одна главная кнопка */}
+      <div>
+        <div className="flex items-center justify-between mb-2.5 px-0.5">
+          <h3 className="text-[17px] font-bold">Принять оплату</h3>
+          <button onClick={() => setShowPromotions(true)} className={`flex items-center gap-1 h-8 px-2.5 rounded-lg text-[13px] font-semibold transition ${activePromo ? "bg-orange-400/15 text-orange-300" : "text-zinc-400 hover:text-zinc-100"}`}><Percent size={14} /> {activePromo ? "Акция" : "Акции"}</button>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 space-y-3">
+          {!isSub && (
+            <div className="flex gap-2 overflow-x-auto -mx-3.5 px-3.5 pb-0.5">
+              {!matchedTpl && total > 0 && (
+                <span className="shrink-0 min-w-[8.5rem] rounded-xl bg-zinc-800 px-3 py-2.5 ring-2 ring-inset ring-lime-400">
+                  <span className="block font-semibold">{total} тренировок</span>
+                  <span className="block text-[13px] text-zinc-400">{pkgPrice ? rub(pkgPrice) : "цена не указана"} · текущий</span>
+                </span>
+              )}
+              {templates.map((t) => (
+                <button key={t.id} onClick={() => applyTemplate(t.id)}
+                  className={`shrink-0 min-w-[8.5rem] text-left rounded-xl bg-zinc-800 px-3 py-2.5 transition ${matchedTpl?.id === t.id ? "ring-2 ring-inset ring-lime-400" : "hover:bg-zinc-700"}`}>
+                  <span className="block font-semibold truncate">{t.name}</span>
+                  <span className="block text-[13px] text-zinc-400">{t.sessions} тр. · {rub(tplPrice(t))}{t.discount ? ` · −${t.discount}%` : ""}</span>
+                </button>
+              ))}
+              <button onClick={() => setShowPkg(true)} className="shrink-0 min-w-[6.5rem] text-left rounded-xl bg-zinc-800 px-3 py-2.5 hover:bg-zinc-700 transition">
+                <span className="block font-semibold">Свой</span>
+                <span className="block text-[13px] text-zinc-400">кол-во и цена</span>
+              </button>
             </div>
-            {Number(m.extraRemaining) > 0 && (
-              <p className="text-xs text-cyan-300/80">+ {m.extraRemaining} тренировки доп. блока по {Math.round(Number(m.extraPricePerSession) || 0).toLocaleString("ru-RU")}₽/занятие (старый пакет, другая цена)</p>
-            )}
-            <button onClick={() => setShowHistory(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl py-1.5 text-sm font-medium transition">
-              <CalendarCheck size={14} /> Посмотреть даты проведённых тренировок
-            </button>
-            {showHistory && <SessionHistoryModal trainerId={trainerId} clientId={clientId} onClose={() => setShowHistory(false)} />}
-            <button onClick={saveAsTemplate} className="text-xs text-zinc-500 hover:text-zinc-300 transition">Сохранить текущий пакет как шаблон</button>
-            <button onClick={() => (m.split ? unlinkPartner() : patchMembership({ split: true }, true))} className={`w-full flex items-center justify-center gap-1.5 rounded-xl py-1.5 text-sm font-medium transition ${m.split ? "bg-cyan-400/20 text-cyan-300" : "bg-zinc-800 text-zinc-400"}`}>Сплит на двоих{m.split && m.partnerClientId ? ` — ${m.partnerName}` : ""}</button>
-            {m.split && !m.partnerClientId && (
-              <select onChange={(e) => e.target.value && linkPartner(e.target.value)} defaultValue="" className="w-full bg-zinc-800 rounded-xl px-2.5 py-2 text-sm outline-none">
-                <option value="" className="bg-zinc-900">Выбрать партнёра по сплиту...</option>
-                {otherClients.map((c) => <option key={c.id} value={c.id} className="bg-zinc-900">{c.name}</option>)}
-              </select>
-            )}
-            {m.split && m.partnerClientId && (
-              <p className="text-xs text-cyan-300/80">Общий остаток и оплата 50/50 с {m.partnerName}</p>
-            )}
-          </>
-        )}
-        <input value={m.note} onChange={(e) => patchMembership({ note: e.target.value })} placeholder="заметка по абонементу (необязательно)" className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-
-        <div className={`grid gap-1.5 ${!basePrice ? "opacity-40 pointer-events-none" : ""}`} style={{ gridTemplateColumns: "1fr auto auto" }}>
-          <button onClick={() => doMarkPaid("paid")} disabled={!basePrice} className="flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition">
-            <CheckCircle2 size={15} /> Оплачено{preview && preview.amount !== basePrice ? ` — ${preview.amount.toLocaleString("ru-RU")}₽ (${preview.label})` : basePrice ? ` — ${basePrice.toLocaleString("ru-RU")}₽` : ""}
+          )}
+          <DateField label="Дата оплаты" value={payDate} onChange={(e) => setPayDate(e.target.value || today())} />
+          <button onClick={() => doMarkPaid("paid")} disabled={!basePrice}
+            className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
+            <Check size={18} strokeWidth={2.75} /> {basePrice ? `Оплачено · ${rub(payAmount)}` : "Укажите цену пакета"}
           </button>
-          <button onClick={() => doMarkPaid("deferred")} disabled={!basePrice} title="Оплатит позже — блок начислен, оплата ожидается" className="flex items-center justify-center gap-1 bg-orange-400/20 text-orange-300 font-semibold rounded-xl py-2.5 px-3 text-sm hover:bg-orange-400/30 transition">
-            <Clock size={15} /> Позже
-          </button>
-          <button onClick={() => doMarkPaid("installment")} disabled={!basePrice} title="Оплата частями — блок начислен, оплата разбита" className="flex items-center justify-center gap-1 bg-cyan-400/20 text-cyan-300 font-semibold rounded-xl py-2.5 px-3 text-sm hover:bg-cyan-400/30 transition">
-            <SplitSquareVertical size={15} /> Частями
-          </button>
+          {preview && preview.amount !== basePrice && <p className="text-[13px] text-orange-300 text-center -mt-1">{preview.label}: вместо {rub(basePrice)}</p>}
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={() => doMarkPaid("deferred")} disabled={!basePrice} title="Блок начислен, оплата ожидается"
+              className="h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-semibold transition disabled:opacity-40"><Clock size={16} className="text-orange-300" /> Позже</button>
+            <button onClick={() => doMarkPaid("installment")} disabled={!basePrice} title="Блок начислен, оплата разбита на части"
+              className="h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-semibold transition disabled:opacity-40"><SplitSquareVertical size={16} className="text-cyan-300" /> Частями</button>
+          </div>
         </div>
       </div>
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
-        <h3 className="font-semibold text-sm flex items-center gap-1.5"><Receipt size={15} className="text-cyan-400" /> Журнал платежей</h3>
-        {payments.length === 0 && <p className="text-xs text-zinc-600">Платежей пока нет</p>}
-        {payments.map((p) => (
-          <div key={p.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-xl px-3 py-2 text-sm">
-            <span className="text-zinc-400 shrink-0 w-20">{fmtDate(p.date)}</span>
-            <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span className="font-medium">{p.amount.toLocaleString("ru-RU")}₽</span>
-              <span className="text-zinc-500 text-xs">{p.type === "subscription" ? "подписка" : "пакет"}</span>
-              {p.payStatus === "deferred" && <span className="text-[10px] font-semibold bg-orange-400/20 text-orange-300 rounded-lg px-1.5 py-0.5">ожидается</span>}
-              {p.payStatus === "installment" && <span className="text-[10px] font-semibold bg-cyan-400/20 text-cyan-300 rounded-lg px-1.5 py-0.5">частями</span>}
-              {p.promoApplied && <span className="text-orange-400 text-xs">· {p.promoApplied}</span>}
-              {p.note && <span className="text-zinc-500 text-xs truncate">· {p.note}</span>}
-            </span>
-            {p.payStatus !== "paid" && <button onClick={() => doMarkPaymentPaid(p.id)} className="p-1 rounded-lg hover:bg-lime-400/20 text-zinc-500 hover:text-lime-400 transition shrink-0" title="Отметить оплаченным"><CheckCircle2 size={14} /></button>}
-            <button onClick={() => setReceipt(p)} className="p-1 rounded-lg hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Чек"><Printer size={14} /></button>
-            <button onClick={() => splitPayment(p)} className="p-1 rounded-lg hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Разделить"><Scissors size={14} /></button>
-            <button onClick={() => editPayment(p)} className="p-1 rounded-lg hover:bg-zinc-700 text-zinc-500 transition shrink-0" title="Редактировать"><Pencil size={14} /></button>
-            <button onClick={() => deletePayment(p.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
+      {/* Журнал: сумма, дата, статус; действия — в меню «⋯» */}
+      <div>
+        <div className="flex items-center justify-between mb-2.5 px-0.5">
+          <h3 className="text-[17px] font-bold">Журнал платежей</h3>
+          <button onClick={() => setShowHistory(true)} className="h-8 px-2 rounded-lg text-[13px] font-semibold text-zinc-400 hover:text-zinc-100 transition">Даты тренировок</button>
+        </div>
+        {payments.length === 0 ? (
+          <p className="text-sm text-zinc-500 px-0.5">Платежей пока нет</p>
+        ) : (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
+            {payments.map((p) => (
+              <div key={p.id} className="relative flex items-center gap-2 pl-4 pr-1.5 min-h-[60px] py-2">
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold flex items-center gap-1.5 flex-wrap">
+                    {rub(p.amount)}
+                    {p.payStatus === "deferred" && <span className="h-5 px-2 rounded-full text-xs font-semibold bg-orange-400/15 text-orange-300 inline-flex items-center">ожидается</span>}
+                    {p.payStatus === "installment" && <span className="h-5 px-2 rounded-full text-xs font-semibold bg-cyan-400/15 text-cyan-300 inline-flex items-center">частями</span>}
+                  </p>
+                  <p className="text-[13px] text-zinc-400 truncate">{[fmtDate(p.date), p.type === "subscription" ? "подписка" : "пакет", p.promoApplied, p.note].filter(Boolean).join(" · ")}</p>
+                </div>
+                {p.payStatus !== "paid" && (
+                  <button onClick={() => doMarkPaymentPaid(p.id)} title="Отметить оплаченным" className="h-9 px-2.5 rounded-lg text-[13px] font-semibold text-lime-400 hover:bg-lime-400/10 transition shrink-0">Оплачен</button>
+                )}
+                <button onClick={() => setPayMenu(payMenu === p.id ? null : p.id)} aria-label="Действия с платежом" aria-expanded={payMenu === p.id}
+                  className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition"><MoreHorizontal size={19} /></button>
+                {payMenu === p.id && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setPayMenu(null)} />
+                    <div className="absolute right-2 top-full -mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-48 shadow-xl">
+                      <button onClick={() => { setPayMenu(null); setReceipt(p); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Printer size={15} className="text-zinc-500" /> Чек</button>
+                      <button onClick={() => { setPayMenu(null); editPayment(p); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Pencil size={15} className="text-zinc-500" /> Изменить</button>
+                      <button onClick={() => { setPayMenu(null); splitPayment(p); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Scissors size={15} className="text-zinc-500" /> Разбить</button>
+                      <div className="my-1 border-t border-zinc-800" />
+                      <button onClick={() => { setPayMenu(null); deletePayment(p.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} /> Удалить</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
 
+      {/* Пакет и абонемент — меняют редко */}
+      {showPkg && (
+        <ModalShell title="Пакет и абонемент" icon={<Wallet size={17} className="text-lime-400" />} onClose={() => setShowPkg(false)}>
+          <div className="p-4 space-y-3.5">
+            <div className="flex p-1 rounded-xl bg-zinc-800">
+              {([["sessions", "По тренировкам"], ["subscription", "Подписка"]] as const).map(([k, l]) => (
+                <button key={k} onClick={() => patchMembership({ type: k }, true)} aria-pressed={(k === "subscription") === isSub}
+                  className={`flex-1 h-10 rounded-lg text-sm font-semibold transition ${(k === "subscription") === isSub ? "bg-zinc-900 text-zinc-100 shadow" : "text-zinc-400"}`}>{l}</button>
+              ))}
+            </div>
+            {isSub ? (
+              <div className="grid grid-cols-2 gap-2">
+                <NumField label="Сумма ₽" value={m.pricePerSession} onChange={(e) => patchMembership({ pricePerSession: e.target.value })} placeholder="5000" />
+                <DateField label="След. платёж" value={m.nextPaymentDate} onChange={(e) => patchMembership({ nextPaymentDate: e.target.value })} />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-2">
+                  <NumField label="Тренировок" value={m.total} onChange={(e) => patchMembership({ total: e.target.value })} placeholder="10" />
+                  <NumField label="Цена пакета ₽" value={m.packagePrice} onChange={(e) => patchMembership({ packagePrice: e.target.value })} placeholder="24000" />
+                </div>
+                <label className="flex items-center gap-3 min-h-[52px] cursor-pointer">
+                  <input type="checkbox" className="sr-only peer" checked={!!m.split} onChange={() => (m.split ? unlinkPartner() : patchMembership({ split: true }, true))} />
+                  <span className="relative w-11 h-7 shrink-0 rounded-full bg-zinc-700 peer-checked:bg-lime-400 transition after:content-[''] after:absolute after:top-1 after:left-1 after:w-5 after:h-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-4" />
+                  <span className="flex-1"><span className="block font-semibold">Сплит на двоих</span><span className="block text-[13px] text-zinc-400">{m.split && m.partnerName ? `Общий остаток и оплата 50/50 с ${m.partnerName}` : "Общий остаток, оплата 50/50"}</span></span>
+                </label>
+                {m.split && !m.partnerClientId && (
+                  <select onChange={(e) => e.target.value && linkPartner(e.target.value)} defaultValue="" className="w-full h-11 bg-zinc-800 rounded-xl px-3 outline-none">
+                    <option value="" className="bg-zinc-900">Выбрать партнёра по сплиту…</option>
+                    {otherClients.map((c) => <option key={c.id} value={c.id} className="bg-zinc-900">{c.name}</option>)}
+                  </select>
+                )}
+              </>
+            )}
+            <label className="block text-sm font-semibold">Заметка
+              <input value={m.note} onChange={(e) => patchMembership({ note: e.target.value })} placeholder="Необязательно" className="mt-1.5 w-full h-11 bg-zinc-800 rounded-xl px-3 font-normal outline-none focus:ring-1 focus:ring-lime-400/40" />
+            </label>
+            <button onClick={() => setShowPkg(false)} className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition">Готово</button>
+            {!isSub && <button onClick={saveAsTemplate} className="w-full h-11 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-semibold transition">Сохранить как шаблон пакета</button>}
+          </div>
+        </ModalShell>
+      )}
+      {showHistory && <SessionHistoryModal trainerId={trainerId} clientId={clientId} onClose={() => setShowHistory(false)} />}
       {showPromotions && <PromotionsModal clientId={clientId} onClose={() => { setShowPromotions(false); load(); }} />}
       {receipt && <ReceiptPrintView payment={receipt} trainerId={trainerId} clientName={client.name} onClose={() => setReceipt(null)} />}
     </div>
