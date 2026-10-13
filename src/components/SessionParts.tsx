@@ -1,4 +1,6 @@
-import { Check, Flame, Layers } from "lucide-react";
+import { Check, Flame, History, Layers } from "lucide-react";
+import { fmtDate } from "../lib/format";
+import type { LastTime } from "../lib/sessionUtils";
 import { tonnageOf } from "../lib/sessionUtils";
 import type { Exercise } from "../types";
 
@@ -110,5 +112,24 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
         ))}
       </div>
     </div>
+  );
+}
+
+/** «Как в прошлый раз»: подставить вес и повторы с последнего проведения этого дня.
+ *  После подстановки — «Вернуть план». Нет прошлого раза — ничего не показываем. */
+export function LastTimeBar({ last, applied, onApply, onUndo }: { last: LastTime | null; applied: boolean; onApply: () => void; onUndo: () => void }) {
+  if (!last) return null;
+  return applied ? (
+    <div className="flex items-center gap-2 rounded-xl bg-lime-400/10 border border-lime-400/25 pl-3 pr-1 h-11 text-sm">
+      <Check size={16} className="text-lime-400 shrink-0" />
+      <span className="flex-1 min-w-0 truncate">Веса как {fmtDate(last.date, true)}</span>
+      <button onClick={onUndo} className="h-9 px-3 rounded-lg font-semibold text-zinc-300 hover:bg-zinc-800 transition shrink-0">Вернуть план</button>
+    </div>
+  ) : (
+    <button onClick={onApply} className="w-full flex items-center gap-2 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-zinc-700 px-3 h-11 text-sm font-semibold transition">
+      <History size={16} className="text-lime-400 shrink-0" />
+      <span className="flex-1 text-left truncate">Как в прошлый раз · {fmtDate(last.date, true)}</span>
+      <span className="text-[13px] font-medium text-zinc-500 shrink-0">подставить веса</span>
+    </button>
   );
 }

@@ -4,7 +4,8 @@ import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
 import { parseNum, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
-import { buildMetrics, tonnageOf } from "../lib/sessionUtils";
+import { applyLastTime, buildMetrics, lastTimeFor, tonnageOf, type LastTime } from "../lib/sessionUtils";
+import { fetchProgress } from "../lib/progress";
 import { finishWorkout } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
 import type { Day, Plan, Session } from "../types";
@@ -126,6 +127,19 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     ex.kind === "functional" || !ex.name || meta[ex.id]?.done ? n
       : n + (vals[ex.id] || []).filter((_, i) => !meta[ex.id]?.setsDone?.[i]).length, 0) : 0);
 
+  // «Как в прошлый раз» — последнее проведение выбранного дня этого подопечного
+  const [last, setLast] = useState<LastTime | null>(null);
+  const [beforeLast, setBeforeLast] = useState<Record<string, SetVal[]> | null>(null);
+  useEffect(() => {
+    setLast(null); setBeforeLast(null);
+    if (!plan || !day) return;
+    let alive = true;
+    fetchProgress(plan.id).then((d) => { if (alive) setLast(lastTimeFor(d.sessions, day)); }).catch((e) => console.error("[useSessionSlot] прошлый раз:", e));
+    return () => { alive = false; };
+  }, [plan?.id, day?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const applyLast = () => { if (!day || !last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
+  const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };
+
   const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
   const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [], meta[ex.id]?.setsDone)), 0) : 0;
 
@@ -162,5 +176,6 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     vals, meta, setVal, setMetaFor, setFire, toggleSetDone, openSets,
     mood, setMood, wellbeing, setWellbeing, review, setReview, clientRating, setClientRating,
     doneEx, totalTonnage, finish,
+    last, lastApplied: !!beforeLast, applyLast, undoLast,
   };
 }

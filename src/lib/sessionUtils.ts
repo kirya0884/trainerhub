@@ -1,5 +1,5 @@
 import { parseNum, parseRest, today } from "./format";
-import type { Day, Metric } from "../types";
+import type { Day, Metric, Session } from "../types";
 
 type SetVal = { weight: string; reps: string };
 
@@ -43,3 +43,34 @@ export const tonnageOf = (rows: SetVal[], setsDone?: Record<number, boolean>) =>
     const w = parseNum(r.weight); const rp = parseNum(r.reps);
     return w != null && rp != null ? sum + w * rp : sum;
   }, 0);
+
+// ── «Как в прошлый раз» ──
+// Последнее проведение этого дня (в том же плане): по id дня, а у старых записей без
+// него — по названию. Фактические подходы каждого упражнения — по названию упражнения.
+export type LastTime = { date: string; byName: Record<string, SetVal[]> };
+export function lastTimeFor(sessions: Session[], day: Day): LastTime | null {
+  const s = [...sessions]
+    .filter((x) => (x.dayId ? x.dayId === day.id : x.dayName === day.name))
+    .sort((a, b) => (a.date < b.date ? 1 : -1))
+    .find((x) => x.items.some((it) => it.actualSets?.some((r) => r.weight || r.reps)));
+  if (!s) return null;
+  const byName: Record<string, SetVal[]> = {};
+  for (const it of s.items) {
+    const rows = (it.actualSets ?? []).filter((r) => r.weight || r.reps);
+    if (rows.length) byName[it.name.trim().toLowerCase()] = rows;
+  }
+  return { date: s.date, byName };
+}
+/** Подставляет прошлые вес и повторы в подходы, которые ещё не отмечены. Количество
+ *  подходов берётся из текущего плана: если подходов стало больше — повторяем последний
+ *  прошлый. Упражнения, которых в прошлый раз не было, не трогаем. */
+export function applyLastTime(day: Day, vals: Record<string, SetVal[]>, setsDone: (exId: string) => Record<number, boolean> | undefined, last: LastTime) {
+  const next = { ...vals };
+  for (const ex of day.exercises) {
+    const prev = last.byName[ex.name.trim().toLowerCase()];
+    if (!prev || ex.kind === "functional") continue;
+    const done = setsDone(ex.id) ?? {};
+    next[ex.id] = (vals[ex.id] ?? []).map((r, i) => (done[i] ? r : { weight: prev[Math.min(i, prev.length - 1)].weight || r.weight, reps: prev[Math.min(i, prev.length - 1)].reps || r.reps }));
+  }
+  return next;
+}

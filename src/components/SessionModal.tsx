@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { FlameRate, SupersetRounds, tonnageOf } from "./SessionParts";
+import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionParts";
+import { applyLastTime, lastTimeFor, type LastTime } from "../lib/sessionUtils";
+import { fetchProgress } from "../lib/progress";
 import { parseNum, parseRest, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
 
@@ -40,8 +42,8 @@ const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} к
 type SetVal = { weight: string; reps: string };
 type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number; setsDone?: Record<number, boolean> };
 
-export default function SessionModal({ day, onFinish, onClose }: {
-  day: Day; onFinish: (metrics: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => void | Promise<void>; onClose: () => void;
+export default function SessionModal({ day, planId, onFinish, onClose }: {
+  day: Day; planId?: string; onFinish: (metrics: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => void | Promise<void>; onClose: () => void;
 }) {
   // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
   // Вызов до любых ранних return — иначе порядок хуков поедет.
@@ -118,6 +120,17 @@ export default function SessionModal({ day, onFinish, onClose }: {
   const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
   // Выполненные упражнения сворачиваются в строку; тап раскрывает обратно (поправить вес, заметку)
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
+  // «Как в прошлый раз»: последнее проведение этого дня; до подстановки храним веса, чтобы вернуть план
+  const [last, setLast] = useState<LastTime | null>(null);
+  const [beforeLast, setBeforeLast] = useState<Record<string, SetVal[]> | null>(null);
+  useEffect(() => {
+    if (!planId) return;
+    let alive = true;
+    fetchProgress(planId).then((d) => { if (alive) setLast(lastTimeFor(d.sessions, day)); }).catch((e) => console.error("[SessionModal] прошлый раз:", e));
+    return () => { alive = false; };
+  }, [planId, day.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const applyLast = () => { if (!last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
+  const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };
 
   // Таймер отдыха: стартует сам после отметки подхода, если в плане задан отдых (см. RestTimer).
   const restTimer = useRestTimer();
@@ -220,6 +233,7 @@ export default function SessionModal({ day, onFinish, onClose }: {
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 max-w-2xl w-full mx-auto space-y-2.5">
+        <LastTimeBar last={last} applied={!!beforeLast} onApply={applyLast} onUndo={undoLast} />
         {day.exercises.length === 0 && <p className="text-zinc-600 text-center py-10">В этом дне нет упражнений.</p>}
         {isCircuit ? Array.from({ length: maxRounds }, (_, r) => (
           <div key={r} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">

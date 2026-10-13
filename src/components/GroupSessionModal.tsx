@@ -2,7 +2,7 @@ import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, Users, X } from "
 import { useModalA11y } from "../hooks/useModalA11y";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { readSlotDraft, useSessionSlot } from "../hooks/useSessionSlot";
-import { FlameRate, SupersetRounds, tonnageOf } from "./SessionParts";
+import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionParts";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
@@ -102,6 +102,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
                   <div className="h-full rounded-full bg-lime-400 transition-[width] duration-300" style={{ width: `${(doneEx / day.exercises.length) * 100}%` }} />
                 </div>
               )}
+              <LastTimeBar last={s.last} applied={s.lastApplied} onApply={s.applyLast} onUndo={s.undoLast} />
               {day.exercises.length === 0 && <p className="text-zinc-500 text-center py-10">В этом дне нет упражнений.</p>}
               {groupBlocks(day.exercises).map((block, bi) => {
                 if (block.group && block.items.length > 1) return (
@@ -410,6 +411,13 @@ function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest }: {
         <PlanPicker c={a} slot={sa} />
         <PlanPicker c={b} slot={sb} />
       </div>
+      {[{ c: a, s: sa }, { c: b, s: sb }].map(({ c, s }) => s.last && (
+        <div key={c.id} className="flex items-center gap-2">
+          <span className="w-1.5 h-4 rounded-full shrink-0" style={{ background: c.color }} />
+          <span className="text-sm font-semibold w-16 truncate shrink-0">{c.name}</span>
+          <div className="flex-1 min-w-0"><LastTimeBar last={s.last} applied={s.lastApplied} onApply={s.applyLast} onUndo={s.undoLast} /></div>
+        </div>
+      ))}
 
       {!bothReady ? (
         <p className="text-zinc-500 text-sm text-center py-10">Выберите план и день у обоих подопечных.</p>

@@ -157,6 +157,7 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients }: {
     <SessionModal
       key={active.day.id}
       day={active.day}
+      planId={active.planId}
       onFinish={async (metrics, note, session) => {
         await finishWorkout({
           trainerId, clientId: active.clientId, planId: active.planId,

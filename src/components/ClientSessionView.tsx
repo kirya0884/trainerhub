@@ -6,7 +6,8 @@ import { buildMetrics } from "../lib/sessionUtils";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { FlameRate, SupersetRounds, tonnageOf } from "./SessionParts";
+import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionParts";
+import { applyLastTime, type LastTime } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
 
 const exLabel = (day: Day, idx: number) => {
@@ -50,8 +51,10 @@ function SessionTimer({ startedAt }: { startedAt: number }) {
   return <>{`${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`}</>;
 }
 
-export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635", onProgress, minimized = false, onMinimize, onExpand }: {
+export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635", onProgress, minimized = false, onMinimize, onExpand, lastTime = null }: {
   day: Day; startedAt: number;
+  /** Последнее проведение этого дня — для «Как в прошлый раз» */
+  lastTime?: LastTime | null;
   onFinish: (metrics: Omit<Metric, "id">[], session: Omit<Session, "id">) => void;
   onCancel: () => void;
   accent?: string;
@@ -116,6 +119,9 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   // Как у тренера (SessionModal): текущее — первое невыполненное, выполненные сворачиваются
   const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
+  const [beforeLast, setBeforeLast] = useState<Record<string, SetVal[]> | null>(null);
+  const applyLast = () => { if (!lastTime) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, lastTime)); };
+  const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };
   // Таймер отдыха после отметки подхода, если отдых задан в плане и это не последний подход
   const restTimer = useRestTimer();
   const openSets = () => day.exercises.reduce((n, ex) =>
@@ -269,6 +275,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 max-w-2xl w-full mx-auto space-y-2.5">
+        <LastTimeBar last={lastTime} applied={!!beforeLast} onApply={applyLast} onUndo={undoLast} />
         {day.exercises.length === 0 && <p className="text-zinc-500 text-center py-10">В этом дне нет упражнений.</p>}
         {isCircuit ? Array.from({ length: maxRounds }, (_, r) => (
           <div key={r} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">

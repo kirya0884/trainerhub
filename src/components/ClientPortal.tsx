@@ -22,6 +22,7 @@ import { addDays, fmtDate, today as todayFn } from "../lib/format";
 import { supabase } from "../lib/supabase";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
+import { lastTimeFor } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 
 type Tab = "profile" | "program" | "reporting";
@@ -536,6 +537,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           onExpand={() => setSessionMinimized(false)}
           accent={profile.accentColor}
           day={activeDay}
+          lastTime={lastTimeFor(progressHook.sessions, activeDay)}
           startedAt={activeSession.startedAt}
           onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch((e) => console.error("[ClientPortal] прогресс тренировки не ушёл тренеру:", e))}
           onCancel={async () => { try { await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { sessionLoggedRef.current = false; setActiveSession(null); setSessionMinimized(false); } }}
