@@ -66,9 +66,11 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   // сворачивается, переживает переходы и перезагрузку; запись отмечается, когда завершат все
   const workout = useActiveWorkout();
   const startGroup = (o: Occurrence) => {
+    const list = o.clientIds.map((id) => { const c = clients.find((x) => x.id === id); return { id, name: clientName(id), color: c?.color || "#a3e635", remaining: c?.remaining ?? null }; });
+    if (!clientsApi.confirmEmptyMembership(list)) return;
     const ok = workout.start({
       kind: "group", id: String(Date.now()),
-      clients: o.clientIds.map((id) => { const c = clients.find((x) => x.id === id); return { id, name: clientName(id), color: c?.color || "#a3e635", remaining: c?.remaining ?? null }; }),
+      clients: list,
       booking: { id: o.id, occDate: o.occDate, isOccurrence: o.isOccurrence, clientIds: o.clientIds },
     });
     if (!ok) alert("Одна тренировка уже идёт — заверши или сверни её.");

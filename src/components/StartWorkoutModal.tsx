@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import { fetchPlan } from "../lib/plans";
-import { fetchClients, type ClientListItem, type PlanListItem } from "../lib/clients";
+import { confirmEmptyMembership, fetchClients, type ClientListItem, type PlanListItem } from "../lib/clients";
 import type { Plan } from "../types";
 import { useActiveWorkout, type GroupClient } from "../hooks/useActiveWorkout";
 
@@ -28,6 +28,7 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
   const startWith = (id: string, name: string) => {
     const c = others?.find((x) => x.id === id);
     const other: GroupClient = { id, name: c?.name ?? name, color: c?.color || "#22d3ee", remaining: c?.remaining ?? null };
+    if (!confirmEmptyMembership([self, other])) return;
     if (!workout.start({ kind: "group", id: String(Date.now()), clients: [self, other] })) { alert("Одна тренировка уже идёт — заверши или сверни её."); return; }
     onClose();
   };
@@ -55,7 +56,7 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
 
   const start = (dayId: string) => {
     const day = days.find((d) => d.id === dayId);
-    if (!day) return;
+    if (!day || !confirmEmptyMembership([self])) return;
     if (!workout.start({ day, planId, clientId, clientName })) { alert("Одна тренировка уже идёт — заверши или сверни её."); return; }
     onClose();
   };

@@ -24,6 +24,14 @@ export const remainingOf = (membership: any): string | null => {
   return String((Number(membership.remaining) || 0) + (Number(membership.extraRemaining) || 0));
 };
 
+// Абонемент на нуле — не запрет (тренировка спишется в минус), но тренер должен знать
+// до начала, а не узнать после. remaining = null — подписка или учёт не ведётся.
+export function confirmEmptyMembership(clients: { name: string; remaining?: string | null }[]) {
+  const empty = clients.filter((c) => c.remaining != null && Number(c.remaining) <= 0).map((c) => c.name);
+  if (!empty.length) return true;
+  return window.confirm(`${empty.join(", ")}: в абонементе не осталось тренировок. Начать всё равно?`);
+}
+
 export async function fetchClients(trainerId: string): Promise<ClientListItem[]> {
   const { data, error } = await supabase
     .from("clients")

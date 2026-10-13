@@ -5,7 +5,7 @@ import { FeelingBadge } from "./FeelingScale";
 import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
 import { useProgress } from "../hooks/useProgress";
-import { decrementMembershipRemaining, incrementMembershipRemaining, fetchClient, sessionPrice, combinedRemaining, type Membership } from "../lib/clients";
+import { decrementMembershipRemaining, incrementMembershipRemaining, fetchClient, sessionPrice, combinedRemaining, confirmEmptyMembership, remainingOf, type Membership } from "../lib/clients";
 import { fmtDate, initials, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
 import * as paymentsApi from "../lib/payments";
@@ -603,10 +603,10 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                   </button>
                 )}
                 {doneDate ? (
-                  <button onClick={() => { if (window.confirm(`«${day.name}» уже проведена ${fmtDate(doneDate, true)}. Провести ещё раз?`) && !workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
+                  <button onClick={() => { if (window.confirm(`«${day.name}» уже проведена ${fmtDate(doneDate, true)}. Провести ещё раз?`) && confirmEmptyMembership([{ name: clientName, remaining: remainingOf(membership) }]) && !workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
                     className="w-10 h-10 shrink-0 rounded-xl bg-lime-400 text-zinc-950 flex items-center justify-center hover:bg-lime-300 transition" title={`Проведена ${fmtDate(doneDate, true)} — провести ещё раз`} aria-label={`Проведена ${fmtDate(doneDate, true)}. Провести ещё раз`}><Check size={19} strokeWidth={2.75} /></button>
                 ) : (
-                  <button onClick={() => { if (!workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
+                  <button onClick={() => { if (confirmEmptyMembership([{ name: clientName, remaining: remainingOf(membership) }]) && !workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
                     className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center hover:bg-lime-400/25 transition" title="Провести тренировку" aria-label="Провести тренировку"><Play size={18} /></button>
                 )}
                 <div className="relative shrink-0">
