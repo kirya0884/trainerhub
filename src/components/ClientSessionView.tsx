@@ -272,8 +272,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         {day.exercises.length === 0 && <p className="text-zinc-500 text-center py-10">В этом дне нет упражнений.</p>}
         {isCircuit ? Array.from({ length: maxRounds }, (_, r) => (
           <div key={r} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-            <div className="px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide bg-zinc-800/80 text-lime-400">Круг {r + 1} из {maxRounds}</div>
-            <div className="flex items-center gap-2 px-3 py-1 text-[10px] uppercase tracking-wide text-zinc-500 border-b border-zinc-800">
+            <div className="px-3 py-1.5 text-xs font-bold bg-zinc-800/80 text-lime-400">Круг {r + 1} из {maxRounds}</div>
+            <div className="flex items-center gap-2 px-3 py-1 text-xs text-zinc-500 border-b border-zinc-800">
               <span className="flex-1 min-w-0">Упражнение</span>
               <span className="w-14 text-center shrink-0">повт.</span>
               <span className="w-14 text-center shrink-0">вес, кг</span>

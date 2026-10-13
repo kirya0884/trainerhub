@@ -745,7 +745,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
           <input autoFocus value={pasteInput} onChange={(e) => setPasteInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && pasteInput.trim()) handlePasteDay(); if (e.key === "Escape") setPasteInput(null); }}
             placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
-          <button onClick={handlePasteDay} disabled={!pasteInput.trim() || addBusy} className="px-3 py-2 text-sm rounded-xl bg-cyan-400 text-zinc-950 font-semibold hover:bg-cyan-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Вставляю…" : "Вставить"}</button>
+          <button onClick={handlePasteDay} disabled={!pasteInput.trim() || addBusy} className="px-3 py-2 text-sm rounded-xl bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Вставляю…" : "Вставить"}</button>
           <button onClick={() => setPasteInput(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
         </div>
       ) : (
@@ -790,7 +790,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                           <span className="text-xs text-zinc-500">{fmtDate(s.date)}</span>
                           <span className="text-zinc-700">·</span>
                           <span className="text-xs text-zinc-500">{s.done}/{s.total} упр.</span>
-                          {s.fromClient && <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
+                          {s.fromClient && <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
                         </div>
                       </div>
                       <div className="flex items-center gap-0.5 shrink-0">
@@ -849,7 +849,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       {historyFor !== null && <ExerciseHistoryModal name={historyFor} sessions={sessions} metrics={metrics} onClose={() => setHistoryFor(null)} />}
       {/* П4: заметка внизу — заполняется редко, а сверху занимала строку наравне с названием */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-        <label htmlFor="plan-note" className="block text-[11px] uppercase tracking-wide text-zinc-500 mb-1.5">Заметка к плану</label>
+        <label htmlFor="plan-note" className="block text-xs text-zinc-500 mb-1.5">Заметка к плану</label>
         <input id="plan-note" value={plan.note} onChange={(e) => { markSaving(); updatePlanMeta({ note: e.target.value }); }}
           placeholder="Напр. прогрессия каждые 2 недели"
           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-lime-400/50" />

@@ -258,7 +258,7 @@ function InviteBlock({ clientId, email, hasAccount }: { clientId: string; email:
   return (
     <div className="space-y-1">
       {!hasAccount && !created && (
-        <button onClick={invite} disabled={!email || busy} className="flex items-center gap-1.5 bg-cyan-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-cyan-300 transition disabled:opacity-40">
+        <button onClick={invite} disabled={!email || busy} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-cyan-300 transition disabled:opacity-40">
           <Send size={14} /> {busy ? "Отправка..." : "Отправить доступ клиенту"}
         </button>
       )}
@@ -698,13 +698,13 @@ function BookingsTab({ clientId, bookings, onOpenOccurrence, onBook }: {
       {bookBtn}
       {upcoming.length > 0 && (
         <div>
-          <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПРЕДСТОЯЩИЕ — {upcoming.length}</p>
+          <p className="text-[15px] font-bold mb-2 px-0.5">Предстоящие <span className="text-zinc-500 font-semibold">· {upcoming.length}</span></p>
           <div className="space-y-1.5">{upcoming.map((o) => <Row key={`${o.id}-${o.occDate}`} o={o} />)}</div>
         </div>
       )}
       {past.length > 0 && (
         <div>
-          <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2">ПРОШЕДШИЕ</p>
+          <p className="text-[15px] font-bold mb-2 px-0.5">Прошедшие</p>
           <div className="space-y-1.5">{past.map((o) => <Row key={`${o.id}-${o.occDate}`} o={o} />)}</div>
         </div>
       )}
@@ -753,7 +753,7 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
           {[...sorted].reverse().map((p) => (
             <div key={p.id} className="relative group">
               <img src={p.url} alt="" className="w-full h-32 object-cover rounded-xl bg-zinc-800" />
-              <div className="absolute bottom-1 left-1 right-1 text-[10px] text-white bg-black/50 rounded-lg px-1 py-0.5 text-center">{fmtDate(p.date)}</div>
+              <div className="absolute bottom-1 left-1 right-1 text-[11px] text-white bg-black/50 rounded-lg px-1 py-0.5 text-center">{fmtDate(p.date)}</div>
               <button onClick={() => remove(p.id)} className="absolute top-1 right-1 p-1.5 rounded-lg bg-black/50 text-white hover:bg-red-500 transition"><X size={13} /></button>
             </div>
           ))}
@@ -824,7 +824,7 @@ function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, 
             <button key={p.id} onClick={() => onOpenPlan(p.id)} className="w-full text-left bg-zinc-900 border border-zinc-800 rounded-2xl p-3 hover:border-zinc-700 transition flex items-center justify-between gap-2">
               <span className="font-medium truncate">{p.name}</span>
               <span className="flex items-center gap-2 shrink-0">
-                {p.archived && <span className="text-[10px] uppercase tracking-wide bg-zinc-700 text-zinc-400 rounded-lg px-1.5 py-0.5">архив</span>}
+                {p.archived && <span className="text-xs bg-zinc-700 text-zinc-400 rounded-lg px-1.5 py-0.5">архив</span>}
                 <span onClick={(e) => duplicate(p.id, p.name, e)} className={`p-1 rounded-lg hover:bg-zinc-700 hover:text-zinc-200 text-zinc-500 transition ${dupId === p.id ? "opacity-40" : ""}`} title="Дублировать план"><Copy size={14} /></span>
                 <span onClick={(e) => deletePlan(p.id, p.name, e)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить"><Trash2 size={14} /></span>
               </span>

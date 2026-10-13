@@ -54,7 +54,7 @@ export default function SearchOverlay({ clients, plans, onOpenClient, onOpenPlan
 
           {foundClients.length > 0 && (
             <div>
-              <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5"><Users size={12} /> ПОДОПЕЧНЫЕ</p>
+              <p className="text-[15px] font-bold mb-2 flex items-center gap-1.5"><Users size={15} className="text-zinc-400" /> Подопечные</p>
               <div className="space-y-1.5">
                 {foundClients.map((c) => (
                   <button key={c.id} onClick={() => { onOpenClient(c.id); onClose(); }} className="w-full flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-left hover:border-zinc-700 transition">
@@ -73,7 +73,7 @@ export default function SearchOverlay({ clients, plans, onOpenClient, onOpenPlan
 
           {foundPlans.length > 0 && (
             <div>
-              <p className="text-xs font-semibold tracking-widest text-zinc-500 mb-2 flex items-center gap-1.5"><ClipboardList size={12} /> ПЛАНЫ</p>
+              <p className="text-[15px] font-bold mb-2 flex items-center gap-1.5"><ClipboardList size={15} className="text-zinc-400" /> Планы</p>
               <div className="space-y-1.5">
                 {foundPlans.map((p) => (
                   <button key={p.id} onClick={() => { onOpenPlan(p.id, p.clientId); onClose(); }} className="w-full flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-left hover:border-zinc-700 transition">

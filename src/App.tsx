@@ -346,7 +346,7 @@ export default function App() {
             Вход выполнен ({session.user.email}), но карточка подопечного не найдена. Проверьте у тренера, что в вашей карточке указан именно этот email для входа.
           </p>
           <div className="flex gap-2 justify-center pt-1">
-            <button onClick={() => checkAccess(session.user.id)} className="bg-cyan-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-cyan-300 transition">Повторить</button>
+            <button onClick={() => checkAccess(session.user.id)} className="bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-lime-300 transition">Повторить</button>
             <button onClick={() => supabase.auth.signOut()} className="text-sm text-zinc-500 hover:text-zinc-300 px-3 py-2">Выйти</button>
           </div>
         </div>
@@ -386,7 +386,7 @@ export default function App() {
                         </span>
                       )}
                     </span>
-                    <span className="text-[10px] text-zinc-400 truncate w-full text-center leading-tight group-hover:text-zinc-200 transition">{c.name}</span>
+                    <span className="text-[11px] text-zinc-400 truncate w-full text-center leading-tight group-hover:text-zinc-200 transition">{c.name}</span>
                   </button>
                 ))}
               </div>

@@ -509,9 +509,9 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           {[...paymentsThisMonth].sort((a, b) => b.date.localeCompare(a.date)).map((p, i) => {
             const cName = clientById[p.clientId]?.name ?? "—";
             const badge = p.payStatus === "deferred"
-              ? <span className="text-[10px] text-orange-400 bg-orange-400/10 rounded-lg px-1 shrink-0">ожидание</span>
+              ? <span className="text-[11px] text-orange-400 bg-orange-400/10 rounded-lg px-1 shrink-0">ожидание</span>
               : p.payStatus === "installment"
-              ? <span className="text-[10px] text-yellow-400 bg-yellow-400/10 rounded-lg px-1 shrink-0">рассрочка</span>
+              ? <span className="text-[11px] text-yellow-400 bg-yellow-400/10 rounded-lg px-1 shrink-0">рассрочка</span>
               : null;
             return (
               <div key={i} className="flex items-center gap-2 text-sm">

@@ -103,14 +103,14 @@ export default function ExerciseHistoryModal({
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-sm font-semibold">{fmtDate(e.date)}</span>
               {e.dayName && <><span className="text-zinc-700">·</span><span className="text-xs text-zinc-500 truncate">{e.dayName}</span></>}
-              {e.fromClient && <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
+              {e.fromClient && <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
               {e.rpe > 0 && <span className="ml-auto text-[11px] text-zinc-500 shrink-0">RPE {e.rpe}</span>}
             </div>
             {e.sets.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
                 {e.sets.map((s, i) => (
                   <span key={i} className="flex items-baseline gap-1 bg-zinc-900 border border-zinc-700 rounded-lg px-2 py-1 text-sm">
-                    <span className="text-[10px] text-zinc-600">{i + 1}</span>
+                    <span className="text-[11px] text-zinc-600">{i + 1}</span>
                     <span className="font-medium">{s.weight || "—"}</span>
                     <span className="text-xs text-zinc-500">×</span>
                     <span className="font-medium">{s.reps || "—"}</span>
@@ -126,7 +126,7 @@ export default function ExerciseHistoryModal({
 
         {view === "chart" && entries.length > 0 && (
           <div>
-            <p className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{chart.title}</p>
+            <p className="text-xs text-zinc-500 mb-1">{chart.title}</p>
             <div className="text-lime-400">
               <TrendChart data={chart.data} color="currentColor" height={220}
                 formatter={(v) => `${v} ${chart.unit}`}

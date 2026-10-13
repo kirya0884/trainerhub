@@ -154,7 +154,7 @@ function ExerciseRow({
             ))}
             <div className="flex items-center gap-3 mt-0.5">
               <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-lime-400 transition"><Plus size={13} /> подход</button>
-              <span className="text-[10px] uppercase tracking-wide text-zinc-500 ml-auto">Отдых</span>
+              <span className="text-xs text-zinc-500 ml-auto">Отдых</span>
               <input value={ex.rest} inputMode="decimal" onChange={(e) => { const v = e.target.value; startTransition(() => update({ rest: v })); }} placeholder="90 с" className="w-16 bg-zinc-800 rounded-lg px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
             </div>
           </div>

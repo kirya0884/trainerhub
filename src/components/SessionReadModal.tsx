@@ -37,7 +37,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
             <span className="text-zinc-700 text-xs">·</span>
             <span className="text-xs text-zinc-500">{session.done}/{session.total} упр.</span>
             {session.fromClient && (
-              <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>
+              <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>
             )}
           </div>
         </div>
@@ -84,7 +84,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                   </span>
                 )}
                 {item.rpe > 0 && (
-                  <span className="text-[10px] bg-cyan-400/10 text-cyan-400 rounded-lg px-1.5 py-0.5 shrink-0">RPE {item.rpe}</span>
+                  <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-lg px-1.5 py-0.5 shrink-0">RPE {item.rpe}</span>
                 )}
                 {tonnage > 0 && (
                   <span className="text-[11px] text-zinc-500 shrink-0">
@@ -106,7 +106,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                   {maxRows > 0 && (
                     <div className="space-y-1.5">
                       {/* Заголовок колонок */}
-                      <div className="flex items-center gap-2 text-[10px] text-zinc-600 uppercase tracking-wide px-7">
+                      <div className="flex items-center gap-2 text-xs text-zinc-600 px-7">
                         <span className="w-4 text-center">#</span>
                         <span className="w-16 text-center">план</span>
                         <span className="text-zinc-700 px-1">→</span>

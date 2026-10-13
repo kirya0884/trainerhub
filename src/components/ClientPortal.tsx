@@ -333,7 +333,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                         if (color && block.items.length > 1) {
                           return (
                             <div key={bi} className="rounded-xl border-2 overflow-hidden" style={{ borderColor: color }}>
-                              <div className="px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide" style={{ background: `${color}26`, color }}>
+                              <div className="px-2.5 py-1 text-xs font-bold" style={{ background: `${color}26`, color }}>
                                 Суперсет {block.group} · {block.items.length} упр.
                               </div>
                               <div className="p-1.5 space-y-1">{rows}</div>

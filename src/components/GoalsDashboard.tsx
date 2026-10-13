@@ -51,7 +51,7 @@ function RingCard({ label, unit, actual, goal, periodDays, color }: {
         </div>
       </div>
       <span className="text-[11px] text-zinc-400 text-center leading-tight">{label}</span>
-      <span className="text-[10px] text-zinc-600 text-center">{Math.round(actual)}&nbsp;/&nbsp;{Math.round(target)}&nbsp;{unit}</span>
+      <span className="text-[11px] text-zinc-600 text-center">{Math.round(actual)}&nbsp;/&nbsp;{Math.round(target)}&nbsp;{unit}</span>
     </div>
   );
 }
@@ -172,7 +172,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
         {goalsOpen && (
           <div className="px-4 pb-4 space-y-4 border-t border-zinc-800">
             <div>
-              <p className="flex items-center gap-1.5 text-xs text-zinc-500 uppercase tracking-wide mt-3 mb-2"><Apple size={12} /> Питание на день</p>
+              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mt-3 mb-2"><Apple size={12} /> Питание на день</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 <GoalInput label="Белок" unit="г" placeholder="150" value={draft.protein ?? ""} onChange={(v) => setDraft((d) => ({ ...d, protein: v }))} />
                 <GoalInput label="Углеводы" unit="г" placeholder="200" value={draft.carbs ?? ""} onChange={(v) => setDraft((d) => ({ ...d, carbs: v }))} />
@@ -182,7 +182,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
               </div>
             </div>
             <div>
-              <p className="flex items-center gap-1.5 text-xs text-zinc-500 uppercase tracking-wide mb-2"><Footprints size={12} /> Активность</p>
+              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mb-2"><Footprints size={12} /> Активность</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                 {ACTIVITY_FIELDS.map((f) => (
                   <GoalInput key={String(f.key)} label={f.label} unit={f.unit} placeholder={f.placeholder}
@@ -223,7 +223,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold mb-1"><Apple size={14} className="text-lime-400" /> Питание</h3>
               {!nutrition.length && <p className="text-xs text-zinc-600 mb-3">Клиент не вёл дневник питания в этом периоде</p>}
-              <p className="text-[10px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
+              <p className="text-[11px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 justify-items-center">
                 <RingCard label="Калории" unit="ккал" actual={nutSum("calories")} goal={goals.calories ?? 0} periodDays={totalDays} color="#fb923c" />
                 <RingCard label="Белок" unit="г" actual={nutSum("protein")} goal={goals.protein ?? 0} periodDays={totalDays} color="#a3e635" />
@@ -237,7 +237,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold mb-1"><Footprints size={14} className="text-lime-400" /> Активность</h3>
               {!activities.length && <p className="text-xs text-zinc-600 mb-3">Клиент не логировал активность в этом периоде</p>}
-              <p className="text-[10px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
+              <p className="text-[11px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
               <div className="grid grid-cols-2 gap-4 justify-items-center">
                 <RingCard label="Шаги" unit="шаг" actual={actSum("steps")} goal={goals.steps ?? 0} periodDays={totalDays} color="#a3e635" />
                 <RingCard label="Акт. минут" unit="мин" actual={actSum("activeMinutes")} goal={goals.activeMinutes ?? 0} periodDays={totalDays} color="#22d3ee" />

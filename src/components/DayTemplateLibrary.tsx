@@ -120,7 +120,7 @@ export default function DayTemplateLibrary({
               className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2.5 text-base font-semibold outline-none focus:border-lime-400/50"
             />
             <div className="space-y-2">
-              <div className="hidden sm:grid grid-cols-[1fr_2.5rem_3.5rem_3.5rem_3.5rem_1.5rem] gap-1.5 px-2 text-[11px] text-zinc-500 uppercase tracking-wide">
+              <div className="hidden sm:grid grid-cols-[1fr_2.5rem_3.5rem_3.5rem_3.5rem_1.5rem] gap-1.5 px-2 text-xs text-zinc-500">
                 <span>Упражнение</span><span className="text-center">×</span><span className="text-center">Повт.</span><span className="text-center">Кг</span><span className="text-center">Отд.</span><span />
               </div>
               {editing.exercises.map((ex, i) => (
@@ -197,7 +197,7 @@ export default function DayTemplateLibrary({
                       placeholder="Название дня в плане"
                       className="flex-1 min-w-0 bg-zinc-900 border border-zinc-700 rounded-xl px-2.5 py-1.5 text-sm outline-none focus:border-cyan-400/50" />
                     <button onClick={handleInsert} disabled={!insertFor.name.trim() || saving}
-                      className="px-3 py-1.5 text-sm rounded-lg bg-cyan-400 text-zinc-950 font-semibold hover:bg-cyan-300 transition disabled:opacity-40">
+                      className="px-3 py-1.5 text-sm rounded-lg bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40">
                       {saving ? "…" : "Вставить"}
                     </button>
                     <button onClick={() => setInsertFor(null)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-500 transition"><X size={14} /></button>
