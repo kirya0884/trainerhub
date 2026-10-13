@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Layers, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
+import { Activity, Check, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Layers, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
@@ -275,7 +275,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           {/* Program sub-tabs */}
           <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
             {(["active", "completed", "progress"] as ProgramSub[]).map((k) => {
-              const labels: Record<ProgramSub, string> = { active: "Активные", completed: "Пройденные", progress: "Прогресс" };
+              const labels: Record<ProgramSub, string> = { active: "Активные", completed: "История", progress: "Прогресс" };
               return (
                 <button key={k} onClick={() => setProgramSub(k)} className={`${SUB_BTN} flex-1 ${programSub === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={programSub === k ? { background: "var(--accent)" } : undefined}>
                   {labels[k]}
@@ -297,15 +297,14 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                 const mesocycles = planHook.plan?.mesocycles ?? [];
                 // #5 Wait for sessions to load before computing doneEver — prevents flash of all days
                 if (progressHook.loading) return null;
-                // Дни, для которых уже есть проведённая тренировка — скрываем из "Активных"
-                const doneEver = new Set(progressHook.sessions.map((s) => s.dayName));
-                // Видимые дни: не скрыты тренером, не принадлежат скрытому блоку, не проведены ранее
-                const visibleDays = (planHook.plan?.days ?? []).filter((d) =>
-                  d.visibleToClient !== false &&
-                  !doneEver.has(d.name) &&
-                  !(d.mesocycleId && mesocycles.find((m) => m.id === d.mesocycleId)?.visibleToClient === false)
-                );
-                const todayDay = visibleDays.find((d) => d.dateOf === todayStr) ?? null;
+                // Как у тренера: проведённый день остаётся в списке с датой и галочкой
+                // (раньше пропадал навсегда — повторить день было нельзя)
+                const lastDone = new Map<string, string>();
+                for (const s of progressHook.sessions) if (!lastDone.has(s.dayName) || s.date > lastDone.get(s.dayName)!) lastDone.set(s.dayName, s.date);
+                // Видимые дни: не скрыты тренером и не из скрытого или архивного блока
+                const hiddenMeso = (id?: string | null) => { const m = id ? mesocycles.find((x) => x.id === id) : undefined; return !!m && (m.visibleToClient === false || !!m.archivedAt); };
+                const visibleDays = (planHook.plan?.days ?? []).filter((d) => d.visibleToClient !== false && !hiddenMeso(d.mesocycleId));
+                const todayDay = visibleDays.find((d) => d.dateOf === todayStr && !lastDone.has(d.name)) ?? null;
                 const hasMesos = mesocycles.filter((m) => m.visibleToClient !== false).length > 0;
 
                 // Вспомогательные функции для групповых отображений
@@ -382,14 +381,22 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                         <h3 className="font-semibold flex-1 min-w-0 truncate">{day.name}</h3>
                         {day.dateOf && <span className="text-xs text-zinc-500 shrink-0">{fmtDate(day.dateOf, true)}</span>}
                         <span className="text-xs text-zinc-600 shrink-0">{day.exercises.length} упр.</span>
-                        <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
+                        {lastDone.has(day.name) ? (
+                          <button onClick={() => { if (window.confirm(`«${day.name}» уже пройдена ${fmtDate(lastDone.get(day.name)!, true)}. Пройти ещё раз?`)) startDay(day.id, day.name); }}
+                            title={`Пройдена ${fmtDate(lastDone.get(day.name)!, true)} — пройти ещё раз`}
+                            className="flex items-center gap-1 rounded-lg px-2.5 h-9 text-sm font-semibold shrink-0 transition hover:opacity-90" style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 14%, transparent)" }}>
+                            <Check size={15} strokeWidth={2.75} /> {fmtDate(lastDone.get(day.name)!, true)}
+                          </button>
+                        ) : (
+                          <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 h-9 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
+                        )}
                       </div>
                       {dayOpen && renderDayExpanded(day)}
                     </div>
                   );
                 };
 
-                const sortedMesos = [...mesocycles].sort((a, b) => a.position - b.position).filter((m) => m.visibleToClient !== false);
+                const sortedMesos = [...mesocycles].sort((a, b) => a.position - b.position).filter((m) => m.visibleToClient !== false && !m.archivedAt);
 
                 return (
                   <>
@@ -436,7 +443,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           {/* Пройденные — session history */}
           {programSub === "completed" && (
             <div className="space-y-2">
-              {sortedSessions.length === 0 && <p className="text-sm text-zinc-600 text-center py-8">Пройденных тренировок пока нет</p>}
+              {sortedSessions.length === 0 && <p className="text-sm text-zinc-600 text-center py-8">Проведённых тренировок пока нет</p>}
               {sortedSessions.map((s) => {
                 const isOpen = openDetails === s.id;
                 return (
