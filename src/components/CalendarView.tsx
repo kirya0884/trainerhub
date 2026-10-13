@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
-import { CalendarDays, CalendarX, Check, ClipboardList, UserX, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share } from "lucide-react";
+import { CalendarDays, CalendarX, Check, ClipboardList, UserX, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share } from "lucide-react";
 import { bookingsOverlap, expandBookings, toMin } from "../lib/bookings";
 import type { Booking, Occurrence } from "../lib/bookings";
 import * as clientsApi from "../lib/clients";
@@ -8,6 +8,7 @@ import type { ClientListItem } from "../lib/clients";
 import BookingModal, { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import ModalShell from "./ModalShell";
+import RemindModal from "./RemindModal";
 import NoShowModal, { type NoShowReason } from "./NoShowModal";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
 import { today as todayFn, addDays, addMonths, initials, plural, toDateStr } from "../lib/format";
@@ -61,6 +62,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   }, [pendingOcc, bookings, bookingsHook.loading]);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
   const [noShow, setNoShow] = useState<Occurrence | null>(null);
+  const [remind, setRemind] = useState<{ id: string; date: string; time: string } | null>(null);
   // Сначала статус записи (кнопка пропадает — второй раз не спишем), потом списание
   const markNoShow = async (o: Occurrence, reasons: Record<string, NoShowReason>) => {
     const b = findBookingById(o.id);
@@ -425,6 +427,9 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                       <p className="font-semibold truncate">{clientName(id)}</p>
                       {rem != null && rem !== "" && <p className={`text-[13px] ${low ? "text-orange-400" : "text-zinc-500"}`}>Осталось {rem}</p>}
                     </div>
+                    {quickView.status === "scheduled" && quickView.date >= today && (
+                      <button onClick={() => { setRemind({ id, date: quickView.date, time: quickView.time }); setQuickView(null); }} aria-label="Напомнить о тренировке" title="Напомнить" className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100 transition shrink-0"><Bell size={17} /></button>
+                    )}
                     <button onClick={() => { onOpenClientPlans(id); setQuickView(null); }} aria-label="Планы подопечного" title="Планы" className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100 transition shrink-0"><ClipboardList size={17} /></button>
                     <button onClick={() => { onOpenClient(id); setQuickView(null); }} className="h-9 px-3 rounded-lg text-[13px] font-semibold bg-zinc-900 text-zinc-100 hover:bg-zinc-700 transition shrink-0">Профиль</button>
                   </div>
@@ -445,6 +450,8 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
           </div>
         </ModalShell>
       )}
+
+      {remind && <RemindModal clientId={remind.id} name={clientName(remind.id)} date={remind.date} time={remind.time} onClose={() => setRemind(null)} />}
 
       {noShow && (
         <NoShowModal clients={noShow.clientIds.map((id) => ({ id, name: clientName(id) }))} onConfirm={(r) => markNoShow(noShow, r)} onClose={() => setNoShow(null)} />
