@@ -214,7 +214,7 @@ export interface ClientFull {
   health: Health; membership: Membership; hasAccount: boolean;
   activeSession: { planId: string; dayId: string; dayName: string; startedAt: number } | null;
 }
-const emptyMembership: Membership = { type: "sessions", total: "", packagePrice: "", pricePerSession: "", remaining: "", paymentDate: "", nextPaymentDate: "", split: false, partnerName: "", partnerClientId: "", note: "", remainingPrice: "", extraRemaining: "", extraPricePerSession: "", remainingTotal: "" };
+export const emptyMembership: Membership = { type: "sessions", total: "", packagePrice: "", pricePerSession: "", remaining: "", paymentDate: "", nextPaymentDate: "", split: false, partnerName: "", partnerClientId: "", note: "", remainingPrice: "", extraRemaining: "", extraPricePerSession: "", remainingTotal: "" };
 
 // Цена одной тренировки: для подписки — pricePerSession; для пакета — packagePrice/total (как считает Дашборд),
 // с фоллбэком на pricePerSession для старых записей, где он мог быть вписан вручную.

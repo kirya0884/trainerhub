@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { logEvent } from "../lib/events";
 import { useScrollRestore } from "../hooks/useScrollRestore";
-import { GOALS } from "../constants";
-import * as api from "../lib/clients";
 import RenewModal from "./RenewModal";
+import NewClientWizard from "./NewClientWizard";
 import LiveWorkoutModal from "./LiveWorkoutModal";
 import type { ClientListItem } from "../lib/clients";
 
@@ -14,8 +13,6 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
   const [showForm, setShowForm] = useState(!!openForm);
   // B13: FAB просит открыть форму сразу. Флаг живёт во View, читаем один раз на смену флага.
   useEffect(() => { if (openForm) { setShowForm(true); setShowArchive(false); } }, [openForm]);
-  const [name, setName] = useState("");
-  const [goal, setGoal] = useState(GOALS[0]);
 
   // B12: поиск и фильтр формата переживают переключение вкладки. Архив намеренно
   // не запоминаем — вернуться в него незаметно и не понять, куда делись активные.
@@ -37,14 +34,6 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
     setRenewing({ clientId: c.id, name: c.name });
   };
 
-  const submit = async () => {
-    if (!name.trim()) return;
-    try {
-      await api.addClient(trainerId, name.trim(), goal, clients?.length ?? 0);
-      setName(""); setGoal(GOALS[0]); setShowForm(false);
-      reloadClients();
-    } catch (e) { console.error("[ClientsList] submit:", e); alert("Не удалось добавить подопечного."); }
-  };
 
   // Ш4в: скелетон по форме будущего списка вместо голого «Загрузка...»
   if (!clients) return (
@@ -166,16 +155,8 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
         ))}
       </div>
       {showForm && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 space-y-3">
-          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} placeholder="Имя подопечного" className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 h-11 outline-none focus:border-lime-400/50" />
-          <select value={goal} onChange={(e) => setGoal(e.target.value)} className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 h-11 outline-none focus:border-lime-400/50">
-            {GOALS.map((g) => <option key={g}>{g}</option>)}
-          </select>
-          <div className="flex gap-2">
-            <button onClick={submit} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-xl h-11 hover:bg-lime-300 transition">Сохранить</button>
-            <button onClick={() => setShowForm(false)} className="px-4 bg-zinc-800 rounded-xl h-11 text-zinc-400 hover:text-zinc-100 transition">Отмена</button>
-          </div>
-        </div>
+        <NewClientWizard trainerId={trainerId} existingCount={clients?.length ?? 0} onClose={() => setShowForm(false)}
+          onCreated={(id) => { setShowForm(false); reloadClients(); onOpenClient(id); }} />
       )}
       {showArchive && (
         <p className="text-sm text-zinc-500 mb-3 flex items-center gap-1.5"><Archive size={14} /> Архив: эти подопечные скрыты из основного списка</p>
