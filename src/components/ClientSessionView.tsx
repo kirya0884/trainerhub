@@ -231,8 +231,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   if (minimized) {
     return (
       <button onClick={() => onExpand?.()}
-        style={{ "--accent": accent } as React.CSSProperties}
-        className="fixed bottom-0 left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
+        style={{ "--accent": accent, bottom: "var(--tabbar-h, 0px)" } as React.CSSProperties}
+        className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Play size={15} style={{ color: "var(--accent)" }} className="shrink-0" />
         <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>
         {restTimer.left > 0 && <span className="font-mono text-sm shrink-0 text-zinc-300">отдых {fmtClock(restTimer.left)}</span>}

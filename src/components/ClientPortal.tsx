@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Check, Apple, BarChart3, ChevronDown, ChevronRight, CheckCircle2, CreditCard, Dumbbell, Flame, Layers, Lock, LogOut, Menu, MessageCircle, MessageSquare, Phone, Play, Ruler, ScrollText, Settings, TrendingUp, User, X as XIcon } from "lucide-react";
+import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageCircle, MessageSquare, Play, Ruler, Settings, TrendingUp, User } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
+import ModalShell from "./ModalShell";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
 import NutritionTab from "./NutritionTab";
@@ -24,13 +25,14 @@ import ClientSessionView from "./ClientSessionView";
 import { SkeletonRows } from "./Skeleton";
 
 type Tab = "profile" | "program" | "reporting";
-type ProgramSub = "active" | "completed" | "progress";
-type ReportSub = "body" | "nutrition" | "activity";
+type ProgramSub = "active" | "completed";
+type ReportSub = "exercises" | "body" | "nutrition" | "activity";
 
+// Нижняя панель — как у тренера; «Профиль» стал «Главной», «Отчётность» — «Прогрессом»
 const TAB_DEFS: Record<Tab, { label: string; icon: typeof User }> = {
-  profile: { label: "Профиль", icon: User },
+  profile: { label: "Главная", icon: Home },
   program: { label: "Программа", icon: Dumbbell },
-  reporting: { label: "Отчётность", icon: BarChart3 },
+  reporting: { label: "Прогресс", icon: TrendingUp },
 };
 
 const SUB_BTN = "px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0";
@@ -38,7 +40,7 @@ const SUB_BTN = "px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0"
 export default function ClientPortal({ client }: { client: portalApi.SelfClient }) {
   const [tab, setTab] = useState<Tab>("profile");
   const [programSub, setProgramSub] = useState<ProgramSub>("active");
-  const [reportSub, setReportSub] = useState<ReportSub>("body");
+  const [reportSub, setReportSub] = useState<ReportSub>("exercises");
   const [showNav, setShowNav] = useState(false);
   const [brand, setBrand] = useState({ brand: "Reps", logoUrl: "", trainingRules: "" });
   const [upcoming, setUpcoming] = useState<portalApi.UpcomingBooking | null>(null);
@@ -58,6 +60,11 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [openDetails, setOpenDetails] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const toggleDay = (id: string) => setExpandedDays((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  // Высота нижней панели — плашка свёрнутой тренировки поднимается над ней
+  useEffect(() => {
+    document.documentElement.style.setProperty("--tabbar-h", "calc(4rem + env(safe-area-inset-bottom))");
+    return () => { document.documentElement.style.removeProperty("--tabbar-h"); };
+  }, []);
 
   const activeSessionRef = useRef<typeof activeSession>(null);
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
@@ -122,160 +129,141 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   // #6 activeDay derived here so portal always renders; CSV renders on top when not minimized
   const activeDay = activeSession ? (planHook.plan?.days.find((d) => d.id === activeSession.dayId) ?? null) : null;
 
+  // Как у тренера: проведённый день остаётся в списке с датой и галочкой
+  const lastDone = new Map<string, string>();
+  for (const s of progressHook.sessions) if (!lastDone.has(s.dayName) || s.date > lastDone.get(s.dayName)!) lastDone.set(s.dayName, s.date);
+  const mesoList = planHook.plan?.mesocycles ?? [];
+  // Видимые дни: не скрыты тренером и не из скрытого или архивного блока
+  const hiddenMeso = (id?: string | null) => { const x = id ? mesoList.find((mm) => mm.id === id) : undefined; return !!x && (x.visibleToClient === false || !!x.archivedAt); };
+  const portalDays = (planHook.plan?.days ?? []).filter((d) => d.visibleToClient !== false && !hiddenMeso(d.mesocycleId));
+  // Следующая тренировка на главной — первый ещё не пройденный день
+  const nextDay = progressHook.loading ? null : portalDays.find((d) => !lastDone.has(d.name)) ?? null;
+  const lastWeight = [...measurements].filter((x) => Number(String(x.weight).replace(",", ".")) > 0).sort((a, b) => (a.date < b.date ? -1 : 1)).pop();
+
   const m = client.membership;
   const sortedSessions = [...progressHook.sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   return (
-    <div className={`max-w-2xl mx-auto space-y-4${activeSession && sessionMinimized ? " pb-20" : ""}`} style={{ "--accent": profile.accentColor } as React.CSSProperties}>
-      {/* Drawer overlay */}
-      {showNav && <div className="fixed inset-0 z-40 bg-black/50" onClick={() => setShowNav(false)} />}
-      {/* Nav drawer */}
-      <div className={`fixed top-0 right-0 h-full z-50 w-56 bg-zinc-900 border-l border-zinc-800 flex flex-col transition-transform duration-200 ${showNav ? "translate-x-0" : "translate-x-full"}`}>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
-          <p className="font-semibold text-sm" style={{ color: "var(--accent)" }}>{brand.brand}</p>
-          <button onClick={() => setShowNav(false)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><XIcon size={18} /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto py-2">
+    <div className={`max-w-2xl mx-auto space-y-4 ${activeSession && sessionMinimized ? "pb-40" : "pb-24"}`} style={{ "--accent": profile.accentColor } as React.CSSProperties}>
+      {/* Аккаунт — по аватару на главной: настройки, PIN, выход */}
+      {showNav && (
+        <ModalShell title={profile.name || client.name} onClose={() => setShowNav(false)}>
+          <div className="p-3 space-y-1">
+            <button onClick={() => { setShowNav(false); setShowSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Settings size={18} className="text-zinc-400" /> <span className="font-medium">Мои данные и здоровье</span></button>
+            <button onClick={() => { setShowNav(false); setShowPinSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Lock size={18} className="text-zinc-400" /> <span className="font-medium">PIN-код на вход</span></button>
+            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-red-400"><LogOut size={18} /> <span className="font-medium">Выйти</span></button>
+          </div>
+        </ModalShell>
+      )}
+
+      {/* Нижняя панель — одна навигация, как у тренера */}
+      <nav aria-label="Разделы" className="fixed inset-x-0 bottom-0 z-40 bg-zinc-950/85 backdrop-blur-xl border-t border-zinc-800" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
+        <div className="max-w-2xl mx-auto h-16 grid grid-cols-3">
           {(Object.keys(TAB_DEFS) as Tab[]).map((k) => {
             const t = TAB_DEFS[k];
+            const on = tab === k;
             return (
-              <button key={k} onClick={() => { setTab(k); setShowNav(false); }} className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition ${tab === k ? "font-semibold" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { color: "var(--accent)" } : undefined}>
-                <t.icon size={16} className="shrink-0" /> {t.label}
-                {tab === k && <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)" }} />}
+              <button key={k} onClick={() => { setTab(k); window.scrollTo(0, 0); }} aria-current={on ? "page" : undefined}
+                className={`flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition ${on ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
+                <t.icon size={22} style={on ? { color: "var(--accent)" } : undefined} />
+                {t.label}
               </button>
             );
           })}
         </div>
-        <div className="border-t border-zinc-800 px-4 py-3 shrink-0">
-          <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-2 text-sm text-zinc-500 hover:text-red-400 transition"><LogOut size={14} /> Выйти</button>
-        </div>
-      </div>
+      </nav>
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setShowNav(true)} aria-label="Меню" className="w-11 h-11 -ml-2 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition"><Menu size={22} /></button>
-          {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-7 h-7 rounded-lg object-cover" />}
-          <p className="font-bold" style={{ color: "var(--accent)" }}>{brand.brand}</p>
-        </div>
-        <p className="text-sm font-medium text-zinc-400">{TAB_DEFS[tab].label}</p>
-      </div>
-
-      {/* Tab bar */}
-      <div className="flex gap-1 overflow-x-auto bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-        {(Object.keys(TAB_DEFS) as Tab[]).map((k) => {
-          const t = TAB_DEFS[k];
-          return (
-            <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-3.5 h-9 rounded-lg text-sm font-semibold transition shrink-0 ${tab === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={tab === k ? { background: "var(--accent)" } : undefined}>
-              <t.icon size={15} /> {t.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* ── ПРОФИЛЬ ── */}
+      {/* ── ГЛАВНАЯ ── */}
       {tab === "profile" && (
         <div className="space-y-3">
-          {/* Приветствие обычным заголовком, как на главной тренера */}
-          <div className="flex items-center gap-3 pt-1">
+          {(brand.logoUrl || brand.brand) && (
+            <div className="flex items-center gap-2 pt-1">
+              {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-7 h-7 rounded-lg object-cover" />}
+              <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>{brand.brand}</p>
+            </div>
+          )}
+          <div className="flex items-center gap-3">
             <div className="min-w-0 flex-1">
               <p className="text-sm text-zinc-500">{(() => { const w = new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" }); return w.charAt(0).toUpperCase() + w.slice(1); })()}</p>
               <h1 className="text-2xl font-extrabold tracking-tight truncate">Привет, {(profile.name || client.name).split(" ")[0]}</h1>
-              {profile.goal && <p className="text-sm text-zinc-400 truncate">{profile.goal}</p>}
             </div>
-            {profile.avatarUrl
-              ? <img src={profile.avatarUrl} alt="" className="w-14 h-14 rounded-full object-cover shrink-0" />
-              : <div className="w-14 h-14 rounded-full shrink-0 flex items-center justify-center text-xl font-bold bg-zinc-900 text-lime-400">{(profile.name || client.name)[0]}</div>}
+            <button onClick={() => setShowNav(true)} aria-label="Мои данные, PIN и выход" title="Аккаунт" className="shrink-0 rounded-full">
+              {profile.avatarUrl
+                ? <img src={profile.avatarUrl} alt="" className="w-14 h-14 rounded-full object-cover" />
+                : <span className="w-14 h-14 rounded-full flex items-center justify-center text-xl font-bold text-zinc-950" style={{ background: "var(--accent)" }}>{(profile.name || client.name)[0]}</span>}
+            </button>
           </div>
 
-          {/* Ближайшая тренировка — главный блок */}
+          {/* Следующая тренировка — главный блок; кнопка сразу начинает следующий день */}
           <div className="relative overflow-hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-4">
-            <div className="pointer-events-none absolute -right-16 -top-16 w-48 h-48 rounded-full bg-lime-400/15 blur-3xl" />
-            <p className="text-sm text-zinc-400">Ближайшая тренировка</p>
+            <div className="pointer-events-none absolute -right-16 -top-16 w-48 h-48 rounded-full blur-3xl" style={{ background: "color-mix(in srgb, var(--accent) 15%, transparent)" }} />
+            <p className="text-sm text-zinc-400">Следующая тренировка</p>
             {upcoming ? (
               <div className="flex items-end gap-3 mt-2">
                 <p className="text-5xl font-extrabold tracking-tight leading-none">{upcoming.time || "—"}</p>
                 <p className="text-base font-semibold text-zinc-300 pb-0.5">{upcoming.date === todayFn() ? "Сегодня" : upcoming.date === addDays(todayFn(), 1) ? "Завтра" : fmtDate(upcoming.date)}</p>
               </div>
             ) : <p className="text-lg font-semibold text-zinc-300 mt-2">Пока нет записей</p>}
-            <button onClick={() => setTab("program")} className="relative mt-4 w-full h-12 rounded-2xl bg-lime-400 text-zinc-950 font-bold flex items-center justify-center gap-2 hover:bg-lime-300 transition active:scale-[0.98]">
-              <Play size={18} /> К программе тренировок
+            {nextDay ? (
+              <button onClick={() => startDay(nextDay.id, nextDay.name)} className="relative mt-4 w-full h-12 rounded-2xl text-zinc-950 font-bold flex items-center justify-center gap-2 hover:opacity-90 transition active:scale-[0.98] px-3" style={{ background: "var(--accent)" }}>
+                <Play size={18} className="shrink-0" /> <span className="truncate">{nextDay.name}</span>
+              </button>
+            ) : (
+              <button onClick={() => setTab("program")} className="relative mt-4 w-full h-12 rounded-2xl bg-zinc-800 font-semibold flex items-center justify-center gap-2 hover:bg-zinc-700 transition">
+                <Dumbbell size={18} /> К программе
+              </button>
+            )}
+          </div>
+
+          {/* Остаток и вес — плитками */}
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
+              <p className="text-sm text-zinc-400">{m.type === "subscription" ? "Подписка" : "Осталось"}</p>
+              {m.type !== "subscription" && m.remaining !== "" && m.remaining != null ? (
+                <p className={`text-[28px] font-extrabold tracking-tight mt-0.5 ${combinedRemaining(m as clientsApi.Membership) <= 2 ? "text-orange-400" : ""}`}>
+                  {combinedRemaining(m as clientsApi.Membership)}{Number(m.remainingTotal || m.total) ? <span className="text-sm font-semibold text-zinc-500"> из {m.remainingTotal || m.total}</span> : null}
+                </p>
+              ) : <p className="text-base font-semibold mt-1.5">{m.nextPaymentDate ? `оплата ${fmtDate(m.nextPaymentDate, true)}` : "активна"}</p>}
+            </div>
+            <button onClick={() => { setTab("reporting"); setReportSub("body"); }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
+              <p className="text-sm text-zinc-400">Вес</p>
+              {lastWeight
+                ? <p className="text-[28px] font-extrabold tracking-tight mt-0.5">{String(lastWeight.weight).replace(".", ",")} <span className="text-sm font-semibold text-zinc-500">кг</span></p>
+                : <p className="text-base font-semibold mt-1.5 text-zinc-500">добавить замер</p>}
             </button>
           </div>
 
-          {/* Абонемент: большая цифра остатка или подписка с датой оплаты */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center gap-4">
-            {m.type !== "subscription" && m.remaining !== "" && m.remaining != null ? (
-              <>
-                <p className={`text-4xl font-extrabold tracking-tight ${combinedRemaining(m as clientsApi.Membership) <= 2 ? "text-orange-400" : ""}`}>{combinedRemaining(m as clientsApi.Membership)}</p>
-                <div className="min-w-0">
-                  <p className="font-semibold">Осталось тренировок</p>
-                  <p className="text-sm text-zinc-500">{combinedRemaining(m as clientsApi.Membership) <= 2 ? "Скоро понадобится продление" : "по абонементу"}</p>
-                </div>
-              </>
-            ) : (
-              <div className="min-w-0">
-                <p className="font-semibold">{m.type === "subscription" ? "Подписка" : "Абонемент"}</p>
-                <p className="text-sm text-zinc-500">{m.nextPaymentDate ? `Следующая оплата ${fmtDate(m.nextPaymentDate)}` : "активен"}</p>
-              </div>
-            )}
-          </div>
-          {/* Платежи */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-2">
-            <p className="font-semibold flex items-center gap-1.5"><CreditCard size={16} className="text-zinc-400" /> Оплаты</p>
-            <div className="text-sm space-y-0.5">
-              <p className="text-zinc-300">Тип: {m.type === "subscription" ? "Подписка" : "По тренировкам"}</p>
-              {m.remaining !== "" && m.remaining != null && <p className="text-zinc-300">Осталось: {combinedRemaining(m as clientsApi.Membership)} тр.</p>}
-              {m.pricePerSession && <p className="text-zinc-300">Цена занятия: {m.pricePerSession} ₽</p>}
-              {m.nextPaymentDate && <p className="text-zinc-300">След. оплата: {fmtDate(m.nextPaymentDate)}</p>}
+          {brand.trainingRules && (
+            <div>
+              <h3 className="text-[17px] font-bold mt-2 mb-2 px-0.5">Правила тренера</h3>
+              <p className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-sm text-zinc-300 whitespace-pre-line">{brand.trainingRules}</p>
             </div>
-            {payments.length > 0 && (
-              <div className="space-y-1 pt-1 border-t border-zinc-800">
-                {payments.slice(0, 5).map((p) => (
-                  <div key={p.id} className="flex items-center justify-between text-sm">
-                    <span className="text-zinc-500">{fmtDate(p.date)}</span>
-                    <span style={{ color: "var(--accent)" }} className="font-semibold">{p.amount.toLocaleString("ru-RU")} ₽</span>
+          )}
+
+          {payments.length > 0 && (
+            <div>
+              <h3 className="text-[17px] font-bold mt-2 mb-2 px-0.5">Оплаты</h3>
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
+                {payments.slice(0, 3).map((p) => (
+                  <div key={p.id} className="flex items-center justify-between px-4 h-12 text-sm">
+                    <span className="text-zinc-400">{fmtDate(p.date)}</span>
+                    <span className="font-semibold">{p.amount.toLocaleString("ru-RU")} ₽</span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-          {/* Контакты + здоровье */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-            {(profile.phone || profile.telegram || profile.whatsapp) && (
-              <div className="flex flex-wrap gap-2">
-                {profile.phone && <a href={`tel:${profile.phone}`} className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm transition text-zinc-300"><Phone size={14} /> {profile.phone}</a>}
-                {profile.telegram && <a href={profile.telegram.startsWith("http") ? profile.telegram : `https://t.me/${profile.telegram.replace(/^@/, "")}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 bg-cyan-500/15 text-cyan-300 hover:bg-cyan-500/25 rounded-lg px-3 py-1.5 text-sm transition"><MessageSquare size={14} /> {profile.telegram}</a>}
-                {profile.whatsapp && <a href={`https://wa.me/${profile.whatsapp.replace(/\D/g, "")}`} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 bg-green-500/15 text-green-300 hover:bg-green-500/25 rounded-lg px-3 py-1.5 text-sm transition"><MessageCircle size={14} /> WhatsApp</a>}
-              </div>
-            )}
-            {(profile.health.injuries || profile.health.restrictions || profile.health.notes) && (
-              <div className="bg-zinc-800/50 rounded-lg p-2.5 space-y-1 text-xs text-zinc-400">
-                {profile.health.injuries && <p><span className="text-zinc-500">Травмы:</span> {profile.health.injuries}</p>}
-                {profile.health.restrictions && <p><span className="text-zinc-500">Противопоказания:</span> {profile.health.restrictions}</p>}
-                {profile.health.notes && <p><span className="text-zinc-500">Заметки:</span> {profile.health.notes}</p>}
-              </div>
-            )}
-            {brand.trainingRules && (
-              <div className="bg-zinc-800/50 rounded-lg p-3 space-y-1">
-                <p className="text-xs text-zinc-500 flex items-center gap-1.5 font-medium"><ScrollText size={13} /> Правила тренировок</p>
-                <p className="text-xs text-zinc-300 whitespace-pre-line">{brand.trainingRules}</p>
-              </div>
-            )}
-            <button onClick={() => setShowSettings(true)} className="w-full flex items-center justify-center gap-1.5 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:opacity-90 transition" style={{ background: "var(--accent)" }}><Settings size={15} /> Редактировать профиль</button>
-            <button onClick={() => setShowPinSettings(true)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-xl py-2.5 text-sm transition"><Lock size={14} /> PIN-код на вход</button>
-            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition py-1"><LogOut size={14} /> Выйти</button>
-          </div>
+            </div>
+          )}
         </div>
       )}
 
       {/* ── ПРОГРАММА ── */}
       {tab === "program" && (
         <div className="space-y-3">
+          <h2 className="text-2xl font-extrabold tracking-tight pt-1">Программа</h2>
           {/* Program sub-tabs */}
           <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-            {(["active", "completed", "progress"] as ProgramSub[]).map((k) => {
-              const labels: Record<ProgramSub, string> = { active: "Активные", completed: "История", progress: "Прогресс" };
+            {(["active", "completed"] as ProgramSub[]).map((k) => {
+              const labels: Record<ProgramSub, string> = { active: "Тренировки", completed: "История" };
               return (
                 <button key={k} onClick={() => setProgramSub(k)} className={`${SUB_BTN} flex-1 ${programSub === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={programSub === k ? { background: "var(--accent)" } : undefined}>
                   {labels[k]}
@@ -297,13 +285,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                 const mesocycles = planHook.plan?.mesocycles ?? [];
                 // #5 Wait for sessions to load before computing doneEver — prevents flash of all days
                 if (progressHook.loading) return null;
-                // Как у тренера: проведённый день остаётся в списке с датой и галочкой
-                // (раньше пропадал навсегда — повторить день было нельзя)
-                const lastDone = new Map<string, string>();
-                for (const s of progressHook.sessions) if (!lastDone.has(s.dayName) || s.date > lastDone.get(s.dayName)!) lastDone.set(s.dayName, s.date);
-                // Видимые дни: не скрыты тренером и не из скрытого или архивного блока
-                const hiddenMeso = (id?: string | null) => { const m = id ? mesocycles.find((x) => x.id === id) : undefined; return !!m && (m.visibleToClient === false || !!m.archivedAt); };
-                const visibleDays = (planHook.plan?.days ?? []).filter((d) => d.visibleToClient !== false && !hiddenMeso(d.mesocycleId));
+                const visibleDays = portalDays;
                 const todayDay = visibleDays.find((d) => d.dateOf === todayStr && !lastDone.has(d.name)) ?? null;
                 const hasMesos = mesocycles.filter((m) => m.visibleToClient !== false).length > 0;
 
@@ -324,29 +306,23 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                   });
                   return blocks;
                 };
-                const renderEx = (ex: typeof visibleDays[0]["exercises"][0], label: string) => (
-                  <div key={ex.id} className="bg-zinc-800/40 rounded-xl px-3 py-2 text-sm">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-zinc-600 font-bold w-4 shrink-0">{label}</span>
-                      <p className="font-medium flex-1 min-w-0 truncate">{ex.name || "—"}</p>
+                // Упражнение строкой, как в редакторе тренера: «5 × 5 · 80 кг»; разные подходы — списком
+                const renderEx = (ex: typeof visibleDays[0]["exercises"][0], label: string) => {
+                  const summary = [ex.sets && ex.reps ? `${ex.sets} × ${ex.reps}` : ex.sets || ex.reps, ex.weight].filter(Boolean).join(" · ");
+                  return (
+                    <div key={ex.id} className="px-1.5 py-1.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-7 h-7 shrink-0 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">{label}</span>
+                        <span className="flex-1 min-w-0 font-semibold truncate">{ex.name || "—"}</span>
+                        {!(ex.detailed && ex.setRows?.length) && summary && <span className="shrink-0 text-sm font-semibold text-zinc-400 whitespace-nowrap">{summary}</span>}
+                      </div>
+                      {ex.detailed && ex.setRows?.length ? (
+                        <p className="text-[13px] text-zinc-400 pl-[2.375rem] mt-0.5">{ex.setRows.map((sr, i) => `${i + 1}) ${sr.weight || "—"} × ${sr.reps || "—"}`).join(" · ")}</p>
+                      ) : null}
+                      {(ex.rest || ex.note) && <p className="text-[13px] text-zinc-500 pl-[2.375rem] mt-0.5">{[ex.rest && `отдых ${ex.rest}`, ex.note].filter(Boolean).join(" · ")}</p>}
                     </div>
-                    {ex.detailed && ex.setRows?.length ? (
-                      <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-zinc-400 pl-5">
-                        {ex.setRows.map((sr, i) => (
-                          <span key={i}><span className="text-zinc-500">{i + 1})</span> <span className="text-zinc-100">{sr.weight || "—"}</span> × <span className="text-zinc-100">{sr.reps || "—"}</span></span>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5 text-xs pl-5">
-                        {ex.sets && <span className="text-zinc-400"><span className="text-zinc-100">{ex.sets}</span> подх.</span>}
-                        {ex.reps && <span className="text-zinc-400">× <span className="text-zinc-100">{ex.reps}</span> повт.</span>}
-                        {ex.weight && <span className="text-zinc-400">· <span className="text-zinc-100">{ex.weight}</span></span>}
-                        {ex.rest && <span className="text-zinc-400">· отдых <span className="text-zinc-100">{ex.rest}</span></span>}
-                      </div>
-                    )}
-                    {ex.note && <p className="text-xs text-zinc-600 mt-0.5 pl-5 italic">{ex.note}</p>}
-                  </div>
-                );
+                  );
+                };
                 const renderDayExpanded = (day: typeof visibleDays[0]) => {
                   const blocks = groupBlks(day.exercises);
                   return (
@@ -370,25 +346,30 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                     </div>
                   );
                 };
+                // Карточка дня — как в редакторе у тренера: нажатие на название раскрывает
+                // упражнения, справа ▶ «начать» или галочка у пройденного (повтор — с подтверждением)
                 const renderDay = (day: typeof visibleDays[0]) => {
                   const dayOpen = expandedDays.has(day.id);
+                  const done = lastDone.get(day.name);
+                  const meta = [`${day.exercises.length} упр.`, day.dateOf ? fmtDate(day.dateOf, true) : null].filter(Boolean).join(" · ");
                   return (
-                    <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
-                      <div className="flex items-center gap-2 px-3 py-2.5">
-                        <button onClick={() => toggleDay(day.id)} className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0 transition">
-                          {dayOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                      <div className="flex items-center gap-2 pl-4 pr-2 py-2">
+                        <button onClick={() => toggleDay(day.id)} aria-expanded={dayOpen} className="flex-1 min-w-0 text-left py-1">
+                          <span className="block font-bold truncate">{day.name}</span>
+                          <span className="block text-[13px] text-zinc-400 truncate">{meta}{done && <span style={{ color: "var(--accent)" }}> · пройдена {fmtDate(done, true)}</span>}</span>
                         </button>
-                        <h3 className="font-semibold flex-1 min-w-0 truncate">{day.name}</h3>
-                        {day.dateOf && <span className="text-xs text-zinc-500 shrink-0">{fmtDate(day.dateOf, true)}</span>}
-                        <span className="text-xs text-zinc-600 shrink-0">{day.exercises.length} упр.</span>
-                        {lastDone.has(day.name) ? (
-                          <button onClick={() => { if (window.confirm(`«${day.name}» уже пройдена ${fmtDate(lastDone.get(day.name)!, true)}. Пройти ещё раз?`)) startDay(day.id, day.name); }}
-                            title={`Пройдена ${fmtDate(lastDone.get(day.name)!, true)} — пройти ещё раз`}
-                            className="flex items-center gap-1 rounded-lg px-2.5 h-9 text-sm font-semibold shrink-0 transition hover:opacity-90" style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 14%, transparent)" }}>
-                            <Check size={15} strokeWidth={2.75} /> {fmtDate(lastDone.get(day.name)!, true)}
+                        {done ? (
+                          <button onClick={() => { if (window.confirm(`«${day.name}» уже пройдена ${fmtDate(done, true)}. Пройти ещё раз?`)) startDay(day.id, day.name); }}
+                            title={`Пройдена ${fmtDate(done, true)} — пройти ещё раз`} aria-label={`Пройдена ${fmtDate(done, true)}. Пройти ещё раз`}
+                            className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-zinc-950 hover:opacity-90 transition" style={{ background: "var(--accent)" }}>
+                            <Check size={19} strokeWidth={2.75} />
                           </button>
                         ) : (
-                          <button onClick={() => startDay(day.id, day.name)} className="flex items-center gap-1.5 text-zinc-950 font-semibold rounded-lg px-3 h-9 text-sm hover:opacity-90 transition shrink-0" style={{ background: "var(--accent)" }}><Play size={14} /> Начать</button>
+                          <button onClick={() => startDay(day.id, day.name)} aria-label={`Начать: ${day.name}`} title="Начать тренировку"
+                            className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center hover:opacity-90 transition" style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 16%, transparent)" }}>
+                            <Play size={18} />
+                          </button>
                         )}
                       </div>
                       {dayOpen && renderDayExpanded(day)}
@@ -499,8 +480,31 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             </div>
           )}
 
-          {/* Прогресс */}
-          {programSub === "progress" && (
+        </div>
+      )}
+
+      {/* ── ОТЧЁТНОСТЬ ── */}
+      {tab === "reporting" && (
+        <div className="space-y-3">
+          <h2 className="text-2xl font-extrabold tracking-tight pt-1">Прогресс</h2>
+          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+            {(["exercises", "body", "nutrition", "activity"] as ReportSub[]).map((k) => {
+              const meta: Record<ReportSub, { label: string; icon: typeof Ruler }> = {
+                exercises: { label: "Веса", icon: TrendingUp },
+                body: { label: "Замеры", icon: Ruler },
+                nutrition: { label: "Питание", icon: Apple },
+                activity: { label: "Активность", icon: Activity },
+              };
+              const t = meta[k];
+              return (
+                <button key={k} onClick={() => setReportSub(k)} className={`${SUB_BTN} flex-1 !px-1 flex items-center justify-center ${reportSub === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={reportSub === k ? { background: "var(--accent)" } : undefined}>
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+          {/* Упражнения: веса по тренировкам и заметки тренера (раньше — в «Программе») */}
+          {reportSub === "exercises" && (
             <div className="space-y-4">
               {planHook.plan && <MetricsView days={planHook.plan.days} metrics={progressHook.metrics} addMetric={progressHook.addMetric} deleteMetric={progressHook.deleteMetric} />}
               {progressHook.progress.length > 0 && (
@@ -518,27 +522,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {!planHook.plan && <p className="text-sm text-zinc-600 text-center py-8">Нет активного плана</p>}
             </div>
           )}
-        </div>
-      )}
-
-      {/* ── ОТЧЁТНОСТЬ ── */}
-      {tab === "reporting" && (
-        <div className="space-y-3">
-          <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-            {(["body", "nutrition", "activity"] as ReportSub[]).map((k) => {
-              const meta: Record<ReportSub, { label: string; icon: typeof Ruler }> = {
-                body: { label: "Замеры", icon: Ruler },
-                nutrition: { label: "Питание", icon: Apple },
-                activity: { label: "Активность", icon: Activity },
-              };
-              const t = meta[k];
-              return (
-                <button key={k} onClick={() => setReportSub(k)} className={`${SUB_BTN} flex-1 flex items-center justify-center gap-1.5 ${reportSub === k ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`} style={reportSub === k ? { background: "var(--accent)" } : undefined}>
-                  <t.icon size={14} /> {t.label}
-                </button>
-              );
-            })}
-          </div>
           {reportSub === "body" && <BodyTab clientId={client.id} measurements={measurements} setMeasurements={setMeasurements} />}
           {reportSub === "nutrition" && <NutritionTab clientId={client.id} logs={nutritionLogs} setLogs={setNutritionLogs} />}
           {reportSub === "activity" && <ActivityTab clientId={client.id} activities={activities} setActivities={setActivities} accent={profile.accentColor} />}
