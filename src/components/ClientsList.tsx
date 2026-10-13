@@ -6,10 +6,7 @@ import { logEvent } from "../lib/events";
 import { useScrollRestore } from "../hooks/useScrollRestore";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
-import type { Membership } from "../lib/clients";
-import { fetchPackageTemplates, markPaid } from "../lib/payments";
-import type { PackageTemplate } from "../lib/payments";
-import ModalShell from "./ModalShell";
+import RenewModal from "./RenewModal";
 import LiveWorkoutModal from "./LiveWorkoutModal";
 import type { ClientListItem } from "../lib/clients";
 
@@ -23,10 +20,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
   // B12: поиск и фильтр формата переживают переключение вкладки. Архив намеренно
   // не запоминаем — вернуться в него незаметно и не понять, куда делись активные.
   const [search, setSearch] = useState(() => loadViewState("clients-search", ""));
-  const [renewing, setRenewing] = useState<{ clientId: string; name: string; membership: Membership } | null>(null);
-  const [templates, setTemplates] = useState<PackageTemplate[]>([]);
-  const [selectedTplId, setSelectedTplId] = useState("");
-  const [renewBusy, setRenewBusy] = useState(false);
+  const [renewing, setRenewing] = useState<{ clientId: string; name: string } | null>(null);
   const [liveClient, setLiveClient] = useState<ClientListItem | null>(null);
   // B11: свайп по строке влево открывает быстрые действия
   const swipe = useSwipeRow();
@@ -38,31 +32,10 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
   useEffect(() => { saveViewState("clients-fmt", fmtFilter); }, [fmtFilter]);
   useScrollRestore("clients", !!clients);
 
-  const openRenew = async (e: React.MouseEvent, c: { id: string; name: string }) => {
+  const openRenew = (e: React.MouseEvent, c: { id: string; name: string }) => {
     e.stopPropagation();
-    try {
-      const [cf, tpls] = await Promise.all([api.fetchClient(c.id), fetchPackageTemplates(trainerId)]);
-      setTemplates(tpls);
-      setSelectedTplId(tpls[0]?.id ?? "");
-      setRenewing({ clientId: c.id, name: c.name, membership: cf.membership });
-    } catch (e) { console.error("[ClientsList] openRenew:", e); alert("Не удалось загрузить данные."); }
+    setRenewing({ clientId: c.id, name: c.name });
   };
-
-  const doRenew = async () => {
-    if (!renewing || renewBusy) return;
-    const tpl = templates.find((t) => t.id === selectedTplId);
-    if (!tpl) return;
-    setRenewBusy(true);
-    try {
-      const finalPrice = tpl.discount ? Math.round(tpl.price * (1 - tpl.discount / 100)) : tpl.price;
-      const m: Membership = { ...renewing.membership, type: "sessions", total: String(tpl.sessions), packagePrice: String(finalPrice), split: tpl.split };
-      await markPaid(renewing.clientId, m, []);
-      setRenewing(null);
-      reloadClients();
-    } catch (e) { console.error("[ClientsList] doRenew:", e); alert("Не удалось продлить абонемент."); }
-    finally { setRenewBusy(false); }
-  };
-
 
   const submit = async () => {
     if (!name.trim()) return;
@@ -232,29 +205,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
           onClose={() => setLiveClient(null)}
         />
       )}
-      {renewing && (
-        <ModalShell title={`Продлить пакет — ${renewing.name}`} onClose={() => setRenewing(null)}>
-          <div className="p-4 space-y-3">
-            <p className="text-xs text-zinc-500">Выберите шаблон пакета и нажмите «Оплачено» — тренировки добавятся в остаток автоматически.</p>
-            {templates.length === 0 ? (
-              <p className="text-xs text-zinc-500">Нет шаблонов. Создайте их в Профиле тренера → Шаблоны пакетов.</p>
-            ) : (
-              <select value={selectedTplId} onChange={(e) => setSelectedTplId(e.target.value)} className="w-full bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none">
-                {templates.map((t) => {
-                  const fp = t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price;
-                  return <option key={t.id} value={t.id} className="bg-zinc-900">{t.name} · {t.sessions} тр.{fp ? ` — ${fp.toLocaleString("ru-RU")}₽` : ""}{t.split ? " · сплит" : ""}</option>;
-                })}
-              </select>
-            )}
-            <div className="flex gap-2">
-              <button onClick={() => setRenewing(null)} className="flex-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 rounded-xl py-2.5 text-sm transition">Отмена</button>
-              <button onClick={doRenew} disabled={renewBusy || !selectedTplId} className="flex-1 bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition disabled:opacity-50">
-                {renewBusy ? "Оформление..." : "✓ Оплачено"}
-              </button>
-            </div>
-          </div>
-        </ModalShell>
-      )}
+      {renewing && <RenewModal trainerId={trainerId} clientId={renewing.clientId} name={renewing.name} onDone={reloadClients} onClose={() => setRenewing(null)} />}
     </div>
   );
 }

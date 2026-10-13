@@ -9,6 +9,7 @@ import BookingModal, { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./Book
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import ModalShell from "./ModalShell";
 import RemindModal from "./RemindModal";
+import RenewModal from "./RenewModal";
 import NoShowModal, { type NoShowReason } from "./NoShowModal";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
 import { today as todayFn, addDays, addMonths, initials, plural, toDateStr } from "../lib/format";
@@ -62,6 +63,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   }, [pendingOcc, bookings, bookingsHook.loading]);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
   const [noShow, setNoShow] = useState<Occurrence | null>(null);
+  const [renew, setRenew] = useState<string | null>(null);
   const [remind, setRemind] = useState<{ id: string; date: string; time: string } | null>(null);
   // Сначала статус записи (кнопка пропадает — второй раз не спишем), потом списание
   const markNoShow = async (o: Occurrence, reasons: Record<string, NoShowReason>) => {
@@ -425,7 +427,9 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                       : <span className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center font-bold text-zinc-950" style={{ background: c?.color || "#a3e635" }}>{clientName(id)[0]}</span>}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold truncate">{clientName(id)}</p>
-                      {rem != null && rem !== "" && <p className={`text-[13px] ${low ? "text-orange-400" : "text-zinc-500"}`}>Осталось {rem}</p>}
+                      {rem != null && rem !== "" && (low
+                        ? <button onClick={() => { setRenew(id); setQuickView(null); }} className="text-[13px] text-orange-400 font-semibold hover:text-orange-300 transition">Осталось {rem} · Продлить</button>
+                        : <p className="text-[13px] text-zinc-500">Осталось {rem}</p>)}
                     </div>
                     {quickView.status === "scheduled" && quickView.date >= today && (
                       <button onClick={() => { setRemind({ id, date: quickView.date, time: quickView.time }); setQuickView(null); }} aria-label="Напомнить о тренировке" title="Напомнить" className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100 transition shrink-0"><Bell size={17} /></button>
@@ -451,6 +455,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
         </ModalShell>
       )}
 
+      {renew && <RenewModal trainerId={trainerId} clientId={renew} name={clientName(renew)} onDone={reloadClients} onClose={() => setRenew(null)} />}
       {remind && <RemindModal clientId={remind.id} name={clientName(remind.id)} date={remind.date} time={remind.time} onClose={() => setRemind(null)} />}
 
       {noShow && (
