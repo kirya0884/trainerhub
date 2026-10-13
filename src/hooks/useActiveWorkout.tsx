@@ -23,7 +23,11 @@ type Ctx = {
 const WorkoutCtx = createContext<Ctx>({ active: null, start: () => false, stop: () => {} });
 // Идущая тренировка переживает перезагрузку страницы: введённое лежит в черновиках,
 // а без этой записи после перезагрузки не было бы и самой тренировки, куда их вернуть.
-const KEY = "th-active-workout-v1";
+// Ключ свой у каждого аккаунта: иначе после «Выйти» тренировка доставалась бы
+// следующему, кто войдёт на этом устройстве, и записалась бы на его аккаунт.
+const keyFor = (userId: string) => `th-active-workout-v2-${userId}`;
+// Общий ключ первой версии (без аккаунта) — не знаем, чей он, поэтому просто удаляем
+const LEGACY_KEY = "th-active-workout-v1";
 
 /**
  * Д3: активная тренировка живёт на уровне приложения.
@@ -36,8 +40,9 @@ const KEY = "th-active-workout-v1";
  * Теперь состояние держит провайдер над всеми экранами, поэтому плашка переживает
  * любую навигацию и открывается откуда угодно. Совместная тренировка — так же.
  */
-export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
-  const [active, setActive] = useState<ActiveWorkout | null>(() => readJson<ActiveWorkout | null>(KEY, null));
+export function ActiveWorkoutProvider({ userId, children }: { userId: string; children: ReactNode }) {
+  const KEY = keyFor(userId);
+  const [active, setActive] = useState<ActiveWorkout | null>(() => { removeKey(LEGACY_KEY); return readJson<ActiveWorkout | null>(KEY, null); });
   // Проверяем через ref: обновление состояния не синхронное, и по нему нельзя
   // сразу ответить вызывающему, можно ли начинать.
   const ref = useRef<ActiveWorkout | null>(active);
@@ -48,9 +53,9 @@ export function ActiveWorkoutProvider({ children }: { children: ReactNode }) {
     setActive(w);
     writeJson(KEY, w);
     return true;
-  }, []);
+  }, [KEY]);
 
-  const stop = useCallback(() => { ref.current = null; setActive(null); removeKey(KEY); }, []);
+  const stop = useCallback(() => { ref.current = null; setActive(null); removeKey(KEY); }, [KEY]);
   const value = useMemo(() => ({ active, start, stop }), [active, start, stop]);
   return <WorkoutCtx.Provider value={value}>{children}</WorkoutCtx.Provider>;
 }
