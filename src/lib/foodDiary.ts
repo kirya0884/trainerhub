@@ -73,6 +73,17 @@ export async function updateEntryGrams(e: FoodEntry, grams: number): Promise<Foo
   return next;
 }
 
+/** Копия записей на другую дату; meal — в один приём, иначе каждая в свой */
+export async function copyEntries(clientId: string, list: FoodEntry[], date: string, meal?: Meal): Promise<FoodEntry[]> {
+  if (!list.length) return [];
+  const { data, error } = await supabase.from("food_entries").insert(list.map((e) => ({
+    client_id: clientId, date, meal: meal ?? e.meal, product_id: e.productId, recipe_id: e.recipeId,
+    name: e.name, grams: r2(e.grams), ...macrosRow(e),
+  }))).select();
+  if (error) throw error;
+  return (data ?? []).map(toEntry);
+}
+
 export async function deleteEntry(id: string) {
   const { error } = await supabase.from("food_entries").delete().eq("id", id);
   if (error) throw error;
@@ -95,6 +106,21 @@ export async function addProduct(clientId: string, p: { name: string } & Macros)
   const { data, error } = await supabase.from("food_products").insert({ client_id: clientId, name: p.name, ...macrosRow(p) }).select().single();
   if (error) throw error;
   return toProduct(data);
+}
+
+/** Правка своего продукта: прошлые записи дневника не меняются — в них снимок значений */
+export async function updateProduct(id: string, patch: Partial<{ name: string; favorite: boolean } & Macros>) {
+  const row: Record<string, unknown> = {};
+  if (patch.name !== undefined) row.name = patch.name;
+  if (patch.favorite !== undefined) row.favorite = patch.favorite;
+  for (const k of ["kcal", "protein", "fat", "carbs"] as const) if (patch[k] !== undefined) row[k] = r2(patch[k]!);
+  const { error } = await supabase.from("food_products").update(row).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteProduct(id: string) {
+  const { error } = await supabase.from("food_products").delete().eq("id", id);
+  if (error) throw error;
 }
 
 /** Отметка «ели только что»: продукт поднимается в недавних, запоминаются граммы для «как вчера» */

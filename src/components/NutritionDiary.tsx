@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Moon, Plus, Sun, Sunrise, Target, Cookie, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Copy, Moon, MoreHorizontal, Plus, RotateCcw, Sun, Sunrise, Target, Cookie, Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import FoodAddSheet from "./FoodAddSheet";
+import FoodCopySheet from "./FoodCopySheet";
 import NutritionGoalsSheet from "./NutritionGoalsSheet";
 import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
@@ -16,13 +17,17 @@ const MEAL_ICON: Record<Meal, typeof Sun> = { breakfast: Sunrise, lunch: Sun, di
 const dayTitle = (d: string) => {
   const t = today();
   const s = new Date(d + "T00:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" });
-  return d === t ? `Сегодня, ${s}` : d === addDays(t, -1) ? `Вчера, ${s}` : s;
+  return d === t ? `Сегодня, ${s}` : d === addDays(t, -1) ? `Вчера, ${s}` : d === addDays(t, 1) ? `Завтра, ${s}` : s;
 };
 
 // Дневник питания клиента: кольца «съедено из цели», приёмы пищи, быстрый ввод.
 export default function NutritionDiary({ clientId, legacyLogs = [] }: { clientId: string; legacyLogs?: NutritionLog[] }) {
   const [date, setDate] = useState(today());
   const [entries, setEntries] = useState<FoodEntry[] | null>(null);
+  // Предыдущий день — для «Как вчера» у пустого приёма
+  const [prev, setPrev] = useState<FoodEntry[]>([]);
+  const [copying, setCopying] = useState<{ list: FoodEntry[]; meal?: Meal } | null>(null);
+  const [busy, setBusy] = useState(false);
   const [goals, setGoals] = useState<Goals>({ trainer: null, client: null });
   const [adding, setAdding] = useState<Meal | null>(null);
   const [editing, setEditing] = useState<FoodEntry | null>(null);
@@ -32,8 +37,9 @@ export default function NutritionDiary({ clientId, legacyLogs = [] }: { clientId
   useEffect(() => { api.fetchGoals(clientId).then(setGoals).catch((e) => console.error("[NutritionDiary] цели:", e)); }, [clientId]);
   useEffect(() => {
     let alive = true;
-    setEntries(null); setError("");
-    api.fetchEntries(clientId, date, date).then((l) => { if (alive) setEntries(l); })
+    setEntries(null); setPrev([]); setError("");
+    const before = addDays(date, -1);
+    api.fetchEntries(clientId, before, date).then((l) => { if (alive) { setEntries(l.filter((e) => e.date === date)); setPrev(l.filter((e) => e.date === before)); } })
       .catch((e) => { console.error("[NutritionDiary] записи:", e); if (alive) { setEntries([]); setError("Не удалось загрузить дневник. Проверьте интернет."); } });
     return () => { alive = false; };
   }, [clientId, date]);
@@ -41,6 +47,14 @@ export default function NutritionDiary({ clientId, legacyLogs = [] }: { clientId
   const goal = api.activeGoal(goals);
   const eaten = api.sum(entries ?? []);
   const legacy = legacyLogs.find((l) => l.date === date);
+  const prevLabel = date === today() ? "Как вчера" : `Как ${new Date(addDays(date, -1) + "T00:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "short" }).replace(".", "")}`;
+  const repeatPrev = async (meal: Meal) => {
+    if (busy) return;
+    setBusy(true);
+    try { const added = await api.copyEntries(clientId, prev.filter((e) => e.meal === meal), date); setEntries((l) => [...(l ?? []), ...added]); }
+    catch (e) { console.error("[NutritionDiary] как вчера:", e); alert("Не удалось скопировать. Проверьте интернет."); }
+    finally { setBusy(false); }
+  };
 
   return (
     <div className="space-y-3">
@@ -69,12 +83,16 @@ export default function NutritionDiary({ clientId, legacyLogs = [] }: { clientId
         const list = entries.filter((e) => e.meal === key);
         const total = api.sum(list);
         const Icon = MEAL_ICON[key];
+        const prevList = list.length ? [] : prev.filter((e) => e.meal === key);
         return (
           <div key={key} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
             <div className="flex items-center gap-2.5 px-4 py-3">
               <Icon size={19} style={{ color: list.length ? MACRO_COLOR.kcal : undefined }} className={list.length ? "" : "text-zinc-500"} />
               <span className={`font-bold ${list.length ? "" : "text-zinc-400"}`}>{label}</span>
               <span className="ml-auto text-sm font-bold text-zinc-400">{list.length ? `${api.fmtN(total.kcal, 0)} ккал` : "—"}</span>
+              {list.length > 0 && (
+                <button onClick={() => setCopying({ list, meal: key })} aria-label={`Скопировать «${label}»`} className="w-8 h-8 -mr-2 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 transition"><MoreHorizontal size={18} /></button>
+              )}
             </div>
             {list.map((e) => (
               <button key={e.id} onClick={() => setEditing(e)} className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-zinc-800 text-left hover:bg-zinc-800/50 transition">
@@ -85,11 +103,30 @@ export default function NutritionDiary({ clientId, legacyLogs = [] }: { clientId
                 <span className="text-sm font-bold shrink-0">{api.fmtN(e.kcal, 0)}</span>
               </button>
             ))}
-            <button onClick={() => setAdding(key)} className="w-full flex items-center gap-2 px-4 py-2.5 border-t border-zinc-800 text-sm font-semibold text-lime-400 hover:bg-zinc-800/50 transition"><Plus size={17} /> Добавить</button>
+            <div className="flex border-t border-zinc-800">
+              <button onClick={() => setAdding(key)} className="flex-1 flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-lime-400 hover:bg-zinc-800/50 transition"><Plus size={17} /> Добавить</button>
+              {prevList.length > 0 && (
+                <button onClick={() => repeatPrev(key)} disabled={busy} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-zinc-800/50 transition disabled:opacity-40">
+                  <RotateCcw size={15} /> {prevLabel} · {api.fmtN(api.sum(prevList).kcal, 0)} ккал
+                </button>
+              )}
+            </div>
           </div>
         );
       })}
 
+      {entries && entries.length > 0 && (
+        <button onClick={() => setCopying({ list: entries })} className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-zinc-900 border border-zinc-800 text-sm font-semibold text-zinc-300 hover:text-zinc-100 transition"><Copy size={16} /> Скопировать весь день</button>
+      )}
+
+      {copying && (
+        <FoodCopySheet list={copying.list} meal={copying.meal} from={date} onClose={() => setCopying(null)}
+          onCopy={async (to, meal) => {
+            const added = await api.copyEntries(clientId, copying.list, to, meal);
+            setCopying(null);
+            if (to === date) setEntries((l) => [...(l ?? []), ...added]); else setDate(to);
+          }} />
+      )}
       {adding && (
         <FoodAddSheet clientId={clientId} date={date} meal={adding} onClose={() => setAdding(null)}
           onAdded={(e) => setEntries((l) => [...(l ?? []), e])} />
