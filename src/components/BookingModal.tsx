@@ -152,7 +152,8 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
           <div>
             {label("Статус")}
             <div className="grid grid-cols-2 gap-2">
-              {Object.entries(BOOKING_STATUS_LABEL).map(([k, l]) => (
+              {/* «Не пришёл» ставится кнопкой в карточке записи — там спрашиваем причину и списываем */}
+              {Object.entries(BOOKING_STATUS_LABEL).filter(([k]) => k !== "no-show" || booking?.status === "no-show").map(([k, l]) => (
                 <button key={k} onClick={() => setStatus(k)} aria-pressed={status === k}
                   className={`h-10 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition ${status === k ? "bg-zinc-100 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`}>
                   <span className="w-2 h-2 rounded-full" style={{ background: BOOKING_STATUS_COLOR[k] }} />{l}

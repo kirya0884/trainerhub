@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
-import { CalendarDays, CalendarX, Check, ClipboardList, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share } from "lucide-react";
+import { CalendarDays, CalendarX, Check, ClipboardList, UserX, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share } from "lucide-react";
 import { bookingsOverlap, expandBookings, toMin } from "../lib/bookings";
 import type { Booking, Occurrence } from "../lib/bookings";
 import * as clientsApi from "../lib/clients";
@@ -8,6 +8,7 @@ import type { ClientListItem } from "../lib/clients";
 import BookingModal, { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import ModalShell from "./ModalShell";
+import NoShowModal, { type NoShowReason } from "./NoShowModal";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
 import { today as todayFn, addDays, addMonths, initials, plural, toDateStr } from "../lib/format";
 
@@ -33,7 +34,7 @@ const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_S
 const ROW_H = 40; // px за час
 
 export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans, openBooking, newBookingClientId, openOccurrence }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void; openBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } }) {
-  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload } = bookingsHook;
+  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, noShowOccurrence, rescheduleOccurrence, reload } = bookingsHook;
   // B12: запоминаем режим просмотра, но НЕ дату — вернувшись через час, ожидаешь
   // увидеть текущую неделю, а не ту, на которой ушёл.
   const [mode, setMode] = useState<Mode>(() => loadViewState<Mode>("calendar-mode", "week"));
@@ -59,6 +60,26 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
     setPendingOcc(null);
   }, [pendingOcc, bookings, bookingsHook.loading]);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
+  const [noShow, setNoShow] = useState<Occurrence | null>(null);
+  // Сначала статус записи (кнопка пропадает — второй раз не спишем), потом списание
+  const markNoShow = async (o: Occurrence, reasons: Record<string, NoShowReason>) => {
+    const b = findBookingById(o.id);
+    if (!b) return;
+    const why = o.clientIds.map((id) => (o.clientIds.length > 1 ? `${clientName(id)} — ` : "") + reasons[id].toLowerCase()).join(", ");
+    try {
+      await noShowOccurrence(b, o.occDate, [o.note, `Не пришёл: ${why}`].filter(Boolean).join(" · "));
+      for (const id of o.clientIds) {
+        if (reasons[id] === "Уважительная") continue;
+        const m = (await clientsApi.fetchClient(id)).membership;
+        if (m) await clientsApi.decrementMembershipRemaining(id, m);
+      }
+      reloadClients();
+      setNoShow(null);
+    } catch (e) {
+      console.error("[CalendarView] не пришёл:", e);
+      alert("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
+    }
+  };
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [confirmPending, setConfirmPending] = useState<{ text: string; onConfirm: () => void } | null>(null);
   const askConfirm = (text: string, onConfirm: () => void) => setConfirmPending({ text, onConfirm });
@@ -410,15 +431,23 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                 );
               })}
             </div>
+            {quickView.note && <p className="text-sm text-zinc-400 bg-zinc-800/60 rounded-xl px-3 py-2.5 whitespace-pre-wrap">{quickView.note}</p>}
             <button onClick={() => { startGroup(quickView); setQuickView(null); }} className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98]"><Play size={18} /> Начать тренировку</button>
             <div className="flex gap-2">
               <button onClick={() => { setModal({ booking: findBookingById(quickView.id), occDate: quickView.occDate }); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition"><Pencil size={15} /> Изменить</button>
+              {quickView.status === "scheduled" && (
+                <button onClick={() => { setNoShow(quickView); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-orange-500/15 text-orange-400 font-semibold rounded-xl text-sm transition"><UserX size={15} /> Не пришёл</button>
+              )}
               {quickView.isOccurrence && (
                 <button onClick={() => askConfirm("Отменить занятие на эту дату?", () => { cancelOccurrence(findBookingById(quickView.id)!, quickView.occDate); setQuickView(null); })} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-red-500/15 text-red-400 font-semibold rounded-xl text-sm transition"><CalendarX size={15} /> Отменить</button>
               )}
             </div>
           </div>
         </ModalShell>
+      )}
+
+      {noShow && (
+        <NoShowModal clients={noShow.clientIds.map((id) => ({ id, name: clientName(id) }))} onConfirm={(r) => markNoShow(noShow, r)} onClose={() => setNoShow(null)} />
       )}
 
       {modal && (

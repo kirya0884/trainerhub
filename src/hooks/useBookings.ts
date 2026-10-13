@@ -21,6 +21,12 @@ export function useBookings(trainerId: string) {
   const deleteBooking = async (id: string) => { await api.deleteBooking(id); await load(); };
   const cancelOccurrence = async (b: Booking, date: string) => { await api.cancelOccurrence(b, date); await load(); };
   const doneOccurrence = async (b: Booking, occDate: string) => { await api.setException(b, occDate, { status: "done" }); await load(); };
+  // «Не пришёл»: для серии — правка только этой даты, причина дописывается в заметку
+  const noShowOccurrence = async (b: Booking, occDate: string, note: string) => {
+    if (!b.recurring) await api.updateBooking(b.id, { status: "no-show", note });
+    else await api.setException(b, occDate, { status: "no-show", note });
+    await load();
+  };
   // Перенос одного занятия (drag-and-drop в неделе): для разовой записи двигаем дату/время, для повторяющейся — точечная exception на эту дату.
   const rescheduleOccurrence = async (b: Booking, occDate: string, newDate: string, newTime?: string) => {
     const patch: Partial<Booking> = { date: newDate, ...(newTime ? { time: newTime } : {}) };
@@ -32,5 +38,5 @@ export function useBookings(trainerId: string) {
   // А4: обновление из другого окна — возврат к окну и события репликации
   useSharedListSync(!!trainerId, ["bookings", "booking_clients"], load, `bookings-sync-${trainerId}`);
 
-  return { bookings, loading, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, rescheduleOccurrence, reload: load };
+  return { bookings, loading, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, noShowOccurrence, rescheduleOccurrence, reload: load };
 }
