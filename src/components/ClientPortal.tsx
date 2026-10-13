@@ -4,7 +4,7 @@ import PinSettingsModal from "./PinSettingsModal";
 import ModalShell from "./ModalShell";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
-import NutritionTab from "./NutritionTab";
+import NutritionDiary from "./NutritionDiary";
 import ActivityTab from "./ActivityTab";
 import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
@@ -25,14 +25,15 @@ import ClientSessionView from "./ClientSessionView";
 import { lastTimeFor } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 
-type Tab = "profile" | "program" | "reporting";
+type Tab = "profile" | "program" | "nutrition" | "reporting";
 type ProgramSub = "active" | "completed";
-type ReportSub = "exercises" | "body" | "nutrition" | "activity";
+type ReportSub = "exercises" | "body" | "activity";
 
 // Нижняя панель — как у тренера; «Профиль» стал «Главной», «Отчётность» — «Прогрессом»
 const TAB_DEFS: Record<Tab, { label: string; icon: typeof User }> = {
   profile: { label: "Главная", icon: Home },
   program: { label: "Программа", icon: Dumbbell },
+  nutrition: { label: "Питание", icon: Apple },
   reporting: { label: "Прогресс", icon: TrendingUp },
 };
 
@@ -159,7 +160,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
 
       {/* Нижняя панель — одна навигация, как у тренера */}
       <nav aria-label="Разделы" className="fixed inset-x-0 bottom-0 z-40 bg-zinc-950/85 backdrop-blur-xl border-t border-zinc-800" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <div className="max-w-2xl mx-auto h-16 grid grid-cols-3">
+        <div className="max-w-2xl mx-auto h-16 grid grid-cols-4">
           {(Object.keys(TAB_DEFS) as Tab[]).map((k) => {
             const t = TAB_DEFS[k];
             const on = tab === k;
@@ -484,16 +485,18 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
         </div>
       )}
 
+      {/* ── ПИТАНИЕ: дневник по приёмам пищи; старые итоги дня видны как «Запись за день» ── */}
+      {tab === "nutrition" && <NutritionDiary clientId={client.id} legacyLogs={nutritionLogs} />}
+
       {/* ── ОТЧЁТНОСТЬ ── */}
       {tab === "reporting" && (
         <div className="space-y-3">
           <h2 className="text-2xl font-extrabold tracking-tight pt-1">Прогресс</h2>
           <div className="flex gap-1 bg-zinc-900 border border-zinc-800 rounded-xl p-1">
-            {(["exercises", "body", "nutrition", "activity"] as ReportSub[]).map((k) => {
+            {(["exercises", "body", "activity"] as ReportSub[]).map((k) => {
               const meta: Record<ReportSub, { label: string; icon: typeof Ruler }> = {
                 exercises: { label: "Веса", icon: TrendingUp },
                 body: { label: "Замеры", icon: Ruler },
-                nutrition: { label: "Питание", icon: Apple },
                 activity: { label: "Активность", icon: Activity },
               };
               const t = meta[k];
@@ -524,7 +527,6 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             </div>
           )}
           {reportSub === "body" && <BodyTab clientId={client.id} measurements={measurements} setMeasurements={setMeasurements} />}
-          {reportSub === "nutrition" && <NutritionTab clientId={client.id} logs={nutritionLogs} setLogs={setNutritionLogs} />}
           {reportSub === "activity" && <ActivityTab clientId={client.id} activities={activities} setActivities={setActivities} accent={profile.accentColor} />}
         </div>
       )}
