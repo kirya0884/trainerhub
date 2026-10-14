@@ -9,6 +9,7 @@ import type { Measurement } from "../lib/clients";
 import NutritionGoalsSheet from "./NutritionGoalsSheet";
 import { EMPTY_CELL, GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
+import { isNetworkError, pending, subscribeOutbox } from "../lib/outbox";
 import type { FoodEntry, Goals, Macros, Meal, NutritionDay } from "../lib/foodDiary";
 import type { NutritionLog } from "../lib/nutrition";
 import { addDays, today } from "../lib/format";
@@ -78,14 +79,21 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
   }, [clientId, wk, asTrainer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { api.fetchGoals(clientId).then(setGoals).catch((e) => console.error("[NutritionDiary] цели:", e)); }, [clientId]);
+  // Очередь отправки дослала еду — перечитываем день, чтобы «ждёт отправки» сменилось на обычную запись
+  const [sentTick, setSentTick] = useState(0);
+  useEffect(() => {
+    let n = pending(undefined, "food").length;
+    return subscribeOutbox(() => { const m = pending(undefined, "food").length; if (m < n) setSentTick((t) => t + 1); n = m; });
+  }, []);
   useEffect(() => {
     let alive = true;
-    setEntries(null); setPrev([]); setError("");
+    if (!sentTick) { setEntries(null); setPrev([]); }
+    setError("");
     const before = addDays(date, -1);
-    api.fetchEntries(clientId, before, date).then((l) => { if (alive) { setEntries(l.filter((e) => e.date === date)); setPrev(l.filter((e) => e.date === before)); } })
-      .catch((e) => { console.error("[NutritionDiary] записи:", e); if (alive) { setEntries([]); setError("Не удалось загрузить дневник. Проверьте интернет."); } });
+    api.fetchEntries(clientId, before, date).then((l) => { if (alive) { setEntries([...l.filter((e) => e.date === date), ...api.pendingFood(clientId, date)]); setPrev(l.filter((e) => e.date === before)); } })
+      .catch((e) => { console.error("[NutritionDiary] записи:", e); if (alive) { setEntries(api.pendingFood(clientId, date)); setError(isNetworkError(e) ? "Нет интернета, а этот день на телефоне ещё не открывали. Добавленное сейчас сохранится и отправится само." : "Не удалось загрузить дневник."); } });
     return () => { alive = false; };
-  }, [clientId, date]);
+  }, [clientId, date, sentTick]);
 
   const goal = api.activeGoal(goals);
   const eaten = api.sum(entries ?? []);
@@ -164,10 +172,10 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
               )}
             </div>
             {list.map((e) => (
-              <button key={e.id} onClick={() => setEditing(e)} disabled={asTrainer} className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-zinc-800 text-left enabled:hover:bg-zinc-800/50 transition">
+              <button key={e.id} onClick={() => setEditing(e)} disabled={asTrainer || e.pending} className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-zinc-800 text-left enabled:hover:bg-zinc-800/50 transition">
                 <span className="flex-1 min-w-0">
                   <span className="block font-semibold truncate">{e.name}</span>
-                  <span className="block text-[13px] text-zinc-500">{api.fmtN(e.grams, 0)} г · Б {api.fmtN(e.protein)} · Ж {api.fmtN(e.fat)} · У {api.fmtN(e.carbs)}</span>
+                  <span className="block text-[13px] text-zinc-500">{api.fmtN(e.grams, 0)} г · Б {api.fmtN(e.protein)} · Ж {api.fmtN(e.fat)} · У {api.fmtN(e.carbs)}{e.pending && <span className="text-orange-400"> · ждёт отправки</span>}</span>
                 </span>
                 <span className="text-sm font-bold shrink-0">{api.fmtN(e.kcal, 0)}</span>
               </button>

@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { enqueue, isNetworkError, pending, registerHandler } from "./outbox";
 
 // Дневник питания. Продукт хранит КБЖУ на 100 г; запись дневника — уже посчитанные
 // значения съеденного (снимок), поэтому правка продукта прошлые дни не меняет.
@@ -13,7 +14,9 @@ export const MEALS: { key: Meal; label: string }[] = [
 
 export interface Macros { kcal: number; protein: number; fat: number; carbs: number }
 export interface FoodProduct extends Macros { id: string; name: string; favorite: boolean; lastGrams: number | null; lastUsedAt: string | null }
-export interface FoodEntry extends Macros { id: string; date: string; meal: Meal; productId: string | null; recipeId: string | null; name: string; grams: number }
+export interface FoodEntry extends Macros { id: string; date: string; meal: Meal; productId: string | null; recipeId: string | null; name: string; grams: number;
+  /** Добавлена без сети и ждёт отправки (лежит в очереди) */
+  pending?: boolean }
 export interface NutritionGoal extends Macros { waterCups: number | null; updatedAt: string }
 export type Goals = { trainer: NutritionGoal | null; client: NutritionGoal | null };
 
@@ -48,7 +51,7 @@ const toEntry = (r: any): FoodEntry => ({
   name: r.name, grams: Number(r.grams) || 0, ...toMacros(r),
 });
 
-export async function fetchEntries(clientId: string, from: string, to: string): Promise<FoodEntry[]> {
+async function fetchEntriesRaw(clientId: string, from: string, to: string): Promise<FoodEntry[]> {
   const { data, error } = await supabase.from("food_entries").select("*")
     .eq("client_id", clientId).gte("date", from).lte("date", to).order("created_at");
   if (error) throw error;
@@ -95,7 +98,7 @@ const toProduct = (r: any): FoodProduct => ({
   lastUsedAt: r.last_used_at, ...toMacros(r),
 });
 
-export async function fetchProducts(clientId: string): Promise<FoodProduct[]> {
+async function fetchProductsRaw(clientId: string): Promise<FoodProduct[]> {
   const { data, error } = await supabase.from("food_products").select("*").eq("client_id", clientId)
     .order("last_used_at", { ascending: false, nullsFirst: false });
   if (error) throw error;
@@ -132,7 +135,7 @@ export async function touchProduct(id: string, grams: number) {
 // ── Цели ──
 const toGoal = (r: any): NutritionGoal => ({ ...toMacros(r), waterCups: r.water_cups, updatedAt: r.updated_at });
 
-export async function fetchGoals(clientId: string): Promise<Goals> {
+async function fetchGoalsRaw(clientId: string): Promise<Goals> {
   const { data, error } = await supabase.from("nutrition_goals").select("*").eq("client_id", clientId);
   if (error) throw error;
   const by = (who: string) => { const r = (data ?? []).find((x) => x.set_by === who); return r ? toGoal(r) : null; };
@@ -162,7 +165,7 @@ export const recipePer100 = (r: Pick<Recipe, "cookedWeight" | "items">): Macros 
 };
 export const portionWeight = (r: Pick<Recipe, "cookedWeight" | "items" | "servings">) => recipeWeight(r) / Math.max(1, r.servings);
 
-export async function fetchRecipes(clientId: string): Promise<Recipe[]> {
+async function fetchRecipesRaw(clientId: string): Promise<Recipe[]> {
   const { data, error } = await supabase.from("food_recipes").select("*").eq("client_id", clientId)
     .order("last_used_at", { ascending: false, nullsFirst: false });
   if (error) throw error;
@@ -225,7 +228,7 @@ export async function deleteGoal(clientId: string, setBy: "client" | "trainer") 
 export interface NutritionDay { waterCups: number; trainerComment: string; commentAt: string | null }
 export const EMPTY_DAY: NutritionDay = { waterCups: 0, trainerComment: "", commentAt: null };
 
-export async function fetchDay(clientId: string, date: string): Promise<NutritionDay> {
+async function fetchDayRaw(clientId: string, date: string): Promise<NutritionDay> {
   const { data, error } = await supabase.from("nutrition_days").select("*").eq("client_id", clientId).eq("date", date).maybeSingle();
   if (error) throw error;
   return data ? { waterCups: data.water_cups ?? 0, trainerComment: data.trainer_comment ?? "", commentAt: data.comment_at } : EMPTY_DAY;
@@ -264,3 +267,58 @@ export function calcGoal(p: { sex: Sex; weight: number; height: number; age: num
   const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
   return { kcal, protein, fat, carbs };
 }
+
+// ── Без интернета ──
+// Прочитанное запоминаем на телефоне: без сети дневник, продукты, рецепты и цели открываются
+// из последней загрузки. Добавленная без сети еда кладётся в очередь отправки и видна
+// в дневнике с пометкой «ждёт отправки», пока очередь её не дошлёт.
+async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const k = `th-food-cache:${key}`;
+  try {
+    const v = await load();
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* переполнено — просто без кэша */ }
+    return v;
+  } catch (e) {
+    if (!isNetworkError(e)) throw e;
+    const saved = localStorage.getItem(k);
+    if (saved == null) throw e;
+    return JSON.parse(saved) as T;
+  }
+}
+export const fetchEntries = (clientId: string, from: string, to: string) => cached(`entries:${clientId}:${from}:${to}`, () => fetchEntriesRaw(clientId, from, to));
+export const fetchProducts = (clientId: string) => cached(`products:${clientId}`, () => fetchProductsRaw(clientId));
+export const fetchRecipes = (clientId: string) => cached(`recipes:${clientId}`, () => fetchRecipesRaw(clientId));
+export const fetchGoals = (clientId: string) => cached(`goals:${clientId}`, () => fetchGoalsRaw(clientId));
+export const fetchDay = (clientId: string, date: string) => cached(`day:${clientId}:${date}`, () => fetchDayRaw(clientId, date));
+
+type FoodJob = { clientId: string; entry: Omit<FoodEntry, "id" | "pending">; newProduct?: { name: string } & Macros; touch?: { productId?: string; recipeId?: string; grams: number } };
+type FoodJobState = { productId?: string; done?: boolean };
+
+async function runFoodJob(job: FoodJob, st: FoodJobState, save: (s: FoodJobState) => void): Promise<FoodEntry> {
+  let productId = job.entry.productId ?? st.productId ?? null;
+  if (job.newProduct && !st.productId) { productId = (await addProduct(job.clientId, job.newProduct)).id; st = { ...st, productId }; save(st); }
+  const e = await addEntry(job.clientId, { ...job.entry, productId });
+  save({ ...st, done: true });
+  const pid = job.touch?.productId ?? (job.newProduct ? productId : null);
+  if (pid) touchProduct(pid, job.touch?.grams ?? job.entry.grams).catch((err) => console.error("[food] touch:", err));
+  if (job.touch?.recipeId) updateRecipeMeta(job.touch.recipeId, { lastGrams: job.touch.grams }).catch((err) => console.error("[food] touch:", err));
+  return e;
+}
+registerHandler("food", async (item, save) => { if (!(item.state as FoodJobState).done) await runFoodJob(item.payload as FoodJob, item.state as FoodJobState, save); });
+
+/** Добавить еду; без сети — в очередь, а в дневник вернётся запись с пометкой «ждёт отправки» */
+export async function addEntryOrQueue(job: FoodJob): Promise<FoodEntry> {
+  let st: FoodJobState = {};
+  try { return await runFoodJob(job, st, (s) => { st = s; }); }
+  catch (e) {
+    if (!isNetworkError(e)) throw e;
+    const item = await enqueue("food", job, st);
+    return { ...job.entry, id: `local-${item.id}`, pending: true };
+  }
+}
+
+/** Ждущая отправки еда клиента за день — показываем в дневнике до отправки */
+export const pendingFood = (clientId: string, date: string): FoodEntry[] =>
+  pending(undefined, "food")
+    .filter((i) => (i.payload as FoodJob).clientId === clientId && (i.payload as FoodJob).entry.date === date && !(i.state as FoodJobState).done)
+    .map((i) => ({ ...(i.payload as FoodJob).entry, id: `local-${i.id}`, pending: true }));

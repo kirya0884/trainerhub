@@ -114,14 +114,14 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
 
   const save = () => run(async () => {
     if (!g || !base || (creating && !name.trim())) return;
-    let productId: string | null = picked?.id ?? null;
-    if (creating && remember) productId = (await api.addProduct(clientId, { name: name.trim(), ...formPer100 })).id;
-    const entry = await api.addEntry(clientId, {
-      date, meal, productId, recipeId: pickedRecipe?.id ?? null,
-      name: pickedRecipe?.name ?? picked?.name ?? name.trim(), grams: g, ...eaten,
+    // Без сети запись уйдёт в очередь и вернётся с пометкой «ждёт отправки»
+    const entry = await api.addEntryOrQueue({
+      clientId,
+      entry: { date, meal, productId: picked?.id ?? null, recipeId: pickedRecipe?.id ?? null, name: pickedRecipe?.name ?? picked?.name ?? name.trim(), grams: g, ...eaten },
+      newProduct: creating && remember ? { name: name.trim(), ...formPer100 } : undefined,
+      touch: picked ? { productId: picked.id, grams: g } : pickedRecipe ? { recipeId: pickedRecipe.id, grams: g } : undefined,
     });
-    if (productId) api.touchProduct(productId, g).catch((e) => console.error("[FoodAddSheet] touch:", e));
-    if (pickedRecipe) api.updateRecipeMeta(pickedRecipe.id, { lastGrams: g }).catch((e) => console.error("[FoodAddSheet] touch:", e));
+    if (entry.pending) notify("Нет интернета — запись сохранена на телефоне и отправится сама, когда появится сеть.", "info");
     onAdded(entry);
     onClose();
   }, "Не удалось добавить. Проверьте интернет и попробуйте ещё раз.");
