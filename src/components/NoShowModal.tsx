@@ -8,7 +8,7 @@ export type NoShowReason = (typeof NO_SHOW_REASONS)[number];
 // «Не пришёл»: причина у каждого подопечного своя. Списываем всё, кроме уважительной —
 // так же, как при удалении тренировки (DeleteSessionModal).
 export default function NoShowModal({ clients, onConfirm, onClose }: {
-  clients: { id: string; name: string }[]; onConfirm: (reasons: Record<string, NoShowReason>) => void | Promise<void>; onClose: () => void;
+  clients: { id: string; name: string; remaining?: string | null }[]; onConfirm: (reasons: Record<string, NoShowReason>) => void | Promise<void>; onClose: () => void;
 }) {
   const [reasons, setReasons] = useState<Record<string, NoShowReason>>({});
   const [busy, setBusy] = useState(false);
@@ -22,6 +22,9 @@ export default function NoShowModal({ clients, onConfirm, onClose }: {
         {clients.map((c) => (
           <div key={c.id} className="space-y-2">
             {clients.length > 1 && <p className="font-semibold">{c.name}</p>}
+            {c.remaining != null && Number(c.remaining) <= 0 && (
+              <p className="text-[13px] text-orange-400">{clients.length > 1 ? "" : `${c.name}: `}в абонементе 0 — списывать нечего, отметим только пропуск.</p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               {NO_SHOW_REASONS.map((r) => (
                 <button key={r} onClick={() => setReasons((p) => ({ ...p, [c.id]: r }))} aria-pressed={reasons[c.id] === r}

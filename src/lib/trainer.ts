@@ -28,11 +28,14 @@ export async function saveTrainerBrand(trainerId: string, patch: { brand: string
 export interface TrainerStats { activeClients: number; totalClients: number; plansCount: number; sessionsDone: number }
 
 export async function fetchTrainerStats(trainerId: string): Promise<TrainerStats> {
-  const [{ data: clients }, { count: plansCount }, { count: sessionsDone }] = await Promise.all([
-    supabase.from("clients").select("id,status").eq("trainer_id", trainerId).eq("is_self", false).is("deleted_at", null),
-    supabase.from("plans").select("id", { count: "exact", head: true }).eq("trainer_id", trainerId).is("deleted_at", null),
+  const [{ data: clients }, { data: plans }, { count: sessionsDone }] = await Promise.all([
+    supabase.from("clients").select("id,status,is_self").eq("trainer_id", trainerId).is("deleted_at", null),
+    supabase.from("plans").select("client_id").eq("trainer_id", trainerId).is("deleted_at", null),
     supabase.from("bookings").select("id", { count: "exact", head: true }).eq("trainer_id", trainerId).eq("status", "done"),
   ]);
-  const all = clients ?? [];
-  return { activeClients: all.filter((c: any) => c.status !== "left").length, totalClients: all.length, plansCount: plansCount ?? 0, sessionsDone: sessionsDone ?? 0 };
+  // Своя карточка «Я» — не подопечный: ни она, ни её планы в счётчики не входят
+  const selfIds = new Set((clients ?? []).filter((c: any) => c.is_self).map((c: any) => c.id));
+  const all = (clients ?? []).filter((c: any) => !c.is_self);
+  const plansCount = (plans ?? []).filter((p: any) => !selfIds.has(p.client_id)).length;
+  return { activeClients: all.filter((c: any) => c.status !== "left").length, totalClients: all.length, plansCount, sessionsDone: sessionsDone ?? 0 };
 }

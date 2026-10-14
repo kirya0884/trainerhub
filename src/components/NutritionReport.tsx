@@ -159,7 +159,7 @@ function KcalBars({ days, byDay, goal, period, sel, onTap }: {
               <button key={d} onClick={() => m && onTap(d)} disabled={!m} aria-label={`${fmtD(d, { day: "numeric", month: "long" })}: ${m ? `${Math.round(v)} ккал` : "нет записей"}`}
                 className="relative flex-1 h-full flex items-end">
                 <span className={`block w-full ${period === "week" ? "rounded-t-lg rounded-b" : "rounded-t-sm"} transition`}
-                  style={{ height: m ? Math.max(3, y(v)) : d <= t ? 3 : 0, background: !m ? "rgb(63 63 70)" : over ? OVER : MACRO_COLOR.kcal, opacity: !m ? 0.6 : on || !sel ? (on ? 1 : 0.55) : 0.35 }} />
+                  style={{ height: m ? Math.max(3, y(v)) : d <= t ? 3 : 0, background: !m ? "rgb(var(--bg-700))" : over ? OVER : MACRO_COLOR.kcal, opacity: !m ? 0.6 : on || !sel ? (on ? 1 : 0.55) : 0.35 }} />
                 {on && m && (
                   <span className={`absolute ${edge} z-10 whitespace-nowrap rounded-lg bg-zinc-100 text-zinc-950 px-2 py-1 text-[11.5px] font-semibold leading-snug text-left`} style={{ bottom: y(v) + 6 }}>
                     {fmtD(d, { weekday: "short", day: "numeric" })} · {Math.round(v)} ккал<br />Б {Math.round(m.protein)} · Ж {Math.round(m.fat)} · У {Math.round(m.carbs)}

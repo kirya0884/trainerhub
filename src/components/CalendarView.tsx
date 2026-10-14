@@ -459,7 +459,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
       {remind && <RemindModal clientId={remind.id} name={clientName(remind.id)} date={remind.date} time={remind.time} onClose={() => setRemind(null)} />}
 
       {noShow && (
-        <NoShowModal clients={noShow.clientIds.map((id) => ({ id, name: clientName(id) }))} onConfirm={(r) => markNoShow(noShow, r)} onClose={() => setNoShow(null)} />
+        <NoShowModal clients={noShow.clientIds.map((id) => ({ id, name: clientName(id), remaining: clients.find((c) => c.id === id)?.remaining ?? null }))} onConfirm={(r) => markNoShow(noShow, r)} onClose={() => setNoShow(null)} />
       )}
 
       {modal && (

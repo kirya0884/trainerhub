@@ -5,7 +5,7 @@ import { MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
 import type { Activity, Aim, Goals, Macros, NutritionGoal, Sex } from "../lib/foodDiary";
 import type { Measurement } from "../lib/clients";
-import { fmtDate } from "../lib/format";
+import { fmtDate, toDateStr } from "../lib/format";
 
 const str = (n: number | undefined) => (n ? String(Math.round(n)) : "");
 const chip = (on: boolean) => `h-9 px-3 rounded-full text-[13px] font-semibold transition ${on ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`;
@@ -54,7 +54,7 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose,
               <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-xs font-bold bg-lime-400/15 text-lime-400"><UserCheck size={13} /> от тренера</span>
             </div>
             <GoalRow g={goals.trainer} />
-            <p className="text-[13px] text-zinc-400 mt-2">Тренер задал цель {fmtDate(goals.trainer.updatedAt.slice(0, 10))}. Своя цель ниже включится, только если тренер свою уберёт.</p>
+            <p className="text-[13px] text-zinc-400 mt-2">Тренер задал цель {fmtDate(toDateStr(new Date(goals.trainer.updatedAt)))}. Своя цель ниже включится, только если тренер свою уберёт.</p>
           </div>
         )}
 
@@ -81,7 +81,7 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose,
         </div>
 
         <div className="flex items-center gap-2.5 rounded-2xl bg-zinc-800/60 px-3.5 py-3">
-          <GlassWater size={20} className="shrink-0" style={{ color: "#5ac8fa" }} />
+          <GlassWater size={20} className="shrink-0" style={{ color: "var(--m-water)" }} />
           <span className="flex-1 text-sm"><b>Вода:</b> {water} {water % 10 === 1 && water !== 11 ? "стакан" : [2, 3, 4].includes(water % 10) && ![12, 13, 14].includes(water) ? "стакана" : "стаканов"} по 250 мл</span>
           <button onClick={() => setWater((w) => Math.max(1, w - 1))} aria-label="Меньше воды" className="w-9 h-9 flex items-center justify-center rounded-lg bg-zinc-900 text-zinc-300 hover:bg-zinc-700 transition"><Minus size={17} /></button>
           <button onClick={() => setWater((w) => Math.min(20, w + 1))} aria-label="Больше воды" className="w-9 h-9 flex items-center justify-center rounded-lg bg-zinc-900 text-zinc-300 hover:bg-zinc-700 transition"><Plus size={17} /></button>

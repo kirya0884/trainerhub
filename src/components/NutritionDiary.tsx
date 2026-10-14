@@ -7,14 +7,14 @@ import FoodCopySheet from "./FoodCopySheet";
 import NutritionReport from "./NutritionReport";
 import type { Measurement } from "../lib/clients";
 import NutritionGoalsSheet from "./NutritionGoalsSheet";
-import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
+import { EMPTY_CELL, GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
 import type { FoodEntry, Goals, Macros, Meal, NutritionDay } from "../lib/foodDiary";
 import type { NutritionLog } from "../lib/nutrition";
 import { addDays, today } from "../lib/format";
 
 const OVER = "#f2555a";
-const WATER = "#5ac8fa";
+const WATER = "var(--m-water)";
 const MEAL_ICON: Record<Meal, typeof Sun> = { breakfast: Sunrise, lunch: Sun, dinner: Moon, snack: Cookie };
 
 const dayTitle = (d: string) => {
@@ -213,7 +213,7 @@ function WaterCard({ cups, goal, readOnly, onChange }: { cups: number; goal: num
       <div className="flex gap-1 flex-1 min-w-0" role="group" aria-label="Вода">
         {Array.from({ length: n }, (_, i) => (
           <button key={i} onClick={() => onChange(cups === i + 1 ? i : i + 1)} disabled={readOnly} aria-label={`${i + 1} стакан`}
-            className="flex-1 h-6 rounded-md transition" style={{ background: i < cups ? WATER : "rgb(39 39 42)" }} />
+            className="flex-1 h-8 rounded-lg transition" style={{ background: i < cups ? WATER : EMPTY_CELL }} />
         ))}
       </div>
       <span className="text-sm font-bold shrink-0 tabular-nums">{cups}/{goal}</span>
@@ -235,7 +235,7 @@ function WeekStrip({ start, kcal, goal, sel, onPick }: { start: string; kcal: Ma
   const norm = logged.filter((d) => goal > 0 && Math.abs(kcal.get(d)! - goal) <= goal * 0.1).length;
   const color = (d: string) => {
     const v = kcal.get(d);
-    if (v == null) return "rgb(39 39 42)";
+    if (v == null) return EMPTY_CELL;
     if (!goal || d === t) return MACRO_COLOR.kcal;
     return Math.abs(v - goal) <= goal * 0.1 ? "#a3e635" : v > goal ? OVER : "#f5a524";
   };
@@ -296,7 +296,7 @@ function SummaryCard({ eaten, goal, onSetGoal }: { eaten: Macros; goal: Macros |
       <div className="flex items-center gap-4 p-4">
         <div className="relative w-[116px] h-[116px] shrink-0">
           <svg width="116" height="116" className="-rotate-90" aria-hidden>
-            <circle cx="58" cy="58" r={R} stroke="currentColor" strokeWidth="12" fill="none" className="text-zinc-800" />
+            <circle cx="58" cy="58" r={R} stroke={EMPTY_CELL} strokeWidth="12" fill="none" />
             <circle cx="58" cy="58" r={R} stroke={over("kcal") ? OVER : MACRO_COLOR.kcal} strokeWidth="12" fill="none" strokeLinecap="round"
               strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(1, share("kcal")))} style={{ transition: "stroke-dashoffset .4s ease" }} />
           </svg>

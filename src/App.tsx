@@ -443,7 +443,7 @@ export default function App() {
                 <button onClick={() => openClient(c.id)} title={`Вернуться к: ${c.name}`} className="flex items-center gap-1.5 min-w-0 group">
                   {c.avatarUrl
                     ? <img src={c.avatarUrl} alt="" className="w-5 h-5 rounded-full object-cover shrink-0" />
-                    : <span className="w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name[0]?.toUpperCase()}</span>}
+                    : <span className="w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold text-zinc-950 shrink-0" style={{ background: c.color }}>{c.name[0]?.toUpperCase()}</span>}
                   <span className="text-xs text-zinc-300 truncate group-hover:text-zinc-100 transition">{short}</span>
                 </button>
                 <button onClick={() => setContext(null)} aria-label="Убрать из контекста" title="Убрать" className="p-1 rounded-full text-zinc-600 hover:text-zinc-300 transition shrink-0">

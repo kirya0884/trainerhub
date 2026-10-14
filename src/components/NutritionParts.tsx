@@ -2,7 +2,10 @@ import * as api from "../lib/foodDiary";
 import type { Macros } from "../lib/foodDiary";
 
 // Цвета показателей: ккал оранжевый, белки лайм, жиры розовый, углеводы голубой
-export const MACRO_COLOR = { kcal: "#fb923c", protein: "#a3e635", fat: "#f472b6", carbs: "#22d3ee" } as const;
+// Через переменные темы (index.css): в светлой теме темнее, чтобы цифры читались на белом
+export const MACRO_COLOR = { kcal: "var(--m-kcal)", protein: "var(--m-protein)", fat: "var(--m-fat)", carbs: "var(--m-carbs)" } as const;
+/** Пустая ячейка (стакан, день без записей) — фон-токен, светлеет в светлой теме */
+export const EMPTY_CELL = "rgb(var(--bg-800))";
 
 // Без автофокуса: клавиатура появляется только по нажатию на поле, а не сразу с окном
 export function GramsInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
