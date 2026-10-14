@@ -13,6 +13,7 @@ import { SkeletonRows } from "./Skeleton";
 import { today, addDays } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
 import { remainingOf } from "../lib/clients";
+import { notify } from "../lib/dialog";
 // Аналитика с графиками открывается по кнопке — грузим её только тогда (графики тяжёлые)
 const AnalyticsPanel = lazyRetry(() => import("./AnalyticsPanel"));
 
@@ -259,7 +260,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
                 }
               } catch (e) {
                 console.error("[Dashboard] push:", e);
-                alert("Не удалось изменить уведомления. Попробуйте ещё раз.");
+                notify("Не удалось изменить уведомления. Попробуйте ещё раз.");
               } finally {
                 setPushLoading(false);
               }

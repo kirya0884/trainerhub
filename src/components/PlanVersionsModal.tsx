@@ -5,6 +5,7 @@ import type { PlanVersion } from "../lib/planVersions";
 import { fmtDate, today } from "../lib/format";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
+import { ask } from "../lib/dialog";
 
 export default function PlanVersionsModal({ planId, onClose, onRestored }: { planId: string; onClose: () => void; onRestored: () => void }) {
   const [versions, setVersions] = useState<PlanVersion[] | null>(null);
@@ -19,7 +20,7 @@ export default function PlanVersionsModal({ planId, onClose, onRestored }: { pla
     try { await versionsApi.snapshotPlan(planId, label); load(); } catch (e: any) { setError(e.message || "Не удалось сохранить версию"); } finally { setBusy(false); }
   };
   const restore = async (v: PlanVersion) => {
-    if (!window.confirm(`Откатить план к версии «${v.label || fmtDate(v.createdAt.slice(0, 10))}»? Текущее содержимое дней будет заменено (саму версию можно сохранить перед откатом).`)) return;
+    if (!(await ask(`Откатить план к версии «${v.label || fmtDate(v.createdAt.slice(0, 10))}»? Текущее содержимое дней будет заменено (саму версию можно сохранить перед откатом).`, { ok: "Откатить" }))) return;
     setBusy(true);
     try { await versionsApi.restorePlanVersion(planId, v); onRestored(); } catch (e: any) { setError(e.message || "Не удалось восстановить версию"); } finally { setBusy(false); }
   };

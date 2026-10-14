@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import { fetchClient, type Membership } from "../lib/clients";
 import { applyPromotion, fetchPackageTemplates, fetchPromotions, markPaid, type PackageTemplate, type PayStatus, type Promotion } from "../lib/payments";
+import { notify } from "../lib/dialog";
 
 const rub = (n: number) => `${n.toLocaleString("ru-RU")} ₽`;
 const tplPrice = (t: PackageTemplate) => (t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price);
@@ -21,7 +22,7 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
     let alive = true;
     Promise.all([fetchClient(clientId), fetchPackageTemplates(trainerId), fetchPromotions(clientId).catch(() => [] as Promotion[])])
       .then(([c, templates, promos]) => { if (alive) setData({ m: c.membership, templates, promos }); })
-      .catch((e) => { console.error("[RenewModal] загрузка:", e); alert("Не удалось загрузить абонемент."); onClose(); });
+      .catch((e) => { console.error("[RenewModal] загрузка:", e); notify("Не удалось загрузить абонемент."); onClose(); });
     return () => { alive = false; };
   }, [clientId, trainerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -45,7 +46,7 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
     if (!next || busy) return;
     setBusy(true);
     try { await markPaid(clientId, next, data!.promos, status); onDone(); onClose(); }
-    catch (e) { console.error("[RenewModal] оплата:", e); alert("Не удалось записать оплату."); }
+    catch (e) { console.error("[RenewModal] оплата:", e); notify("Не удалось записать оплату."); }
     finally { setBusy(false); }
   };
 

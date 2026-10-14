@@ -6,6 +6,7 @@ import { fetchPlan } from "../lib/plans";
 import { confirmEmptyMembership, fetchClients, type ClientListItem, type PlanListItem } from "../lib/clients";
 import type { Plan } from "../types";
 import { useActiveWorkout, type GroupClient } from "../hooks/useActiveWorkout";
+import { ask, notify } from "../lib/dialog";
 
 // Запуск тренировки прямо из карточки подопечного: выбор плана (если их несколько) и дня.
 // Дальше всё как с кнопкой ▶ в редакторе плана — тренировка живёт в ActiveWorkoutHost.
@@ -25,11 +26,11 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
       .catch((e) => { console.error("[StartWorkoutModal] подопечные:", e); if (alive) setOthers([]); });
     return () => { alive = false; };
   }, [trainerId, self.id]);
-  const startWith = (id: string, name: string) => {
+  const startWith = async (id: string, name: string) => {
     const c = others?.find((x) => x.id === id);
     const other: GroupClient = { id, name: c?.name ?? name, color: c?.color || "#22d3ee", remaining: c?.remaining ?? null };
-    if (!confirmEmptyMembership([self, other])) return;
-    if (!workout.start({ kind: "group", id: String(Date.now()), clients: [self, other] })) { alert("Одна тренировка уже идёт — заверши или сверни её."); return; }
+    if (!(await confirmEmptyMembership([self, other]))) return;
+    if (!workout.start({ kind: "group", id: String(Date.now()), clients: [self, other] })) { notify("Одна тренировка уже идёт — заверши или сверни её."); return; }
     onClose();
   };
   const term = q.trim().toLowerCase();
@@ -54,10 +55,10 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
   const mesoName = (id?: string | null) => plan?.mesocycles?.find((m) => m.id === id)?.name;
   const days = (plan?.days ?? []).filter((d) => !(d.mesocycleId && archivedMesos.has(d.mesocycleId)));
 
-  const start = (dayId: string) => {
+  const start = async (dayId: string) => {
     const day = days.find((d) => d.id === dayId);
-    if (!day || !confirmEmptyMembership([self])) return;
-    if (!workout.start({ day, planId, clientId, clientName })) { alert("Одна тренировка уже идёт — заверши или сверни её."); return; }
+    if (!day || !(await confirmEmptyMembership([self]))) return;
+    if (!workout.start({ day, planId, clientId, clientName })) { notify("Одна тренировка уже идёт — заверши или сверни её."); return; }
     onClose();
   };
 

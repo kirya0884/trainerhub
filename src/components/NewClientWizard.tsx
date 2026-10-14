@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import { GOALS } from "../constants";
 import { addClient, emptyMembership, updateClient } from "../lib/clients";
 import { fetchPackageTemplates, markPaid, type PackageTemplate, type PayStatus } from "../lib/payments";
+import { notify } from "../lib/dialog";
 
 const STEPS = ["Кто", "Контакты", "Здоровье", "Абонемент"];
 const rub = (n: number) => `${n.toLocaleString("ru-RU")} ₽`;
@@ -50,7 +51,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
       onCreated(c.id);
     } catch (e) {
       console.error("[NewClientWizard] сохранение:", e);
-      alert("Не удалось добавить подопечного. Проверьте интернет и попробуйте ещё раз.");
+      notify("Не удалось добавить подопечного. Проверьте интернет и попробуйте ещё раз.");
       setBusy(false);
     }
   };

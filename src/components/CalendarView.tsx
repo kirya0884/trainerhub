@@ -13,6 +13,7 @@ import RenewModal from "./RenewModal";
 import NoShowModal, { type NoShowReason } from "./NoShowModal";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
 import { today as todayFn, addDays, addMonths, initials, plural, toDateStr } from "../lib/format";
+import { ask, notify } from "../lib/dialog";
 
 const WEEKDAYS_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 const WEEKDAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -81,7 +82,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
       setNoShow(null);
     } catch (e) {
       console.error("[CalendarView] не пришёл:", e);
-      alert("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
+      notify("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
     }
   };
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
@@ -90,15 +91,15 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   // Тренировка по записи — совместная (на всех из записи) и живёт на уровне приложения:
   // сворачивается, переживает переходы и перезагрузку; запись отмечается, когда завершат все
   const workout = useActiveWorkout();
-  const startGroup = (o: Occurrence) => {
+  const startGroup = async (o: Occurrence) => {
     const list = o.clientIds.map((id) => { const c = clients.find((x) => x.id === id); return { id, name: clientName(id), color: c?.color || "#a3e635", remaining: c?.remaining ?? null }; });
-    if (!clientsApi.confirmEmptyMembership(list)) return;
+    if (!(await clientsApi.confirmEmptyMembership(list))) return;
     const ok = workout.start({
       kind: "group", id: String(Date.now()),
       clients: list,
       booking: { id: o.id, occDate: o.occDate, isOccurrence: o.isOccurrence, clientIds: o.clientIds },
     });
-    if (!ok) alert("Одна тренировка уже идёт — заверши или сверни её.");
+    if (!ok) notify("Одна тренировка уже идёт — заверши или сверни её.");
   };
 
   const weekStart = startOfWeekMon(anchor);
@@ -153,9 +154,9 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
     if (!b) return;
     const moved = { ...b, date: targetDate, occDate: targetDate, isOccurrence: true };
     const conflict = occurrences.some((o) => o.date === targetDate && o.id !== id && bookingsOverlap(moved as any, o));
-    if (conflict && !window.confirm("На эту дату уже есть запись в это же время. Перенести всё равно?")) return;
+    if (conflict && !(await ask("На эту дату уже есть запись в это же время. Перенести всё равно?", { ok: "Перенести" }))) return;
     try { await rescheduleOccurrence(b, occDate, targetDate); }
-    catch (e) { console.error("[CalendarView] onDropDay:", e); alert("Не удалось перенести запись."); }
+    catch (e) { console.error("[CalendarView] onDropDay:", e); notify("Не удалось перенести запись."); }
   };
 
   // Перенос занятия в сетке «День»/«Неделя» — день и время определяются позицией отпускания в ячейке.
@@ -175,9 +176,9 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
     if (occDate === targetDate && newTime === b.time) return;
     const moved = { ...b, date: targetDate, time: newTime, occDate: targetDate, isOccurrence: true };
     const conflict = occurrences.some((o) => o.date === targetDate && o.id !== id && bookingsOverlap(moved as any, o));
-    if (conflict && !window.confirm("На это время уже есть запись. Перенести всё равно?")) return;
+    if (conflict && !(await ask("На это время уже есть запись. Перенести всё равно?", { ok: "Перенести" }))) return;
     try { await rescheduleOccurrence(b, occDate, targetDate, newTime); }
-    catch (e) { console.error("[CalendarView] onDropAt:", e); alert("Не удалось перенести запись."); }
+    catch (e) { console.error("[CalendarView] onDropAt:", e); notify("Не удалось перенести запись."); }
   };
 
   const exportIcs = () => {
@@ -503,10 +504,10 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                   await clientsApi.decrementMembershipRemaining(cid, cf.membership);
                 }));
                 reloadClients();
-                if (skipped.length) alert(`Тренировка за этот день уже была отмечена — повторно не списываем: ${skipped.join(", ")}`);
+                if (skipped.length) notify(`Тренировка за этот день уже была отмечена — повторно не списываем: ${skipped.join(", ")}`);
               }
               setModal(null);
-            } catch (e) { console.error("[CalendarView] onSave:", e); alert("Не удалось сохранить запись."); }
+            } catch (e) { console.error("[CalendarView] onSave:", e); notify("Не удалось сохранить запись."); }
           }}
           onDelete={modal.booking ? () => askConfirm("Удалить запись? Это действие необратимо.", async () => { await deleteBooking(modal.booking!.id); setModal(null); }) : undefined}
         />

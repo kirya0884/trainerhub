@@ -9,6 +9,7 @@ import { fetchProgress } from "../lib/progress";
 import { finishWorkout } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
 import type { Day, Plan, Session } from "../types";
+import { notify } from "../lib/dialog";
 
 export type SetVal = { weight: string; reps: string };
 export type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number; setsDone?: Record<number, boolean> };
@@ -166,7 +167,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
       onFinished();
     } catch (e) {
       console.error("[useSessionSlot] finish:", e);
-      alert("Не удалось сохранить тренировку. Попробуй ещё раз.");
+      notify("Не удалось сохранить тренировку. Попробуй ещё раз.");
     } finally { setBusy(false); }
   };
 

@@ -12,6 +12,7 @@ import { parseRest } from "../lib/format";
 import { combinedRemaining } from "../lib/clients";
 import type { Day, Exercise } from "../types";
 import RemainingBadge from "./RemainingBadge";
+import { ask } from "../lib/dialog";
 
 // Дублируем мелкие хелперы из SessionModal — так уже принято в проекте (без общего модуля под мелкие функции).
 const exLabel = (day: Day, idx: number) => {
@@ -226,8 +227,8 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
   // Свёрнутая тренировка не держит прокрутку страницы
   useEffect(() => { document.body.style.overflow = minimized ? "" : "hidden"; return () => { document.body.style.overflow = ""; }; }, [minimized]);
   const allDone = clients.every((c) => finishedIds.includes(c.id));
-  const exit = () => {
-    if (allDone || window.confirm("Прервать совместную тренировку? Кто ещё не завершил, записан не будет.")) onClose();
+  const exit = async () => {
+    if (allDone || (await ask("Прервать совместную тренировку? Кто ещё не завершил, записан не будет.", { danger: true, ok: "Прервать" }))) onClose();
   };
   // Д2: «Рядом» доступен только для пары — хук слота вызывается статично дважды.
   const isPair = clients.length === 2;

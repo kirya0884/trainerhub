@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import * as api from "../lib/clients";
 import type { DeletedItem } from "../lib/clients";
 import { SkeletonRows } from "./Skeleton";
+import { ask, notify } from "../lib/dialog";
 
 export default function TrashModal({ trainerId, onClose }: { trainerId: string; onClose: () => void }) {
   const [clients, setClients] = useState<DeletedItem[]>([]);
@@ -15,15 +16,15 @@ export default function TrashModal({ trainerId, onClose }: { trainerId: string; 
     .catch((e) => { setLoading(false); console.error("[TrashModal] load:", e); });
   useEffect(() => { load(); }, [trainerId]);
 
-  const restoreClient = async (id: string) => { try { await api.restoreClient(id); load(); } catch (e) { console.error("[TrashModal] restoreClient:", e); alert("Не удалось восстановить."); } };
+  const restoreClient = async (id: string) => { try { await api.restoreClient(id); load(); } catch (e) { console.error("[TrashModal] restoreClient:", e); notify("Не удалось восстановить."); } };
   const purgeClient = async (id: string, name: string) => {
-    if (!window.confirm(`Удалить «${name}» навсегда? Это действие необратимо — пропадут все планы, замеры, фото и платежи.`)) return;
-    try { await api.permanentlyDeleteClient(id); load(); } catch (e) { console.error("[TrashModal] purgeClient:", e); alert("Не удалось удалить."); }
+    if (!(await ask(`Удалить «${name}» навсегда? Это действие необратимо — пропадут все планы, замеры, фото и платежи.`, { danger: true, ok: "Удалить навсегда" }))) return;
+    try { await api.permanentlyDeleteClient(id); load(); } catch (e) { console.error("[TrashModal] purgeClient:", e); notify("Не удалось удалить."); }
   };
-  const restorePlan = async (id: string) => { try { await api.restorePlan(id); load(); } catch (e) { console.error("[TrashModal] restorePlan:", e); alert("Не удалось восстановить."); } };
+  const restorePlan = async (id: string) => { try { await api.restorePlan(id); load(); } catch (e) { console.error("[TrashModal] restorePlan:", e); notify("Не удалось восстановить."); } };
   const purgePlan = async (id: string, name: string) => {
-    if (!window.confirm(`Удалить план «${name}» навсегда? Это действие необратимо.`)) return;
-    try { await api.permanentlyDeletePlan(id); load(); } catch (e) { console.error("[TrashModal] purgePlan:", e); alert("Не удалось удалить."); }
+    if (!(await ask(`Удалить план «${name}» навсегда? Это действие необратимо.`, { danger: true, ok: "Удалить навсегда" }))) return;
+    try { await api.permanentlyDeletePlan(id); load(); } catch (e) { console.error("[TrashModal] purgePlan:", e); notify("Не удалось удалить."); }
   };
 
   return (

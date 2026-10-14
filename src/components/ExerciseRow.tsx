@@ -2,6 +2,7 @@ import { Activity, GripVertical, Layers, Pencil, Plus, TrendingUp, Video, X } fr
 import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
 import NumField from "./NumField";
+import { ask } from "../lib/dialog";
 
 // Конвертирует ссылку YouTube в embed-форму; прочие ссылки (прямые .mp4 и т.п.) возвращает как есть.
 function toEmbedUrl(url: string): string {
@@ -117,7 +118,7 @@ function ExerciseRow({
         <button onClick={() => update({ kind: ex.kind === "functional" ? "" : "functional" })} title="Функциональное упражнение (время/пульс вместо подходов)" className={`p-1.5 rounded-lg transition shrink-0 ${ex.kind === "functional" ? "text-orange-400 bg-orange-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Activity size={15} /></button>
         {ex.kind !== "functional" && <button onClick={toggleDetailed} title="Разные подходы" className={`p-1.5 rounded-lg transition shrink-0 ${ex.detailed ? "text-lime-400 bg-lime-400/10" : "text-zinc-500 hover:bg-zinc-700"}`}><Layers size={15} /></button>}
         <span className="flex-1" />
-        <button onClick={() => { if (window.confirm(`Удалить упражнение «${ex.name || "без названия"}»? Подходы и комментарии удалятся вместе с ним.`)) remove(); }} title="Удалить упражнение" aria-label="Удалить упражнение" className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
+        <button onClick={async () => { if (await ask(`Удалить упражнение «${ex.name || "без названия"}»? Подходы и комментарии удалятся вместе с ним.`, { danger: true, ok: "Удалить" })) remove(); }} title="Удалить упражнение" aria-label="Удалить упражнение" className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
       </div>
 
       {/* П1: свёрнутое упражнение показывает только строку с названием и кнопками */}

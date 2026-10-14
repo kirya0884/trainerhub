@@ -6,6 +6,7 @@ import { today } from "../lib/format";
 import * as api from "../lib/clients";
 import type { Measurement } from "../lib/clients";
 import NumField from "./NumField";
+import { notify } from "../lib/dialog";
 
 export const emptyMeasurement = (): Omit<Measurement, "id"> => ({
   date: today(), note: "", weight: "", neck: "", shoulders: "", chest: "", waist: "", glutes: "", thigh: "", biceps: "", bodyfat: "", muscleMass: "",
@@ -43,7 +44,7 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
       setForm(emptyMeasurement());
       setShowForm(false);
       api.fetchMeasurements(clientId).then(setMeasurements).catch((e) => console.error("[BodyTab] fetchMeasurements:", e));
-    } catch (e) { console.error("[BodyTab] submit:", e); alert("Не удалось сохранить замер."); }
+    } catch (e) { console.error("[BodyTab] submit:", e); notify("Не удалось сохранить замер."); }
   };
   const remove = async (id: string) => {
     try { await api.deleteMeasurement(id); setMeasurements(measurements.filter((m) => m.id !== id)); }

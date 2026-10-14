@@ -3,6 +3,7 @@ import { ClipboardList, FileStack, Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import * as api from "../lib/templates";
 import type { DayTemplate, PlanTemplate } from "../lib/templates";
+import { notify } from "../lib/dialog";
 
 // Применить шаблон плана/дня к текущему плану, либо сохранить текущие дни как новый шаблон.
 export default function TemplatesModal({ trainerId, currentDays, onApplyPlan, onApplyDay, onClose }: {
@@ -28,7 +29,7 @@ export default function TemplatesModal({ trainerId, currentDays, onApplyPlan, on
       }
       setName("");
       load();
-    } catch (e) { console.error("[TemplatesModal] saveAsTemplate:", e); alert("Не удалось сохранить шаблон."); }
+    } catch (e) { console.error("[TemplatesModal] saveAsTemplate:", e); notify("Не удалось сохранить шаблон."); }
   };
 
   return (

@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import * as portalApi from "../lib/clientPortal";
 import { fileToThumb } from "../lib/thumb";
 import { GOALS } from "../constants";
+import { notify } from "../lib/dialog";
 
 export const ACCENT_COLORS = ["#22d3ee", "#a3e635", "#fb923c", "#f472b6", "#a78bfa", "#facc15", "#34d399", "#f87171", "#60a5fa", "#e879f9"];
 
@@ -25,8 +26,8 @@ export default function ClientSettingsModal({ clientId, initial, onClose, onSave
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) { alert("Нужен файл изображения."); return; }
-    if (file.size > 8 * 1024 * 1024) { alert("Файл слишком большой (макс. 8 МБ)."); return; }
+    if (!file.type.startsWith("image/")) { notify("Нужен файл изображения."); return; }
+    if (file.size > 8 * 1024 * 1024) { notify("Файл слишком большой (макс. 8 МБ)."); return; }
     setForm((p) => ({ ...p, avatarUrl: "" }));
     const thumb = await fileToThumb(file);
     setForm((p) => ({ ...p, avatarUrl: thumb }));

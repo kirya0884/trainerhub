@@ -12,6 +12,7 @@ import * as api from "../lib/foodDiary";
 import type { FoodEntry, Goals, Macros, Meal, NutritionDay } from "../lib/foodDiary";
 import type { NutritionLog } from "../lib/nutrition";
 import { addDays, today } from "../lib/format";
+import { notify } from "../lib/dialog";
 
 const OVER = "#f2555a";
 const WATER = "var(--m-water)";
@@ -86,7 +87,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
     if (busy) return;
     setBusy(true);
     try { const added = await api.copyEntries(clientId, prev.filter((e) => e.meal === meal), date); setEntries((l) => [...(l ?? []), ...added]); }
-    catch (e) { console.error("[NutritionDiary] как вчера:", e); alert("Не удалось скопировать. Проверьте интернет."); }
+    catch (e) { console.error("[NutritionDiary] как вчера:", e); notify("Не удалось скопировать. Проверьте интернет."); }
     finally { setBusy(false); }
   };
 
@@ -119,7 +120,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
         const was = day.waterCups;
         setDay((d) => ({ ...d, waterCups: n }));
         try { await api.setWater(clientId, date, n); }
-        catch (e) { console.error("[NutritionDiary] вода:", e); setDay((d) => ({ ...d, waterCups: was })); alert("Не удалось сохранить воду. Проверьте интернет."); }
+        catch (e) { console.error("[NutritionDiary] вода:", e); setDay((d) => ({ ...d, waterCups: was })); notify("Не удалось сохранить воду. Проверьте интернет."); }
       }} />
 
       {asTrainer
@@ -266,7 +267,7 @@ function CommentBox({ clientId, date, initial, onSaved }: { clientId: string; da
     if (busy) return;
     setBusy(true);
     try { await api.saveTrainerComment(clientId, date, text); onSaved(text.trim()); setSaved(true); setTimeout(() => setSaved(false), 2000); }
-    catch (e) { console.error("[CommentBox]", e); alert("Не удалось сохранить комментарий."); }
+    catch (e) { console.error("[CommentBox]", e); notify("Не удалось сохранить комментарий."); }
     finally { setBusy(false); }
   };
   return (
@@ -342,7 +343,7 @@ function EntrySheet({ entry, onSaved, onDeleted, onClose }: { entry: FoodEntry; 
   const g = api.num(grams);
   const k = entry.grams > 0 ? g / entry.grams : 0;
   const preview = { kcal: entry.kcal * k, protein: entry.protein * k, fat: entry.fat * k, carbs: entry.carbs * k };
-  const run = async (f: () => Promise<void>) => { if (busy) return; setBusy(true); try { await f(); } catch (e) { console.error("[EntrySheet]", e); alert("Не удалось сохранить. Проверьте интернет."); } finally { setBusy(false); } };
+  const run = async (f: () => Promise<void>) => { if (busy) return; setBusy(true); try { await f(); } catch (e) { console.error("[EntrySheet]", e); notify("Не удалось сохранить. Проверьте интернет."); } finally { setBusy(false); } };
 
   return (
     <ModalShell title={entry.name} onClose={onClose}>

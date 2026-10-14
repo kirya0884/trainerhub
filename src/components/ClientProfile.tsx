@@ -31,6 +31,7 @@ import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 import StartWorkoutModal from "./StartWorkoutModal";
+import { ask, notify } from "../lib/dialog";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans";
 
@@ -97,9 +98,9 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const outOfStock = client.membership.type !== "subscription" && client.membership.remaining !== "" && remainingNum <= 0;
   const overdue = client.membership.type === "subscription" && client.membership.nextPaymentDate && client.membership.nextPaymentDate < today();
   const deleteClient = async () => {
-    if (!window.confirm(`Удалить «${client.name}»? Карточка переместится в корзину — её можно восстановить позже.`)) return;
+    if (!(await ask(`Удалить «${client.name}»? Карточка переместится в корзину — её можно восстановить позже.`, { danger: true, ok: "Удалить" }))) return;
     try { await api.deleteClient(clientId); onBack(); }
-    catch (e) { console.error("[ClientProfile] deleteClient:", e); alert("Не удалось удалить карточку. Попробуй ещё раз."); }
+    catch (e) { console.error("[ClientProfile] deleteClient:", e); notify("Не удалось удалить карточку. Попробуй ещё раз."); }
   };
 
   // Абонемент под именем: остаток кольцом, нажатие — вкладка оплат
@@ -431,12 +432,12 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     const partner = otherClients.find((c) => c.id === partnerId);
     if (!partner) return;
     try { const merged = await api.linkSplitPartner(clientId, client.name, partnerId, partner.name, m); patchMembership(merged, true); }
-    catch (e) { console.error("[PaymentsTab] linkPartner:", e); alert("Не удалось привязать партнёра."); }
+    catch (e) { console.error("[PaymentsTab] linkPartner:", e); notify("Не удалось привязать партнёра."); }
   };
   const unlinkPartner = async () => {
-    if (!window.confirm("Отвязать сплит-партнёра?")) return;
+    if (!(await ask("Отвязать сплит-партнёра?", { ok: "Отвязать" }))) return;
     try { const merged = await api.unlinkSplitPartner(clientId, m); patchMembership(merged, true); }
-    catch (e) { console.error("[PaymentsTab] unlinkPartner:", e); alert("Не удалось отвязать партнёра."); }
+    catch (e) { console.error("[PaymentsTab] unlinkPartner:", e); notify("Не удалось отвязать партнёра."); }
   };
 
   const activePromo = promotions.find((p) => p.active && p.appliesTo === (m.type === "subscription" ? "subscription" : "sessions"));
@@ -455,16 +456,16 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     try {
       await paymentsApi.savePackageTemplate(trainerId, { name, sessions: Number(m.total) || 0, price: Number(m.packagePrice) || 0, discount: 0, split: m.split });
       paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[PaymentsTab] fetchTemplates:", e));
-    } catch (e) { console.error("[PaymentsTab] saveAsTemplate:", e); alert("Не удалось сохранить шаблон."); }
+    } catch (e) { console.error("[PaymentsTab] saveAsTemplate:", e); notify("Не удалось сохранить шаблон."); }
   };
 
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
     try { const merged = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus); patchMembership(merged, true); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
-    catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); alert("Не удалось записать оплату."); }
+    catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); notify("Не удалось записать оплату."); }
   };
   const doMarkPaymentPaid = async (id: string) => {
     try { await paymentsApi.markPaymentPaid(id); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
-    catch (e) { console.error("[PaymentsTab] markPaymentPaid:", e); alert("Не удалось обновить платёж."); }
+    catch (e) { console.error("[PaymentsTab] markPaymentPaid:", e); notify("Не удалось обновить платёж."); }
   };
 
   const editPayment = async (p: Payment) => {
@@ -472,18 +473,18 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     if (amount == null) return;
     const note = window.prompt("Примечание:", p.note) ?? p.note;
     try { await paymentsApi.updatePayment(p.id, { amount: Number(amount) || p.amount, note }); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
-    catch (e) { console.error("[PaymentsTab] editPayment:", e); alert("Не удалось обновить платёж."); }
+    catch (e) { console.error("[PaymentsTab] editPayment:", e); notify("Не удалось обновить платёж."); }
   };
   const splitPayment = async (p: Payment) => {
     const parts = Number(window.prompt("Разбить на сколько платежей?", "2"));
     if (!parts || parts < 2) return;
     try { await paymentsApi.splitPayment(clientId, p, parts); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
-    catch (e) { console.error("[PaymentsTab] splitPayment:", e); alert("Не удалось разбить платёж."); }
+    catch (e) { console.error("[PaymentsTab] splitPayment:", e); notify("Не удалось разбить платёж."); }
   };
   const deletePayment = async (id: string) => {
-    if (!window.confirm("Удалить платёж из журнала? Если он добавлял тренировки в остаток, остаток тоже уменьшится обратно.")) return;
+    if (!(await ask("Удалить платёж из журнала? Если он добавлял тренировки в остаток, остаток тоже уменьшится обратно.", { danger: true, ok: "Удалить" }))) return;
     try { const next = await paymentsApi.deletePayment(id, clientId, m); patchMembership(next, true); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
-    catch (e) { console.error("[PaymentsTab] deletePayment:", e); alert("Не удалось удалить платёж."); }
+    catch (e) { console.error("[PaymentsTab] deletePayment:", e); notify("Не удалось удалить платёж."); }
   };
 
   const isSub = m.type === "subscription";
@@ -721,10 +722,10 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
     const f = e.target.files?.[0];
     if (!f) return;
     try { const thumb = await fileToThumb(f); await api.addPhoto(clientId, thumb); reload(); }
-    catch { alert("Не удалось обработать изображение"); }
+    catch { notify("Не удалось обработать изображение"); }
     e.target.value = "";
   };
-  const addByUrl = async () => { const u = photoUrl.trim(); if (!u) return; try { await api.addPhoto(clientId, u); setPhotoUrl(""); reload(); } catch (e) { console.error("[PhotosTab] addByUrl:", e); alert("Не удалось добавить фото."); } };
+  const addByUrl = async () => { const u = photoUrl.trim(); if (!u) return; try { await api.addPhoto(clientId, u); setPhotoUrl(""); reload(); } catch (e) { console.error("[PhotosTab] addByUrl:", e); notify("Не удалось добавить фото."); } };
   const remove = async (id: string) => { try { await api.deletePhoto(id); setPhotos(photos.filter((p) => p.id !== id)); } catch (e) { console.error("[PhotosTab] remove:", e); } };
 
   return (
@@ -773,7 +774,7 @@ function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, 
       setName("");
       api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e));
       onOpenPlan(row.id);
-    } catch (e) { console.error("[ClientProfile] createPlan:", e); alert("Не удалось создать план."); }
+    } catch (e) { console.error("[ClientProfile] createPlan:", e); notify("Не удалось создать план."); }
   };
   // B06: дубликат плана со всей структурой
   const [dupId, setDupId] = useState<string | null>(null);
@@ -784,14 +785,14 @@ function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, 
     try {
       await duplicatePlan(trainerId, clientId, id, `${planName} (копия)`);
       api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e));
-    } catch (err) { console.error("[ClientProfile] duplicate:", err); alert("Не удалось дублировать план."); }
+    } catch (err) { console.error("[ClientProfile] duplicate:", err); notify("Не удалось дублировать план."); }
     finally { setDupId(null); }
   };
   const deletePlan = async (id: string, planName: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!window.confirm(`Удалить план «${planName}»? Его можно восстановить из корзины.`)) return;
+    if (!(await ask(`Удалить план «${planName}»? Его можно восстановить из корзины.`, { danger: true, ok: "Удалить" }))) return;
     try { await api.deletePlan(id); api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e)); }
-    catch (err) { console.error("[ClientProfile] deletePlan:", err); alert("Не удалось удалить план."); }
+    catch (err) { console.error("[ClientProfile] deletePlan:", err); notify("Не удалось удалить план."); }
   };
 
   return (

@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import * as api from "../lib/foodDiary";
 import type { FoodEntry, Meal } from "../lib/foodDiary";
 import { addDays, today } from "../lib/format";
+import { notify } from "../lib/dialog";
 
 const chip = (on: boolean) => `h-9 px-3.5 rounded-full text-[13px] font-semibold transition ${on ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`;
 
@@ -23,7 +24,7 @@ export default function FoodCopySheet({ list, meal, from, onCopy, onClose }: {
     if (busy || !to) return;
     setBusy(true);
     try { await onCopy(to, toMeal); }
-    catch (e) { console.error("[FoodCopySheet]", e); alert("Не удалось скопировать. Проверьте интернет."); setBusy(false); }
+    catch (e) { console.error("[FoodCopySheet]", e); notify("Не удалось скопировать. Проверьте интернет."); setBusy(false); }
   };
 
   return (

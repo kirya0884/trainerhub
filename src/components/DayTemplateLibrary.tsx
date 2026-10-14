@@ -5,6 +5,7 @@ import * as api from "../lib/templates";
 import type { DayTemplate } from "../lib/templates";
 import type { Day, Exercise } from "../types";
 import { SkeletonRows } from "./Skeleton";
+import { ask } from "../lib/dialog";
 
 interface TplEx {
   tempId: string;
@@ -84,7 +85,7 @@ export default function DayTemplateLibrary({
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm("Удалить шаблон?")) return;
+    if (!(await ask("Удалить шаблон?", { danger: true, ok: "Удалить" }))) return;
     await api.deleteDayTemplate(id);
     load();
   };

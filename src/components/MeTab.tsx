@@ -8,6 +8,7 @@ import { addPlan, fetchClientPlans, fetchMeasurements, type Measurement, type Pl
 import { fetchPlan } from "../lib/plans";
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import type { Plan } from "../types";
+import { notify } from "../lib/dialog";
 
 type Sub = "workouts" | "nutrition" | "progress";
 const SUBS: [Sub, string][] = [["workouts", "Тренировки"], ["nutrition", "Питание"], ["progress", "Прогресс"]];
@@ -72,7 +73,7 @@ function Workouts({ trainerId, selfId, name, onOpenPlan }: { trainerId: string; 
     if (busy || !newName?.trim()) return;
     setBusy(true);
     try { const p = await addPlan(trainerId, selfId, newName.trim()); onOpenPlan(p.id); }
-    catch (e) { console.error("[MeTab] новый план:", e); alert("Не удалось создать план."); setBusy(false); }
+    catch (e) { console.error("[MeTab] новый план:", e); notify("Не удалось создать план."); setBusy(false); }
   };
 
   if (plans === null) return <SkeletonRows rows={3} />;
@@ -95,7 +96,7 @@ function Workouts({ trainerId, selfId, name, onOpenPlan }: { trainerId: string; 
                 <div key={d.id} className="flex items-center gap-3 px-4 py-3">
                   <Dumbbell size={18} className="text-zinc-500 shrink-0" />
                   <span className="flex-1 min-w-0"><span className="block font-semibold truncate">{d.name || "Без названия"}</span><span className="block text-[13px] text-zinc-500">{d.exercises.length} упр.</span></span>
-                  <button onClick={() => { if (!workout.start({ day: d, planId: plan.id, clientId: selfId, clientName: name || "Я" })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
+                  <button onClick={() => { if (!workout.start({ day: d, planId: plan.id, clientId: selfId, clientName: name || "Я" })) notify("Одна тренировка уже идёт — заверши или сверни её."); }}
                     aria-label={`Начать «${d.name}»`} className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center hover:bg-lime-400/25 transition"><Play size={18} /></button>
                 </div>
               ))}

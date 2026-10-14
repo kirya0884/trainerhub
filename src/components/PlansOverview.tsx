@@ -10,6 +10,7 @@ import { duplicatePlan } from "../lib/plans";
 import type { PlanOverviewItem, ClientListItem } from "../lib/clients";
 import { SkeletonRows } from "./Skeleton";
 import { addDays, initials, plural, today } from "../lib/format";
+import { ask, notify } from "../lib/dialog";
 
 const fmtDay = (d: string) => {
   const t = today();
@@ -48,7 +49,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
       const cid = newClientId;
       closeCreate();
       onOpenPlan(row.id, cid);
-    } catch (e) { console.error("[PlansOverview] createPlan:", e); alert("Не удалось создать план."); }
+    } catch (e) { console.error("[PlansOverview] createPlan:", e); notify("Не удалось создать план."); }
   };
   // B06: дубликат создаётся вместе с блоками, днями, упражнениями и подходами.
   const [dupId, setDupId] = useState<string | null>(null);
@@ -60,14 +61,14 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
     try {
       await duplicatePlan(trainerId, p.clientId, p.id, `${p.name} (копия)`);
       reloadPlans();
-    } catch (err) { console.error("[PlansOverview] duplicate:", err); alert("Не удалось дублировать план."); }
+    } catch (err) { console.error("[PlansOverview] duplicate:", err); notify("Не удалось дублировать план."); }
     finally { setDupId(null); }
   };
   const deletePlan = async (id: string, name: string) => {
     setMenuId(null);
-    if (!window.confirm(`Удалить план «${name}»? Его можно восстановить из корзины.`)) return;
+    if (!(await ask(`Удалить план «${name}»? Его можно восстановить из корзины.`, { danger: true, ok: "Удалить" }))) return;
     try { await api.deletePlan(id); load(); }
-    catch (err) { console.error("[PlansOverview] deletePlan:", err); alert("Не удалось удалить план."); }
+    catch (err) { console.error("[PlansOverview] deletePlan:", err); notify("Не удалось удалить план."); }
   };
 
   const wizardClient = clients.find((c) => c.id === newClientId);

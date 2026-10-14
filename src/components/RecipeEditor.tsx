@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import { MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
 import type { FoodProduct, Recipe, RecipeItem } from "../lib/foodDiary";
+import { ask, notify } from "../lib/dialog";
 
 const str = (n: number | null | undefined) => (n ? String(Math.round(n * 10) / 10).replace(".", ",") : "");
 const line = (m: api.Macros) => `Б ${api.fmtN(m.protein)} · Ж ${api.fmtN(m.fat)} · У ${api.fmtN(m.carbs)}`;
@@ -38,15 +39,15 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
   const run = async (f: () => Promise<void>, msg: string) => {
     if (busy) return;
     setBusy(true);
-    try { await f(); } catch (e) { console.error("[RecipeEditor]", e); alert(msg); setBusy(false); }
+    try { await f(); } catch (e) { console.error("[RecipeEditor]", e); notify(msg); setBusy(false); }
   };
   const save = () => run(async () => {
     if (!canSave) return;
     const id = await api.saveRecipe(clientId, { id: recipe?.id, name: name.trim(), ...draft, items: items.filter((i) => i.grams > 0) });
     onSaved(id);
   }, "Не удалось сохранить рецепт. Проверьте интернет.");
-  const remove = () => {
-    if (!recipe || !window.confirm(`Удалить рецепт «${recipe.name}»? Записи в дневнике останутся.`)) return;
+  const remove = async () => {
+    if (!recipe || !(await ask(`Удалить рецепт «${recipe.name}»? Записи в дневнике останутся.`, { danger: true, ok: "Удалить" }))) return;
     run(async () => { await api.deleteRecipe(recipe.id); onDeleted(recipe.id); }, "Не удалось удалить рецепт.");
   };
 
@@ -141,7 +142,7 @@ function IngredientPicker({ clientId, products, onPick, onProductAdded, onBack, 
       const prod = await api.addProduct(clientId, { name: q.trim(), kcal: kcal.trim() ? api.num(kcal) : auto, protein: api.num(p), fat: api.num(f), carbs: api.num(c) });
       onProductAdded(prod);
       onPick(prod);
-    } catch (e) { console.error("[IngredientPicker]", e); alert("Не удалось сохранить продукт."); setBusy(false); }
+    } catch (e) { console.error("[IngredientPicker]", e); notify("Не удалось сохранить продукт."); setBusy(false); }
   };
   const box = (label: string, v: string, set: (s: string) => void, color: string, ph = "0") => (
     <label className="block text-center rounded-xl bg-zinc-800 px-1 py-2">

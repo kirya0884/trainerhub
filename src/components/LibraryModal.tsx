@@ -4,6 +4,7 @@ import { BUILTIN_EXERCISES, LIB_GROUP_ORDER, type BuiltinExercise } from "../dat
 import * as libraryApi from "../lib/library";
 import { fileToThumb } from "../lib/thumb";
 import ModalShell from "./ModalShell";
+import { notify } from "../lib/dialog";
 
 type Item = BuiltinExercise & { custom?: boolean };
 
@@ -28,14 +29,14 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
     try {
       await libraryApi.setExerciseMedia(trainerId, name, url);
       setMedia((m) => ({ ...m, [name]: url }));
-    } catch (e) { console.error("[LibraryModal] saveMedia:", e); alert("Не удалось сохранить медиа."); }
+    } catch (e) { console.error("[LibraryModal] saveMedia:", e); notify("Не удалось сохранить медиа."); }
   };
   const onMediaFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !detail) return;
-    if (!file.type.startsWith("image/")) { alert("Нужен файл изображения."); return; }
-    if (file.size > 8 * 1024 * 1024) { alert("Файл слишком большой (макс. 8 МБ)."); return; }
+    if (!file.type.startsWith("image/")) { notify("Нужен файл изображения."); return; }
+    if (file.size > 8 * 1024 * 1024) { notify("Файл слишком большой (макс. 8 МБ)."); return; }
     try {
       const thumb = await fileToThumb(file);
       setMediaUrlInput(thumb);

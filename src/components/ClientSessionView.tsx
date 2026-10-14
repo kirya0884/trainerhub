@@ -9,6 +9,7 @@ import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionParts";
 import { applyLastTime, type LastTime } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
+import { ask } from "../lib/dialog";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -192,8 +193,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     }
   };
 
-  const cancel = () => {
-    if (window.confirm("Прервать тренировку? Несохранённые отметки будут потеряны.")) {
+  const cancel = async () => {
+    if (await ask("Прервать тренировку? Несохранённые отметки будут потеряны.", { danger: true, ok: "Прервать" })) {
       removeKey(`${SK}-vals`);
       removeKey(`${SK}-meta`);
       onCancel();

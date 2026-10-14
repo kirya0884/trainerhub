@@ -8,6 +8,7 @@ import SubscriptionModal from "./SubscriptionModal";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 import { checkForUpdate } from "../lib/swUpdate";
 import { ScreenSkeleton } from "./Skeleton";
+import { ask, notify } from "../lib/dialog";
 
 const SECTIONS = {
   personal: "Личные данные", packages: "Шаблоны пакетов", rules: "Правила для клиентов",
@@ -37,7 +38,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
     } catch (e) {
       console.error(`[TrainerProfile] save ${key}:`, e);
       setSaveState((p) => ({ ...p, [key]: undefined }));
-      alert("Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.");
+      notify("Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.");
     }
   };
   const saveLabel = (key: SaveKey, idle: string) => saveState[key] === "saving" ? "Сохранение..." : saveState[key] === "saved" ? "✓ Сохранено" : idle;
@@ -62,16 +63,16 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file || !profile) return;
-    if (!file.type.startsWith("image/")) { alert("Нужен файл изображения."); return; }
-    if (file.size > 8 * 1024 * 1024) { alert("Файл слишком большой (макс. 8 МБ)."); return; }
+    if (!file.type.startsWith("image/")) { notify("Нужен файл изображения."); return; }
+    if (file.size > 8 * 1024 * 1024) { notify("Файл слишком большой (макс. 8 МБ)."); return; }
     setProfile({ ...profile, avatarUrl: await fileToThumb(file) });
   };
   const onLogoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (!file.type.startsWith("image/")) { alert("Нужен файл изображения."); return; }
-    if (file.size > 8 * 1024 * 1024) { alert("Файл слишком большой (макс. 8 МБ)."); return; }
+    if (!file.type.startsWith("image/")) { notify("Нужен файл изображения."); return; }
+    if (file.size > 8 * 1024 * 1024) { notify("Файл слишком большой (макс. 8 МБ)."); return; }
     const thumb = await fileToThumb(file);
     setBrand((b) => ({ ...b, logoUrl: thumb }));
   };
@@ -231,7 +232,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         </div>
         <button
           onClick={async () => {
-            if (!window.confirm("Выйти из аккаунта на всех устройствах?")) return;
+            if (!(await ask("Выйти из аккаунта на всех устройствах?", { danger: true, ok: "Выйти" }))) return;
             await supabase.auth.signOut({ scope: "global" });
           }}
           className="w-full flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition py-1"

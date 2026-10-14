@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Database, Download, Upload } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { downloadBackup, exportBackup, importBackup } from "../lib/backup";
+import { ask, notify } from "../lib/dialog";
 
 export default function BackupModal({ trainerId, onClose }: { trainerId: string; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -14,10 +15,10 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
     finally { setBusy(false); }
   };
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!window.confirm("Импорт добавит данные из файла как новые записи (существующие не удаляются и не изменяются). Продолжить?")) { e.target.value = ""; return; }
+    if (!(await ask("Импорт добавит данные из файла как новые записи (существующие не удаляются и не изменяются). Продолжить?", { ok: "Импортировать" }))) { e.target.value = ""; return; }
     setBusy(true);
     const reader = new FileReader();
     reader.onload = async () => {
@@ -26,10 +27,10 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
         setProgress({ done: 0, total: 0 });
         const { skippedNutrition } = await importBackup(trainerId, raw, (done, total) => setProgress({ done, total }));
         setProgress(null);
-        alert("Импорт завершён. Обновите страницу, чтобы увидеть новые данные."
+        notify("Импорт завершён. Обновите страницу, чтобы увидеть новые данные."
           + (skippedNutrition ? `\n\nЗаписи дневников питания подопечных (${skippedNutrition}) не перенесены: их ведут сами подопечные, тренеру база писать в них не даёт. Они сохранены в файле копии.` : ""));
       } catch (err: any) {
-        alert("Не удалось импортировать файл: " + (err?.message || "неверный формат"));
+        notify("Не удалось импортировать файл: " + (err?.message || "неверный формат"));
       } finally {
         setBusy(false);
         setProgress(null);

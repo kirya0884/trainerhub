@@ -6,6 +6,7 @@ import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
 import RecipeEditor from "./RecipeEditor";
 import * as api from "../lib/foodDiary";
 import type { FoodEntry, FoodProduct, Meal, Recipe } from "../lib/foodDiary";
+import { ask, notify } from "../lib/dialog";
 
 const QUICK_GRAMS = [50, 100, 150, 200];
 const PORTIONS: [number, string][] = [[0.5, "½ порции"], [1, "1 порция"], [1.5, "1½"], [2, "2 порции"]];
@@ -83,7 +84,7 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
   const run = async (f: () => Promise<void>, msg = "Не удалось сохранить. Проверьте интернет.") => {
     if (busy) return;
     setBusy(true);
-    try { await f(); } catch (e) { console.error("[FoodAddSheet]", e); alert(msg); } finally { setBusy(false); }
+    try { await f(); } catch (e) { console.error("[FoodAddSheet]", e); notify(msg); } finally { setBusy(false); }
   };
   const toggleFav = (x: Item) => {
     if (x.kind === "product") {
@@ -102,8 +103,8 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
     patchLocal(picked.id, patch);
     setEditing(false);
   });
-  const removeProduct = () => {
-    if (!picked || !window.confirm(`Удалить «${picked.name}» из моих продуктов? Записи в дневнике останутся.`)) return;
+  const removeProduct = async () => {
+    if (!picked || !(await ask(`Удалить «${picked.name}» из моих продуктов? Записи в дневнике останутся.`, { danger: true, ok: "Удалить" }))) return;
     run(async () => {
       await api.deleteProduct(picked.id);
       setProducts((l) => (l ?? []).filter((x) => x.id !== picked.id));

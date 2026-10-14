@@ -24,6 +24,7 @@ import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNoti
 import ClientSessionView from "./ClientSessionView";
 import { lastTimeFor } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
+import { ask, notify } from "../lib/dialog";
 
 type Tab = "profile" | "program" | "nutrition" | "reporting";
 type ProgramSub = "active" | "completed";
@@ -125,7 +126,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
     try {
       await portalApi.startSession(client.id, currentPlan.id, dayId, dayName);
       setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now() });
-    } catch (e) { console.error("[ClientPortal] startDay:", e); alert("Не удалось начать тренировку. Попробуй ещё раз."); }
+    } catch (e) { console.error("[ClientPortal] startDay:", e); notify("Не удалось начать тренировку. Попробуй ещё раз."); }
   };
 
   // #6 activeDay derived here so portal always renders; CSV renders on top when not minimized
@@ -362,7 +363,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                           <span className="block text-[13px] text-zinc-400 truncate">{meta}{done && <span style={{ color: "var(--accent)" }}> · пройдена {fmtDate(done, true)}</span>}</span>
                         </button>
                         {done ? (
-                          <button onClick={() => { if (window.confirm(`«${day.name}» уже пройдена ${fmtDate(done, true)}. Пройти ещё раз?`)) startDay(day.id, day.name); }}
+                          <button onClick={async () => { if (await ask(`«${day.name}» уже пройдена ${fmtDate(done, true)}. Пройти ещё раз?`, { ok: "Пройти" })) startDay(day.id, day.name); }}
                             title={`Пройдена ${fmtDate(done, true)} — пройти ещё раз`} aria-label={`Пройдена ${fmtDate(done, true)}. Пройти ещё раз`}
                             className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center text-zinc-950 hover:opacity-90 transition" style={{ background: "var(--accent)" }}>
                             <Check size={19} strokeWidth={2.75} />
@@ -557,7 +558,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               setSessionMinimized(false);
             } catch (e) {
               console.error("[ClientPortal] finish session:", e);
-              alert("Не удалось сохранить тренировку. Проверь соединение и попробуй ещё раз.");
+              notify("Не удалось сохранить тренировку. Проверь соединение и попробуй ещё раз.");
               throw e;
             }
           }}

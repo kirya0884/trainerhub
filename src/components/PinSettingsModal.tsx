@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Lock } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { clearPin, fetchPinHash, setPin } from "../lib/pin";
+import { ask } from "../lib/dialog";
 
 export default function PinSettingsModal({ id, table = "trainers", onClose }: { id: string; table?: "trainers" | "clients"; onClose: () => void }) {
   const [hasPin, setHasPin] = useState(false);
@@ -21,7 +22,7 @@ export default function PinSettingsModal({ id, table = "trainers", onClose }: { 
   };
 
   const clear = async () => {
-    if (!window.confirm("Снять PIN-защиту входа?")) return;
+    if (!(await ask("Снять PIN-защиту входа?", { danger: true, ok: "Снять" }))) return;
     setBusy(true);
     try { await clearPin(id, table); setHasPin(false); }
     finally { setBusy(false); }

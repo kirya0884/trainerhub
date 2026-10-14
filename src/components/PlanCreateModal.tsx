@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import ProgramCatalogModal from "./ProgramCatalogModal";
 import { duplicatePlan } from "../lib/plans";
 import type { PlanOverviewItem } from "../lib/clients";
+import { notify } from "../lib/dialog";
 
 // B07: мастер создания плана. Бэклог предлагал вывести шаблоны первым шагом, но
 // в базе их ноль на 39 созданных планов — тренер увидел бы пустой список. Поэтому
@@ -42,7 +43,7 @@ export default function PlanCreateModal({ trainerId, clientId, clientName, allPl
       onCreated(newId);
     } catch (e) {
       console.error("[PlanCreateModal] copy:", e);
-      alert("Не удалось скопировать план.");
+      notify("Не удалось скопировать план.");
     } finally { setBusy(null); }
   };
 

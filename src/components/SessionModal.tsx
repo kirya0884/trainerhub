@@ -11,6 +11,7 @@ import { applyLastTime, lastTimeFor, type LastTime } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
 import { parseNum, parseRest, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
+import { ask, notify } from "../lib/dialog";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -188,7 +189,7 @@ export default function SessionModal({ day, planId, onFinish, onClose }: {
       onClose();
     } catch (e) {
       console.error("[SessionModal] finish:", e);
-      alert("Не удалось сохранить тренировку. Данные не потеряны — попробуй ещё раз.");
+      notify("Не удалось сохранить тренировку. Данные не потеряны — попробуй ещё раз.");
     } finally { setSubmitting(false); }
   };
 
@@ -225,7 +226,7 @@ export default function SessionModal({ day, planId, onFinish, onClose }: {
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => setMinimized(true)} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Свернуть" aria-label="Свернуть"><Minimize2 size={20} /></button>
-            <button onClick={() => { if (window.confirm("Прервать тренировку? Отметки будут удалены.")) { clearPersist(); onClose(); } }} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Прервать" aria-label="Прервать тренировку"><X size={22} /></button>
+            <button onClick={async () => { if (await ask("Прервать тренировку? Отметки будут удалены.", { danger: true, ok: "Прервать" })) { clearPersist(); onClose(); } }} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Прервать" aria-label="Прервать тренировку"><X size={22} /></button>
           </div>
         </div>
         <div className="h-1 mt-2 rounded-full bg-zinc-800 overflow-hidden">

@@ -4,6 +4,7 @@ import ModalShell from "./ModalShell";
 import * as api from "../lib/payments";
 import type { Promotion } from "../lib/payments";
 import { SkeletonRows } from "./Skeleton";
+import { notify } from "../lib/dialog";
 
 const APPLIES = [["sessions", "Пакет тренировок"], ["subscription", "Подписка"]] as const;
 
@@ -24,7 +25,7 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
       await api.addPromotion(clientId, { label, type, value: v, appliesTo, active: true });
       setLabel(""); setValue("");
       load();
-    } catch (e) { console.error("[PromotionsModal] submit:", e); alert("Не удалось добавить акцию."); }
+    } catch (e) { console.error("[PromotionsModal] submit:", e); notify("Не удалось добавить акцию."); }
   };
 
   return (

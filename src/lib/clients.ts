@@ -2,6 +2,7 @@ import { supabase } from "./supabase";
 import { notifyClientsChanged } from "./clientsBus";
 import { CLIENT_COLORS } from "../constants";
 import { today } from "./format";
+import { ask } from "./dialog";
 
 export interface ClientListItem {
   id: string;
@@ -26,10 +27,10 @@ export const remainingOf = (membership: any): string | null => {
 
 // Абонемент на нуле — не запрет (тренировка спишется в минус), но тренер должен знать
 // до начала, а не узнать после. remaining = null — подписка или учёт не ведётся.
-export function confirmEmptyMembership(clients: { name: string; remaining?: string | null }[]) {
+export async function confirmEmptyMembership(clients: { name: string; remaining?: string | null }[]): Promise<boolean> {
   const empty = clients.filter((c) => c.remaining != null && Number(c.remaining) <= 0).map((c) => c.name);
   if (!empty.length) return true;
-  return window.confirm(`${empty.join(", ")}: в абонементе не осталось тренировок. Начать всё равно?`);
+  return ask(`${empty.join(", ")}: в абонементе не осталось тренировок. Начать всё равно?`, { ok: "Начать" });
 }
 
 export async function fetchClients(trainerId: string): Promise<ClientListItem[]> {

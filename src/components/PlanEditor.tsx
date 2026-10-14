@@ -28,6 +28,7 @@ import SessionReadModal from "./SessionReadModal";
 import TemplatesModal from "./TemplatesModal";
 import DayTemplateLibrary from "./DayTemplateLibrary";
 import { ScreenSkeleton } from "./Skeleton";
+import { ask, notify } from "../lib/dialog";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -163,7 +164,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       setNewDayName(null);
     } catch (e) {
       console.error("[PlanEditor] handleCreateDay:", e);
-      alert("Не удалось добавить день. Попробуй ещё раз.");
+      notify("Не удалось добавить день. Попробуй ещё раз.");
     } finally { setAddBusy(false); }
   };
 
@@ -178,7 +179,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     if (addBusy) return;
     setAddBusy(true);
     try { await fn(); reload(); }
-    catch (e) { console.error("[PlanEditor] runAdd:", e); alert(failMsg); }
+    catch (e) { console.error("[PlanEditor] runAdd:", e); notify(failMsg); }
     finally { setAddBusy(false); }
   };
   // B06: дублировать день — один клик с автоименем. Копирование в буфер оставлено:
@@ -282,7 +283,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     // П5: раньше при неподходящем абонементе кнопка молча ничего не делала —
     // тренер не понимал, сломалось или он что-то не так делает.
     if (membership.type === "subscription") {
-      alert("У подопечного подписка — разовые тренировки к ней не добавляются, оплата помесячная.");
+      notify("У подопечного подписка — разовые тренировки к ней не добавляются, оплата помесячная.");
       return;
     }
 
@@ -293,7 +294,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       const v = window.prompt("Цена разового занятия, ₽:", "");
       if (v == null) return;
       amount = Number(String(v).replace(",", ".").trim()) || 0;
-      if (amount <= 0) { alert("Нужна сумма больше нуля."); return; }
+      if (amount <= 0) { notify("Нужна сумма больше нуля."); return; }
     }
 
     setAddingSession(true);
@@ -302,7 +303,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       if (paid) await paymentsApi.addPayment(clientId, { date: today(), amount, type: "single", note: "Разовая тренировка" }, 1);
       setMembership(next);
     } catch (e: any) {
-      alert(e.message || "Не удалось добавить тренировку");
+      notify(e.message || "Не удалось добавить тренировку");
     } finally {
       setAddingSession(false);
     }
@@ -315,7 +316,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       if (reason === "Уважительная" && membership) setMembership(await incrementMembershipRemaining(clientId, membership));
     } catch (e: any) {
       console.error("[PlanEditor] confirmDeleteSession:", e);
-      alert("Не удалось удалить тренировку. Попробуй ещё раз.");
+      notify("Не удалось удалить тренировку. Попробуй ещё раз.");
     } finally {
       setDeletingSessionId(null);
     }
@@ -546,7 +547,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                     <button onClick={() => { markSaving(); updateMesocycle(meso.id, { archivedAt: null }); }}
                       title="Вернуть блок в Тренировки" aria-label="Вернуть блок в Тренировки"
                       className="p-1.5 rounded-lg hover:bg-lime-400/15 hover:text-lime-400 active:text-lime-400 text-zinc-500 transition shrink-0"><RotateCcw size={15} /></button>
-                    <button onClick={() => { if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }}
+                    <button onClick={async () => { if (await ask(`Удалить блок «${meso.name}»? Дни останутся без блока.`, { danger: true, ok: "Удалить" })) deleteMesocycle(meso.id); }}
                       title="Удалить блок" aria-label="Удалить блок"
                       className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 active:text-red-400 text-zinc-500 transition shrink-0"><X size={15} /></button>
                   </div>
@@ -603,10 +604,10 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                   </button>
                 )}
                 {doneDate ? (
-                  <button onClick={() => { if (window.confirm(`«${day.name}» уже проведена ${fmtDate(doneDate, true)}. Провести ещё раз?`) && confirmEmptyMembership([{ name: clientName, remaining: remainingOf(membership) }]) && !workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
+                  <button onClick={async () => { if ((await ask(`«${day.name}» уже проведена ${fmtDate(doneDate, true)}. Провести ещё раз?`, { ok: "Провести" })) && (await confirmEmptyMembership([{ name: clientName, remaining: remainingOf(membership) }])) && !workout.start({ day, planId, clientId, clientName })) notify("Одна тренировка уже идёт — заверши или сверни её."); }}
                     className="w-10 h-10 shrink-0 rounded-xl bg-lime-400 text-zinc-950 flex items-center justify-center hover:bg-lime-300 transition" title={`Проведена ${fmtDate(doneDate, true)} — провести ещё раз`} aria-label={`Проведена ${fmtDate(doneDate, true)}. Провести ещё раз`}><Check size={19} strokeWidth={2.75} /></button>
                 ) : (
-                  <button onClick={() => { if (confirmEmptyMembership([{ name: clientName, remaining: remainingOf(membership) }]) && !workout.start({ day, planId, clientId, clientName })) alert("Одна тренировка уже идёт — заверши или сверни её."); }}
+                  <button onClick={async () => { if ((await confirmEmptyMembership([{ name: clientName, remaining: remainingOf(membership) }])) && !workout.start({ day, planId, clientId, clientName })) notify("Одна тренировка уже идёт — заверши или сверни её."); }}
                     className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center hover:bg-lime-400/25 transition" title="Провести тренировку" aria-label="Провести тренировку"><Play size={18} /></button>
                 )}
                 <div className="relative shrink-0">
@@ -640,7 +641,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                         <button onClick={() => { setDayMenu(null); duplicateDay(day); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать день</button>
                         <button onClick={() => { setDayMenu(null); copyDay(day); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Clipboard size={15} className="text-zinc-500 shrink-0" /> Копировать день</button>
                         <div className="my-1 border-t border-zinc-800" />
-                        <button onClick={() => { setDayMenu(null); if (window.confirm(`Удалить день «${day.name}»?`)) deleteDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить день</button>
+                        <button onClick={async () => { setDayMenu(null); if (await ask(`Удалить день «${day.name}»?`, { danger: true, ok: "Удалить" })) deleteDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить день</button>
                       </div>
                     </>
                   )}
@@ -693,7 +694,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                             <button onClick={() => { setMesoMenu(null); duplicateMeso(meso.id); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать с днями</button>
                             <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { archivedAt: new Date().toISOString() }); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Archive size={15} className="text-zinc-500 shrink-0" /> В архив с днями</button>
                             <div className="my-1 border-t border-zinc-800" />
-                            <button onClick={() => { setMesoMenu(null); if (window.confirm(`Удалить блок «${meso.name}»? Дни останутся без блока.`)) deleteMesocycle(meso.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить блок</button>
+                            <button onClick={async () => { setMesoMenu(null); if (await ask(`Удалить блок «${meso.name}»? Дни останутся без блока.`, { danger: true, ok: "Удалить" })) deleteMesocycle(meso.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить блок</button>
                           </div>
                         </>
                       )}
@@ -769,7 +770,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                     <div className="min-w-0"><p className="text-zinc-300 truncate">{d.dayName || "Тренировка"} · {fmtDate(d.date)}</p><p className="text-zinc-500">Причина: {d.deleteReason} · удалено {fmtDate(d.deletedAt.slice(0, 10))}</p></div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button onClick={() => restoreSession(d.id)} className="p-1 rounded-lg hover:bg-lime-400/20 hover:text-lime-400 text-zinc-500 transition" title="Восстановить"><RotateCcw size={13} /></button>
-                      <button onClick={() => window.confirm("Удалить безвозвратно?") && purgeSession(d.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={13} /></button>
+                      <button onClick={async () => { if (await ask("Удалить безвозвратно? Вернуть будет нельзя.", { danger: true, ok: "Удалить" })) purgeSession(d.id); }} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить навсегда"><Trash2 size={13} /></button>
                     </div>
                   </div>
                 ))}

@@ -6,6 +6,7 @@ import type { ClientListItem } from "../lib/clients";
 import type { Booking } from "../lib/bookings";
 import { addDays, initials, today } from "../lib/format";
 import { supabase } from "../lib/supabase";
+import { notify } from "../lib/dialog";
 
 const fmtDateLabel = (s: string) => {
   const str = new Date(s + "T00:00:00").toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" });
@@ -58,7 +59,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
   const toggleClient = (id: string) => setClientIds((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
 
   const save = () => {
-    if (!clientIds.length) { alert("Выбери хотя бы одного подопечного"); return; }
+    if (!clientIds.length) { notify("Выбери хотя бы одного подопечного"); return; }
     onSave({
       planId: booking?.planId ?? null, dayId: selectedDayId || null, dayName: selectedDayName || null, date, time, duration: Number(duration) || 60, status, note,
       recurring, recurUntil: recurring ? recurUntil || null : null, exceptions: booking?.exceptions ?? {},

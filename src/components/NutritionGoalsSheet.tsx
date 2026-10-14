@@ -6,6 +6,7 @@ import * as api from "../lib/foodDiary";
 import type { Activity, Aim, Goals, Macros, NutritionGoal, Sex } from "../lib/foodDiary";
 import type { Measurement } from "../lib/clients";
 import { fmtDate, toDateStr } from "../lib/format";
+import { ask, notify } from "../lib/dialog";
 
 const str = (n: number | undefined) => (n ? String(Math.round(n)) : "");
 const chip = (on: boolean) => `h-9 px-3 rounded-full text-[13px] font-semibold transition ${on ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`;
@@ -32,13 +33,13 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose,
     if (busy) return;
     setBusy(true);
     try { onSaved(await fn()); onClose(); }
-    catch (e) { console.error("[NutritionGoalsSheet]", e); alert("Не удалось сохранить цель."); setBusy(false); }
+    catch (e) { console.error("[NutritionGoalsSheet]", e); notify("Не удалось сохранить цель."); setBusy(false); }
   };
   const save = () => next.kcal && run(async () => {
     await api.saveGoal(clientId, who, { ...next, waterCups: water });
     return { ...goals, [who]: { ...next, waterCups: water, updatedAt: new Date().toISOString() } };
   });
-  const remove = () => window.confirm("Убрать цель тренера? Клиенту снова будет действовать его собственная цель.") && run(async () => {
+  const remove = async () => (await ask("Убрать цель тренера? Клиенту снова будет действовать его собственная цель.", { danger: true, ok: "Убрать" })) && run(async () => {
     await api.deleteGoal(clientId, "trainer");
     return { ...goals, trainer: null };
   });
