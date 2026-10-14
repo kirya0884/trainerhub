@@ -269,7 +269,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   useEffect(() => {
     let alive = true;
     fetchClient(clientId)
-      .then((c) => { if (alive) { setMembership(c.membership); setClientName(c.name); setClientColor(c.color); } })
+      .then((c) => { if (alive) { setMembership(c.isSelf ? null : c.membership); setClientName(c.name); setClientColor(c.color); } })
       .catch((e) => console.error("[PlanEditor] fetchClient:", e));
     return () => { alive = false; };
   }, [clientId]);

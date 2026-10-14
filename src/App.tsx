@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { cleanupStorage, readJson, writeJson } from "./lib/storage";
-import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, Plus, X, Pin, Search } from "lucide-react";
+import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, UserRound, Plus, X, Pin, Search } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -31,6 +31,7 @@ import { ScreenSkeleton } from "./components/Skeleton";
 // подопечных остаются в основном файле, чтобы первый экран открывался сразу.
 const PlanEditor = lazyRetry(() => import("./components/PlanEditor"));
 const PlansOverview = lazyRetry(() => import("./components/PlansOverview"));
+const MeTab = lazyRetry(() => import("./components/MeTab"));
 const ClientProfile = lazyRetry(() => import("./components/ClientProfile"));
 const CalendarView = lazyRetry(() => import("./components/CalendarView"));
 const ClientPortal = lazyRetry(() => import("./components/ClientPortal"));
@@ -42,16 +43,17 @@ const TrainerProfile = lazyRetry(() => import("./components/TrainerProfile"));
 const SessionModal = lazyRetry(() => import("./components/SessionModal"));
 const GroupSessionModal = lazyRetry(() => import("./components/GroupSessionModal"));
 
-type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" } | { kind: "trainerProfile" };
-type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "trainerProfile";
+type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" | "me" } | { kind: "trainerProfile" } | { kind: "me" };
+type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "me" | "trainerProfile";
 const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
   dashboard: { label: "Главная", icon: Home },
   clients: { label: "Подопечные", icon: Users },
   plans: { label: "Планы", icon: ClipboardList },
   calendar: { label: "Календарь", icon: CalendarDays },
+  me: { label: "Я", icon: UserRound },
   trainerProfile: { label: "Профиль", icon: User },
 };
-const DEFAULT_TAB_ORDER: TabKind[] = ["dashboard", "clients", "plans", "calendar", "trainerProfile"];
+const DEFAULT_TAB_ORDER: TabKind[] = ["dashboard", "clients", "plans", "calendar", "me", "trainerProfile"];
 const RECENT_KEY = "trainerhub-recent-clients-v1";
 const PINNED_KEY = "trainerhub-pinned-clients-v1";
 const RECENT_MAX = 8;
@@ -69,8 +71,11 @@ const TAB_HIDDEN_KEY = "trainerhub-tab-hidden-v1";
 // ponytail: порядок и видимость вкладок — личная настройка устройства, храним в localStorage, без бэкенда
 const loadTabOrder = (): TabKind[] => {
   const saved = readJson<TabKind[] | null>(TAB_ORDER_KEY, null);
-  if (saved && saved.length === DEFAULT_TAB_ORDER.length && DEFAULT_TAB_ORDER.every((k) => saved.includes(k))) return saved;
-  return DEFAULT_TAB_ORDER;
+  if (!Array.isArray(saved)) return DEFAULT_TAB_ORDER;
+  // Свой порядок сохраняем; новые вкладки (например, «Я») встают перед «Профилем»
+  const known = saved.filter((k, i) => DEFAULT_TAB_ORDER.includes(k) && saved.indexOf(k) === i && k !== "trainerProfile");
+  const added = DEFAULT_TAB_ORDER.filter((k) => !known.includes(k) && k !== "trainerProfile");
+  return [...known, ...added, "trainerProfile"];
 };
 const loadHiddenTabs = (): TabKind[] => {
   const saved = readJson<TabKind[] | null>(TAB_HIDDEN_KEY, null);
@@ -405,7 +410,7 @@ export default function App() {
   const navItems: TabKind[] = ["dashboard", ...tabOrder.filter((k) => k !== "dashboard" && k !== "trainerProfile" && !hiddenTabs.includes(k))];
   const activeTab: TabKind | null =
     view.kind === "client" ? "clients"
-    : view.kind === "plan" ? (view.from === "plans" ? "plans" : "clients")
+    : view.kind === "plan" ? (view.from === "plans" ? "plans" : view.from === "me" ? "me" : "clients")
     : view.kind === "trainerProfile" ? null
     : view.kind;
 
@@ -497,6 +502,9 @@ export default function App() {
         )}
         {view.kind === "client" && (
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "client_card" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} bookings={bookingsHook.bookings} allPlans={allPlans ?? []} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "open_booking"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} onBack={goBack} onOpenPlan={(planId) => go({ kind: "plan", planId, clientId: view.clientId })} />
+        )}
+        {view.kind === "me" && (
+          <MeTab trainerId={session.user.id} trainerName={trainerName} onOpenPlan={(planId, clientId) => go({ kind: "plan", planId, clientId, from: "me" })} />
         )}
         {view.kind === "trainerProfile" && (
           <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.filter((kind) => kind !== "dashboard" && kind !== "trainerProfile").map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onMoveTab={(kind, dir) => moveTab(kind as TabKind, dir)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />

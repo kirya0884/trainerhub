@@ -37,6 +37,7 @@ export async function fetchClients(trainerId: string): Promise<ClientListItem[]>
     .from("clients")
     .select("id,name,goal,color,status,format,active_session,health,membership,avatar_url")
     .eq("trainer_id", trainerId)
+    .eq("is_self", false) // своя карточка тренера («Я») — не подопечный
     .is("deleted_at", null)
     .order("created_at");
   if (error) throw error;
@@ -156,11 +157,14 @@ export interface PlanOverviewItem extends PlanListItem {
 export async function fetchAllPlans(trainerId: string): Promise<PlanOverviewItem[]> {
   // Без implicit embed clients(...) — у Supabase/PostgREST он падает с "more than one relationship was found",
   // если на clients ссылается больше одной колонки. Джойним вручную по уже отдельно загруженным клиентам.
-  const [{ data, error }, clients] = await Promise.all([
+  const [{ data: all, error }, clients, { data: self }] = await Promise.all([
     supabase.from("plans").select("id,name,archived,client_id,visible_to_client").eq("trainer_id", trainerId).is("deleted_at", null).order("created_at", { ascending: false }),
     fetchClients(trainerId),
+    supabase.from("clients").select("id").eq("trainer_id", trainerId).eq("is_self", true).maybeSingle(),
   ]);
   if (error) throw error;
+  // Свои планы тренера живут во вкладке «Я», в общем списке планов их нет
+  const data = (all ?? []).filter((p) => p.client_id !== self?.id);
   const byId = new Map(clients.map((c) => [c.id, c]));
   // Число дней и последняя тренировка — только для подписи в строке, поэтому ошибка
   // этих запросов не роняет список: строка просто останется без них.
@@ -212,6 +216,8 @@ export interface ClientFull {
   phone: string; telegram: string; whatsapp: string; email: string;
   status: string; format: string; pauseReason: string; source: string; trial: boolean;
   health: Health; membership: Membership; hasAccount: boolean;
+  /** Своя карточка тренера («Я») — без абонемента и оплат */
+  isSelf: boolean;
   activeSession: { planId: string; dayId: string; dayName: string; startedAt: number } | null;
 }
 export const emptyMembership: Membership = { type: "sessions", total: "", packagePrice: "", pricePerSession: "", remaining: "", paymentDate: "", nextPaymentDate: "", split: false, partnerName: "", partnerClientId: "", note: "", remainingPrice: "", extraRemaining: "", extraPricePerSession: "", remainingTotal: "" };
@@ -231,7 +237,7 @@ const emptyHealth: Health = { injuries: "", restrictions: "", notes: "" };
 export async function fetchClient(clientId: string): Promise<ClientFull> {
   const { data, error } = await supabase
     .from("clients")
-    .select("id,name,goal,color,avatar_url,phone,telegram,whatsapp,email,status,format,pause_reason,source,trial,health,membership,auth_user_id,active_session")
+    .select("id,name,goal,color,avatar_url,phone,telegram,whatsapp,email,status,format,pause_reason,source,trial,health,membership,auth_user_id,active_session,is_self")
     .eq("id", clientId)
     .single();
   if (error) throw error;
@@ -242,6 +248,7 @@ export async function fetchClient(clientId: string): Promise<ClientFull> {
     health: { ...emptyHealth, ...(data.health || {}) },
     membership: { ...emptyMembership, ...(data.membership || {}) },
     hasAccount: !!data.auth_user_id,
+    isSelf: !!data.is_self,
     activeSession: data.active_session || null,
   };
 }

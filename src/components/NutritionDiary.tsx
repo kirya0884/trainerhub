@@ -28,8 +28,10 @@ const weekStart = (d: string) => addDays(d, -((new Date(d + "T00:00:00").getDay(
 // Дневник питания: кольца «съедено из цели», приёмы пищи, быстрый ввод.
 // asTrainer — тот же экран в профиле подопечного у тренера: только чтение, неделя цветными
 // днями, своя цель тренера и комментарий к дню (клиент видит его карточкой).
-export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [], asTrainer = false }: {
+export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [], asTrainer = false, embedded = false }: {
   clientId: string; legacyLogs?: NutritionLog[]; measurements?: Measurement[]; asTrainer?: boolean;
+  /** Внутри другого раздела (вкладка «Я») — без крупного заголовка */
+  embedded?: boolean;
 }) {
   const [mode, setMode] = useState<"diary" | "report">("diary");
   const [date, setDate] = useState(today());
@@ -91,7 +93,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        {asTrainer ? <p className="text-[17px] font-bold">Дневник питания</p> : <h1 className="text-[26px] font-extrabold tracking-tight">Питание</h1>}
+        {asTrainer || embedded ? <p className="text-[17px] font-bold">Дневник питания</p> : <h1 className="text-[26px] font-extrabold tracking-tight">Питание</h1>}
         <button onClick={() => setShowGoals(true)} aria-label="Цели питания" className="w-11 h-11 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 transition"><Target size={22} /></button>
       </div>
 

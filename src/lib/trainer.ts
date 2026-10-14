@@ -29,7 +29,7 @@ export interface TrainerStats { activeClients: number; totalClients: number; pla
 
 export async function fetchTrainerStats(trainerId: string): Promise<TrainerStats> {
   const [{ data: clients }, { count: plansCount }, { count: sessionsDone }] = await Promise.all([
-    supabase.from("clients").select("id,status").eq("trainer_id", trainerId).is("deleted_at", null),
+    supabase.from("clients").select("id,status").eq("trainer_id", trainerId).eq("is_self", false).is("deleted_at", null),
     supabase.from("plans").select("id", { count: "exact", head: true }).eq("trainer_id", trainerId).is("deleted_at", null),
     supabase.from("bookings").select("id", { count: "exact", head: true }).eq("trainer_id", trainerId).eq("status", "done"),
   ]);

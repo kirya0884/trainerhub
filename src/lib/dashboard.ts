@@ -5,7 +5,7 @@ export interface DashboardPayment { clientId: string; amount: number; date: stri
 
 export async function fetchDashboardData(trainerId: string) {
   const { data: clients, error } = await supabase
-    .from("clients").select("id,name,color,status,membership,birthday,joined_at,trial,source,active_session").eq("trainer_id", trainerId).is("deleted_at", null);
+    .from("clients").select("id,name,color,status,membership,birthday,joined_at,trial,source,active_session").eq("trainer_id", trainerId).eq("is_self", false).is("deleted_at", null);
   if (error) throw error;
   const clientIds = (clients ?? []).map((c) => c.id);
   const { data: payments } = clientIds.length

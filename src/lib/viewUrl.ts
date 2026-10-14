@@ -21,7 +21,8 @@ export type ViewLike =
   | { kind: "plans" }
   | { kind: "client"; clientId: string; sub?: Sub }
   | { kind: "plan"; planId: string; clientId: string }
-  | { kind: "trainerProfile" };
+  | { kind: "trainerProfile" }
+  | { kind: "me" };
 
 const SUBS: Sub[] = ["overview", "bookings", "payments", "reporting", "plans"];
 
@@ -31,6 +32,7 @@ export function viewToUrl(v: ViewLike): string {
     case "calendar": return "#/calendar";
     case "plans": return "#/plans";
     case "trainerProfile": return "#/profile";
+    case "me": return "#/me";
     case "client": return `#/clients/${encodeURIComponent(v.clientId)}${v.sub && v.sub !== "overview" ? `/${v.sub}` : ""}`;
     case "plan": return `#/plans/${encodeURIComponent(v.planId)}?c=${encodeURIComponent(v.clientId)}`;
     default: return "#/";
@@ -57,5 +59,6 @@ export function urlToView(hash: string): ViewLike {
   }
   if (seg[0] === "calendar") return { kind: "calendar" };
   if (seg[0] === "profile") return { kind: "trainerProfile" };
+  if (seg[0] === "me") return { kind: "me" };
   return { kind: "dashboard" };
 }
