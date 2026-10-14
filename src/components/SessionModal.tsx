@@ -1,3 +1,4 @@
+import { minibarRef } from "../lib/minibar";
 import { AlertTriangle, Check, CheckCircle2, MessageSquare, Minimize2, Play, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useModalA11y } from "../hooks/useModalA11y";
@@ -194,7 +195,7 @@ export default function SessionModal({ day, planId, onFinish, onClose }: {
   if (minimized) {
     return (
       <button onClick={() => setMinimized(false)}
-        style={{ bottom: "var(--tabbar-h, 0px)" }}
+        ref={minibarRef} style={{ bottom: "var(--tabbar-h, 0px)" }}
         className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Play size={15} className="text-lime-400 shrink-0" />
         <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>

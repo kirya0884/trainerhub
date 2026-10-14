@@ -1,3 +1,4 @@
+import { minibarRef } from "../lib/minibar";
 import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { loadViewState, saveViewState } from "../lib/viewState";
@@ -243,7 +244,7 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
     <>
     {/* Свёрнутая — плашка внизу; сам экран остаётся смонтированным, чтобы не терять ввод */}
     {minimized && (
-      <button onClick={() => setMinimized(false)} style={{ bottom: "var(--tabbar-h, 0px)" }}
+      <button onClick={() => setMinimized(false)} ref={minibarRef} style={{ bottom: "var(--tabbar-h, 0px)" }}
         className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Users size={16} className="text-lime-400 shrink-0" />
         <span className="flex-1 font-semibold truncate text-sm">{clients.map((c) => c.name).join(" и ")}</span>

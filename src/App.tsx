@@ -400,10 +400,9 @@ export default function App() {
           );
   })();
 
-  // Нижняя панель: «Главная» всегда первая, дальше видимые разделы в сохранённом порядке,
-  // «+» посередине. Профиль — по аватару в шапке, в панель не входит.
-  const navItems: (TabKind | "fab")[] = ["dashboard", ...tabOrder.filter((k) => k !== "dashboard" && k !== "trainerProfile" && !hiddenTabs.includes(k))];
-  navItems.splice(Math.ceil(navItems.length / 2), 0, "fab");
+  // Нижняя панель: «Главная» всегда первая, дальше видимые разделы в сохранённом порядке.
+  // «+» — круглая кнопка справа над панелью. Профиль — по аватару в шапке, в панель не входит.
+  const navItems: TabKind[] = ["dashboard", ...tabOrder.filter((k) => k !== "dashboard" && k !== "trainerProfile" && !hiddenTabs.includes(k))];
   const activeTab: TabKind | null =
     view.kind === "client" ? "clients"
     : view.kind === "plan" ? (view.from === "plans" ? "plans" : "clients")
@@ -415,7 +414,7 @@ export default function App() {
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined} />}
     <ActiveWorkoutProvider key={session.user.id} userId={session.user.id}>
     <PinGate id={session.user.id}>
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-28 sm:pb-28" style={{ "--accent": trainerAccent } as React.CSSProperties}>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-36 sm:pb-36" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4"
         style={swipeDx ? { transform: `translateX(${swipeDx}px)`, transition: "none" } : { transition: "transform .18s ease-out" }}>
         {/* B30: одна строка вместо двух — логотип вместо надписи «Reps», профиль и подписка
@@ -515,18 +514,6 @@ export default function App() {
       <nav aria-label="Разделы" className={`fixed inset-x-0 bottom-0 z-40 bg-zinc-950/85 backdrop-blur-xl border-t border-zinc-800 ${kbOpen ? "hidden" : ""}`} style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
         <div className="relative max-w-2xl mx-auto h-16 grid" style={{ gridTemplateColumns: `repeat(${navItems.length}, minmax(0, 1fr))` }}>
           {navItems.map((kind) => {
-            if (kind === "fab") return (
-              <div key="fab" className="flex items-center justify-center">
-                <button
-                  onClick={() => setShowFab((v) => !v)}
-                  aria-expanded={showFab}
-                  aria-label={showFab ? "Закрыть меню создания" : "Создать"}
-                  className="w-12 h-12 rounded-2xl flex items-center justify-center bg-lime-400 text-zinc-950 shadow-lg transition active:scale-95"
-                >
-                  {showFab ? <X size={24} /> : <Plus size={26} />}
-                </button>
-              </div>
-            );
             const t = TAB_DEFS[kind];
             const active = activeTab === kind;
             return (
@@ -541,8 +528,21 @@ export default function App() {
               </button>
             );
           })}
+        </div>
+      </nav>
+
+      {/* «+» — кружок справа над панелью (и над плашкой свёрнутой тренировки, если она есть) */}
+      <div className={`fixed right-4 z-40 ${kbOpen ? "hidden" : ""}`} style={{ bottom: "calc(var(--tabbar-h, 0px) + var(--minibar-h, 0px) + 12px)" }}>
+            <button
+              onClick={() => setShowFab((v) => !v)}
+              aria-expanded={showFab}
+              aria-label={showFab ? "Закрыть меню создания" : "Создать"}
+              className="w-12 h-12 rounded-full flex items-center justify-center bg-lime-400 text-zinc-950 shadow-lg shadow-black/40 transition active:scale-95"
+            >
+              {showFab ? <X size={22} /> : <Plus size={24} strokeWidth={2.5} />}
+            </button>
             {showFab && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 w-60 bg-zinc-900 border border-zinc-800 rounded-2xl p-1.5 shadow-xl">
+              <div className="absolute bottom-full right-0 mb-3 w-60 bg-zinc-900 border border-zinc-800 rounded-2xl p-1.5 shadow-xl">
                 <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "client"); go({ kind: "clients", newForm: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <Users size={16} className="text-lime-400 shrink-0" /> Новый подопечный
                 </button>
@@ -554,8 +554,7 @@ export default function App() {
                 </button>
               </div>
             )}
-        </div>
-      </nav>
+      </div>
     </div>
     </PinGate>
     {/* Д3: вне переключателя экранов — переживает любую навигацию */}
