@@ -36,8 +36,15 @@ export async function exportBackup(trainerId: string) {
   const { data: planTemplates } = await supabase.from("plan_templates").select("*").eq("trainer_id", trainerId);
   const { data: dayTemplates } = await supabase.from("day_templates").select("*").eq("trainer_id", trainerId);
 
+  // Питание: дневник, свои продукты и рецепты, цели, вода и комментарии по дням
+  const foodRecipes = await childByClient("food_recipes");
+  const recipeIds = foodRecipes.map((r: any) => r.id);
+  const { data: foodRecipeItems } = recipeIds.length ? await supabase.from("food_recipe_items").select("*").in("recipe_id", recipeIds) : { data: [] as any[] };
+
   return {
-    version: 1, exportedAt: new Date().toISOString(),
+    version: 2, exportedAt: new Date().toISOString(),
+    nutritionLogs: await childByClient("nutrition_logs"), foodProducts: await childByClient("food_products"), foodRecipes, foodRecipeItems,
+    foodEntries: await childByClient("food_entries"), nutritionGoals: await childByClient("nutrition_goals"), nutritionDays: await childByClient("nutrition_days"),
     clients, measurements: await childByClient("client_measurements"), photos: await childByClient("client_photos"),
     payments: await childByClient("client_payments"), promotions: await childByClient("client_promotions"), notes: await childByClient("client_notes"),
     plans, days, exercises, setRows, progressNotes, metrics, sessions, sessionItems,
@@ -56,13 +63,15 @@ export function downloadBackup(data: object) {
 
 // Восстановление — построчная вставка с перегенерацией id и переподвязкой внешних ключей,
 // данные трейнера всегда переписываются на текущего (trainerId), чужие бэкапы импортировать нельзя по ошибке.
-export async function importBackup(trainerId: string, raw: any, onProgress?: (done: number, total: number) => void) {
+export async function importBackup(trainerId: string, raw: any, onProgress?: (done: number, total: number) => void): Promise<{ skippedNutrition: number }> {
   const allItems = [
     ...(raw.clients ?? []), ...(raw.measurements ?? []), ...(raw.photos ?? []), ...(raw.payments ?? []),
     ...(raw.promotions ?? []), ...(raw.notes ?? []), ...(raw.plans ?? []), ...(raw.days ?? []),
     ...(raw.exercises ?? []), ...(raw.setRows ?? []), ...(raw.progressNotes ?? []), ...(raw.metrics ?? []),
     ...(raw.sessions ?? []), ...(raw.sessionItems ?? []), ...(raw.bookings ?? []), ...(raw.bookingClients ?? []),
     ...(raw.packageTemplates ?? []), ...(raw.exerciseLibrary ?? []), ...(raw.planTemplates ?? []), ...(raw.dayTemplates ?? []),
+    ...(raw.foodProducts ?? []), ...(raw.foodRecipes ?? []), ...(raw.foodRecipeItems ?? []), ...(raw.foodEntries ?? []),
+    ...(raw.nutritionGoals ?? []), ...(raw.nutritionDays ?? []),
   ];
   const total = allItems.length;
   let done = 0;
@@ -70,12 +79,18 @@ export async function importBackup(trainerId: string, raw: any, onProgress?: (do
   const idMap: Record<string, string> = {};
   const remap = (id: string) => idMap[id] ?? id;
 
+  // Своя карточка «Я» у тренера одна (уникальный индекс): если она уже есть — данные из
+  // копии переносим в неё, а не создаём вторую (раньше импорт падал на середине).
+  const { data: existingSelf } = await supabase.from("clients").select("id").eq("trainer_id", trainerId).eq("is_self", true).maybeSingle();
+  const selfIds = new Set<string>();
   for (const c of raw.clients ?? []) {
     const { id, trainer_id, auth_user_id, ...rest } = c;
+    if (c.is_self && existingSelf) { idMap[id] = existingSelf.id; selfIds.add(existingSelf.id); tick(); continue; }
     const { data, error } = await supabase.from("clients").insert({ ...rest, trainer_id: trainerId }).select("id").single();
     tick();
     if (error) throw error;
     idMap[id] = data.id;
+    if (c.is_self) selfIds.add(data.id);
   }
   // Remap partnerClientId inside membership JSONB now that all client IDs are known
   for (const c of raw.clients ?? []) {
@@ -196,4 +211,50 @@ export async function importBackup(trainerId: string, raw: any, onProgress?: (do
     await supabase.from("day_templates").insert({ ...rest, trainer_id: trainerId });
     tick();
   }
+
+  // Питание. Дневник подопечного ведёт сам подопечный — тренеру база писать в него не даёт.
+  // Поэтому полностью восстанавливается только своё («Я»), а у подопечных — цели и
+  // комментарии тренера. Остальное остаётся в файле, число пропущенного возвращаем.
+  let skippedNutrition = 0;
+  const own = (clientId: string) => selfIds.has(remap(clientId));
+  for (const p of raw.foodProducts ?? []) {
+    tick();
+    if (!own(p.client_id)) { skippedNutrition++; continue; }
+    const { id, client_id, ...rest } = p;
+    const { data } = await supabase.from("food_products").insert({ ...rest, client_id: remap(client_id) }).select("id").single();
+    if (data) idMap[id] = data.id;
+  }
+  for (const r of raw.foodRecipes ?? []) {
+    tick();
+    if (!own(r.client_id)) { skippedNutrition++; continue; }
+    const { id, client_id, ...rest } = r;
+    const { data } = await supabase.from("food_recipes").insert({ ...rest, client_id: remap(client_id) }).select("id").single();
+    if (data) idMap[id] = data.id;
+  }
+  for (const it of raw.foodRecipeItems ?? []) {
+    tick();
+    if (!idMap[it.recipe_id]) { skippedNutrition++; continue; }
+    const { id, recipe_id, product_id, ...rest } = it;
+    await supabase.from("food_recipe_items").insert({ ...rest, recipe_id: idMap[recipe_id], product_id: product_id ? idMap[product_id] ?? null : null });
+  }
+  for (const e of raw.foodEntries ?? []) {
+    tick();
+    if (!own(e.client_id)) { skippedNutrition++; continue; }
+    const { id, client_id, product_id, recipe_id, ...rest } = e;
+    await supabase.from("food_entries").insert({ ...rest, client_id: remap(client_id), product_id: product_id ? idMap[product_id] ?? null : null, recipe_id: recipe_id ? idMap[recipe_id] ?? null : null });
+  }
+  for (const g of raw.nutritionGoals ?? []) {
+    tick();
+    if (!own(g.client_id) && g.set_by !== "trainer") { skippedNutrition++; continue; }
+    await supabase.from("nutrition_goals").upsert({ ...g, client_id: remap(g.client_id) });
+  }
+  for (const d of raw.nutritionDays ?? []) {
+    tick();
+    if (!own(d.client_id) && !d.trainer_comment) { skippedNutrition++; continue; }
+    // У подопечного вода — его данные: тренер переносит только свой комментарий
+    const row = own(d.client_id) ? { ...d, client_id: remap(d.client_id) } : { client_id: remap(d.client_id), date: d.date, trainer_comment: d.trainer_comment };
+    await supabase.from("nutrition_days").upsert(row);
+  }
+  skippedNutrition += (raw.nutritionLogs ?? []).length;
+  return { skippedNutrition };
 }

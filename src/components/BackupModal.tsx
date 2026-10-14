@@ -24,9 +24,10 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
       try {
         const raw = JSON.parse(String(reader.result));
         setProgress({ done: 0, total: 0 });
-        await importBackup(trainerId, raw, (done, total) => setProgress({ done, total }));
+        const { skippedNutrition } = await importBackup(trainerId, raw, (done, total) => setProgress({ done, total }));
         setProgress(null);
-        alert("Импорт завершён. Обновите страницу, чтобы увидеть новые данные.");
+        alert("Импорт завершён. Обновите страницу, чтобы увидеть новые данные."
+          + (skippedNutrition ? `\n\nЗаписи дневников питания подопечных (${skippedNutrition}) не перенесены: их ведут сами подопечные, тренеру база писать в них не даёт. Они сохранены в файле копии.` : ""));
       } catch (err: any) {
         alert("Не удалось импортировать файл: " + (err?.message || "неверный формат"));
       } finally {
@@ -41,7 +42,7 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
   return (
     <ModalShell title="Резервная копия" icon={<Database size={17} className="text-lime-400" />} onClose={onClose}>
       <div className="p-4 space-y-3 text-sm">
-        <p className="text-zinc-400">Экспорт сохраняет всех подопечных, планы, записи и шаблоны в один JSON-файл.</p>
+        <p className="text-zinc-400">Экспорт сохраняет всех подопечных, планы, записи, шаблоны и питание в один JSON-файл.</p>
         <button onClick={doExport} disabled={busy} className="w-full flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 hover:bg-lime-300 transition disabled:opacity-50"><Download size={16} /> Экспортировать всё</button>
 
         <div className="border-t border-zinc-800 pt-3">
