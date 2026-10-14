@@ -19,7 +19,7 @@ import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
 import { clearSlotDrafts } from "./hooks/useSessionSlot";
-import { finishWorkout } from "./lib/finishWorkout";
+import { finishOrQueue } from "./lib/finishWorkout";
 import { ActiveWorkoutProvider, useActiveWorkout } from "./hooks/useActiveWorkout";
 import { urlToView, viewToUrl, type ViewLike } from "./lib/viewUrl";
 import { useHistoryNav } from "./hooks/useHistoryNav";
@@ -164,7 +164,7 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients }: {
       day={active.day}
       planId={active.planId}
       onFinish={async (metrics, note, session) => {
-        await finishWorkout({
+        await finishOrQueue({
           trainerId, clientId: active.clientId, planId: active.planId,
           day: active.day, metrics, note, session,
         });

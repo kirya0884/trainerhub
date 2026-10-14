@@ -6,7 +6,7 @@ import { parseNum, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
 import { applyLastTime, buildMetrics, lastTimeFor, tonnageOf, type LastTime } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
-import { finishWorkout } from "../lib/finishWorkout";
+import { finishOrQueue } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
 import type { Day, Plan, Session } from "../types";
 import { notify } from "../lib/dialog";
@@ -161,7 +161,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
       const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`;
       // Д3: запись сессии, архивация дня, отметка в календаре и двойной гард
       // списания — всё в одной общей функции, а не копией на каждый экран.
-      const res = await finishWorkout({ trainerId, clientId, planId: plan.id, day, metrics, note, session, membership });
+      const res = await finishOrQueue({ trainerId, clientId, planId: plan.id, day, metrics, note, session, membership });
       setMembership(res.membership);
       setFinished(true);
       onFinished();
