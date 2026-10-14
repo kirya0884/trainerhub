@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { cleanupStorage, readJson, writeJson } from "./lib/storage";
-import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, UserRound, Plus, X, Pin, Search } from "lucide-react";
+import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, UserRound, Plus, X, Pin, Search, Apple, Play, Ruler } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -43,7 +43,7 @@ const TrainerProfile = lazyRetry(() => import("./components/TrainerProfile"));
 const SessionModal = lazyRetry(() => import("./components/SessionModal"));
 const GroupSessionModal = lazyRetry(() => import("./components/GroupSessionModal"));
 
-type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" | "me" } | { kind: "trainerProfile" } | { kind: "me" };
+type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" | "me" } | { kind: "trainerProfile" } | { kind: "me"; meAction?: "food" | "workout" | "measure" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "me" | "trainerProfile";
 const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
   dashboard: { label: "Главная", icon: Home },
@@ -194,8 +194,8 @@ export default function App() {
   // Эффекты дочерних экранов выполняются раньше этого — флаг они успевают получить.
   useEffect(() => {
     const v = view as Record<string, unknown>;
-    if (!v.newForm && !v.newBooking && !v.newBookingClientId && !v.newPlan && !v.openOccurrence) return;
-    const { newForm: _f, newBooking: _b, newBookingClientId: _c, newPlan: _p, openOccurrence: _o, ...rest } = v;
+    if (!v.newForm && !v.newBooking && !v.newBookingClientId && !v.newPlan && !v.openOccurrence && !v.meAction) return;
+    const { newForm: _f, newBooking: _b, newBookingClientId: _c, newPlan: _p, openOccurrence: _o, meAction: _m, ...rest } = v;
     replaceView(rest as View);
   }, [view, replaceView]);
   const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
@@ -504,7 +504,7 @@ export default function App() {
           <ClientProfile trainerId={session.user.id} clientId={view.clientId} initialSub={view.sub} pinned={pinnedIds.includes(view.clientId)} onTogglePinned={() => togglePinned(view.clientId)} onBookClient={(cid) => { logEvent(dataTrainerId, "create", "booking", { from: "client_card" }); go({ kind: "calendar", newBooking: true, newBookingClientId: cid }); }} bookings={bookingsHook.bookings} allPlans={allPlans ?? []} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "open_booking"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} onBack={goBack} onOpenPlan={(planId) => go({ kind: "plan", planId, clientId: view.clientId })} />
         )}
         {view.kind === "me" && (
-          <MeTab trainerId={session.user.id} trainerName={trainerName} onOpenPlan={(planId, clientId) => go({ kind: "plan", planId, clientId, from: "me" })} />
+          <MeTab trainerId={session.user.id} trainerName={trainerName} action={view.meAction} onOpenPlan={(planId, clientId) => go({ kind: "plan", planId, clientId, from: "me" })} />
         )}
         {view.kind === "trainerProfile" && (
           <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.filter((kind) => kind !== "dashboard" && kind !== "trainerProfile").map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onMoveTab={(kind, dir) => moveTab(kind as TabKind, dir)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
@@ -551,6 +551,17 @@ export default function App() {
             </button>
             {showFab && (
               <div className="absolute bottom-full right-0 mb-3 w-60 bg-zinc-900 border border-zinc-800 rounded-2xl p-1.5 shadow-xl">
+                {/* На вкладке «Я» сверху — своё: еда, тренировка, замер */}
+                {view.kind === "me" && (
+                  <>
+                    {([["food", Apple, "Добавить еду"], ["workout", Play, "Начать тренировку"], ["measure", Ruler, "Записать замер"]] as const).map(([a, Icon, label]) => (
+                      <button key={a} onClick={() => { setShowFab(false); go({ kind: "me", meAction: a }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                        <Icon size={16} className="text-lime-400 shrink-0" /> {label}
+                      </button>
+                    ))}
+                    <div className="my-1 border-t border-zinc-800" />
+                  </>
+                )}
                 <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "client"); go({ kind: "clients", newForm: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <Users size={16} className="text-lime-400 shrink-0" /> Новый подопечный
                 </button>

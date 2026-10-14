@@ -16,8 +16,20 @@ const card = "bg-zinc-900 border border-zinc-800 rounded-2xl";
 
 // «Я» — свои тренировки, питание и замеры тренера. Под капотом это обычная карточка
 // подопечного (is_self), поэтому план, проведение, дневник питания и замеры — те же экраны.
-export default function MeTab({ trainerId, trainerName, onOpenPlan }: { trainerId: string; trainerName: string; onOpenPlan: (planId: string, clientId: string) => void }) {
+export default function MeTab({ trainerId, trainerName, action, onOpenPlan }: {
+  trainerId: string; trainerName: string; onOpenPlan: (planId: string, clientId: string) => void;
+  /** Команда из «+»: открыть добавление еды, тренировки или форму замера */
+  action?: "food" | "workout" | "measure";
+}) {
   const [sub, setSub] = useState<Sub>("workouts");
+  // Счётчики — каждое нажатие «+» срабатывает, даже если команда та же, что в прошлый раз
+  const [addFood, setAddFood] = useState(0);
+  const [measureTick, setMeasureTick] = useState(0);
+  useEffect(() => {
+    if (action === "food") { setSub("nutrition"); setAddFood((n) => n + 1); }
+    if (action === "workout") setSub("workouts");
+    if (action === "measure") { setSub("progress"); setMeasureTick((n) => n + 1); }
+  }, [action]);
   const [selfId, setSelfId] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
@@ -35,15 +47,15 @@ export default function MeTab({ trainerId, trainerName, onOpenPlan }: { trainerI
       <h1 className="text-[26px] font-extrabold tracking-tight">Я</h1>
       <div className="flex p-1 rounded-xl bg-zinc-900 border border-zinc-800">
         {SUBS.map(([k, l]) => (
-          <button key={k} onClick={() => setSub(k)} aria-pressed={sub === k}
+          <button key={k} onClick={() => { setSub(k); setAddFood(0); setMeasureTick(0); }} aria-pressed={sub === k}
             className={`flex-1 h-9 rounded-lg text-sm font-semibold transition ${sub === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
         ))}
       </div>
       {error ? <p className="text-sm text-red-400 px-1">{error}</p> : !selfId ? <SkeletonRows rows={3} /> : (
         <>
           {sub === "workouts" && <Workouts trainerId={trainerId} selfId={selfId} name={trainerName} onOpenPlan={(id) => onOpenPlan(id, selfId)} />}
-          {sub === "nutrition" && <NutritionDiary clientId={selfId} measurements={measurements} embedded />}
-          {sub === "progress" && <BodyTab clientId={selfId} measurements={measurements} setMeasurements={setMeasurements} />}
+          {sub === "nutrition" && <NutritionDiary clientId={selfId} measurements={measurements} embedded addRequest={addFood} />}
+          {sub === "progress" && <BodyTab key={measureTick} clientId={selfId} measurements={measurements} setMeasurements={setMeasurements} openForm={measureTick > 0} />}
         </>
       )}
     </div>

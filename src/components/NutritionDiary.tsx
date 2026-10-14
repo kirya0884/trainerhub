@@ -29,10 +29,12 @@ const weekStart = (d: string) => addDays(d, -((new Date(d + "T00:00:00").getDay(
 // Дневник питания: кольца «съедено из цели», приёмы пищи, быстрый ввод.
 // asTrainer — тот же экран в профиле подопечного у тренера: только чтение, неделя цветными
 // днями, своя цель тренера и комментарий к дню (клиент видит его карточкой).
-export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [], asTrainer = false, embedded = false }: {
+export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [], asTrainer = false, embedded = false, addRequest = 0 }: {
   clientId: string; legacyLogs?: NutritionLog[]; measurements?: Measurement[]; asTrainer?: boolean;
   /** Внутри другого раздела (вкладка «Я») — без крупного заголовка */
   embedded?: boolean;
+  /** Растёт — открыть добавление еды на сегодня в приём по времени суток («+» во вкладке «Я») */
+  addRequest?: number;
 }) {
   const [mode, setMode] = useState<"diary" | "report">("diary");
   const [date, setDate] = useState(today());
@@ -46,6 +48,12 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
   const [editing, setEditing] = useState<FoodEntry | null>(null);
   const [showGoals, setShowGoals] = useState(false);
   const [error, setError] = useState("");
+  useEffect(() => {
+    if (!addRequest) return;
+    const h = new Date().getHours();
+    setMode("diary"); setDate(today());
+    setAdding(h < 11 ? "breakfast" : h < 16 ? "lunch" : h < 21 ? "dinner" : "snack");
+  }, [addRequest]);
   const [day, setDay] = useState<NutritionDay>(api.EMPTY_DAY);
   // Для тренера: ккал по дням недели выбранной даты — цветная полоска
   const [week, setWeek] = useState<Map<string, number>>(new Map());
