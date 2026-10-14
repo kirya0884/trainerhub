@@ -172,7 +172,7 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
           <>
             <label className="flex items-center gap-2.5 h-11 px-3.5 rounded-xl bg-zinc-800">
               <Search size={18} className="text-zinc-500 shrink-0" />
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Найти продукт или рецепт" className="flex-1 min-w-0 bg-transparent outline-none" />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Найти продукт или рецепт" className="flex-1 min-w-0 bg-transparent outline-none" />
             </label>
             <div className="flex gap-1.5 overflow-x-auto -mx-4 px-4 pb-0.5">
               {LISTS.map(([k, l]) => (
@@ -231,7 +231,7 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
 
         {base && (
           <>
-            <GramsInput value={grams} onChange={setGrams} autoFocus={!creating} />
+            <GramsInput value={grams} onChange={setGrams} />
             <div className="flex gap-1.5 flex-wrap">
               {pickedRecipe && pickedRecipe.servings > 1
                 ? PORTIONS.map(([k, l]) => { const v = Math.round(portion * k); return <button key={k} onClick={() => setGrams(String(v))} className={chip(Math.round(g) === v)}>{l}</button>; })

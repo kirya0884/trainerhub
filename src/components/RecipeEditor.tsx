@@ -64,7 +64,7 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
   return (
     <ModalShell title={recipe ? "Рецепт" : "Новый рецепт"} icon={<BookOpen size={16} className="text-lime-400" />} onClose={onClose} footer={footer}>
       <div className="p-4 space-y-3">
-        <input autoFocus={!recipe} value={name} onChange={(e) => setName(e.target.value)} placeholder="Название, например «Плов с курицей»"
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название, например «Плов с курицей»"
           className="w-full h-12 px-3.5 rounded-xl bg-zinc-800 outline-none focus:ring-2 focus:ring-lime-400/50 font-semibold" />
 
         <div className="flex items-baseline justify-between px-0.5">
@@ -157,7 +157,7 @@ function IngredientPicker({ clientId, products, onPick, onProductAdded, onBack, 
         <button onClick={creating ? () => setCreating(false) : onBack} className="flex items-center gap-1 -mt-1 text-sm font-semibold text-zinc-400 hover:text-zinc-100 transition"><ChevronLeft size={17} /> Назад</button>
         <label className="flex items-center gap-2.5 h-11 px-3.5 rounded-xl bg-zinc-800">
           {!creating && <Search size={18} className="text-zinc-500 shrink-0" />}
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={creating ? "Название продукта" : "Найти в моих продуктах"} className="flex-1 min-w-0 bg-transparent outline-none" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={creating ? "Название продукта" : "Найти в моих продуктах"} className="flex-1 min-w-0 bg-transparent outline-none" />
         </label>
         {creating ? (
           <>

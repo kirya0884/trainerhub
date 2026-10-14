@@ -4,10 +4,11 @@ import type { Macros } from "../lib/foodDiary";
 // Цвета показателей — как в отчётах (NutritionTab): ккал оранжевый, белки лайм, жиры розовый, углеводы голубой
 export const MACRO_COLOR = { kcal: "#fb923c", protein: "#a3e635", fat: "#f472b6", carbs: "#22d3ee" } as const;
 
-export function GramsInput({ value, onChange, autoFocus = true }: { value: string; onChange: (v: string) => void; autoFocus?: boolean }) {
+// Без автофокуса: клавиатура появляется только по нажатию на поле, а не сразу с окном
+export function GramsInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <label className="flex items-baseline justify-center gap-1 h-14 rounded-xl bg-zinc-800 ring-2 ring-lime-400/60 px-4">
-      <input autoFocus={autoFocus} value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" aria-label="Граммы"
+      <input value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" aria-label="Граммы"
         onFocus={(e) => e.target.select()} className="w-24 bg-transparent text-center text-2xl font-extrabold outline-none self-center" />
       <span className="text-zinc-400 font-semibold">г</span>
     </label>

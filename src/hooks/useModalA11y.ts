@@ -19,6 +19,12 @@ const FOCUSABLE =
 export function useModalA11y(onClose: () => void, label?: string) {
   const ref = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
+  // onClose родители передают новой стрелкой на каждой отрисовке. Раньше эффект зависел
+  // от неё и перезапускался при любой перерисовке родителя (в кабинете клиента — фоновое
+  // обновление раз в 20 с): возвращал фокус «назад» и ставил его на панель — поле ввода
+  // теряло фокус, клавиатура на телефоне закрывалась. Теперь эффект живёт с окном.
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     const me = Symbol("modal");
@@ -34,7 +40,7 @@ export function useModalA11y(onClose: () => void, label?: string) {
       // Не верхний модал — не наше событие
       if (stack[stack.length - 1] !== me) return;
 
-      if (e.key === "Escape") { e.stopPropagation(); onClose(); return; }
+      if (e.key === "Escape") { e.stopPropagation(); onCloseRef.current(); return; }
       if (e.key !== "Tab") return;
 
       const p = ref.current;
@@ -59,7 +65,7 @@ export function useModalA11y(onClose: () => void, label?: string) {
       // Возврат фокуса туда, откуда открыли, — иначе он падает на body
       if (restoreTo && document.contains(restoreTo)) restoreTo.focus({ preventScroll: true });
     };
-  }, [onClose]);
+  }, []);
 
   return {
     titleId,
