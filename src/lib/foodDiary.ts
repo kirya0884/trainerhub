@@ -145,3 +145,71 @@ export async function saveGoal(clientId: string, setBy: "client" | "trainer", g:
   });
   if (error) throw error;
 }
+
+// ── Рецепты ──
+// Состав — сырой вес и КБЖУ на 100 г каждого продукта (снимок). КБЖУ блюда на 100 г считаются
+// по весу готового: при варке вода уходит или впитывается, поэтому сумма сырых весов не годится.
+export interface RecipeItem extends Macros { productId: string | null; name: string; grams: number }
+export interface Recipe { id: string; name: string; cookedWeight: number | null; servings: number; favorite: boolean; lastGrams: number | null; lastUsedAt: string | null; items: RecipeItem[] }
+
+export const recipeTotal = (items: RecipeItem[]) => sum(items.map((i) => scale(i, i.grams)));
+export const recipeRawWeight = (items: RecipeItem[]) => items.reduce((a, i) => a + i.grams, 0);
+/** Вес готового блюда; не указан — сумма сырых весов */
+export const recipeWeight = (r: Pick<Recipe, "cookedWeight" | "items">) => r.cookedWeight || recipeRawWeight(r.items);
+export const recipePer100 = (r: Pick<Recipe, "cookedWeight" | "items">): Macros => {
+  const w = recipeWeight(r);
+  return w > 0 ? scale(recipeTotal(r.items), 10000 / w) : ZERO;
+};
+export const portionWeight = (r: Pick<Recipe, "cookedWeight" | "items" | "servings">) => recipeWeight(r) / Math.max(1, r.servings);
+
+export async function fetchRecipes(clientId: string): Promise<Recipe[]> {
+  const { data, error } = await supabase.from("food_recipes").select("*").eq("client_id", clientId)
+    .order("last_used_at", { ascending: false, nullsFirst: false });
+  if (error) throw error;
+  const ids = (data ?? []).map((r) => r.id);
+  const { data: items, error: e2 } = ids.length
+    ? await supabase.from("food_recipe_items").select("*").in("recipe_id", ids).order("position")
+    : { data: [] as any[], error: null };
+  if (e2) throw e2;
+  return (data ?? []).map((r) => ({
+    id: r.id, name: r.name, cookedWeight: r.cooked_weight == null ? null : Number(r.cooked_weight), servings: r.servings || 1,
+    favorite: !!r.favorite, lastGrams: r.last_grams == null ? null : Number(r.last_grams), lastUsedAt: r.last_used_at,
+    items: (items ?? []).filter((i) => i.recipe_id === r.id).map((i) => ({ productId: i.product_id, name: i.name, grams: Number(i.grams) || 0, ...toMacros(i) })),
+  }));
+}
+
+/** Создание (id нет) или правка: строка рецепта и состав целиком заново */
+export async function saveRecipe(clientId: string, r: Omit<Recipe, "id" | "favorite" | "lastGrams" | "lastUsedAt"> & { id?: string }): Promise<string> {
+  const row = { name: r.name, cooked_weight: r.cookedWeight ? r2(r.cookedWeight) : null, servings: Math.max(1, Math.round(r.servings)) };
+  let id = r.id;
+  if (id) {
+    const { error } = await supabase.from("food_recipes").update(row).eq("id", id);
+    if (error) throw error;
+    const { error: e2 } = await supabase.from("food_recipe_items").delete().eq("recipe_id", id);
+    if (e2) throw e2;
+  } else {
+    const { data, error } = await supabase.from("food_recipes").insert({ client_id: clientId, ...row }).select().single();
+    if (error) throw error;
+    id = data.id as string;
+  }
+  if (r.items.length) {
+    const { error } = await supabase.from("food_recipe_items").insert(r.items.map((i, n) => ({
+      recipe_id: id, product_id: i.productId, name: i.name, grams: r2(i.grams), position: n, ...macrosRow(i),
+    })));
+    if (error) throw error;
+  }
+  return id!;
+}
+
+export async function updateRecipeMeta(id: string, patch: { favorite?: boolean; lastGrams?: number }) {
+  const row: Record<string, unknown> = {};
+  if (patch.favorite !== undefined) row.favorite = patch.favorite;
+  if (patch.lastGrams !== undefined) { row.last_grams = r2(patch.lastGrams); row.last_used_at = new Date().toISOString(); }
+  const { error } = await supabase.from("food_recipes").update(row).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteRecipe(id: string) {
+  const { error } = await supabase.from("food_recipes").delete().eq("id", id);
+  if (error) throw error;
+}

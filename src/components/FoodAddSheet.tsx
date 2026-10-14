@@ -1,27 +1,37 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronLeft, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
+import { BookOpen, Check, ChevronLeft, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
+import RecipeEditor from "./RecipeEditor";
 import * as api from "../lib/foodDiary";
-import type { FoodEntry, FoodProduct, Meal } from "../lib/foodDiary";
+import type { FoodEntry, FoodProduct, Meal, Recipe } from "../lib/foodDiary";
 
 const QUICK_GRAMS = [50, 100, 150, 200];
+const PORTIONS: [number, string][] = [[0.5, "½ порции"], [1, "1 порция"], [1.5, "1½"], [2, "2 порции"]];
 const per100 = (p: api.Macros) => `Б ${api.fmtN(p.protein)} · Ж ${api.fmtN(p.fat)} · У ${api.fmtN(p.carbs)} · ${api.fmtN(p.kcal, 0)} ккал`;
 const str = (n: number) => (n ? String(Math.round(n * 10) / 10).replace(".", ",") : "");
-type List = "recent" | "all" | "fav";
-const LISTS: [List, string][] = [["recent", "Недавние"], ["all", "Все"], ["fav", "Избранное"]];
+type List = "recent" | "all" | "fav" | "recipes";
+const LISTS: [List, string][] = [["recent", "Недавние"], ["all", "Все"], ["fav", "Избранное"], ["recipes", "Рецепты"]];
+// Строка списка: продукт или рецепт (у рецепта КБЖУ на 100 г посчитаны заранее)
+type Item = { kind: "product"; p: FoodProduct } | { kind: "recipe"; r: Recipe; per: api.Macros };
+const itemName = (x: Item) => (x.kind === "product" ? x.p.name : x.r.name);
+const itemFav = (x: Item) => (x.kind === "product" ? x.p.favorite : x.r.favorite);
+const itemUsed = (x: Item) => (x.kind === "product" ? x.p.lastUsedAt : x.r.lastUsedAt) ?? "";
 
-// Добавление в приём пищи: свой продукт из списка (выбрал → граммы) или новый
-// (КБЖУ на 100 г с упаковки → граммы). Новый по умолчанию запоминается в «Мои продукты».
-// Свой продукт можно поправить или удалить — записи в дневнике от этого не меняются.
+// Добавление в приём пищи: свой продукт или рецепт из списка (выбрал → граммы или порции)
+// или новый продукт (КБЖУ на 100 г с упаковки → граммы). Новый по умолчанию запоминается.
+// Свой продукт и рецепт можно поправить или удалить — записи в дневнике от этого не меняются.
 export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }: {
   clientId: string; date: string; meal: Meal; onAdded: (e: FoodEntry) => void; onClose: () => void;
 }) {
   const [products, setProducts] = useState<FoodProduct[] | null>(null);
+  const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [q, setQ] = useState("");
   const [list, setList] = useState<List>("recent");
   const [picked, setPicked] = useState<FoodProduct | null>(null);
+  const [pickedRecipe, setPickedRecipe] = useState<Recipe | null>(null);
+  const [recipeEdit, setRecipeEdit] = useState<Recipe | "new" | null>(null);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false); // правка выбранного продукта
   const [grams, setGrams] = useState("100");
@@ -31,22 +41,30 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
   const [p, setP] = useState(""); const [f, setF] = useState(""); const [c, setC] = useState(""); const [kcal, setKcal] = useState("");
   const [remember, setRemember] = useState(true);
 
+  const loadRecipes = () => api.fetchRecipes(clientId).then((l) => { setRecipes(l); return l; })
+    .catch((e) => { console.error("[FoodAddSheet] рецепты:", e); setRecipes([]); return [] as Recipe[]; });
   useEffect(() => {
     api.fetchProducts(clientId).then(setProducts).catch((e) => { console.error("[FoodAddSheet] продукты:", e); setProducts([]); });
-  }, [clientId]);
+    loadRecipes();
+  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const term = q.trim().toLowerCase();
-  const shown = useMemo(() => {
-    let l = (products ?? []).filter((x) => !term || x.name.toLowerCase().includes(term));
-    if (list === "fav") l = l.filter((x) => x.favorite);
-    if (list === "all") l = [...l].sort((a, b) => a.name.localeCompare(b.name, "ru"));
-    if (list === "recent" && !term) l = l.filter((x) => x.lastUsedAt).slice(0, 30);
+  const shown = useMemo<Item[]>(() => {
+    const ps: Item[] = (products ?? []).map((x) => ({ kind: "product", p: x }));
+    const rs: Item[] = (recipes ?? []).map((r) => ({ kind: "recipe", r, per: api.recipePer100(r) }));
+    let l = list === "recipes" ? rs : [...ps, ...rs];
+    if (term) l = l.filter((x) => itemName(x).toLowerCase().includes(term));
+    if (list === "fav") l = l.filter(itemFav);
+    if (list === "recent") { l = l.filter((x) => term || itemUsed(x)).sort((a, b) => itemUsed(b).localeCompare(itemUsed(a))); if (!term) l = l.slice(0, 30); }
+    else l = [...l].sort((a, b) => itemName(a).localeCompare(itemName(b), "ru"));
     return l;
-  }, [products, term, list]);
+  }, [products, recipes, term, list]);
 
   const autoKcal = api.kcalOf({ protein: api.num(p), fat: api.num(f), carbs: api.num(c) });
   const formPer100: api.Macros = { kcal: kcal.trim() ? api.num(kcal) : autoKcal, protein: api.num(p), fat: api.num(f), carbs: api.num(c) };
-  const base = editing ? null : picked ?? (creating ? formPer100 : null);
+  const recipePer = pickedRecipe ? api.recipePer100(pickedRecipe) : null;
+  const portion = pickedRecipe ? api.portionWeight(pickedRecipe) : 0;
+  const base = editing ? null : recipePer ?? picked ?? (creating ? formPer100 : null);
   const g = api.num(grams);
   const eaten = base ? api.scale(base, g) : api.ZERO;
   const mealLabel = api.MEALS.find((m) => m.key === meal)!.label;
@@ -56,19 +74,26 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
     setPicked((x) => (x && x.id === id ? { ...x, ...patch } : x));
   };
   const pick = (x: FoodProduct) => { setPicked(x); setGrams(String(x.lastGrams ?? 100)); };
+  const pickRecipe = (r: Recipe) => { setPickedRecipe(r); setGrams(str(r.lastGrams ?? api.portionWeight(r)) || "100"); };
   const fillForm = (x: { name: string } & api.Macros) => { setName(x.name); setP(str(x.protein)); setF(str(x.fat)); setC(str(x.carbs)); setKcal(Math.round(api.kcalOf(x)) === Math.round(x.kcal) ? "" : str(x.kcal)); };
   const startNew = () => { setCreating(true); setPicked(null); fillForm({ name: q.trim(), ...api.ZERO }); setGrams("100"); };
   const startEdit = () => { if (picked) { fillForm(picked); setEditing(true); } };
-  const back = () => { if (editing) { setEditing(false); return; } setPicked(null); setCreating(false); };
+  const back = () => { if (editing) { setEditing(false); return; } setPicked(null); setPickedRecipe(null); setCreating(false); };
 
   const run = async (f: () => Promise<void>, msg = "Не удалось сохранить. Проверьте интернет.") => {
     if (busy) return;
     setBusy(true);
     try { await f(); } catch (e) { console.error("[FoodAddSheet]", e); alert(msg); } finally { setBusy(false); }
   };
-  const toggleFav = (x: FoodProduct) => {
-    patchLocal(x.id, { favorite: !x.favorite });
-    api.updateProduct(x.id, { favorite: !x.favorite }).catch((e) => { console.error("[FoodAddSheet] избранное:", e); patchLocal(x.id, { favorite: x.favorite }); });
+  const toggleFav = (x: Item) => {
+    if (x.kind === "product") {
+      patchLocal(x.p.id, { favorite: !x.p.favorite });
+      api.updateProduct(x.p.id, { favorite: !x.p.favorite }).catch((e) => { console.error("[FoodAddSheet] избранное:", e); patchLocal(x.p.id, { favorite: x.p.favorite }); });
+    } else {
+      const flip = (v: boolean) => { setRecipes((l) => (l ?? []).map((r) => (r.id === x.r.id ? { ...r, favorite: v } : r))); setPickedRecipe((r) => (r && r.id === x.r.id ? { ...r, favorite: v } : r)); };
+      flip(!x.r.favorite);
+      api.updateRecipeMeta(x.r.id, { favorite: !x.r.favorite }).catch((e) => { console.error("[FoodAddSheet] избранное:", e); flip(x.r.favorite); });
+    }
   };
   const saveEdit = () => run(async () => {
     if (!picked || !name.trim()) return;
@@ -90,11 +115,24 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
     if (!g || !base || (creating && !name.trim())) return;
     let productId: string | null = picked?.id ?? null;
     if (creating && remember) productId = (await api.addProduct(clientId, { name: name.trim(), ...formPer100 })).id;
-    const entry = await api.addEntry(clientId, { date, meal, productId, recipeId: null, name: picked?.name ?? name.trim(), grams: g, ...eaten });
+    const entry = await api.addEntry(clientId, {
+      date, meal, productId, recipeId: pickedRecipe?.id ?? null,
+      name: pickedRecipe?.name ?? picked?.name ?? name.trim(), grams: g, ...eaten,
+    });
     if (productId) api.touchProduct(productId, g).catch((e) => console.error("[FoodAddSheet] touch:", e));
+    if (pickedRecipe) api.updateRecipeMeta(pickedRecipe.id, { lastGrams: g }).catch((e) => console.error("[FoodAddSheet] touch:", e));
     onAdded(entry);
     onClose();
   }, "Не удалось добавить. Проверьте интернет и попробуйте ещё раз.");
+
+  if (recipeEdit) {
+    return (
+      <RecipeEditor clientId={clientId} recipe={recipeEdit === "new" ? null : recipeEdit} products={products ?? []}
+        onProductAdded={(x) => setProducts((l) => [x, ...(l ?? [])])} onClose={onClose}
+        onSaved={async (id) => { const l = await loadRecipes(); setRecipeEdit(null); const r = l.find((x) => x.id === id); if (r) pickRecipe(r); }}
+        onDeleted={async () => { await loadRecipes(); setRecipeEdit(null); setPickedRecipe(null); }} />
+    );
+  }
 
   const footer = editing ? (
     <div className="p-4 border-t border-zinc-800 shrink-0 space-y-2">
@@ -110,53 +148,59 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
     </div>
   );
 
-  const title = editing ? "Изменить продукт" : creating ? "Новый продукт" : picked ? picked.name : mealLabel;
+  const current = pickedRecipe ? { kind: "recipe" as const, r: pickedRecipe, per: recipePer! } : picked ? { kind: "product" as const, p: picked } : null;
+  const title = editing ? "Изменить продукт" : creating ? "Новый продукт" : current ? itemName(current) : mealLabel;
+  const chip = (on: boolean) => `h-9 px-3 rounded-full text-[13px] font-semibold transition ${on ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`;
   return (
     <ModalShell title={title} onClose={onClose} footer={footer}>
       <div className="p-4 space-y-3">
-        {(picked || creating) && (
+        {(current || creating) && (
           <div className="flex items-center justify-between -mt-1">
             <button onClick={back} className="flex items-center gap-1 text-sm font-semibold text-zinc-400 hover:text-zinc-100 transition"><ChevronLeft size={17} /> {editing ? "Назад" : "К списку"}</button>
-            {picked && !editing && (
+            {current && !editing && (
               <div className="flex gap-1">
-                <button onClick={() => toggleFav(picked)} aria-pressed={picked.favorite} aria-label={picked.favorite ? "Убрать из избранного" : "В избранное"}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition"><Star size={18} className={picked.favorite ? "text-amber-400 fill-amber-400" : "text-zinc-500"} /></button>
-                <button onClick={startEdit} aria-label="Изменить продукт" className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition"><Pencil size={17} /></button>
+                <button onClick={() => toggleFav(current)} aria-pressed={itemFav(current)} aria-label={itemFav(current) ? "Убрать из избранного" : "В избранное"}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition"><Star size={18} className={itemFav(current) ? "text-amber-400 fill-amber-400" : "text-zinc-500"} /></button>
+                <button onClick={() => (pickedRecipe ? setRecipeEdit(pickedRecipe) : startEdit())} aria-label={pickedRecipe ? "Открыть рецепт" : "Изменить продукт"}
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition"><Pencil size={17} /></button>
               </div>
             )}
           </div>
         )}
 
-        {!picked && !creating && (
+        {!current && !creating && (
           <>
             <label className="flex items-center gap-2.5 h-11 px-3.5 rounded-xl bg-zinc-800">
               <Search size={18} className="text-zinc-500 shrink-0" />
-              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Найти в моих продуктах" className="flex-1 min-w-0 bg-transparent outline-none" />
+              <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Найти продукт или рецепт" className="flex-1 min-w-0 bg-transparent outline-none" />
             </label>
-            <div className="flex gap-1.5">
+            <div className="flex gap-1.5 overflow-x-auto -mx-4 px-4 pb-0.5">
               {LISTS.map(([k, l]) => (
-                <button key={k} onClick={() => setList(k)} aria-pressed={list === k}
-                  className={`h-9 px-3.5 rounded-full text-[13px] font-semibold transition ${list === k ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`}>{l}</button>
+                <button key={k} onClick={() => setList(k)} aria-pressed={list === k} className={`${chip(list === k)} shrink-0 !px-3.5`}>{l}</button>
               ))}
             </div>
-            <button onClick={startNew} className="w-full flex items-center gap-2 h-10 px-1 text-sm font-semibold text-lime-400">
-              <Plus size={18} /> {term ? `Новый продукт «${q.trim()}»` : "Новый продукт"}
-            </button>
-            {products === null ? <SkeletonRows rows={3} /> : shown.length === 0 ? (
+            {list === "recipes"
+              ? <button onClick={() => setRecipeEdit("new")} className="w-full flex items-center gap-2 h-10 px-1 text-sm font-semibold text-lime-400"><Plus size={18} /> Новый рецепт</button>
+              : <button onClick={startNew} className="w-full flex items-center gap-2 h-10 px-1 text-sm font-semibold text-lime-400"><Plus size={18} /> {term ? `Новый продукт «${q.trim()}»` : "Новый продукт"}</button>}
+            {products === null || recipes === null ? <SkeletonRows rows={3} /> : shown.length === 0 ? (
               <p className="text-sm text-zinc-500 px-1">
-                {!products.length ? "Здесь появятся продукты, которые вы добавите. Начните с «Новый продукт» — КБЖУ на 100 г есть на упаковке."
-                  : list === "fav" && !term ? "В избранном пусто — отметьте продукт звёздочкой." : "Ничего не нашлось"}
+                {list === "recipes" && !recipes.length ? "Рецептов пока нет. Соберите блюдо из своих продуктов — КБЖУ посчитаются по весу готового."
+                  : !products.length && !recipes.length ? "Здесь появятся продукты, которые вы добавите. Начните с «Новый продукт» — КБЖУ на 100 г есть на упаковке."
+                  : list === "fav" && !term ? "В избранном пусто — отметьте продукт или рецепт звёздочкой."
+                  : list === "recent" && !term ? "Недавних пока нет — откройте «Все»." : "Ничего не нашлось"}
               </p>
             ) : (
               <div className="divide-y divide-zinc-800">
                 {shown.map((x) => (
-                  <div key={x.id} className="flex items-center">
-                    <button onClick={() => pick(x)} className="flex-1 min-w-0 text-left py-2.5 px-1 hover:bg-zinc-800/50 rounded-lg transition">
-                      <span className="block font-semibold truncate">{x.name}</span>
-                      <span className="block text-[13px] text-zinc-500">на 100 г: {per100(x)}</span>
+                  <div key={x.kind + (x.kind === "product" ? x.p.id : x.r.id)} className="flex items-center">
+                    <button onClick={() => (x.kind === "product" ? pick(x.p) : pickRecipe(x.r))} className="flex-1 min-w-0 text-left py-2.5 px-1 hover:bg-zinc-800/50 rounded-lg transition">
+                      <span className="flex items-center gap-1.5 font-semibold min-w-0">{x.kind === "recipe" && <BookOpen size={15} className="text-zinc-500 shrink-0" />}<span className="truncate">{itemName(x)}</span></span>
+                      <span className="block text-[13px] text-zinc-500 truncate">
+                        {x.kind === "product" ? `на 100 г: ${per100(x.p)}` : `рецепт · на 100 г ${api.fmtN(x.per.kcal, 0)} ккал${x.r.servings > 1 ? ` · порция ${api.fmtN(api.portionWeight(x.r), 0)} г` : ""}`}
+                      </span>
                     </button>
-                    <button onClick={() => toggleFav(x)} aria-pressed={x.favorite} aria-label={x.favorite ? `Убрать «${x.name}» из избранного` : `«${x.name}» в избранное`}
-                      className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition"><Star size={18} className={x.favorite ? "text-amber-400 fill-amber-400" : "text-zinc-600"} /></button>
+                    <button onClick={() => toggleFav(x)} aria-pressed={itemFav(x)} aria-label={itemFav(x) ? `Убрать «${itemName(x)}» из избранного` : `«${itemName(x)}» в избранное`}
+                      className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition"><Star size={18} className={itemFav(x) ? "text-amber-400 fill-amber-400" : "text-zinc-600"} /></button>
                   </div>
                 ))}
               </div>
@@ -165,6 +209,9 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
         )}
 
         {picked && !editing && <p className="text-[13px] text-zinc-400">На 100 г: {per100(picked)}</p>}
+        {pickedRecipe && recipePer && (
+          <p className="text-[13px] text-zinc-400">Рецепт · на 100 г: {per100(recipePer)}{pickedRecipe.servings > 1 ? ` · порция ${api.fmtN(portion, 0)} г` : ""}</p>
+        )}
 
         {(creating || editing) && (
           <>
@@ -186,12 +233,14 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
           <>
             <GramsInput value={grams} onChange={setGrams} autoFocus={!creating} />
             <div className="flex gap-1.5 flex-wrap">
-              {QUICK_GRAMS.map((n) => (
-                <button key={n} onClick={() => setGrams(String(n))} className={`h-9 px-3 rounded-full text-[13px] font-semibold transition ${g === n ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`}>{n} г</button>
-              ))}
-              {picked?.lastGrams && !QUICK_GRAMS.includes(picked.lastGrams) && (
-                <button onClick={() => setGrams(String(picked.lastGrams))} className={`h-9 px-3 rounded-full text-[13px] font-semibold transition ${g === picked.lastGrams ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`}>как в прошлый раз · {api.fmtN(picked.lastGrams, 0)} г</button>
-              )}
+              {pickedRecipe && pickedRecipe.servings > 1
+                ? PORTIONS.map(([k, l]) => { const v = Math.round(portion * k); return <button key={k} onClick={() => setGrams(String(v))} className={chip(Math.round(g) === v)}>{l}</button>; })
+                : QUICK_GRAMS.map((n) => <button key={n} onClick={() => setGrams(String(n))} className={chip(g === n)}>{n} г</button>)}
+              {(() => {
+                const last = picked?.lastGrams ?? pickedRecipe?.lastGrams;
+                return last && !QUICK_GRAMS.includes(last) && !(pickedRecipe && PORTIONS.some(([k]) => Math.round(portion * k) === Math.round(last)))
+                  ? <button onClick={() => setGrams(str(last))} className={chip(g === last)}>как в прошлый раз · {api.fmtN(last, 0)} г</button> : null;
+              })()}
             </div>
             <MacroTiles m={eaten} />
             {creating && (
