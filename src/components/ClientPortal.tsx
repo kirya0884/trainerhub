@@ -486,7 +486,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
       )}
 
       {/* ── ПИТАНИЕ: дневник по приёмам пищи; старые итоги дня видны как «Запись за день» ── */}
-      {tab === "nutrition" && <NutritionDiary clientId={client.id} legacyLogs={nutritionLogs} />}
+      {tab === "nutrition" && <NutritionDiary clientId={client.id} legacyLogs={nutritionLogs} measurements={measurements} />}
 
       {/* ── ОТЧЁТНОСТЬ ── */}
       {tab === "reporting" && (

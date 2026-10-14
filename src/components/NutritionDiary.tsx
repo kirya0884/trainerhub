@@ -4,6 +4,8 @@ import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import FoodAddSheet from "./FoodAddSheet";
 import FoodCopySheet from "./FoodCopySheet";
+import NutritionReport from "./NutritionReport";
+import type { Measurement } from "../lib/clients";
 import NutritionGoalsSheet from "./NutritionGoalsSheet";
 import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
@@ -21,7 +23,8 @@ const dayTitle = (d: string) => {
 };
 
 // Дневник питания клиента: кольца «съедено из цели», приёмы пищи, быстрый ввод.
-export default function NutritionDiary({ clientId, legacyLogs = [] }: { clientId: string; legacyLogs?: NutritionLog[] }) {
+export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [] }: { clientId: string; legacyLogs?: NutritionLog[]; measurements?: Measurement[] }) {
+  const [mode, setMode] = useState<"diary" | "report">("diary");
   const [date, setDate] = useState(today());
   const [entries, setEntries] = useState<FoodEntry[] | null>(null);
   // Предыдущий день — для «Как вчера» у пустого приёма
@@ -63,6 +66,16 @@ export default function NutritionDiary({ clientId, legacyLogs = [] }: { clientId
         <button onClick={() => setShowGoals(true)} aria-label="Цели питания" className="w-11 h-11 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 transition"><Target size={22} /></button>
       </div>
 
+      <div className="flex p-1 rounded-xl bg-zinc-900 border border-zinc-800">
+        {([["diary", "Дневник"], ["report", "Отчёты"]] as const).map(([k, l]) => (
+          <button key={k} onClick={() => setMode(k)} aria-pressed={mode === k}
+            className={`flex-1 h-9 rounded-lg text-sm font-semibold transition ${mode === k ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
+        ))}
+      </div>
+
+      {mode === "report" ? (
+        <NutritionReport clientId={clientId} goal={goal} legacyLogs={legacyLogs} measurements={measurements} onOpenDay={(d) => { setDate(d); setMode("diary"); }} />
+      ) : (<>
       <div className="flex items-center justify-between h-11 px-1 rounded-xl bg-zinc-900 border border-zinc-800">
         <button onClick={() => setDate(addDays(date, -1))} aria-label="Предыдущий день" className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 transition"><ChevronLeft size={20} /></button>
         <button onClick={() => setDate(today())} className="font-bold text-[15px]">{dayTitle(date)}</button>
@@ -118,6 +131,8 @@ export default function NutritionDiary({ clientId, legacyLogs = [] }: { clientId
       {entries && entries.length > 0 && (
         <button onClick={() => setCopying({ list: entries })} className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-zinc-900 border border-zinc-800 text-sm font-semibold text-zinc-300 hover:text-zinc-100 transition"><Copy size={16} /> Скопировать весь день</button>
       )}
+
+      </>)}
 
       {copying && (
         <FoodCopySheet list={copying.list} meal={copying.meal} from={date} onClose={() => setCopying(null)}
