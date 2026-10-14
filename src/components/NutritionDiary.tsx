@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, ChevronLeft, ChevronRight, Copy, MessageSquare, Moon, MoreHorizontal, Plus, RotateCcw, Sun, Sunrise, Target, Cookie, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, GlassWater, MessageSquare, Minus, Moon, MoreHorizontal, Plus, RotateCcw, Sun, Sunrise, Target, Cookie, Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import FoodAddSheet from "./FoodAddSheet";
@@ -14,6 +14,7 @@ import type { NutritionLog } from "../lib/nutrition";
 import { addDays, today } from "../lib/format";
 
 const OVER = "#f2555a";
+const WATER = "#5ac8fa";
 const MEAL_ICON: Record<Meal, typeof Sun> = { breakfast: Sunrise, lunch: Sun, dinner: Moon, snack: Cookie };
 
 const dayTitle = (d: string) => {
@@ -112,6 +113,12 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       </div>
 
       <SummaryCard eaten={eaten} goal={goal} onSetGoal={() => setShowGoals(true)} />
+      <WaterCard cups={day.waterCups} goal={api.activeWater(goals)} readOnly={asTrainer} onChange={async (n) => {
+        const was = day.waterCups;
+        setDay((d) => ({ ...d, waterCups: n }));
+        try { await api.setWater(clientId, date, n); }
+        catch (e) { console.error("[NutritionDiary] вода:", e); setDay((d) => ({ ...d, waterCups: was })); alert("Не удалось сохранить воду. Проверьте интернет."); }
+      }} />
 
       {asTrainer
         ? <CommentBox key={date} clientId={clientId} date={date} initial={day.trainerComment} onSaved={(t) => setDay((d) => ({ ...d, trainerComment: t }))} />
@@ -189,7 +196,31 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
           onSaved={(e) => { setEntries((l) => (l ?? []).map((x) => (x.id === e.id ? e : x))); setEditing(null); }}
           onDeleted={(id) => { setEntries((l) => (l ?? []).filter((x) => x.id !== id)); setEditing(null); }} />
       )}
-      {showGoals && <NutritionGoalsSheet clientId={clientId} goals={goals} asTrainer={asTrainer} onSaved={setGoals} onClose={() => setShowGoals(false)} />}
+      {showGoals && <NutritionGoalsSheet clientId={clientId} goals={goals} asTrainer={asTrainer} measurements={measurements} onSaved={setGoals} onClose={() => setShowGoals(false)} />}
+    </div>
+  );
+}
+
+// Вода стаканами по 250 мл: нажатие на стакан ставит столько, повторное на последний — минус один
+function WaterCard({ cups, goal, readOnly, onChange }: { cups: number; goal: number; readOnly: boolean; onChange: (n: number) => void }) {
+  const n = Math.max(goal, cups);
+  const btn = "w-9 h-9 shrink-0 flex items-center justify-center rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition disabled:opacity-30";
+  return (
+    <div className="flex items-center gap-2.5 bg-zinc-900 border border-zinc-800 rounded-2xl px-3.5 py-3">
+      <GlassWater size={20} className="shrink-0" style={{ color: WATER }} />
+      <div className="flex gap-1 flex-1 min-w-0" role="group" aria-label="Вода">
+        {Array.from({ length: n }, (_, i) => (
+          <button key={i} onClick={() => onChange(cups === i + 1 ? i : i + 1)} disabled={readOnly} aria-label={`${i + 1} стакан`}
+            className="flex-1 h-6 rounded-md transition" style={{ background: i < cups ? WATER : "rgb(39 39 42)" }} />
+        ))}
+      </div>
+      <span className="text-sm font-bold shrink-0 tabular-nums">{cups}/{goal}</span>
+      {!readOnly && (
+        <>
+          <button onClick={() => onChange(cups - 1)} disabled={cups <= 0} aria-label="Минус стакан" className={btn}><Minus size={17} /></button>
+          <button onClick={() => onChange(cups + 1)} aria-label="Плюс стакан" className={btn}><Plus size={17} /></button>
+        </>
+      )}
     </div>
   );
 }

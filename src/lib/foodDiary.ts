@@ -235,3 +235,32 @@ export async function saveTrainerComment(clientId: string, date: string, text: s
   const { error } = await supabase.from("nutrition_days").upsert({ client_id: clientId, date, trainer_comment: text.trim() || null });
   if (error) throw error;
 }
+
+/** Клиент отмечает стаканы воды (тренеру менять не даёт триггер) */
+export async function setWater(clientId: string, date: string, cups: number) {
+  const { error } = await supabase.from("nutrition_days").upsert({ client_id: clientId, date, water_cups: Math.max(0, Math.round(cups)) });
+  if (error) throw error;
+}
+export const WATER_DEFAULT = 8;
+/** Цель по воде: тренерская, своя, иначе 8 стаканов по 250 мл */
+export const activeWater = (g: Goals) => g.trainer?.waterCups || g.client?.waterCups || WATER_DEFAULT;
+
+// ── Калькулятор цели: Миффлин — Сан-Жеор ──
+export type Sex = "f" | "m";
+export type Activity = "low" | "light" | "mid" | "high";
+export type Aim = "lose" | "keep" | "gain";
+export const ACTIVITY: [Activity, string, number][] = [["low", "Низкая", 1.2], ["light", "1–2 тренировки", 1.375], ["mid", "3–4 тренировки", 1.55], ["high", "5+ тренировок", 1.725]];
+export const AIMS: [Aim, string][] = [["lose", "Похудение"], ["keep", "Поддержание"], ["gain", "Набор"]];
+/**
+ * Обмен по Миффлину — Сан-Жеору × активность; похудение −15%, набор +10%.
+ * Белок от веса (2 / 1,6 / 1,8 г на кг), жиры 0,9 г на кг, углеводы — остаток калорий.
+ */
+export function calcGoal(p: { sex: Sex; weight: number; height: number; age: number; activity: Activity; aim: Aim }): Macros {
+  const bmr = 10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "m" ? 5 : -161);
+  const tdee = bmr * ACTIVITY.find((a) => a[0] === p.activity)![2];
+  const kcal = Math.round((tdee * { lose: 0.85, keep: 1, gain: 1.1 }[p.aim]) / 10) * 10;
+  const protein = Math.round(p.weight * { lose: 2, keep: 1.6, gain: 1.8 }[p.aim]);
+  const fat = Math.round(p.weight * 0.9);
+  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
+  return { kcal, protein, fat, carbs };
+}
