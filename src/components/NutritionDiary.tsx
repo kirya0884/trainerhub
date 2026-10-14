@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Copy, Moon, MoreHorizontal, Plus, RotateCcw, Sun, Sunrise, Target, Cookie, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, Copy, MessageSquare, Moon, MoreHorizontal, Plus, RotateCcw, Sun, Sunrise, Target, Cookie, Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import FoodAddSheet from "./FoodAddSheet";
@@ -9,7 +9,7 @@ import type { Measurement } from "../lib/clients";
 import NutritionGoalsSheet from "./NutritionGoalsSheet";
 import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
-import type { FoodEntry, Goals, Macros, Meal } from "../lib/foodDiary";
+import type { FoodEntry, Goals, Macros, Meal, NutritionDay } from "../lib/foodDiary";
 import type { NutritionLog } from "../lib/nutrition";
 import { addDays, today } from "../lib/format";
 
@@ -22,8 +22,14 @@ const dayTitle = (d: string) => {
   return d === t ? `Сегодня, ${s}` : d === addDays(t, -1) ? `Вчера, ${s}` : d === addDays(t, 1) ? `Завтра, ${s}` : s;
 };
 
-// Дневник питания клиента: кольца «съедено из цели», приёмы пищи, быстрый ввод.
-export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [] }: { clientId: string; legacyLogs?: NutritionLog[]; measurements?: Measurement[] }) {
+const weekStart = (d: string) => addDays(d, -((new Date(d + "T00:00:00").getDay() + 6) % 7));
+
+// Дневник питания: кольца «съедено из цели», приёмы пищи, быстрый ввод.
+// asTrainer — тот же экран в профиле подопечного у тренера: только чтение, неделя цветными
+// днями, своя цель тренера и комментарий к дню (клиент видит его карточкой).
+export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [], asTrainer = false }: {
+  clientId: string; legacyLogs?: NutritionLog[]; measurements?: Measurement[]; asTrainer?: boolean;
+}) {
   const [mode, setMode] = useState<"diary" | "report">("diary");
   const [date, setDate] = useState(today());
   const [entries, setEntries] = useState<FoodEntry[] | null>(null);
@@ -36,6 +42,28 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
   const [editing, setEditing] = useState<FoodEntry | null>(null);
   const [showGoals, setShowGoals] = useState(false);
   const [error, setError] = useState("");
+  const [day, setDay] = useState<NutritionDay>(api.EMPTY_DAY);
+  // Для тренера: ккал по дням недели выбранной даты — цветная полоска
+  const [week, setWeek] = useState<Map<string, number>>(new Map());
+  const wk = weekStart(date);
+  useEffect(() => {
+    let alive = true;
+    setDay(api.EMPTY_DAY);
+    api.fetchDay(clientId, date).then((d) => { if (alive) setDay(d); }).catch((e) => console.error("[NutritionDiary] день:", e));
+    return () => { alive = false; };
+  }, [clientId, date]);
+  useEffect(() => {
+    if (!asTrainer) return;
+    let alive = true;
+    api.fetchEntries(clientId, wk, addDays(wk, 6)).then((l) => {
+      if (!alive) return;
+      const m = new Map<string, number>();
+      for (const e of l) m.set(e.date, (m.get(e.date) ?? 0) + e.kcal);
+      for (const x of legacyLogs) if (!m.has(x.date) && x.date >= wk && x.date <= addDays(wk, 6)) m.set(x.date, x.calories);
+      setWeek(m);
+    }).catch((e) => console.error("[NutritionDiary] неделя:", e));
+    return () => { alive = false; };
+  }, [clientId, wk, asTrainer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { api.fetchGoals(clientId).then(setGoals).catch((e) => console.error("[NutritionDiary] цели:", e)); }, [clientId]);
   useEffect(() => {
@@ -62,7 +90,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-[26px] font-extrabold tracking-tight">Питание</h1>
+        {asTrainer ? <p className="text-[17px] font-bold">Дневник питания</p> : <h1 className="text-[26px] font-extrabold tracking-tight">Питание</h1>}
         <button onClick={() => setShowGoals(true)} aria-label="Цели питания" className="w-11 h-11 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 transition"><Target size={22} /></button>
       </div>
 
@@ -76,6 +104,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       {mode === "report" ? (
         <NutritionReport clientId={clientId} goal={goal} legacyLogs={legacyLogs} measurements={measurements} onOpenDay={(d) => { setDate(d); setMode("diary"); }} />
       ) : (<>
+      {asTrainer && <WeekStrip start={wk} kcal={week} goal={goal?.kcal ?? 0} sel={date} onPick={setDate} />}
       <div className="flex items-center justify-between h-11 px-1 rounded-xl bg-zinc-900 border border-zinc-800">
         <button onClick={() => setDate(addDays(date, -1))} aria-label="Предыдущий день" className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 transition"><ChevronLeft size={20} /></button>
         <button onClick={() => setDate(today())} className="font-bold text-[15px]">{dayTitle(date)}</button>
@@ -83,6 +112,15 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       </div>
 
       <SummaryCard eaten={eaten} goal={goal} onSetGoal={() => setShowGoals(true)} />
+
+      {asTrainer
+        ? <CommentBox key={date} clientId={clientId} date={date} initial={day.trainerComment} onSaved={(t) => setDay((d) => ({ ...d, trainerComment: t }))} />
+        : day.trainerComment && (
+          <div className="flex gap-2.5 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3" style={{ boxShadow: "inset 3px 0 0 var(--accent)" }}>
+            <MessageSquare size={18} className="text-lime-400 shrink-0 mt-0.5" />
+            <p className="text-sm leading-snug whitespace-pre-wrap"><b>Тренер:</b> <span className="text-zinc-300">{day.trainerComment}</span></p>
+          </div>
+        )}
 
       {error && <p className="text-sm text-red-400 px-1">{error}</p>}
       {legacy && (
@@ -103,12 +141,12 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
               <Icon size={19} style={{ color: list.length ? MACRO_COLOR.kcal : undefined }} className={list.length ? "" : "text-zinc-500"} />
               <span className={`font-bold ${list.length ? "" : "text-zinc-400"}`}>{label}</span>
               <span className="ml-auto text-sm font-bold text-zinc-400">{list.length ? `${api.fmtN(total.kcal, 0)} ккал` : "—"}</span>
-              {list.length > 0 && (
+              {list.length > 0 && !asTrainer && (
                 <button onClick={() => setCopying({ list, meal: key })} aria-label={`Скопировать «${label}»`} className="w-8 h-8 -mr-2 flex items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-800 hover:text-zinc-100 transition"><MoreHorizontal size={18} /></button>
               )}
             </div>
             {list.map((e) => (
-              <button key={e.id} onClick={() => setEditing(e)} className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-zinc-800 text-left hover:bg-zinc-800/50 transition">
+              <button key={e.id} onClick={() => setEditing(e)} disabled={asTrainer} className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-zinc-800 text-left enabled:hover:bg-zinc-800/50 transition">
                 <span className="flex-1 min-w-0">
                   <span className="block font-semibold truncate">{e.name}</span>
                   <span className="block text-[13px] text-zinc-500">{api.fmtN(e.grams, 0)} г · Б {api.fmtN(e.protein)} · Ж {api.fmtN(e.fat)} · У {api.fmtN(e.carbs)}</span>
@@ -116,19 +154,19 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
                 <span className="text-sm font-bold shrink-0">{api.fmtN(e.kcal, 0)}</span>
               </button>
             ))}
-            <div className="flex border-t border-zinc-800">
+            {!asTrainer && <div className="flex border-t border-zinc-800">
               <button onClick={() => setAdding(key)} className="flex-1 flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-lime-400 hover:bg-zinc-800/50 transition"><Plus size={17} /> Добавить</button>
               {prevList.length > 0 && (
                 <button onClick={() => repeatPrev(key)} disabled={busy} className="flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-zinc-300 hover:bg-zinc-800/50 transition disabled:opacity-40">
                   <RotateCcw size={15} /> {prevLabel} · {api.fmtN(api.sum(prevList).kcal, 0)} ккал
                 </button>
               )}
-            </div>
+            </div>}
           </div>
         );
       })}
 
-      {entries && entries.length > 0 && (
+      {entries && entries.length > 0 && !asTrainer && (
         <button onClick={() => setCopying({ list: entries })} className="w-full h-11 flex items-center justify-center gap-2 rounded-xl bg-zinc-900 border border-zinc-800 text-sm font-semibold text-zinc-300 hover:text-zinc-100 transition"><Copy size={16} /> Скопировать весь день</button>
       )}
 
@@ -151,7 +189,62 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
           onSaved={(e) => { setEntries((l) => (l ?? []).map((x) => (x.id === e.id ? e : x))); setEditing(null); }}
           onDeleted={(id) => { setEntries((l) => (l ?? []).filter((x) => x.id !== id)); setEditing(null); }} />
       )}
-      {showGoals && <NutritionGoalsSheet clientId={clientId} goals={goals} onSaved={setGoals} onClose={() => setShowGoals(false)} />}
+      {showGoals && <NutritionGoalsSheet clientId={clientId} goals={goals} asTrainer={asTrainer} onSaved={setGoals} onClose={() => setShowGoals(false)} />}
+    </div>
+  );
+}
+
+// Неделя цветными днями (для тренера): зелёный — ±10% от цели, жёлтый — недобор, красный — перебор
+function WeekStrip({ start, kcal, goal, sel, onPick }: { start: string; kcal: Map<string, number>; goal: number; sel: string; onPick: (d: string) => void }) {
+  const t = today();
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const logged = days.filter((d) => kcal.has(d) && d !== t);
+  const norm = logged.filter((d) => goal > 0 && Math.abs(kcal.get(d)! - goal) <= goal * 0.1).length;
+  const color = (d: string) => {
+    const v = kcal.get(d);
+    if (v == null) return "rgb(39 39 42)";
+    if (!goal || d === t) return MACRO_COLOR.kcal;
+    return Math.abs(v - goal) <= goal * 0.1 ? "#a3e635" : v > goal ? OVER : "#f5a524";
+  };
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
+      <div className="flex justify-between items-baseline"><b>Неделя</b>{goal > 0 && logged.length > 0 && <span className="text-[13px] text-zinc-400">в норме {norm} из {logged.length}</span>}</div>
+      <div className="grid grid-cols-7 gap-1.5 mt-2.5">
+        {days.map((d, i) => (
+          <button key={d} onClick={() => d <= t && onPick(d)} disabled={d > t} aria-pressed={d === sel} aria-label={new Date(d + "T00:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}
+            className="flex flex-col items-center gap-1 disabled:opacity-40">
+            <i className={`block w-full h-7 rounded-lg ${d === sel ? "ring-2 ring-zinc-100" : ""}`} style={{ background: color(d) }} />
+            <span className={`text-[12px] ${d === sel ? "text-zinc-100 font-bold" : "text-zinc-500"}`}>{["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"][i]}</span>
+          </button>
+        ))}
+      </div>
+      {goal > 0 && <p className="text-[12px] text-zinc-500 mt-2">Зелёный — ±10% от цели, жёлтый — недобор, красный — перебор.</p>}
+    </div>
+  );
+}
+
+// Комментарий тренера к дню — клиент видит его на экране дня
+function CommentBox({ clientId, date, initial, onSaved }: { clientId: string; date: string; initial: string; onSaved: (t: string) => void }) {
+  const [text, setText] = useState(initial);
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { setText(initial); }, [initial]);
+  const save = async () => {
+    if (busy) return;
+    setBusy(true);
+    try { await api.saveTrainerComment(clientId, date, text); onSaved(text.trim()); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+    catch (e) { console.error("[CommentBox]", e); alert("Не удалось сохранить комментарий."); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
+      <p className="font-bold mb-2 flex items-center gap-1.5"><MessageSquare size={16} className="text-lime-400" /> Комментарий к дню</p>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={2} placeholder="Например: мало белка на ужин — добавь творог"
+        className="w-full bg-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-lime-400/50 resize-none" />
+      <button onClick={save} disabled={busy || text.trim() === initial.trim()}
+        className="mt-2 w-full h-10 flex items-center justify-center gap-1.5 rounded-xl bg-lime-400 text-zinc-950 text-sm font-bold hover:bg-lime-300 transition disabled:opacity-40">
+        {saved ? <><Check size={16} /> Сохранено — клиент увидит</> : busy ? "Сохраняю…" : "Сохранить"}
+      </button>
     </div>
   );
 }

@@ -3,16 +3,19 @@ import { Target, UserCheck } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
-import type { Goals } from "../lib/foodDiary";
+import type { Goals, NutritionGoal } from "../lib/foodDiary";
 import { fmtDate } from "../lib/format";
 
 const str = (n: number | undefined) => (n ? String(Math.round(n)) : "");
 
-// Цели КБЖУ. Задают оба; если цель есть у тренера — действует она, своя ждёт в запасе.
-export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose }: {
-  clientId: string; goals: Goals; onSaved: (g: Goals) => void; onClose: () => void;
+// Цели КБЖУ. Задают оба; если цель есть у тренера — действует она, своя у клиента ждёт в запасе.
+// asTrainer — окно открыл тренер: правит свою цель, видит цель клиента и может свою убрать.
+export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose, asTrainer = false }: {
+  clientId: string; goals: Goals; onSaved: (g: Goals) => void; onClose: () => void; asTrainer?: boolean;
 }) {
-  const own = goals.client;
+  const who = asTrainer ? "trainer" : "client";
+  const own = goals[who];
+  const other = asTrainer ? goals.client : goals.trainer;
   const [p, setP] = useState(str(own?.protein));
   const [f, setF] = useState(str(own?.fat));
   const [c, setC] = useState(str(own?.carbs));
@@ -21,20 +24,25 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose 
   const auto = api.kcalOf({ protein: api.num(p), fat: api.num(f), carbs: api.num(c) });
   const next = { kcal: kcal.trim() ? api.num(kcal) : auto, protein: api.num(p), fat: api.num(f), carbs: api.num(c) };
 
-  const save = async () => {
-    if (busy || !next.kcal) return;
+  const run = async (fn: () => Promise<Goals>) => {
+    if (busy) return;
     setBusy(true);
-    try {
-      await api.saveGoal(clientId, "client", next);
-      onSaved({ ...goals, client: { ...next, waterCups: own?.waterCups ?? null, updatedAt: new Date().toISOString() } });
-      onClose();
-    } catch (e) { console.error("[NutritionGoalsSheet]", e); alert("Не удалось сохранить цель."); setBusy(false); }
+    try { onSaved(await fn()); onClose(); }
+    catch (e) { console.error("[NutritionGoalsSheet]", e); alert("Не удалось сохранить цель."); setBusy(false); }
   };
+  const save = () => next.kcal && run(async () => {
+    await api.saveGoal(clientId, who, { ...next, waterCups: own?.waterCups ?? null });
+    return { ...goals, [who]: { ...next, waterCups: own?.waterCups ?? null, updatedAt: new Date().toISOString() } };
+  });
+  const remove = () => window.confirm("Убрать цель тренера? Клиенту снова будет действовать его собственная цель.") && run(async () => {
+    await api.deleteGoal(clientId, "trainer");
+    return { ...goals, trainer: null };
+  });
 
   return (
     <ModalShell title="Цели питания" icon={<Target size={16} className="text-lime-400" />} onClose={onClose}>
       <div className="p-4 space-y-4">
-        {goals.trainer && (
+        {!asTrainer && goals.trainer && (
           <div className="rounded-2xl bg-zinc-800/60 p-3.5">
             <div className="flex items-center justify-between">
               <b>Действует сейчас</b>
@@ -46,8 +54,11 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose 
         )}
 
         <div>
-          <p className="font-bold mb-1">{goals.trainer ? "Своя цель" : "Моя цель"}</p>
-          <p className="text-[13px] text-zinc-400 mb-3">Укажите граммы белков, жиров и углеводов — калории посчитаются сами. Можно вписать свои ккал.</p>
+          <p className="font-bold mb-1">{asTrainer ? "Цель от тренера" : goals.trainer ? "Своя цель" : "Моя цель"}</p>
+          <p className="text-[13px] text-zinc-400 mb-3">
+            {asTrainer ? "Клиент увидит её как главную — своя у него действует, только пока вашей нет. " : ""}
+            Укажите граммы белков, жиров и углеводов — калории посчитаются сами. Можно вписать свои ккал.
+          </p>
           <div className="grid grid-cols-4 gap-1.5">
             <Field label="Белки, г" value={p} onChange={setP} color={MACRO_COLOR.protein} />
             <Field label="Жиры, г" value={f} onChange={setF} color={MACRO_COLOR.fat} />
@@ -58,12 +69,23 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose 
         <button onClick={save} disabled={busy || !next.kcal} className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition disabled:opacity-40">
           {busy ? "Сохраняю…" : "Сохранить"}
         </button>
+        {asTrainer && goals.trainer && (
+          <button onClick={remove} disabled={busy} className="w-full h-10 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition">Убрать цель тренера</button>
+        )}
+
+        {asTrainer && other && (
+          <div className="rounded-2xl bg-zinc-800/60 p-3.5">
+            <b>Цель, которую указал клиент</b>
+            <GoalRow g={other} />
+            <p className="text-[13px] text-zinc-400 mt-2">{goals.trainer ? "Сейчас не действует — главная ваша." : "Действует, пока вы не зададите свою."}</p>
+          </div>
+        )}
       </div>
     </ModalShell>
   );
 }
 
-function GoalRow({ g }: { g: api.Macros }) {
+function GoalRow({ g }: { g: NutritionGoal }) {
   const items = [["kcal", "ккал"], ["protein", "белки"], ["fat", "жиры"], ["carbs", "углеводы"]] as const;
   return (
     <div className="grid grid-cols-4 gap-1.5 mt-2.5">

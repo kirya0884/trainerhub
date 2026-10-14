@@ -213,3 +213,25 @@ export async function deleteRecipe(id: string) {
   const { error } = await supabase.from("food_recipes").delete().eq("id", id);
   if (error) throw error;
 }
+
+/** Тренер убирает свою цель — снова действует цель клиента */
+export async function deleteGoal(clientId: string, setBy: "client" | "trainer") {
+  const { error } = await supabase.from("nutrition_goals").delete().eq("client_id", clientId).eq("set_by", setBy);
+  if (error) throw error;
+}
+
+// ── День питания: комментарий тренера и вода ──
+// Триггер в базе не даёт клиенту менять комментарий, а тренеру — воду.
+export interface NutritionDay { waterCups: number; trainerComment: string; commentAt: string | null }
+export const EMPTY_DAY: NutritionDay = { waterCups: 0, trainerComment: "", commentAt: null };
+
+export async function fetchDay(clientId: string, date: string): Promise<NutritionDay> {
+  const { data, error } = await supabase.from("nutrition_days").select("*").eq("client_id", clientId).eq("date", date).maybeSingle();
+  if (error) throw error;
+  return data ? { waterCups: data.water_cups ?? 0, trainerComment: data.trainer_comment ?? "", commentAt: data.comment_at } : EMPTY_DAY;
+}
+
+export async function saveTrainerComment(clientId: string, date: string, text: string) {
+  const { error } = await supabase.from("nutrition_days").upsert({ client_id: clientId, date, trainer_comment: text.trim() || null });
+  if (error) throw error;
+}

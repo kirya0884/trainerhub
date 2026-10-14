@@ -1,7 +1,7 @@
 import * as api from "../lib/foodDiary";
 import type { Macros } from "../lib/foodDiary";
 
-// Цвета показателей — как в отчётах (NutritionTab): ккал оранжевый, белки лайм, жиры розовый, углеводы голубой
+// Цвета показателей: ккал оранжевый, белки лайм, жиры розовый, углеводы голубой
 export const MACRO_COLOR = { kcal: "#fb923c", protein: "#a3e635", fat: "#f472b6", carbs: "#22d3ee" } as const;
 
 // Без автофокуса: клавиатура появляется только по нажатию на поле, а не сразу с окном

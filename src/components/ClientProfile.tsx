@@ -15,7 +15,7 @@ import ModalShell from "./ModalShell";
 import ReceiptPrintView from "./ReceiptPrintView";
 import ClientProgressPrintView from "./ClientProgressPrintView";
 import BodyTab from "./BodyTab";
-import NutritionTab from "./NutritionTab";
+import NutritionDiary from "./NutritionDiary";
 import * as nutritionApi from "../lib/nutrition";
 import type { NutritionLog } from "../lib/nutrition";
 import SessionHistoryModal from "./SessionHistoryModal";
@@ -232,7 +232,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       {sub === "bookings" && <BookingsTab clientId={clientId} bookings={bookings ?? []} onOpenOccurrence={onOpenOccurrence} onBook={onBookClient ? () => onBookClient(clientId) : undefined} />}
       {sub === "payments" && <MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} />}
       {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
-      {sub === "reporting" && <ReportingTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} setNutritionLogs={setNutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
+      {sub === "reporting" && <ReportingTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} clientName={client.name} allPlans={allPlans ?? []} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
     </div>
   );
@@ -366,11 +366,11 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
   );
 }
 
-function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, setNutritionLogs, photos, setPhotos, activities, setActivities, measureTick }: {
+function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, photos, setPhotos, activities, setActivities, measureTick }: {
   measureTick?: number;
   clientId: string;
   measurements: Measurement[]; setMeasurements: (m: Measurement[]) => void;
-  nutritionLogs: NutritionLog[]; setNutritionLogs: (l: NutritionLog[]) => void;
+  nutritionLogs: NutritionLog[];
   photos: Photo[]; setPhotos: (p: Photo[]) => void;
   activities: ClientActivity[]; setActivities: (a: ClientActivity[]) => void;
 }) {
@@ -396,7 +396,7 @@ function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, 
         ))}
       </div>
       {reportSub === "body" && <BodyTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} openForm={!!measureTick} />}
-      {reportSub === "nutrition" && <NutritionTab clientId={clientId} logs={nutritionLogs} setLogs={setNutritionLogs} readOnly />}
+      {reportSub === "nutrition" && <NutritionDiary clientId={clientId} legacyLogs={nutritionLogs} measurements={measurements} asTrainer />}
       {reportSub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly />}
       {reportSub === "photos" && <PhotosTab clientId={clientId} photos={photos} setPhotos={setPhotos} />}
       {reportSub === "goals" && <GoalsDashboard clientId={clientId} />}
