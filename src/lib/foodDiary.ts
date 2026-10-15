@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { enqueue, isNetworkError, pending, registerHandler } from "./outbox";
+import { enqueue, isNetworkError, pending, registerHandler, removeItem, updateItem } from "./outbox";
 
 // Дневник питания. Продукт хранит КБЖУ на 100 г; запись дневника — уже посчитанные
 // значения съеденного (снимок), поэтому правка продукта прошлые дни не меняет.
@@ -322,3 +322,87 @@ export const pendingFood = (clientId: string, date: string): FoodEntry[] =>
   pending(undefined, "food")
     .filter((i) => (i.payload as FoodJob).clientId === clientId && (i.payload as FoodJob).entry.date === date && !(i.state as FoodJobState).done)
     .map((i) => ({ ...(i.payload as FoodJob).entry, id: `local-${i.id}`, pending: true }));
+
+// Прочие действия с дневником без сети: вода, граммы, удаление. Применяются на экране сразу,
+// а дневник из памяти телефона показывается уже с их учётом (applyPendingOps).
+type FoodOp =
+  | { op: "water"; clientId: string; date: string; cups: number }
+  | { op: "grams"; clientId: string; date: string; entry: FoodEntry; grams: number }
+  | { op: "delete"; clientId: string; date: string; id: string };
+registerHandler("foodOp", async (item) => {
+  const o = item.payload as FoodOp;
+  if (o.op === "water") await setWater(o.clientId, o.date, o.cups);
+  if (o.op === "grams") await updateEntryGrams(o.entry, o.grams);
+  if (o.op === "delete") await deleteEntry(o.id);
+});
+const isLocal = (id: string) => id.startsWith("local-");
+const localItemId = (id: string) => id.slice("local-".length);
+const scaleEntry = (e: FoodEntry, grams: number): FoodEntry => {
+  const k = e.grams > 0 ? grams / e.grams : 0;
+  return { ...e, grams, kcal: e.kcal * k, protein: e.protein * k, fat: e.fat * k, carbs: e.carbs * k };
+};
+const BUSY = "Как раз отправляем — попробуйте через пару секунд.";
+
+/** Ждущие отправки правки и удаления поверх загруженного дня */
+export function applyPendingOps(clientId: string, date: string, list: FoodEntry[]): FoodEntry[] {
+  let out = list;
+  for (const i of pending(undefined, "foodOp")) {
+    const o = i.payload as FoodOp;
+    if (o.clientId !== clientId || o.date !== date) continue;
+    if (o.op === "grams") out = out.map((e) => (e.id === o.entry.id ? { ...scaleEntry(e, o.grams), pending: true } : e));
+    if (o.op === "delete") out = out.filter((e) => e.id !== o.id);
+  }
+  return out;
+}
+export const pendingWater = (clientId: string, date: string): number | null => {
+  const l = pending(undefined, "foodOp").map((i) => i.payload as FoodOp).filter((o) => o.op === "water" && o.clientId === clientId && o.date === date);
+  return l.length ? (l[l.length - 1] as { cups: number }).cups : null;
+};
+
+export async function setWaterOrQueue(clientId: string, date: string, cups: number) {
+  try { await setWater(clientId, date, cups); }
+  catch (e) {
+    if (!isNetworkError(e)) throw e;
+    // Значение воды — последнее нажатие: старые неотправленные заменяем
+    for (const i of pending(undefined, "foodOp")) { const o = i.payload as FoodOp; if (o.op === "water" && o.clientId === clientId && o.date === date) removeItem(i.id); }
+    await enqueue("foodOp", { op: "water", clientId, date, cups } satisfies FoodOp, {});
+  }
+}
+
+export async function updateEntryGramsOrQueue(clientId: string, e: FoodEntry, grams: number): Promise<FoodEntry> {
+  if (isLocal(e.id)) {
+    // Ещё не отправленная запись — правим её прямо в очереди
+    const it = pending(undefined, "food").find((i) => i.id === localItemId(e.id));
+    const next = scaleEntry(e, grams);
+    if (it && !updateItem(it.id, { ...(it.payload as FoodJob), entry: { ...(it.payload as FoodJob).entry, grams, kcal: next.kcal, protein: next.protein, fat: next.fat, carbs: next.carbs } })) throw new Error(BUSY);
+    return next;
+  }
+  try { return await updateEntryGrams(e, grams); }
+  catch (err) {
+    if (!isNetworkError(err)) throw err;
+    await enqueue("foodOp", { op: "grams", clientId, date: e.date, entry: e, grams } satisfies FoodOp, {});
+    return { ...scaleEntry(e, grams), pending: true };
+  }
+}
+
+export async function deleteEntryOrQueue(clientId: string, e: FoodEntry) {
+  if (isLocal(e.id)) { if (!removeItem(localItemId(e.id))) throw new Error(BUSY); return; }
+  try { await deleteEntry(e.id); }
+  catch (err) {
+    if (!isNetworkError(err)) throw err;
+    await enqueue("foodOp", { op: "delete", clientId, date: e.date, id: e.id } satisfies FoodOp, {});
+  }
+}
+
+/** Копия записей; без сети каждая копия встаёт в очередь как новая запись */
+export async function copyEntriesOrQueue(clientId: string, list: FoodEntry[], date: string, meal?: Meal): Promise<FoodEntry[]> {
+  try { return await copyEntries(clientId, list.filter((e) => !e.pending), date, meal).then(async (done) => [...done, ...await Promise.all(list.filter((e) => e.pending).map((e) => addEntryOrQueue({ clientId, entry: { ...strip(e), date, meal: meal ?? e.meal } })))]); }
+  catch (err) {
+    if (!isNetworkError(err)) throw err;
+    return Promise.all(list.map((e) => addEntryOrQueue({ clientId, entry: { ...strip(e), date, meal: meal ?? e.meal } })));
+  }
+}
+const strip = (e: FoodEntry): Omit<FoodEntry, "id" | "pending"> => {
+  const { id: _i, pending: _p, ...rest } = e;
+  return rest;
+};

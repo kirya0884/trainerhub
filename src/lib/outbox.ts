@@ -7,7 +7,7 @@
 
 import { supabase } from "./supabase";
 
-export type OutboxKind = "finish" | "food" | "product";
+export type OutboxKind = "finish" | "food" | "foodOp" | "product";
 export interface OutboxItem<P = any, S = any> {
   id: string;
   kind: OutboxKind;
@@ -41,6 +41,19 @@ export function isNetworkError(e: unknown) {
 }
 
 export function registerHandler(kind: OutboxKind, h: Handler) { handlers[kind] = h; }
+
+/** Убрать операцию из очереди (передумали до отправки). false — она как раз отправляется. */
+export function removeItem(id: string) {
+  if (flushing) return false;
+  write(read().filter((i) => i.id !== id));
+  return true;
+}
+/** Поправить данные ещё не отправленной операции. false — она как раз отправляется. */
+export function updateItem(id: string, payload: unknown) {
+  if (flushing) return false;
+  write(read().map((i) => (i.id === id ? { ...i, payload } : i)));
+  return true;
+}
 
 export function subscribeOutbox(f: () => void) { listeners.add(f); return () => { listeners.delete(f); }; }
 

@@ -62,7 +62,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
   useEffect(() => {
     let alive = true;
     setDay(api.EMPTY_DAY);
-    api.fetchDay(clientId, date).then((d) => { if (alive) setDay(d); }).catch((e) => console.error("[NutritionDiary] день:", e));
+    api.fetchDay(clientId, date).then((d) => { const w = api.pendingWater(clientId, date); if (alive) setDay(w == null ? d : { ...d, waterCups: w }); }).catch((e) => console.error("[NutritionDiary] день:", e));
     return () => { alive = false; };
   }, [clientId, date]);
   useEffect(() => {
@@ -82,16 +82,17 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
   // Очередь отправки дослала еду — перечитываем день, чтобы «ждёт отправки» сменилось на обычную запись
   const [sentTick, setSentTick] = useState(0);
   useEffect(() => {
-    let n = pending(undefined, "food").length;
-    return subscribeOutbox(() => { const m = pending(undefined, "food").length; if (m < n) setSentTick((t) => t + 1); n = m; });
+    const count = () => pending(undefined, "food").length + pending(undefined, "foodOp").length;
+    let n = count();
+    return subscribeOutbox(() => { const m = count(); if (m < n) setSentTick((t) => t + 1); n = m; });
   }, []);
   useEffect(() => {
     let alive = true;
     if (!sentTick) { setEntries(null); setPrev([]); }
     setError("");
     const before = addDays(date, -1);
-    api.fetchEntries(clientId, before, date).then((l) => { if (alive) { setEntries([...l.filter((e) => e.date === date), ...api.pendingFood(clientId, date)]); setPrev(l.filter((e) => e.date === before)); } })
-      .catch((e) => { console.error("[NutritionDiary] записи:", e); if (alive) { setEntries(api.pendingFood(clientId, date)); setError(isNetworkError(e) ? "Нет интернета, а этот день на телефоне ещё не открывали. Добавленное сейчас сохранится и отправится само." : "Не удалось загрузить дневник."); } });
+    api.fetchEntries(clientId, before, date).then((l) => { if (alive) { setEntries(api.applyPendingOps(clientId, date, [...l.filter((e) => e.date === date), ...api.pendingFood(clientId, date)])); setPrev(l.filter((e) => e.date === before)); } })
+      .catch((e) => { console.error("[NutritionDiary] записи:", e); if (alive) { setEntries(api.applyPendingOps(clientId, date, api.pendingFood(clientId, date))); setError(isNetworkError(e) ? "Нет интернета, а этот день на телефоне ещё не открывали. Добавленное сейчас сохранится и отправится само." : "Не удалось загрузить дневник."); } });
     return () => { alive = false; };
   }, [clientId, date, sentTick]);
 
@@ -102,7 +103,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
   const repeatPrev = async (meal: Meal) => {
     if (busy) return;
     setBusy(true);
-    try { const added = await api.copyEntries(clientId, prev.filter((e) => e.meal === meal), date); setEntries((l) => [...(l ?? []), ...added]); }
+    try { const added = await api.copyEntriesOrQueue(clientId, prev.filter((e) => e.meal === meal), date); setEntries((l) => [...(l ?? []), ...added]); }
     catch (e) { console.error("[NutritionDiary] как вчера:", e); notify("Не удалось скопировать. Проверьте интернет."); }
     finally { setBusy(false); }
   };
@@ -135,7 +136,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       <WaterCard cups={day.waterCups} goal={api.activeWater(goals)} readOnly={asTrainer} onChange={async (n) => {
         const was = day.waterCups;
         setDay((d) => ({ ...d, waterCups: n }));
-        try { await api.setWater(clientId, date, n); }
+        try { await api.setWaterOrQueue(clientId, date, n); }
         catch (e) { console.error("[NutritionDiary] вода:", e); setDay((d) => ({ ...d, waterCups: was })); notify("Не удалось сохранить воду. Проверьте интернет."); }
       }} />
 
@@ -172,7 +173,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
               )}
             </div>
             {list.map((e) => (
-              <button key={e.id} onClick={() => setEditing(e)} disabled={asTrainer || e.pending} className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-zinc-800 text-left enabled:hover:bg-zinc-800/50 transition">
+              <button key={e.id} onClick={() => setEditing(e)} disabled={asTrainer} className="w-full flex items-center gap-3 px-4 py-2.5 border-t border-zinc-800 text-left enabled:hover:bg-zinc-800/50 transition">
                 <span className="flex-1 min-w-0">
                   <span className="block font-semibold truncate">{e.name}</span>
                   <span className="block text-[13px] text-zinc-500">{api.fmtN(e.grams, 0)} г · Б {api.fmtN(e.protein)} · Ж {api.fmtN(e.fat)} · У {api.fmtN(e.carbs)}{e.pending && <span className="text-orange-400"> · ждёт отправки</span>}</span>
@@ -201,7 +202,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       {copying && (
         <FoodCopySheet list={copying.list} meal={copying.meal} from={date} onClose={() => setCopying(null)}
           onCopy={async (to, meal) => {
-            const added = await api.copyEntries(clientId, copying.list, to, meal);
+            const added = await api.copyEntriesOrQueue(clientId, copying.list, to, meal);
             setCopying(null);
             if (to === date) setEntries((l) => [...(l ?? []), ...added]); else setDate(to);
           }} />
@@ -211,7 +212,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
           onAdded={(e) => setEntries((l) => [...(l ?? []), e])} />
       )}
       {editing && (
-        <EntrySheet entry={editing} onClose={() => setEditing(null)}
+        <EntrySheet clientId={clientId} entry={editing} onClose={() => setEditing(null)}
           onSaved={(e) => { setEntries((l) => (l ?? []).map((x) => (x.id === e.id ? e : x))); setEditing(null); }}
           onDeleted={(id) => { setEntries((l) => (l ?? []).filter((x) => x.id !== id)); setEditing(null); }} />
       )}
@@ -353,7 +354,7 @@ function SummaryCard({ eaten, goal, onSetGoal }: { eaten: Macros; goal: Macros |
 }
 
 // Правка граммов или удаление записи
-function EntrySheet({ entry, onSaved, onDeleted, onClose }: { entry: FoodEntry; onSaved: (e: FoodEntry) => void; onDeleted: (id: string) => void; onClose: () => void }) {
+function EntrySheet({ clientId, entry, onSaved, onDeleted, onClose }: { clientId: string; entry: FoodEntry; onSaved: (e: FoodEntry) => void; onDeleted: (id: string) => void; onClose: () => void }) {
   const [grams, setGrams] = useState(String(api.fmtN(entry.grams, 0)).replace(/\s/g, ""));
   const [busy, setBusy] = useState(false);
   const g = api.num(grams);
@@ -366,9 +367,9 @@ function EntrySheet({ entry, onSaved, onDeleted, onClose }: { entry: FoodEntry; 
       <div className="p-4 space-y-3">
         <GramsInput value={grams} onChange={setGrams} />
         <MacroTiles m={preview} />
-        <button onClick={() => run(async () => onSaved(await api.updateEntryGrams(entry, g)))} disabled={busy || !g}
+        <button onClick={() => run(async () => onSaved(await api.updateEntryGramsOrQueue(clientId, entry, g)))} disabled={busy || !g}
           className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition disabled:opacity-40">Сохранить</button>
-        <button onClick={() => run(async () => { await api.deleteEntry(entry.id); onDeleted(entry.id); })} disabled={busy}
+        <button onClick={() => run(async () => { await api.deleteEntryOrQueue(clientId, entry); onDeleted(entry.id); })} disabled={busy}
           className="w-full h-11 flex items-center justify-center gap-1.5 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition"><Trash2 size={16} /> Удалить из дневника</button>
       </div>
     </ModalShell>
