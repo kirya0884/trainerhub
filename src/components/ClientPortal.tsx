@@ -25,6 +25,7 @@ import ClientSessionView from "./ClientSessionView";
 import { lastTimeFor } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
+import { flushOutbox, isNetworkError } from "../lib/outbox";
 
 type Tab = "profile" | "program" | "nutrition" | "reporting";
 type ProgramSub = "active" | "completed";
@@ -53,13 +54,12 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLog[]>([]);
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   // П9: у подопечного не было индикатора непрочитанных — он не узнавал, что тренер написал.
-  const [activeSession, setActiveSession] = useState(client.activeSession);
+  // Тренировка, завершённая без сети, ещё «идёт» на сервере — но для клиента она закончена
+  const [activeSession, setActiveSession] = useState(() => (portalApi.hasPendingClientFinish(client.id) ? null : client.activeSession));
   const [profile, setProfile] = useState({ phone: client.phone, telegram: client.telegram, whatsapp: client.whatsapp, avatarUrl: client.avatarUrl, accentColor: client.accentColor, name: client.name, goal: client.goal, health: client.health });
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sessionMinimized, setSessionMinimized] = useState(false);
-  // Запись тренировки уже сохранена, а завершение сорвалось — повтор не пишет её второй раз
-  const sessionLoggedRef = useRef(false);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const toggleDay = (id: string) => setExpandedDays((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -123,10 +123,18 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
 
   const startDay = async (dayId: string, dayName: string) => {
     if (!currentPlan) return;
+    if (portalApi.hasPendingClientFinish(client.id)) {
+      await flushOutbox();
+      if (portalApi.hasPendingClientFinish(client.id)) { notify("Прошлая тренировка ещё не отправлена — она уйдёт, как только появится интернет. Новую можно начать после этого."); return; }
+    }
     try {
       await portalApi.startSession(client.id, currentPlan.id, dayId, dayName);
       setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now() });
-    } catch (e) { console.error("[ClientPortal] startDay:", e); notify("Не удалось начать тренировку. Попробуй ещё раз."); }
+    } catch (e) {
+      // Без сети начинаем на телефоне: тренер увидит тренировку, когда она дойдёт
+      if (isNetworkError(e)) { setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now(), offlineStart: true }); return; }
+      console.error("[ClientPortal] startDay:", e); notify("Не удалось начать тренировку. Попробуй ещё раз.");
+    }
   };
 
   // #6 activeDay derived here so portal always renders; CSV renders on top when not minimized
@@ -543,17 +551,15 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           lastTime={lastTimeFor(progressHook.sessions, activeDay)}
           startedAt={activeSession.startedAt}
           onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch((e) => console.error("[ClientPortal] прогресс тренировки не ушёл тренеру:", e))}
-          onCancel={async () => { try { await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { sessionLoggedRef.current = false; setActiveSession(null); setSessionMinimized(false); } }}
+          onCancel={async () => { try { if (!activeSession.offlineStart) await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { setActiveSession(null); setSessionMinimized(false); } }}
           onFinish={async (metrics, session) => {
             try {
-              if (!sessionLoggedRef.current) {
-                await portalApi.logClientSession(activeSession.planId, metrics, session);
-                sessionLoggedRef.current = true;
-              }
-              await portalApi.finishClientSession(client.id);
-              sessionLoggedRef.current = false;
-              portalApi.markClientBookingDone(client.trainerId, client.id, activeSession.dayName, session.date);
-              await progressHook.reload();
+              const { queued } = await portalApi.finishClientOrQueue({
+                clientId: client.id, trainerId: client.trainerId, planId: activeSession.planId, dayId: activeSession.dayId,
+                dayName: activeSession.dayName, metrics, session, offlineStart: activeSession.offlineStart,
+              });
+              if (queued) notify("Нет интернета — тренировка сохранена на телефоне и отправится сама, как только появится сеть.", "info");
+              else await progressHook.reload().catch((err) => console.error("[ClientPortal] reload:", err));
               setActiveSession(null);
               setSessionMinimized(false);
             } catch (e) {

@@ -7,7 +7,7 @@
 
 import { supabase } from "./supabase";
 
-export type OutboxKind = "finish" | "food" | "foodOp" | "product";
+export type OutboxKind = "finish" | "clientFinish" | "food" | "foodOp" | "product";
 export interface OutboxItem<P = any, S = any> {
   id: string;
   kind: OutboxKind;

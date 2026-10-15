@@ -3,13 +3,16 @@ import { expandBookings } from "./bookings";
 import type { Booking } from "./bookings";
 import type { Metric, Session } from "../types";
 import { today, addDays } from "./format";
+import { enqueue, isNetworkError, pending, registerHandler } from "./outbox";
+import { fetchProgress } from "./progress";
 
 export interface SelfClient {
   id: string; trainerId: string; name: string; color: string; goal: string;
   phone: string; telegram: string; whatsapp: string; avatarUrl: string; accentColor: string;
   health: { injuries: string; restrictions: string; notes: string };
   membership: Record<string, any>;
-  activeSession: { planId: string; dayId: string; dayName: string; startedAt: number } | null;
+  /** offlineStart — начата без сети: «начало» дошлётся вместе с завершением */
+  activeSession: { planId: string; dayId: string; dayName: string; startedAt: number; offlineStart?: boolean } | null;
 }
 
 export interface ClientActivity {
@@ -140,3 +143,63 @@ export async function markClientBookingDone(trainerId: string, clientId: string,
     }
   } catch (e) { console.error("[markClientBookingDone]", e); }
 }
+
+// ── Тренировка клиента без интернета ──
+// Завершение (запись + finish_client_session, где сервер списывает тренировку) кладётся
+// в очередь отправки с отметками сделанных шагов. finish_client_session списывает при
+// каждом вызове, поэтому перед повтором проверяем: если на сервере тренировка уже не
+// идёт (active_session пуст) — завершение прошло, второй раз не вызываем.
+export type ClientFinishJob = {
+  clientId: string; trainerId: string; planId: string; dayId: string; dayName: string;
+  metrics: Omit<Metric, "id">[]; session: Omit<Session, "id">; offlineStart?: boolean;
+};
+type ClientFinishState = { started?: boolean; logged?: boolean; finished?: boolean };
+
+async function runClientFinish(job: ClientFinishJob, st: ClientFinishState, save: (s: ClientFinishState) => void, retry: boolean) {
+  const put = (p: ClientFinishState) => { st = { ...st, ...p }; save(st); };
+  if (job.offlineStart && !st.started) { await startSession(job.clientId, job.planId, job.dayId, job.dayName); put({ started: true }); }
+  if (!st.logged) {
+    const s = job.session;
+    const already = retry && (await fetchProgress(job.planId)).sessions.some((x) =>
+      x.fromClient && x.date === s.date && x.dayName === s.dayName && x.done === s.done && x.total === s.total);
+    if (!already) await logClientSession(job.planId, job.metrics, s);
+    put({ logged: true });
+  }
+  if (!st.finished) {
+    let stillOn = true;
+    if (retry) {
+      const { data, error } = await supabase.from("clients").select("active_session").eq("id", job.clientId).single();
+      if (error) throw error;
+      stillOn = !!data?.active_session;
+    }
+    if (stillOn) await finishClientSession(job.clientId);
+    put({ finished: true });
+  }
+  markClientBookingDone(job.trainerId, job.clientId, job.dayName, job.session.date);
+}
+registerHandler("clientFinish", async (item, save) => {
+  await runClientFinish(item.payload as ClientFinishJob, item.state as ClientFinishState, save, true);
+});
+
+/** Завершить сейчас, а без сети — в очередь. queued: true — тренировка ждёт отправки. */
+// Сорвалось не из-за сети и клиент жмёт «Завершить» снова — продолжаем с того же шага
+const attempts = new Map<string, ClientFinishState>();
+export async function finishClientOrQueue(job: ClientFinishJob): Promise<{ queued: boolean }> {
+  const key = `${job.clientId}|${job.dayId}|${job.session.date}`;
+  const retry = attempts.has(key);
+  let st: ClientFinishState = attempts.get(key) ?? {};
+  try {
+    await runClientFinish(job, st, (s) => { st = s; attempts.set(key, s); }, retry);
+    attempts.delete(key);
+    return { queued: false };
+  } catch (e) {
+    if (!isNetworkError(e)) { attempts.set(key, st); throw e; }
+    attempts.delete(key);
+    await enqueue("clientFinish", job, st);
+    return { queued: true };
+  }
+}
+
+/** Есть ли у клиента неотправленная тренировка — новую начинать нельзя, чтобы не перепутались */
+export const hasPendingClientFinish = (clientId: string) =>
+  pending(undefined, "clientFinish").some((i) => (i.payload as ClientFinishJob).clientId === clientId);
