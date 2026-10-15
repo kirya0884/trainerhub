@@ -5,7 +5,7 @@ import type { PlanVersion } from "../lib/planVersions";
 import { fmtDate, today } from "../lib/format";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
-import { ask } from "../lib/dialog";
+import { ask, askInput } from "../lib/dialog";
 
 export default function PlanVersionsModal({ planId, onClose, onRestored }: { planId: string; onClose: () => void; onRestored: () => void }) {
   const [versions, setVersions] = useState<PlanVersion[] | null>(null);
@@ -15,7 +15,10 @@ export default function PlanVersionsModal({ planId, onClose, onRestored }: { pla
   useEffect(load, [planId]);
 
   const save = async () => {
-    const label = window.prompt("Название версии (необязательно):", `Версия от ${fmtDate(today())}`) ?? "";
+    // «Отмена» больше не сохраняет версию (с prompt сохранялась и при отмене)
+    const r = await askInput("Сохранить версию плана", [{ key: "label", label: "Название (необязательно)", value: `Версия от ${fmtDate(today())}` }], { ok: "Сохранить" });
+    if (!r) return;
+    const label = r.label.trim();
     setBusy(true);
     try { await versionsApi.snapshotPlan(planId, label); load(); } catch (e: any) { setError(e.message || "Не удалось сохранить версию"); } finally { setBusy(false); }
   };

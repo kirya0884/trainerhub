@@ -28,7 +28,7 @@ import SessionReadModal from "./SessionReadModal";
 import TemplatesModal from "./TemplatesModal";
 import DayTemplateLibrary from "./DayTemplateLibrary";
 import { ScreenSkeleton } from "./Skeleton";
-import { ask, notify } from "../lib/dialog";
+import { ask, askInput, notify } from "../lib/dialog";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -291,9 +291,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     // иначе платёж ушёл бы в журнал на нулевую сумму.
     let amount = sessionPrice(membership);
     if (paid && amount <= 0) {
-      const v = window.prompt("Цена разового занятия, ₽:", "");
-      if (v == null) return;
-      amount = Number(String(v).replace(",", ".").trim()) || 0;
+      const r = await askInput("Цена разового занятия", [{ key: "price", label: "Сумма, ₽", numeric: true, placeholder: "Например, 1500" }], { ok: "Добавить" });
+      if (!r) return;
+      amount = Number(r.price.replace(",", ".").replace(/\s/g, "")) || 0;
       if (amount <= 0) { notify("Нужна сумма больше нуля."); return; }
     }
 

@@ -1,10 +1,12 @@
 // Свои сообщения и подтверждения вместо alert/confirm. Системные окна браузера на телефоне
 // показывают адрес сайта, выбиваются из дизайна и блокируют страницу (в Safari — особенно).
 // notify() — короткое сообщение сверху, само исчезает; ask() — окно подтверждения,
-// возвращает Promise<boolean>. Рисует их DialogHost (подключён в main.tsx).
+// возвращает Promise<boolean>; askInput() — окно с полями ввода вместо prompt,
+// возвращает значения или null при отмене. Рисует их DialogHost (подключён в main.tsx).
 
 export type Toast = { id: number; text: string; kind: "info" | "error" };
-export type Ask = { id: number; text: string; ok: string; cancel: string; danger: boolean; resolve: (v: boolean) => void };
+export type Field = { key: string; label: string; value?: string; placeholder?: string; numeric?: boolean };
+export type Ask = { id: number; text: string; ok: string; cancel: string; danger: boolean; fields?: Field[]; resolve: (v: boolean, values?: Record<string, string>) => void };
 type State = { toasts: Toast[]; ask: Ask | null; queue: Ask[] };
 
 let state: State = { toasts: [], ask: null, queue: [] };
@@ -42,9 +44,19 @@ export function ask(text: string, opts: { ok?: string; cancel?: string; danger?:
   });
 }
 
-export function answer(v: boolean) {
+/** Окно с полями ввода: значения по ключам или null, если нажали «Отмена» */
+export function askInput(text: string, fields: Field[], opts: { ok?: string; cancel?: string } = {}): Promise<Record<string, string> | null> {
+  return new Promise((resolve) => {
+    const a: Ask = { id: ++seq, text, ok: opts.ok ?? "Готово", cancel: opts.cancel ?? "Отмена", danger: false, fields, resolve: (v, values) => resolve(v ? values ?? {} : null) };
+    if (state.ask) state = { ...state, queue: [...state.queue, a] };
+    else state = { ...state, ask: a };
+    emit();
+  });
+}
+
+export function answer(v: boolean, values?: Record<string, string>) {
   if (!state.ask) return;
-  state.ask.resolve(v);
+  state.ask.resolve(v, values);
   const [next, ...rest] = state.queue;
   state = { ...state, ask: next ?? null, queue: rest };
   emit();

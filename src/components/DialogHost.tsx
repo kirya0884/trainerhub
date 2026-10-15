@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { AlertCircle, Info, X } from "lucide-react";
 import { answer, dismiss, subscribe, type Ask, type Toast } from "../lib/dialog";
 import { useModalA11y } from "../hooks/useModalA11y";
@@ -27,16 +28,31 @@ export default function DialogHost() {
 }
 
 function AskDialog({ ask }: { ask: Ask }) {
-  const { panelProps } = useModalA11y(() => answer(false), "Подтверждение");
+  const { panelProps } = useModalA11y(() => answer(false), ask.fields ? ask.text : "Подтверждение");
+  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries((ask.fields ?? []).map((f) => [f.key, f.value ?? ""])));
+  const submit = (e?: FormEvent) => { e?.preventDefault(); answer(true, values); };
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => answer(false)}>
       <div {...panelProps} onClick={(e) => e.stopPropagation()}
         className="w-full sm:max-w-sm bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-4 space-y-4 outline-none" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
-        <p className="text-[15px] leading-snug text-zinc-100 whitespace-pre-line pt-1">{ask.text}</p>
+        <p className={`leading-snug text-zinc-100 whitespace-pre-line pt-1 ${ask.fields ? "text-[17px] font-bold" : "text-[15px]"}`}>{ask.text}</p>
+        {ask.fields && (
+          <form onSubmit={submit} className="space-y-2.5">
+            {ask.fields.map((f, i) => (
+              <label key={f.key} className="block">
+                <span className="block text-[13px] font-semibold text-zinc-400 mb-1 px-0.5">{f.label}</span>
+                <input autoFocus={i === 0} value={values[f.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
+                  onFocus={(e) => e.target.select()} placeholder={f.placeholder} inputMode={f.numeric ? "decimal" : undefined}
+                  className="w-full h-12 px-3.5 rounded-xl bg-zinc-800 text-base outline-none focus:ring-2 focus:ring-lime-400/50" />
+              </label>
+            ))}
+            <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
+          </form>
+        )}
         <div className="flex gap-2">
           {/* В опасном вопросе фокус на «Отмена» — случайный Enter ничего не удалит */}
           <button onClick={() => answer(false)} autoFocus={ask.danger} className="flex-1 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 transition">{ask.cancel}</button>
-          <button onClick={() => answer(true)} autoFocus={!ask.danger}
+          <button onClick={() => (ask.fields ? submit() : answer(true))} autoFocus={!ask.danger && !ask.fields}
             className={`flex-1 h-12 rounded-xl text-sm font-bold transition ${ask.danger ? "bg-red-500 hover:bg-red-400 text-white" : "bg-lime-400 hover:bg-lime-300 text-zinc-950"}`}>{ask.ok}</button>
         </div>
       </div>

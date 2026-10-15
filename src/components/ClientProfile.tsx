@@ -31,7 +31,7 @@ import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 import StartWorkoutModal from "./StartWorkoutModal";
-import { ask, notify } from "../lib/dialog";
+import { ask, askInput, notify } from "../lib/dialog";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans";
 
@@ -451,7 +451,8 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     patchMembership({ total: String(t.sessions), packagePrice: String(finalPrice), split: t.split }, true);
   };
   const saveAsTemplate = async () => {
-    const name = window.prompt("Название шаблона:");
+    const r = await askInput("Сохранить как шаблон", [{ key: "name", label: "Название шаблона", placeholder: "Например, «10 тренировок»" }], { ok: "Сохранить" });
+    const name = r?.name.trim();
     if (!name) return;
     try {
       await paymentsApi.savePackageTemplate(trainerId, { name, sessions: Number(m.total) || 0, price: Number(m.packagePrice) || 0, discount: 0, split: m.split });
@@ -469,15 +470,20 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   };
 
   const editPayment = async (p: Payment) => {
-    const amount = window.prompt("Сумма ₽:", String(p.amount));
-    if (amount == null) return;
-    const note = window.prompt("Примечание:", p.note) ?? p.note;
-    try { await paymentsApi.updatePayment(p.id, { amount: Number(amount) || p.amount, note }); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+    const r = await askInput("Изменить платёж", [
+      { key: "amount", label: "Сумма, ₽", value: String(p.amount), numeric: true },
+      { key: "note", label: "Примечание", value: p.note, placeholder: "Необязательно" },
+    ], { ok: "Сохранить" });
+    if (!r) return;
+    const amount = Number(r.amount.replace(",", ".").replace(/\s/g, "")) || p.amount;
+    try { await paymentsApi.updatePayment(p.id, { amount, note: r.note.trim() }); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] editPayment:", e); notify("Не удалось обновить платёж."); }
   };
   const splitPayment = async (p: Payment) => {
-    const parts = Number(window.prompt("Разбить на сколько платежей?", "2"));
-    if (!parts || parts < 2) return;
+    const r = await askInput("Разбить платёж", [{ key: "parts", label: "На сколько частей", value: "2", numeric: true }], { ok: "Разбить" });
+    if (!r) return;
+    const parts = Math.round(Number(r.parts));
+    if (!parts || parts < 2) { notify("Нужно 2 части или больше."); return; }
     try { await paymentsApi.splitPayment(clientId, p, parts); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] splitPayment:", e); notify("Не удалось разбить платёж."); }
   };
