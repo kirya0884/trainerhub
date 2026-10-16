@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { CalendarDays, CalendarX, Check, ClipboardList, UserX, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share } from "lucide-react";
 import { bookingsOverlap, expandBookings, toMin } from "../lib/bookings";
@@ -12,7 +12,7 @@ import RemindModal from "./RemindModal";
 import RenewModal from "./RenewModal";
 import NoShowModal, { type NoShowReason } from "./NoShowModal";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
-import { today as todayFn, addDays, addMonths, initials, plural, toDateStr } from "../lib/format";
+import { today as todayFn, addDays, addMonths, plural, toDateStr } from "../lib/format";
 import { ask, notify } from "../lib/dialog";
 import { track } from "../lib/events";
 
@@ -33,9 +33,9 @@ const fromMin = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0"
 
 const HOUR_START = 6, HOUR_END = 24;
 const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_START + i);
-// К1: 40 px на час вместо 32 — в узкой колонке имя переносится на две строки,
-// и при 32 px оно обрезалось. Сетка прокручивается по вертикали, места хватает.
-const ROW_H = 40; // px за час
+// 48 px на час: в часовую плитку влезают время и полное имя в две строки
+// (колонка недели на телефоне ~92 px). Сетка прокручивается по вертикали, места хватает.
+const ROW_H = 48; // px за час
 
 export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans, openBooking, newBookingClientId, openOccurrence }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void; openBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } }) {
   const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, noShowOccurrence, rescheduleOccurrence, reload } = bookingsHook;
@@ -133,6 +133,16 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   const gridDays = mode === "month" ? Array.from({ length: (new Date(gridEnd + "T00:00:00").getTime() - new Date(gridStart + "T00:00:00").getTime()) / 86400000 + 1 }, (_, i) => addDays(gridStart, i)) : [];
 
   const clientName = (id: string) => clients.find((c) => c.id === id)?.name || "—";
+  const clientColor = (id: string) => clients.find((c) => c.id === id)?.color || "#a3e635";
+
+  // Неделя на телефоне шире экрана — держим выбранный день в начале видимой части
+  const gridScroll = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = gridScroll.current;
+    if (mode !== "week" || !el) return;
+    const col = el.querySelector<HTMLElement>(`[data-day="${anchor}"]`);
+    if (col) el.scrollTo({ left: col.offsetLeft, behavior: "smooth" });
+  }, [mode, anchor]);
   const findBookingById = (id: string) => bookings.find((b) => b.id === id);
 
   const navTitle = mode === "day" ? fmtLong(anchor)
@@ -366,15 +376,20 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
               <div key={h} style={{ height: ROW_H }} className="text-[11px] text-zinc-500 text-right pr-1.5 -translate-y-1.5">{h}:00</div>
             ))}
           </div>
-          {/* К1: без minWidth — семь колонок по ~44 px влезают в 360 px и ничего не едет вбок.
-              На широком экране колонки получают нижнюю границу ширины через sm:min-w. */}
-          <div className="flex-1 overflow-x-hidden">
+          {/* Неделя на телефоне: колонки ~92 px, на экране три дня, остальные — свайпом вбок.
+              Так влезает полное имя; при выборе дня в полосе сетка доезжает до него. */}
+          <div ref={gridScroll} className={`flex-1 ${mode === "week" ? "overflow-x-auto snap-x snap-mandatory sm:snap-none" : "overflow-x-hidden"}`}>
             <div className="flex">
               {listDays.map((d) => {
                 const occs = occurrences.filter((o) => o.date === d).sort((a, b) => a.time.localeCompare(b.time));
                 return (
-                  <div key={d} className={`flex-1 min-w-0 sm:min-w-[68px] border-r border-zinc-800 last:border-r-0 ${
+                  <div key={d} data-day={d} className={`border-r border-zinc-800 last:border-r-0 ${
+                    mode === "week" ? "shrink-0 w-[92px] snap-start sm:w-auto sm:flex-1 sm:min-w-[88px]" : "flex-1 min-w-0"} ${
                     dragOverDay === d ? "bg-cyan-400/5" : d === today ? "bg-zinc-800/25" : ""}`}>
+                    <button onClick={() => setAnchor(d)} className={`h-7 w-full flex items-center justify-center gap-1 text-xs font-semibold border-b border-zinc-800 ${
+                      d === today ? "text-lime-400" : d === anchor ? "text-zinc-100" : "text-zinc-500"}`}>
+                      {WEEKDAYS_SHORT[(new Date(d + "T00:00:00").getDay() + 6) % 7]} {Number(d.slice(8))}
+                    </button>
                     <div className="relative cursor-pointer" style={{ height: HOURS.length * ROW_H }}
                       onClick={(e) => { const min = HOUR_START * 60 + Math.round(((e.clientY - e.currentTarget.getBoundingClientRect().top) / ROW_H) * 60 / 30) * 30; setModal({ date: d, time: fromMin(Math.max(HOUR_START * 60, Math.min(min, HOUR_END * 60))) }); }}
                       onDragOver={(e) => { e.preventDefault(); setDragOverDay(d); }} onDragLeave={() => setDragOverDay(null)} onDrop={(e) => onDropAt(e, d)}>
@@ -382,15 +397,27 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                       {occs.map((o) => {
                         const top = Math.max(0, (toMin(o.time) - HOUR_START * 60) * (ROW_H / 60));
                         const height = Math.max(26, (Number(o.duration) || 60) * (ROW_H / 60));
+                        // Плитка в цвете клиента (в группе — первого), статус — значком и прозрачностью
+                        const color = clientColor(o.clientIds[0]);
+                        const group = o.clientIds.length > 1;
                         return (
                           <button key={`${o.id}-${o.occDate}`} draggable onDragStart={(e) => e.dataTransfer.setData("text/plain", JSON.stringify({ id: o.id, occDate: o.occDate }))}
-                            onClick={(e) => { e.stopPropagation(); setQuickView(o); }} style={{ top, height, background: `${BOOKING_STATUS_COLOR[o.status]}26`, borderLeft: `3px solid ${BOOKING_STATUS_COLOR[o.status]}` }}
-                            className="absolute left-0.5 right-0.5 rounded-lg px-1.5 py-0.5 text-left overflow-hidden cursor-grab active:cursor-grabbing">
-                            {/* К1: в узкой колонке имя переносится, а не обрезается многоточием */}
-                            <span className="hidden sm:block text-xs font-semibold text-zinc-300 leading-tight">{o.time}</span>
-                            {/* В неделе колонка ~44 px — имя ломалось по буквам, поэтому на телефоне инициалы */}
-                            <span className={`block text-xs sm:text-sm text-zinc-100 leading-tight font-semibold break-words ${mode === "week" ? "hidden sm:block" : ""}`}>{o.clientIds.map(clientName).join(", ")}</span>
-                            {mode === "week" && <span className="sm:hidden block text-xs text-zinc-100 leading-tight font-bold">{o.clientIds.map((id) => initials(clientName(id))).join(" ")}</span>}
+                            onClick={(e) => { e.stopPropagation(); setQuickView(o); }} style={{ top, height, background: `${color}33`, borderLeft: `3px solid ${color}` }}
+                            aria-label={`${o.time}, ${namesOf(o)}, ${BOOKING_STATUS_LABEL[o.status]}`}
+                            className={`absolute left-0.5 right-0.5 rounded-lg px-1 py-0.5 text-left overflow-hidden cursor-grab active:cursor-grabbing ${
+                              o.status === "cancelled" ? "opacity-40" : o.status === "done" || o.status === "no-show" ? "opacity-60" : ""}`}>
+                            <span className="flex items-center gap-1 text-[11px] font-semibold text-zinc-300 leading-tight">
+                              {o.time}
+                              {o.status === "done" && <Check size={11} className="text-lime-400" />}
+                              {o.status === "no-show" && <UserX size={11} className="text-orange-400" />}
+                            </span>
+                            {!group && <span className={`block text-xs sm:text-[13px] text-zinc-100 leading-tight font-semibold [overflow-wrap:anywhere] ${o.status === "cancelled" ? "line-through" : ""}`}>{clientName(o.clientIds[0])}</span>}
+                            {group && o.clientIds.map((id) => (
+                              <span key={id} className={`flex items-start gap-1 text-xs sm:text-[13px] text-zinc-100 leading-tight font-semibold [overflow-wrap:anywhere] ${o.status === "cancelled" ? "line-through" : ""}`}>
+                                <span className="w-1.5 h-1.5 mt-[5px] rounded-full shrink-0" style={{ background: clientColor(id) }} />
+                                {clientName(id)}
+                              </span>
+                            ))}
                           </button>
                         );
                       })}
