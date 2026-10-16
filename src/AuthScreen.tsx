@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "./lib/supabase";
-import ConsentModal from "./components/ConsentModal";
+import { DocLink } from "./components/LegalDoc";
 import { ArrowLeft, Dumbbell, User } from "lucide-react";
 
 // Тренер — email+пароль (open signup, role:"trainer" в metadata создаёт строку в trainers через триггер).
@@ -26,7 +26,6 @@ export default function AuthScreen() {
   const [msgIsError, setMsgIsError] = useState(false);
   const [busy, setBusy] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const [showConsent, setShowConsent] = useState(false);
   const needsConsent = mode === "trainer" && isSignup;
 
   const resetMsg = () => { setMsg(""); setMsgIsError(false); };
@@ -127,7 +126,7 @@ export default function AuthScreen() {
                 <label className="flex items-start gap-2.5 text-sm text-zinc-400">
                   <input type="checkbox" checked={agreed} onChange={(e) => setAgreed(e.target.checked)} className="mt-0.5 accent-lime-400 shrink-0 w-4 h-4" />
                   <span>
-                    <button type="button" onClick={() => setShowConsent(true)} className="text-lime-400 hover:text-lime-300 underline underline-offset-2 text-left">Даю согласие на обработку персональных данных</button>
+                    Принимаю <DocLink slug="terms">пользовательское соглашение</DocLink> и даю <DocLink slug="consent">согласие на обработку персональных данных</DocLink> на условиях <DocLink slug="privacy">политики</DocLink>
                   </span>
                 </label>
               )}
@@ -151,7 +150,6 @@ export default function AuthScreen() {
           </>
         )}
       </div>
-      {showConsent && <ConsentModal onClose={() => setShowConsent(false)} />}
     </div>
   );
 }

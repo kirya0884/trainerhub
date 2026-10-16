@@ -4,6 +4,7 @@ import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, UserRound, Pl
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
+import { LegalPage, useLegalRoute } from "./components/LegalDoc";
 import ClientsList from "./components/ClientsList";
 import Dashboard from "./components/Dashboard";
 import { useBookings } from "./hooks/useBookings";
@@ -185,6 +186,8 @@ export default function App() {
   // А3: разовая уборка хранилища при старте — брошенные черновики тренировок копились
   // без ограничения и были причиной переполнения квоты, из-за которого запись молча падала.
   useEffect(() => { cleanupStorage(); }, []);
+  // Документы по адресу #/legal/… открываются всем, в том числе без входа (ссылка для магазинов и сайта)
+  const [legalSlug, closeLegal] = useLegalRoute();
   const { view, push: setView, replace: replaceView, back: goBack } = useHistoryNav<View>(
     { kind: "dashboard" },
     (v) => viewToUrl(v as ViewLike),
@@ -337,6 +340,7 @@ export default function App() {
     writeJson("trainerhub-theme-v1", themeMode);
   }, [themeMode]);
 
+  if (legalSlug) return <LegalPage slug={legalSlug} onClose={closeLegal} />;
   if (loading) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
   if (!session) return <AuthScreen />;
 

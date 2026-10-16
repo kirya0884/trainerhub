@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageCircle, MessageSquare, Play, Ruler, Settings, TrendingUp, User } from "lucide-react";
+import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageCircle, MessageSquare, Play, Ruler, ScrollText, Settings, TrendingUp, User } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ModalShell from "./ModalShell";
+import { LegalList } from "./LegalDoc";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
 import NutritionDiary from "./NutritionDiary";
@@ -61,6 +62,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [activeSession, setActiveSession] = useState(() => (portalApi.hasPendingClientFinish(client.id) ? null : client.activeSession));
   const [profile, setProfile] = useState({ phone: client.phone, telegram: client.telegram, whatsapp: client.whatsapp, avatarUrl: client.avatarUrl, accentColor: client.accentColor, name: client.name, goal: client.goal, health: client.health });
   const [showPinSettings, setShowPinSettings] = useState(false);
+  const [showDocs, setShowDocs] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sessionMinimized, setSessionMinimized] = useState(false);
   const [openDetails, setOpenDetails] = useState<string | null>(null);
@@ -166,6 +168,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           <div className="p-3 space-y-1">
             <button onClick={() => { setShowNav(false); setShowSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Settings size={18} className="text-zinc-400" /> <span className="font-medium">Мои данные и здоровье</span></button>
             <button onClick={() => { setShowNav(false); setShowPinSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Lock size={18} className="text-zinc-400" /> <span className="font-medium">PIN-код на вход</span></button>
+            <button onClick={() => { setShowNav(false); setShowDocs(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><ScrollText size={18} className="text-zinc-400" /> <span className="font-medium">Документы</span></button>
             <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-red-400"><LogOut size={18} /> <span className="font-medium">Выйти</span></button>
           </div>
         </ModalShell>
@@ -580,6 +583,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           Загрузка тренировки…
         </div>
       )}
+      {showDocs && <LegalList slugs={["privacy", "consent-client", "terms"]} onClose={() => setShowDocs(false)} />}
       {showPinSettings && <PinSettingsModal id={client.id} table="clients" onClose={() => setShowPinSettings(false)} />}
       {showSettings && (
         <ClientSettingsModal clientId={client.id} initial={profile} onClose={() => setShowSettings(false)} onSaved={(p) => setProfile(p)} />

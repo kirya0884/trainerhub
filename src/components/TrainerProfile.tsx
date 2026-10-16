@@ -5,6 +5,7 @@ import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
 import { supabase } from "../lib/supabase";
 import SubscriptionModal from "./SubscriptionModal";
+import { LegalList } from "./LegalDoc";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 import { checkForUpdate } from "../lib/swUpdate";
 import { ScreenSkeleton } from "./Skeleton";
@@ -22,6 +23,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   // Раздел открывается с начала, а не с того места, где была строка в списке
   useEffect(() => { window.scrollTo(0, 0); }, [section]);
   const [updState, setUpdState] = useState<"idle" | "checking" | "latest" | "error">("idle");
+  const [showDocs, setShowDocs] = useState(false);
   const [profile, setProfile] = useState<TrainerProfileData | null>(null);
   const [brand, setBrand] = useState({ brand: "", logoUrl: "" });
   const [stats, setStats] = useState<TrainerStats | null>(null);
@@ -350,11 +352,13 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
                 if (r === "latest" || r === "unsupported") setUpdState("latest");
                 else if (r === "error") setUpdState("error");
               }} />
+            <SettingsRow icon={ScrollText} label="Документы" onClick={() => setShowDocs(true)} />
             {onSignOut && <SettingsRow icon={LogOut} label="Выйти" danger onClick={onSignOut} />}
           </SettingsGroup>
         </>
       )}
       {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
+      {showDocs && <LegalList slugs={["privacy", "terms", "consent"]} onClose={() => setShowDocs(false)} />}
     </div>
   );
 }
