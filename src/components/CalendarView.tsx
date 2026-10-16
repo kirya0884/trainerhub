@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
-import { CalendarDays, CalendarX, Check, ClipboardList, UserX, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share } from "lucide-react";
+import { CalendarDays, Check, ClipboardList, UserX, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share, Trash2 } from "lucide-react";
 import { bookingsOverlap, expandBookings, toMin } from "../lib/bookings";
 import type { Booking, Occurrence } from "../lib/bookings";
 import * as clientsApi from "../lib/clients";
@@ -65,6 +65,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   }, [pendingOcc, bookings, bookingsHook.loading]);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
   const [noShow, setNoShow] = useState<Occurrence | null>(null);
+  const [delOcc, setDelOcc] = useState<Occurrence | null>(null);
   const [renew, setRenew] = useState<string | null>(null);
   const [remind, setRemind] = useState<{ id: string; date: string; time: string } | null>(null);
   // Сначала статус записи (кнопка пропадает — второй раз не спишем), потом списание
@@ -477,9 +478,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
               {quickView.status === "scheduled" && (
                 <button onClick={() => { setNoShow(quickView); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-orange-500/15 text-orange-400 font-semibold rounded-xl text-sm transition"><UserX size={15} /> Не пришёл</button>
               )}
-              {quickView.isOccurrence && (
-                <button onClick={() => askConfirm("Отменить занятие на эту дату?", () => { cancelOccurrence(findBookingById(quickView.id)!, quickView.occDate); setQuickView(null); })} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-red-500/15 text-red-400 font-semibold rounded-xl text-sm transition"><CalendarX size={15} /> Отменить</button>
-              )}
+              <button onClick={() => { setDelOcc(quickView); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-red-500/15 text-red-400 font-semibold rounded-xl text-sm transition"><Trash2 size={15} /> Удалить</button>
             </div>
           </div>
         </ModalShell>
@@ -541,6 +540,33 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
           onDelete={modal.booking ? () => askConfirm("Удалить запись? Это действие необратимо.", async () => { await deleteBooking(modal.booking!.id); setModal(null); }) : undefined}
         />
       )}
+
+      {/* Удаление из карточки записи. Разовая — сразу; у серии — выбор: дата, дата и дальше, вся серия.
+          Абонемент не трогаем: удаление записи — не отмена проведённой тренировки. */}
+      {delOcc && (() => {
+        const b = findBookingById(delOcc.id);
+        const run = async (fn: () => Promise<void>) => {
+          setDelOcc(null);
+          try { await fn(); } catch (e) { console.error("[CalendarView] delete:", e); notify("Не удалось удалить запись."); }
+        };
+        const when = `${dayTitle(delOcc.date).toLowerCase()}, ${delOcc.time}`;
+        return (
+          <ModalShell title="Удалить запись" onClose={() => setDelOcc(null)}>
+            <div className="p-4 space-y-2">
+              <p className="text-sm text-zinc-300 mb-3">{namesOf(delOcc)} · {when}{delOcc.recurring ? " · повторяется еженедельно" : ""}</p>
+              {!delOcc.recurring || !b ? (
+                <button onClick={() => run(() => deleteBooking(delOcc.id))} className="w-full h-12 bg-red-500 hover:bg-red-400 text-white font-semibold rounded-xl text-sm transition">Удалить</button>
+              ) : (<>
+                <button onClick={() => run(() => cancelOccurrence(b, delOcc.occDate))} className="w-full h-12 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition">Только это занятие</button>
+                <button onClick={() => run(() => delOcc.occDate <= b.date ? deleteBooking(b.id) : updateBooking(b.id, { recurUntil: addDays(delOcc.occDate, -1) }))}
+                  className="w-full h-12 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition">Это и все следующие</button>
+                <button onClick={() => run(() => deleteBooking(b.id))} className="w-full h-12 bg-red-500 hover:bg-red-400 text-white font-semibold rounded-xl text-sm transition">Всю серию, включая прошлые</button>
+              </>)}
+              <button onClick={() => setDelOcc(null)} autoFocus className="w-full h-11 text-zinc-400 hover:text-zinc-100 text-sm font-semibold transition">Не удалять</button>
+            </div>
+          </ModalShell>
+        );
+      })()}
 
       {confirmPending && (
         <ModalShell title="Подтверждение" onClose={() => setConfirmPending(null)}>
