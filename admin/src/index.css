@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Токены: тёмная тема по умолчанию, светлая — класс .light на <html>.
+   Цвета рядов графиков — проверенная палитра (dataviz), шаги для каждой темы свои. */
+:root {
+  color-scheme: dark;
+  --bg: 11 11 13; --surface: 20 20 23; --surface2: 28 28 33; --line: 39 39 44;
+  --ink: 244 244 245; --ink2: 161 161 170; --ink3: 133 133 143;
+  --accent: 163 230 53; --onaccent: 12 13 10; --good: 132 204 22; --bad: 242 85 90;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181;
+  --seq0: #1c2733; --seq1: #1d3d63; --seq2: #22579a; --seq3: #2f74cc; --seq4: #5f9bec; --seq5: #a7c8f5;
+  --grid: rgba(255, 255, 255, 0.07);
+}
+html.light {
+  color-scheme: light;
+  --bg: 244 244 242; --surface: 255 255 255; --surface2: 239 239 236; --line: 226 226 222;
+  --ink: 17 17 19; --ink2: 75 75 82; --ink3: 107 107 115;
+  --accent: 101 163 13; --onaccent: 255 255 255; --good: 77 124 15; --bad: 201 48 44;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4;
+  --seq0: #eef3fa; --seq1: #cfe0f5; --seq2: #9fc2ec; --seq3: #5f9bec; --seq4: #2a78d6; --seq5: #174f96;
+  --grid: rgba(0, 0, 0, 0.07);
+}
+html, body { background: rgb(var(--bg)); color: rgb(var(--ink)); }
+body { font-family: "Onest Variable", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+.num { font-variant-numeric: tabular-nums; }
