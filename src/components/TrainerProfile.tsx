@@ -6,6 +6,7 @@ import { fileToThumb } from "../lib/thumb";
 import { supabase } from "../lib/supabase";
 import SubscriptionModal from "./SubscriptionModal";
 import { LegalList } from "./LegalDoc";
+import { deleteMyAccount } from "../lib/account";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 import { checkForUpdate } from "../lib/swUpdate";
 import { ScreenSkeleton } from "./Skeleton";
@@ -354,6 +355,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
               }} />
             <SettingsRow icon={ScrollText} label="Документы" onClick={() => setShowDocs(true)} />
             {onSignOut && <SettingsRow icon={LogOut} label="Выйти" danger onClick={onSignOut} />}
+            <SettingsRow icon={Trash2} label="Удалить аккаунт" danger onClick={() => deleteMyAccount("trainer")} />
           </SettingsGroup>
         </>
       )}

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageCircle, MessageSquare, Play, Ruler, ScrollText, Settings, TrendingUp, User } from "lucide-react";
+import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageCircle, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ModalShell from "./ModalShell";
 import { LegalList } from "./LegalDoc";
+import { deleteMyAccount } from "../lib/account";
 import ClientSettingsModal from "./ClientSettingsModal";
 import BodyTab from "./BodyTab";
 import NutritionDiary from "./NutritionDiary";
@@ -170,6 +171,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             <button onClick={() => { setShowNav(false); setShowPinSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Lock size={18} className="text-zinc-400" /> <span className="font-medium">PIN-код на вход</span></button>
             <button onClick={() => { setShowNav(false); setShowDocs(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><ScrollText size={18} className="text-zinc-400" /> <span className="font-medium">Документы</span></button>
             <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-red-400"><LogOut size={18} /> <span className="font-medium">Выйти</span></button>
+            <button onClick={() => { setShowNav(false); deleteMyAccount("client"); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-zinc-500"><Trash2 size={18} /> <span className="font-medium">Удалить аккаунт</span></button>
           </div>
         </ModalShell>
       )}

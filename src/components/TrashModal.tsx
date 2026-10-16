@@ -31,6 +31,8 @@ export default function TrashModal({ trainerId, onClose }: { trainerId: string; 
     <ModalShell title="Корзина" icon={<Trash size={17} className="text-lime-400" />} onClose={onClose}>
       <div className="p-4 space-y-4 text-sm overflow-y-auto">
         {loading && <SkeletonRows />}
+        {/* Срок из политики обработки данных; удаляет ночная задача purge_trash в базе */}
+        <p className="text-xs text-zinc-500">Удалённое хранится здесь 30 дней, затем удаляется навсегда.</p>
         {!loading && clients.length === 0 && plans.length === 0 && <p className="text-zinc-600 text-center py-6">Корзина пуста</p>}
 
         {clients.length > 0 && (
