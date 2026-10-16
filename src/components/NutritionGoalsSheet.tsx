@@ -164,6 +164,8 @@ function GoalCalculator({ clientId, measurements, onTake }: { clientId: string; 
             ))}
           </div>
           <p className="text-[12px] text-zinc-500">Формула Миффлина — Сан-Жеора. Похудение −15% калорий, набор +10%. Белок от веса тела, жиры 0,9 г на кг.</p>
+          {/* Оговорка из пользовательского соглашения: расчёт справочный, не медицинская услуга */}
+          <p className="text-[12px] text-zinc-500">Расчёт справочный и не является медицинской рекомендацией. При заболеваниях, беременности и особых состояниях цели по питанию подбирает врач.</p>
           <button onClick={take} className="w-full h-11 rounded-xl bg-zinc-100 text-zinc-950 text-sm font-bold hover:bg-white transition">Взять эти цифры</button>
         </>
       ) : <p className="text-[13px] text-zinc-500">Укажите вес, рост и возраст.</p>}
