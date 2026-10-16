@@ -5,6 +5,8 @@ import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
 import { LegalPage, useLegalRoute } from "./components/LegalDoc";
+import ConsentGate from "./components/ConsentGate";
+import { needsConsent } from "./lib/consents";
 import ClientsList from "./components/ClientsList";
 import Dashboard from "./components/Dashboard";
 import { useBookings } from "./hooks/useBookings";
@@ -204,6 +206,8 @@ export default function App() {
     replaceView(rest as View);
   }, [view, replaceView]);
   const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
+  // Экран согласия: undefined — ещё проверяем журнал, true — нужно подтвердить документы
+  const [consentGate, setConsentGate] = useState<boolean | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
   // B17: общие данные грузим один раз здесь, а не в каждой вкладке заново.
   // Хуки обязаны вызываться до ранних return ниже, поэтому пустой id = «пока не грузим».
@@ -306,6 +310,14 @@ export default function App() {
     return () => clearInterval(id);
   }, [session, isTrainer]);
 
+  const consentRole = isTrainer ? "trainer" : selfClient ? "client" : null;
+  useEffect(() => {
+    if (!session || !consentRole) { setConsentGate(undefined); return; }
+    let alive = true;
+    needsConsent(session.user.id, consentRole).then((v) => { if (alive) setConsentGate(v); });
+    return () => { alive = false; };
+  }, [session?.user.id, consentRole]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     // Клиента в аналитике выставляет его кабинет — здесь только тренер и выход
     if (isTrainer && session) setAnalyticsContext({ actor: "trainer", trainerId: session.user.id });
@@ -345,7 +357,8 @@ export default function App() {
   if (!session) return <AuthScreen />;
 
   if (isRecovery) return <PasswordResetScreen onDone={() => setIsRecovery(false)} />;
-  if (selfClient === undefined || isTrainer === undefined) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
+  if (selfClient === undefined || isTrainer === undefined || (consentRole && consentGate === undefined)) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
+  if (consentRole && consentGate) return <ConsentGate role={consentRole} onDone={() => setConsentGate(false)} />;
 
   if (selfClient) {
     return (

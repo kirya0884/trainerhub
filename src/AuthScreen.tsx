@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { supabase } from "./lib/supabase";
 import { DocLink } from "./components/LegalDoc";
+import { markSignupConsent } from "./lib/consents";
 import { ArrowLeft, Dumbbell, User } from "lucide-react";
 
 // Тренер — email+пароль (open signup, role:"trainer" в metadata создаёт строку в trainers через триггер).
@@ -51,6 +52,8 @@ export default function AuthScreen() {
       ({ error } = await supabase.auth.signInWithPassword({ email, password }));
     } else if (isSignup) {
       ({ error } = await supabase.auth.signUp({ email, password, options: { data: { role: "trainer" } } }));
+      // Согласие с галочки запишется в журнал при первом входе (до входа писать в базу нельзя)
+      if (!error) markSignupConsent();
       if (!error) setMsg("Регистрация прошла — проверь почту для подтверждения.");
     } else {
       ({ error } = await supabase.auth.signInWithPassword({ email, password }));

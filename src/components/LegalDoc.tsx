@@ -31,7 +31,10 @@ export function DocLink({ slug, children, className = "" }: { slug: DocSlug; chi
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" onClick={(e) => { e.preventDefault(); setOpen(true); }} className={`inline text-lime-400 hover:text-lime-300 underline underline-offset-2 text-left ${className}`}>{children ?? DOCS[slug].short}</button>
+      {/* span, а не button: кнопка — блок и рвёт строку текста согласия. preventDefault — чтобы клик
+          по ссылке внутри label не ставил галочку */}
+      <span role="button" tabIndex={0} onClick={(e) => { e.preventDefault(); setOpen(true); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
+        className={`cursor-pointer text-lime-400 hover:text-lime-300 underline underline-offset-2 ${className}`}>{children ?? DOCS[slug].short}</span>
       {open && <LegalModal slug={slug} onClose={() => setOpen(false)} />}
     </>
   );
