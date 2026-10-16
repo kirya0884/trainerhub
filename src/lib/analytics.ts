@@ -5,17 +5,6 @@ import { toDateStr } from "./format";
 
 // Чистые функции аналитики дашборда — без сетевых вызовов, работают над уже загруженными clients/payments.
 
-export function monthlyRevenue(payments: DashboardPayment[], months = 6) {
-  const now = new Date();
-  const buckets = Array.from({ length: months }, (_, i) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (months - 1 - i), 1);
-    return { key: toDateStr(d).slice(0, 7), label: d.toLocaleDateString("ru-RU", { month: "short" }), total: 0 };
-  });
-  const byKey = Object.fromEntries(buckets.map((b) => [b.key, b]));
-  for (const p of payments) { if (p.payStatus !== "paid") continue; const b = byKey[p.date?.slice(0, 7)]; if (b) b.total += p.amount; }
-  return buckets;
-}
-
 export function topClientsByRevenue(clients: DashboardClient[], payments: DashboardPayment[], n = 5) {
   const totals: Record<string, number> = {};
   for (const p of payments) { if (p.payStatus === "paid") totals[p.clientId] = (totals[p.clientId] || 0) + p.amount; }
@@ -65,13 +54,4 @@ export function debtClients(clients: DashboardClient[]) {
 // Сумма отложенных/рассрочных платежей (ещё не оплачено)
 export function pendingPaymentsTotal(payments: DashboardPayment[]) {
   return payments.filter((p) => p.payStatus !== "paid").reduce((s, p) => s + p.amount, 0);
-}
-
-// Клиенты с отложенными платежами
-export function pendingPaymentClients(clients: DashboardClient[], payments: DashboardPayment[]) {
-  const pending: Record<string, number> = {};
-  for (const p of payments) {
-    if (p.payStatus !== "paid") pending[p.clientId] = (pending[p.clientId] || 0) + p.amount;
-  }
-  return clients.filter((c) => pending[c.id]).map((c) => ({ c, amount: pending[c.id] })).sort((a, b) => b.amount - a.amount);
 }

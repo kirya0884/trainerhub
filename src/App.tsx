@@ -33,6 +33,7 @@ import { setAnalyticsContext } from "./lib/events";
 const PlanEditor = lazyRetry(() => import("./components/PlanEditor"));
 const PlansOverview = lazyRetry(() => import("./components/PlansOverview"));
 const MeTab = lazyRetry(() => import("./components/MeTab"));
+const FinanceView = lazyRetry(() => import("./components/FinanceView"));
 const ClientProfile = lazyRetry(() => import("./components/ClientProfile"));
 const CalendarView = lazyRetry(() => import("./components/CalendarView"));
 const ClientPortal = lazyRetry(() => import("./components/ClientPortal"));
@@ -44,7 +45,7 @@ const TrainerProfile = lazyRetry(() => import("./components/TrainerProfile"));
 const SessionModal = lazyRetry(() => import("./components/SessionModal"));
 const GroupSessionModal = lazyRetry(() => import("./components/GroupSessionModal"));
 
-type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" | "me" } | { kind: "trainerProfile" } | { kind: "me"; meAction?: "food" | "workout" | "measure" };
+type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" | "me" } | { kind: "trainerProfile" } | { kind: "me"; meAction?: "food" | "workout" | "measure" } | { kind: "finance" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "me" | "trainerProfile";
 const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
   dashboard: { label: "Главная", icon: Home },
@@ -416,6 +417,7 @@ export default function App() {
     view.kind === "client" ? "clients"
     : view.kind === "plan" ? (view.from === "plans" ? "plans" : view.from === "me" ? "me" : "clients")
     : view.kind === "trainerProfile" ? null
+    : view.kind === "finance" ? "dashboard"
     : view.kind;
 
   return (
@@ -492,7 +494,10 @@ export default function App() {
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
         {view.kind === "dashboard" && (
-          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} recentSlot={recentRow} onOpenClient={openClient} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
+          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} recentSlot={recentRow} onOpenClient={openClient} onOpenFinance={() => go({ kind: "finance" })} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
+        )}
+        {view.kind === "finance" && (
+          <FinanceView trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onBack={goBack} />
         )}
         {view.kind === "calendar" && (
           <CalendarView trainerId={session.user.id} bookingsHook={bookingsHook} clients={clients ?? []} reloadClients={reloadClients} openBooking={view.newBooking} newBookingClientId={view.newBookingClientId} openOccurrence={view.openOccurrence} onOpenClient={openClient} onOpenClientPlans={(clientId) => openClient(clientId, "plans")} />

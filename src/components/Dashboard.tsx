@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import { Fragment, Suspense, useEffect, useRef, useState } from "react";
-import { BarChart3, Bell, BellOff, Cake, CalendarClock, Check, ChevronDown, ChevronRight, Clock, Eye, EyeOff, Hourglass, Play, TriangleAlert, Wallet } from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Bell, BellOff, Cake, CalendarClock, Check, ChevronRight, Clock, Hourglass, Play, TriangleAlert, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
@@ -8,14 +8,10 @@ import type { Booking } from "../lib/bookings";
 import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import { supabase } from "../lib/supabase";
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, isPushSupported } from "../lib/pushSubscribe";
-import { lazyRetry } from "../lib/lazy";
-import { SkeletonRows } from "./Skeleton";
 import { today, addDays } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
 import { remainingOf } from "../lib/clients";
 import { notify } from "../lib/dialog";
-// Аналитика с графиками открывается по кнопке — грузим её только тогда (графики тяжёлые)
-const AnalyticsPanel = lazyRetry(() => import("./AnalyticsPanel"));
 
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер"; };
 // Ш4б: обычный заголовок раздела вместо мелкого капса с разрядкой над каждым блоком
@@ -25,23 +21,7 @@ const SectionTitle = ({ children, right }: { children: ReactNode; right?: ReactN
 // Минуты до начала (отрицательные — уже идёт)
 const minsUntil = (date: string, time: string) => Math.round((new Date(`${date}T${time || "00:00"}:00`).getTime() - Date.now()) / 60000);
 
-function DonutChart({ pct, size = 72 }: { pct: number; size?: number }) {
-  const r = (size - 10) / 2;
-  const circ = 2 * Math.PI * r;
-  const dash = Math.min(1, pct / 100) * circ;
-  return (
-    <svg width={size} height={size} style={{ transform: "rotate(-90deg)" }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" className="stroke-zinc-800" strokeWidth={8} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" className="stroke-lime-400" strokeWidth={8}
-        strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" />
-    </svg>
-  );
-}
-
-
-const PERIODS = [["day", "День"], ["week", "Неделя"], ["month", "Месяц"]] as const;
-
-export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence, recentSlot }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenOccurrence?: (id: string, occDate: string) => void; recentSlot?: ReactNode }) {
+export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence, recentSlot, onOpenFinance }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenFinance: () => void; onOpenOccurrence?: (id: string, occDate: string) => void; recentSlot?: ReactNode }) {
   // Имя клиента как ссылка на карточку. Наследует цвет родителя, поэтому одинаково
   // работает в белом расписании и в цветных алертах.
   // ponytail: тап-зону 44px по вертикали внутри строки текста не сделать, не разорвав абзац.
@@ -56,13 +36,8 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
     >{name}</button>
   );
   const [data, setData] = useState<{ clients: DashboardClient[]; payments: DashboardPayment[] } | null>(null);
-  const [period, setPeriod] = useState<string>("month");
-  const [showAnalytics, setShowAnalytics] = useState(false);
-  const [showPayments, setShowPayments] = useState(false);
   // Ш4б: какой чип «Требует внимания» раскрыт (имена под ним)
   const [attn, setAttn] = useState<"debt" | "exp" | "bday" | null>(null);
-  const [showMoney, setShowMoney] = useState(false);
-  const [hideRevenue, setHideRevenue] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
@@ -161,26 +136,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
     </div>
   );
   const { clients, payments } = data;
-  const clientById = Object.fromEntries(clients.map((c) => [c.id, c]));
   const todayStr = today();
-  const weekAgo = addDays(todayStr, -6);
-  const inPeriod = (d: string) => {
-    if (!d) return false;
-    if (period === "day") return d === todayStr;
-    if (period === "month") return d.slice(0, 7) === todayStr.slice(0, 7);
-    return d >= weekAgo && d <= todayStr;
-  };
-  // ponytail: доход считаем по факту проведённых тренировок — (цена абонемента / кол-во в пакете) на клиента, не по журналу платежей
-  const periodStart = period === "day" ? todayStr : period === "month" ? `${todayStr.slice(0, 7)}-01` : weekAgo;
-  const doneOccurrences = expandBookings(bookings, periodStart, todayStr).filter((o) => o.status === "done");
-  const pricePerSession = (c: DashboardClient) => {
-    const m = c.membership;
-    if (m.type === "subscription") return Number(m.pricePerSession) || 0;
-    const total = Number(m.total);
-    return total > 0 ? (Number(m.packagePrice) || 0) / total : 0;
-  };
-  const income = doneOccurrences.reduce((sum, o) => sum + o.clientIds.reduce((s, id) => { const c = clients.find((x) => x.id === id); return c ? s + pricePerSession(c) : s; }, 0), 0);
-  const trainingsDone = doneOccurrences.length;
 
   const activeClients = clients.filter((c) => c.status !== "left");
   const debt = activeClients.filter((c) => c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && Number(c.membership.remaining) <= 0);
@@ -198,21 +154,14 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
 
   const todayOccurrences = expandBookings(bookings, todayStr, todayStr).sort((a, b) => a.time.localeCompare(b.time));
   const weekUpcoming = expandBookings(bookings, todayStr, addDays(todayStr, 6)).filter((o) => o.status === "scheduled");
-  const last30 = expandBookings(bookings, addDays(todayStr, -29), todayStr).filter((o) => o.status === "done" || o.status === "no-show");
-  const attendanceRate = last30.length ? Math.round((last30.filter((o) => o.status === "done").length / last30.length) * 100) : null;
   const trainedThisWeek = expandBookings(bookings, addDays(todayStr, -6), todayStr).filter((o) => o.status === "done").length;
-  const periodLabel = period === "day" ? "сегодня" : period === "week" ? "неделя" : new Date(todayStr + "T00:00:00").toLocaleDateString("ru-RU", { month: "long", year: "numeric" });
 
-  // Оплаты за текущий месяц из client_payments (реальные поступления, не расчётный доход)
+  // Карточка «Финансы»: поступления текущего месяца и все неоплаченные (подробности — на экране финансов)
   const thisMonth = todayStr.slice(0, 7);
   const paymentsThisMonth = payments.filter((p) => p.date.startsWith(thisMonth));
   const cashReceived = paymentsThisMonth.filter((p) => p.payStatus === "paid").reduce((s, p) => s + p.amount, 0);
-  const cashPending = paymentsThisMonth.filter((p) => p.payStatus !== "paid").reduce((s, p) => s + p.amount, 0);
-  // Подписки с истекающей датой в течение 7 дней
-  const upcomingRenewals = activeClients.filter((c) => {
-    const d = c.membership?.nextPaymentDate;
-    return d && d >= todayStr && d <= addDays(todayStr, 7);
-  });
+  const monthName = new Date(todayStr + "T00:00:00").toLocaleDateString("ru-RU", { month: "long" });
+  const cashPending = payments.filter((p) => p.payStatus !== "paid").reduce((s, p) => s + p.amount, 0);
 
 
 
@@ -395,143 +344,20 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           история открытий и закрепление. Дашборд только ставит его на нужное место. */}
       {recentSlot}
 
-      {/* B21: деньги свёрнуты в одну строку. Внутри — прежние блоки дохода, аналитики
-           и оплат без единой правки; фрагмент не создаёт узла, поэтому space-y-5 не едет. */}
-      <button
-        onClick={() => setShowMoney((v) => !v)}
-        aria-expanded={showMoney}
-        className="w-full flex items-center gap-2.5 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3 text-left transition hover:border-zinc-700"
-      >
-        <Wallet size={16} className="text-lime-400 shrink-0" />
-        <span className="text-sm font-semibold text-zinc-400 truncate">Доход: {periodLabel}</span>
-        <span className="ml-auto text-base font-bold text-zinc-100 shrink-0">
-          {hideRevenue ? "• • • •" : `${income.toLocaleString("ru-RU")} ₽`}
+      {/* Деньги — отдельный экран «Финансы»; здесь только итог месяца и вход */}
+      <button onClick={onOpenFinance} className="w-full flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3.5 text-left transition hover:border-zinc-700">
+        <span className="w-10 h-10 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center shrink-0"><Wallet size={19} /></span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-sm font-semibold text-zinc-400">Финансы · {monthName}</span>
+          <span className="block text-lg font-bold text-zinc-100 leading-tight">{cashReceived.toLocaleString("ru-RU")} ₽ <span className="text-sm font-normal text-zinc-500">поступило</span></span>
+          {(cashPending > 0 || debt.length > 0) && (
+            <span className="block text-[13px] text-orange-300 truncate">
+              {[cashPending > 0 ? `ждут оплаты ${cashPending.toLocaleString("ru-RU")} ₽` : null, debt.length > 0 ? `пакет закончился у ${debt.length}` : null].filter(Boolean).join(" · ")}
+            </span>
+          )}
         </span>
-        {showMoney
-          ? <ChevronDown size={16} className="shrink-0 text-zinc-500" />
-          : <ChevronRight size={16} className="shrink-0 text-zinc-500" />}
+        <ChevronRight size={18} className="shrink-0 text-zinc-500" />
       </button>
-
-      {showMoney && (<>
-      {/* Revenue */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-sm font-semibold text-zinc-400">Доход: {periodLabel}</p>
-          <div className="flex gap-0.5 bg-zinc-800/60 rounded-lg p-0.5">
-            {PERIODS.map(([k, l]) => (
-              <button key={k} onClick={() => setPeriod(k)} className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${period === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
-            ))}
-          </div>
-        </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
-          <div className="flex items-center gap-4">
-            <div className="relative shrink-0">
-              <DonutChart pct={income > 0 ? Math.min(100, attendanceRate ?? 0) : 0} size={68} />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-[11px] font-bold text-zinc-300">{attendanceRate != null ? `${attendanceRate}%` : "—"}</span>
-              </div>
-            </div>
-            <div className="flex-1 grid grid-cols-3 gap-2">
-              <div>
-                <div className="flex gap-0.5 mb-1.5">{[0,1,2,3].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full bg-lime-400" />)}</div>
-                <p className="text-xs text-zinc-500 leading-none">Доход</p>
-                <p className="text-sm font-bold text-zinc-100 mt-1">{hideRevenue ? "• • • •" : `${income.toLocaleString("ru-RU")} ₽`}</p>
-              </div>
-              <div>
-                <div className="flex gap-0.5 mb-1.5">{[0,1,2,3].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full bg-amber-400" />)}</div>
-                <p className="text-xs text-zinc-500 leading-none">Долг</p>
-                <p className="text-sm font-bold text-zinc-100 mt-1">{hideRevenue ? "•" : debt.length}</p>
-              </div>
-              <div>
-                <div className="flex gap-0.5 mb-1.5">{[0,1,2,3].map(i => <span key={i} className="w-1.5 h-1.5 rounded-full bg-zinc-600" />)}</div>
-                <p className="text-xs text-zinc-500 leading-none">Занятий</p>
-                <p className="text-sm font-bold text-zinc-100 mt-1">{trainingsDone}</p>
-              </div>
-            </div>
-            <button onClick={() => setHideRevenue((v) => !v)} className="text-zinc-600 hover:text-zinc-400 transition shrink-0 p-1">
-              {hideRevenue ? <Eye size={18} /> : <EyeOff size={18} />}
-            </button>
-          </div>
-          <button onClick={() => setShowAnalytics((v) => !v)} className="w-full mt-3 pt-3 border-t border-zinc-800 flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition">
-            <BarChart3 size={12} /> {showAnalytics ? "Скрыть аналитику" : "Показать аналитику"}
-          </button>
-        </div>
-      </div>
-
-      {showAnalytics && <Suspense fallback={<SkeletonRows rows={3} />}><AnalyticsPanel clients={clients} payments={payments} attendanceRate={attendanceRate} /></Suspense>}
-
-      {/* Payments dashboard */}
-      {(cashReceived > 0 || upcomingRenewals.length > 0) && (
-        <div>
-          <button onClick={() => setShowPayments(p => !p)}
-            className="flex items-center justify-between w-full mb-2">
-            <p className="text-sm font-semibold text-zinc-400">Оплаты за {thisMonth.slice(5)}.{thisMonth.slice(0, 4)}</p>
-            {showPayments ? <ChevronDown size={14} className="text-zinc-600" /> : <ChevronRight size={14} className="text-zinc-600" />}
-          </button>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-            <div className="flex items-center gap-3">
-              <Wallet size={16} className="text-lime-400 shrink-0" />
-              <div className="flex-1">
-                <p className="text-xs text-zinc-500">Поступило</p>
-                <p className="text-lg font-bold text-zinc-50">{hideRevenue ? "• • • •" : `${cashReceived.toLocaleString("ru-RU")} ₽`}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-zinc-500">Платежей</p>
-                <p className="text-lg font-bold text-zinc-50">{paymentsThisMonth.length}</p>
-              </div>
-            </div>
-            {cashPending > 0 && (
-              <div className="border-t border-zinc-800 pt-3 flex items-center gap-3">
-                <Clock size={16} className="text-orange-400 shrink-0" />
-                <div className="flex-1">
-                  <p className="text-xs text-zinc-500">Ожидается оплата</p>
-                  <p className="text-base font-bold text-orange-300">{hideRevenue ? "• • • •" : `${cashPending.toLocaleString("ru-RU")} ₽`}</p>
-                </div>
-              </div>
-            )}
-            {upcomingRenewals.length > 0 && (
-              <div className="border-t border-zinc-800 pt-3">
-                <p className="text-xs text-zinc-500 mb-1.5">Продление подписки (7 дней)</p>
-                <div className="space-y-1">
-                  {upcomingRenewals.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between text-sm">
-                      <span className="text-zinc-300">{c.name}</span>
-                      <span className="text-cyan-400 text-xs">{c.membership.nextPaymentDate}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Payments expanded list */}
-      {showPayments && paymentsThisMonth.length > 0 && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-1.5">
-          <p className="text-xs text-zinc-500 mb-1">Все платежи за месяц</p>
-          {[...paymentsThisMonth].sort((a, b) => b.date.localeCompare(a.date)).map((p, i) => {
-            const cName = clientById[p.clientId]?.name ?? "—";
-            const badge = p.payStatus === "deferred"
-              ? <span className="text-[11px] text-orange-400 bg-orange-400/10 rounded-lg px-1 shrink-0">ожидание</span>
-              : p.payStatus === "installment"
-              ? <span className="text-[11px] text-yellow-400 bg-yellow-400/10 rounded-lg px-1 shrink-0">рассрочка</span>
-              : null;
-            return (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <span className="text-zinc-500 text-xs w-[44px] shrink-0">{p.date.slice(5).replace("-", ".")}</span>
-                <span className="flex-1 text-zinc-300 truncate"><ClientLink id={p.clientId} name={cName} /></span>
-                {badge}
-                <span className={`font-semibold shrink-0 ${p.payStatus === "paid" ? "text-lime-400" : "text-orange-300"}`}>
-                  {hideRevenue ? "•••" : `${p.amount.toLocaleString("ru-RU")} ₽`}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      )}
-      </>)}
-
 
       {/* Clients */}
       <div>
