@@ -6,6 +6,7 @@ import type { Membership } from "./clients";
 import { fetchProgress, logSession } from "./progress";
 import { notifyWorkoutFinished } from "./clientsBus";
 import type { Day, Metric, Session } from "../types";
+import { track } from "./events";
 
 // Записи тренировок, сохранённые в попытке, которая потом сорвалась (например, на
 // списании). Повтор «Завершить» не пишет запись второй раз — иначе в истории дубль.
@@ -126,10 +127,12 @@ export async function finishOrQueue(opts: FinishOpts): Promise<{ membership: Mem
   let st: FinishState = {};
   try {
     const r = await finishWorkout(opts, st, (s) => { st = s; });
+    track("action", "workout_finish", { queued: false, charged: r.charged });
     return { ...r, queued: false };
   } catch (e) {
     if (!isNetworkError(e)) throw e;
     await enqueue("finish", opts, st);
+    track("action", "workout_finish", { queued: true });
     notify("Нет интернета — тренировка сохранена на телефоне и отправится сама, как только появится сеть.");
     return { membership: opts.membership ?? null, charged: false, queued: true };
   }

@@ -6,6 +6,7 @@
 // каждого шага — повтор после перезапуска не повторяет сделанное.
 
 import { supabase } from "./supabase";
+import { track } from "./events";
 
 export type OutboxKind = "finish" | "clientFinish" | "food" | "foodOp" | "product";
 export interface OutboxItem<P = any, S = any> {
@@ -73,6 +74,7 @@ export async function enqueue<P, S>(kind: OutboxKind, payload: P, state: S): Pro
     kind, owner: await currentUser(), createdAt: new Date().toISOString(), payload, state, attempts: 0,
   };
   write([...read(), item]);
+  track("action", "offline_queued", { kind });
   return item;
 }
 
@@ -91,6 +93,7 @@ export async function flushOutbox() {
       try {
         await h({ ...item, attempts: item.attempts + 1 }, save);
         write(read().filter((x) => x.id !== item.id));
+        track("action", "offline_sent", { kind: item.kind });
       } catch (e) {
         if (isNetworkError(e)) break;
         console.error("[outbox]", item.kind, e);

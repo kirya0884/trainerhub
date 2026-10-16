@@ -14,6 +14,7 @@ import type { FoodEntry, Goals, Macros, Meal, NutritionDay } from "../lib/foodDi
 import type { NutritionLog } from "../lib/nutrition";
 import { addDays, today } from "../lib/format";
 import { notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 const OVER = "#f2555a";
 const WATER = "var(--m-water)";
@@ -117,7 +118,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
 
       <div className="flex p-1 rounded-xl bg-zinc-900 border border-zinc-800">
         {([["diary", "Дневник"], ["report", "Отчёты"]] as const).map(([k, l]) => (
-          <button key={k} onClick={() => setMode(k)} aria-pressed={mode === k}
+          <button key={k} onClick={() => { setMode(k); track("view", k === "report" ? "nutrition_report" : "nutrition_diary"); }} aria-pressed={mode === k}
             className={`flex-1 h-9 rounded-lg text-sm font-semibold transition ${mode === k ? "bg-zinc-100 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
         ))}
       </div>
@@ -136,6 +137,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       <WaterCard cups={day.waterCups} goal={api.activeWater(goals)} readOnly={asTrainer} onChange={async (n) => {
         const was = day.waterCups;
         setDay((d) => ({ ...d, waterCups: n }));
+        track("action", "water", { cups: n });
         try { await api.setWaterOrQueue(clientId, date, n); }
         catch (e) { console.error("[NutritionDiary] вода:", e); setDay((d) => ({ ...d, waterCups: was })); notify("Не удалось сохранить воду. Проверьте интернет."); }
       }} />
@@ -283,7 +285,7 @@ function CommentBox({ clientId, date, initial, onSaved }: { clientId: string; da
   const save = async () => {
     if (busy) return;
     setBusy(true);
-    try { await api.saveTrainerComment(clientId, date, text); onSaved(text.trim()); setSaved(true); setTimeout(() => setSaved(false), 2000); }
+    try { await api.saveTrainerComment(clientId, date, text); track("action", "nutrition_comment"); onSaved(text.trim()); setSaved(true); setTimeout(() => setSaved(false), 2000); }
     catch (e) { console.error("[CommentBox]", e); notify("Не удалось сохранить комментарий."); }
     finally { setBusy(false); }
   };

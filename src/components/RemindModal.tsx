@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import { fetchClient } from "../lib/clients";
 import { addDays, today } from "../lib/format";
+import { track } from "../lib/events";
 
 const whenText = (date: string) => {
   const t = today();
@@ -42,10 +43,10 @@ export default function RemindModal({ clientId, name, date, time, onClose }: { c
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} aria-label="Текст напоминания"
           className="w-full bg-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-lime-400/50 resize-none" />
         <div className="grid grid-cols-2 gap-2">
-          {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={onClose} className={`${btn} bg-green-500/15 text-green-300 hover:bg-green-500/25`}><MessageCircle size={16} /> WhatsApp</a>}
-          {tg && <a href={tg} target="_blank" rel="noreferrer" onClick={copy} className={`${btn} bg-sky-500/15 text-sky-300 hover:bg-sky-500/25`}><Send size={16} /> Telegram</a>}
-          {sms && <a href={sms} onClick={onClose} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}><MessageSquare size={16} /> SMS</a>}
-          {canShare && <button onClick={() => navigator.share({ text }).catch(() => {})} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}><Share2 size={16} /> Другое</button>}
+          {wa && <a href={wa} target="_blank" rel="noreferrer" onClick={() => { track("action", "remind", { channel: "whatsapp" }); onClose(); }} className={`${btn} bg-green-500/15 text-green-300 hover:bg-green-500/25`}><MessageCircle size={16} /> WhatsApp</a>}
+          {tg && <a href={tg} target="_blank" rel="noreferrer" onClick={() => { track("action", "remind", { channel: "telegram" }); copy(); }} className={`${btn} bg-sky-500/15 text-sky-300 hover:bg-sky-500/25`}><Send size={16} /> Telegram</a>}
+          {sms && <a href={sms} onClick={() => { track("action", "remind", { channel: "sms" }); onClose(); }} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}><MessageSquare size={16} /> SMS</a>}
+          {canShare && <button onClick={() => { track("action", "remind", { channel: "share" }); navigator.share({ text }).catch(() => {}); }} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}><Share2 size={16} /> Другое</button>}
           <button onClick={copy} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}><Copy size={16} /> {copied ? "Скопировано" : "Копировать"}</button>
         </div>
         {tg && <p className="text-[13px] text-zinc-500">Telegram: текст скопируется — вставьте его в чат.</p>}

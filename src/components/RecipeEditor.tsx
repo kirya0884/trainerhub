@@ -5,6 +5,7 @@ import { MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
 import type { FoodProduct, Recipe, RecipeItem } from "../lib/foodDiary";
 import { ask, notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 const str = (n: number | null | undefined) => (n ? String(Math.round(n * 10) / 10).replace(".", ",") : "");
 const line = (m: api.Macros) => `Б ${api.fmtN(m.protein)} · Ж ${api.fmtN(m.fat)} · У ${api.fmtN(m.carbs)}`;
@@ -44,6 +45,7 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
   const save = () => run(async () => {
     if (!canSave) return;
     const id = await api.saveRecipe(clientId, { id: recipe?.id, name: name.trim(), ...draft, items: items.filter((i) => i.grams > 0) });
+    track(recipe ? "action" : "create", recipe ? "recipe_edit" : "recipe", { items: items.length });
     onSaved(id);
   }, "Не удалось сохранить рецепт. Проверьте интернет.");
   const remove = async () => {

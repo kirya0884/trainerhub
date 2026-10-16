@@ -5,6 +5,7 @@ import { GOALS } from "../constants";
 import { addClient, emptyMembership, updateClient } from "../lib/clients";
 import { fetchPackageTemplates, markPaid, type PackageTemplate, type PayStatus } from "../lib/payments";
 import { notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 const STEPS = ["Кто", "Контакты", "Здоровье", "Абонемент"];
 const rub = (n: number) => `${n.toLocaleString("ru-RU")} ₽`;
@@ -48,6 +49,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
         // «Оплата позже» — как во вкладке «Оплаты»: блок начислен, платёж в журнале «ожидается»
         await markPaid(c.id, m, [], pay);
       }
+      track("action", "client_created", { via: "wizard", contacts: !!(phone || telegram || whatsapp), health: !!(injuries || restrictions), package: !!tpl });
       onCreated(c.id);
     } catch (e) {
       console.error("[NewClientWizard] сохранение:", e);

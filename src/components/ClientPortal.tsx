@@ -26,6 +26,7 @@ import { lastTimeFor } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
 import { flushOutbox, isNetworkError } from "../lib/outbox";
+import { setAnalyticsContext, track } from "../lib/events";
 
 type Tab = "profile" | "program" | "nutrition" | "reporting";
 type ProgramSub = "active" | "completed";
@@ -43,6 +44,8 @@ const SUB_BTN = "px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0"
 
 export default function ClientPortal({ client }: { client: portalApi.SelfClient }) {
   const [tab, setTab] = useState<Tab>("profile");
+  useEffect(() => { setAnalyticsContext({ actor: "client", trainerId: client.trainerId, clientId: client.id }); return () => setAnalyticsContext(null); }, [client.id, client.trainerId]);
+  useEffect(() => { track("view", tab); }, [tab]);
   const [programSub, setProgramSub] = useState<ProgramSub>("active");
   const [reportSub, setReportSub] = useState<ReportSub>("exercises");
   const [showNav, setShowNav] = useState(false);
@@ -130,9 +133,10 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
     try {
       await portalApi.startSession(client.id, currentPlan.id, dayId, dayName);
       setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now() });
+      track("action", "workout_start");
     } catch (e) {
       // Без сети начинаем на телефоне: тренер увидит тренировку, когда она дойдёт
-      if (isNetworkError(e)) { setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now(), offlineStart: true }); return; }
+      if (isNetworkError(e)) { setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now(), offlineStart: true }); track("action", "workout_start", { offline: true }); return; }
       console.error("[ClientPortal] startDay:", e); notify("Не удалось начать тренировку. Попробуй ещё раз.");
     }
   };
@@ -558,6 +562,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                 clientId: client.id, trainerId: client.trainerId, planId: activeSession.planId, dayId: activeSession.dayId,
                 dayName: activeSession.dayName, metrics, session, offlineStart: activeSession.offlineStart,
               });
+              track("action", "workout_finish", { queued });
               if (queued) notify("Нет интернета — тренировка сохранена на телефоне и отправится сама, как только появится сеть.", "info");
               else await progressHook.reload().catch((err) => console.error("[ClientPortal] reload:", err));
               setActiveSession(null);

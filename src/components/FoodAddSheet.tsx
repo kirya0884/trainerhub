@@ -7,6 +7,7 @@ import RecipeEditor from "./RecipeEditor";
 import * as api from "../lib/foodDiary";
 import type { FoodEntry, FoodProduct, Meal, Recipe } from "../lib/foodDiary";
 import { ask, notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 const QUICK_GRAMS = [50, 100, 150, 200];
 const PORTIONS: [number, string][] = [[0.5, "½ порции"], [1, "1 порция"], [1.5, "1½"], [2, "2 порции"]];
@@ -121,6 +122,7 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
       newProduct: creating && remember ? { name: name.trim(), ...formPer100 } : undefined,
       touch: picked ? { productId: picked.id, grams: g } : pickedRecipe ? { recipeId: pickedRecipe.id, grams: g } : undefined,
     });
+    track("action", "food_add", { source: pickedRecipe ? "recipe" : picked ? "product" : remember ? "new_saved" : "new", meal, pending: !!entry.pending });
     if (entry.pending) notify("Нет интернета — запись сохранена на телефоне и отправится сама, когда появится сеть.", "info");
     onAdded(entry);
     onClose();

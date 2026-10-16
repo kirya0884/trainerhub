@@ -26,6 +26,7 @@ import { useHistoryNav } from "./hooks/useHistoryNav";
 import { useSwipeBack } from "./hooks/useSwipeBack";
 import { lazyRetry } from "./lib/lazy";
 import { ScreenSkeleton } from "./components/Skeleton";
+import { setAnalyticsContext } from "./lib/events";
 
 // Разделы и окна грузятся при первом открытии (см. lib/lazy) — главная и список
 // подопечных остаются в основном файле, чтобы первый экран открывался сразу.
@@ -302,6 +303,9 @@ export default function App() {
   }, [session, isTrainer]);
 
   useEffect(() => {
+    // Клиента в аналитике выставляет его кабинет — здесь только тренер и выход
+    if (isTrainer && session) setAnalyticsContext({ actor: "trainer", trainerId: session.user.id });
+    else if (!session) setAnalyticsContext(null);
     if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#a3e635"); }).catch((e) => console.error("[App] fetchTrainerSelf:", e));
   }, [isTrainer, session]);
   // Высота нижней панели — для того, что прижато к низу экрана вне App (свёрнутая

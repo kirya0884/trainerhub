@@ -7,6 +7,7 @@ import type { Activity, Aim, Goals, Macros, NutritionGoal, Sex } from "../lib/fo
 import type { Measurement } from "../lib/clients";
 import { fmtDate, toDateStr } from "../lib/format";
 import { ask, notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 const str = (n: number | undefined) => (n ? String(Math.round(n)) : "");
 const chip = (on: boolean) => `h-9 px-3 rounded-full text-[13px] font-semibold transition ${on ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"}`;
@@ -37,6 +38,7 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose,
   };
   const save = () => next.kcal && run(async () => {
     await api.saveGoal(clientId, who, { ...next, waterCups: water });
+    track("action", "nutrition_goal", { by: who });
     return { ...goals, [who]: { ...next, waterCups: water, updatedAt: new Date().toISOString() } };
   });
   const remove = async () => (await ask("Убрать цель тренера? Клиенту снова будет действовать его собственная цель.", { danger: true, ok: "Убрать" })) && run(async () => {

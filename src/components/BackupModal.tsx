@@ -3,6 +3,7 @@ import { Database, Download, Upload } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { downloadBackup, exportBackup, importBackup } from "../lib/backup";
 import { ask, notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 export default function BackupModal({ trainerId, onClose }: { trainerId: string; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
@@ -11,7 +12,7 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
 
   const doExport = async () => {
     setBusy(true);
-    try { downloadBackup(await exportBackup(trainerId)); }
+    try { downloadBackup(await exportBackup(trainerId)); track("action", "backup_export"); }
     finally { setBusy(false); }
   };
 
@@ -26,6 +27,7 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
         const raw = JSON.parse(String(reader.result));
         setProgress({ done: 0, total: 0 });
         const { skippedNutrition } = await importBackup(trainerId, raw, (done, total) => setProgress({ done, total }));
+        track("action", "backup_import");
         setProgress(null);
         notify("Импорт завершён. Обновите страницу, чтобы увидеть новые данные."
           + (skippedNutrition ? `\n\nЗаписи дневников питания подопечных (${skippedNutrition}) не перенесены: их ведут сами подопечные, тренеру база писать в них не даёт. Они сохранены в файле копии.` : ""));

@@ -5,6 +5,7 @@ import { SkeletonRows } from "./Skeleton";
 import { fetchClient, type Membership } from "../lib/clients";
 import { applyPromotion, fetchPackageTemplates, fetchPromotions, markPaid, type PackageTemplate, type PayStatus, type Promotion } from "../lib/payments";
 import { notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 const rub = (n: number) => `${n.toLocaleString("ru-RU")} ₽`;
 const tplPrice = (t: PackageTemplate) => (t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price);
@@ -45,7 +46,7 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
   const pay = async (status: PayStatus) => {
     if (!next || busy) return;
     setBusy(true);
-    try { await markPaid(clientId, next, data!.promos, status); onDone(); onClose(); }
+    try { await markPaid(clientId, next, data!.promos, status); track("action", "renew", { status }); onDone(); onClose(); }
     catch (e) { console.error("[RenewModal] оплата:", e); notify("Не удалось записать оплату."); }
     finally { setBusy(false); }
   };

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Day } from "../types";
 import { readJson, removeKey, writeJson } from "../lib/storage";
+import { track } from "../lib/events";
 
 export type SingleWorkout = { kind?: "single"; day: Day; planId: string; clientId: string; clientName: string };
 export type GroupClient = { id: string; name: string; color: string; remaining?: string | null };
@@ -52,6 +53,7 @@ export function ActiveWorkoutProvider({ userId, children }: { userId: string; ch
     ref.current = w;
     setActive(w);
     writeJson(KEY, w);
+    track("action", "workout_start", { mode: w.kind === "group" ? "group" : "single" });
     return true;
   }, [KEY]);
 

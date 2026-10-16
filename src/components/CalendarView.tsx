@@ -14,6 +14,7 @@ import NoShowModal, { type NoShowReason } from "./NoShowModal";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
 import { today as todayFn, addDays, addMonths, initials, plural, toDateStr } from "../lib/format";
 import { ask, notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 const WEEKDAYS_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
 const WEEKDAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -79,6 +80,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
         if (m) await clientsApi.decrementMembershipRemaining(id, m);
       }
       reloadClients();
+      track("action", "no_show", { clients: o.clientIds.length, excused: o.clientIds.filter((id) => reasons[id] === "Уважительная").length });
       setNoShow(null);
     } catch (e) {
       console.error("[CalendarView] не пришёл:", e);

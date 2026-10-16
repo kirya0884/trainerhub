@@ -32,6 +32,7 @@ import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 import StartWorkoutModal from "./StartWorkoutModal";
 import { ask, askInput, notify } from "../lib/dialog";
+import { track } from "../lib/events";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans";
 
@@ -461,7 +462,7 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   };
 
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
-    try { const merged = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus); patchMembership(merged, true); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+    try { const merged = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus); patchMembership(merged, true); track("action", "payment", { status: payStatus, via: "profile" }); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); notify("Не удалось записать оплату."); }
   };
   const doMarkPaymentPaid = async (id: string) => {
