@@ -1,7 +1,8 @@
 import { supabase } from "./supabase";
+import { upgradeLime } from "./brand";
 
 export interface TrainerProfileData { name: string; specialization: string; bio: string; phone: string; telegram: string; whatsapp: string; avatarUrl: string; trainingRules: string; accentColor: string }
-const EMPTY_PROFILE: TrainerProfileData = { name: "", specialization: "", bio: "", phone: "", telegram: "", whatsapp: "", avatarUrl: "", trainingRules: "", accentColor: "#a3e635" };
+const EMPTY_PROFILE: TrainerProfileData = { name: "", specialization: "", bio: "", phone: "", telegram: "", whatsapp: "", avatarUrl: "", trainingRules: "", accentColor: "#c6ff3d" };
 
 export interface TrainerSelf { brand: string; logoUrl: string; profile: TrainerProfileData; createdAt: string }
 
@@ -10,7 +11,7 @@ export async function fetchTrainerSelf(trainerId: string): Promise<TrainerSelf> 
   if (error) throw error;
   return {
     brand: data?.brand || "Reps", logoUrl: data?.logo_url || "",
-    profile: { ...EMPTY_PROFILE, ...(data?.profile || {}) },
+    profile: (() => { const p = { ...EMPTY_PROFILE, ...(data?.profile || {}) }; return { ...p, accentColor: upgradeLime(p.accentColor) }; })(),
     createdAt: data?.created_at || "",
   };
 }

@@ -153,7 +153,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           {section === "accent" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <div className="flex flex-wrap gap-2">
-          {["#a3e635","#22d3ee","#fb923c","#f472b6","#a78bfa","#facc15","#34d399","#f87171","#60a5fa","#e879f9"].map((c) => (
+          {["#c6ff3d","#22d3ee","#fb923c","#f472b6","#a78bfa","#facc15","#34d399","#f87171","#60a5fa","#e879f9"].map((c) => (
             <button key={c} onClick={() => setProfile({ ...profile, accentColor: c })} className="w-8 h-8 rounded-full border-2 transition" style={{ background: c, borderColor: profile.accentColor === c ? "#fff" : "transparent" }} title={c} />
           ))}
         </div>
@@ -314,7 +314,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           <div className="grid grid-cols-3 gap-2">
             {([[stats.activeClients, "активных"], [stats.plansCount, "планов"], [stats.sessionsDone, "тренировок"]] as const).map(([v, l]) => (
               <div key={l} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
-                <p className="text-[22px] font-extrabold tracking-tight">{v}</p>
+                <p className="font-display text-[22px] font-extrabold tracking-tight">{v}</p>
                 <p className="text-[13px] text-zinc-400">{l}</p>
               </div>
             ))}
@@ -333,7 +333,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           </SettingsGroup>
 
           <SettingsGroup title="Оформление">
-            <SettingsRow icon={Palette} label="Цвет акцента" value={<span className="w-[18px] h-[18px] rounded-full ring-2 ring-zinc-700" style={{ background: profile.accentColor || "#a3e635" }} />} onClick={() => setSection("accent")} />
+            <SettingsRow icon={Palette} label="Цвет акцента" value={<span className="w-[18px] h-[18px] rounded-full ring-2 ring-zinc-700" style={{ background: profile.accentColor || "#c6ff3d" }} />} onClick={() => setSection("accent")} />
             {onThemeChange && <SettingsRow icon={themeMode === "light" ? Sun : Moon} label="Тема" value={themeMode === "light" ? "Светлая" : "Тёмная"} onClick={() => onThemeChange(themeMode === "light" ? "dark" : "light")} />}
             {tabs && onToggleTab && <SettingsRow icon={LayoutGrid} label="Нижняя панель" value={`${tabs.filter((t) => t.visible).length} разд.`} onClick={() => setSection("tabs")} />}
           </SettingsGroup>

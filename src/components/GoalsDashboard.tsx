@@ -41,7 +41,7 @@ function RingCard({ label, unit, actual, goal, periodDays, color }: {
   if (!goal) return null;
   const target = goal * periodDays;
   const pct = target > 0 ? Math.min(100, (actual / target) * 100) : 0;
-  const col = pct >= 90 ? "#a3e635" : pct >= 65 ? "#fbbf24" : "#f87171";
+  const col = pct >= 90 ? "#c6ff3d" : pct >= 65 ? "#fbbf24" : "#f87171";
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="relative">
@@ -151,7 +151,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
   const weeksInPeriod = Math.max(1, period / 7);
   const expectedSessions = Math.round((goals.sessionsPerWeek ?? 0) * weeksInPeriod);
   const sessionPct = expectedSessions > 0 ? Math.min(100, Math.round((sessions / expectedSessions) * 100)) : 0;
-  const sessionColor = sessionPct >= 90 ? "#a3e635" : sessionPct >= 65 ? "#fbbf24" : "#f87171";
+  const sessionColor = sessionPct >= 90 ? "#c6ff3d" : sessionPct >= 65 ? "#fbbf24" : "#f87171";
 
   const hasNutGoals = goals.calories || goals.protein || goals.carbs || goals.fat;
   const hasActGoals = goals.steps || goals.activeMinutes;
@@ -226,7 +226,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
               <p className="text-[11px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 justify-items-center">
                 <RingCard label="Калории" unit="ккал" actual={nutSum("calories")} goal={goals.calories ?? 0} periodDays={totalDays} color="#fb923c" />
-                <RingCard label="Белок" unit="г" actual={nutSum("protein")} goal={goals.protein ?? 0} periodDays={totalDays} color="#a3e635" />
+                <RingCard label="Белок" unit="г" actual={nutSum("protein")} goal={goals.protein ?? 0} periodDays={totalDays} color="#c6ff3d" />
                 <RingCard label="Углеводы" unit="г" actual={nutSum("carbs")} goal={goals.carbs ?? 0} periodDays={totalDays} color="#22d3ee" />
                 <RingCard label="Жиры" unit="г" actual={nutSum("fat")} goal={goals.fat ?? 0} periodDays={totalDays} color="#f472b6" />
               </div>
@@ -239,7 +239,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
               {!activities.length && <p className="text-xs text-zinc-600 mb-3">Клиент не логировал активность в этом периоде</p>}
               <p className="text-[11px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
               <div className="grid grid-cols-2 gap-4 justify-items-center">
-                <RingCard label="Шаги" unit="шаг" actual={actSum("steps")} goal={goals.steps ?? 0} periodDays={totalDays} color="#a3e635" />
+                <RingCard label="Шаги" unit="шаг" actual={actSum("steps")} goal={goals.steps ?? 0} periodDays={totalDays} color="#c6ff3d" />
                 <RingCard label="Акт. минут" unit="мин" actual={actSum("activeMinutes")} goal={goals.activeMinutes ?? 0} periodDays={totalDays} color="#22d3ee" />
               </div>
             </div>

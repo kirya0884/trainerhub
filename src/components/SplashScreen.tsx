@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import RepsMark from "./RepsMark";
 
 interface Props {
   onDone: () => void;
@@ -38,7 +39,7 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
         position: "fixed",
         inset: 0,
         zIndex: 9999,
-        background: "#09090b",
+        background: "#0b0d0c",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -50,12 +51,8 @@ export default function SplashScreen({ onDone, ready = false }: Props) {
       }}
     >
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20 }}>
-        <img
-          src="/icon-512.png"
-          alt=""
-          style={{ width: 100, height: 100, borderRadius: 22, objectFit: "cover" }}
-        />
-        <p style={{ color: "#a3e635", fontWeight: 800, fontSize: 22, letterSpacing: "0.1em", margin: 0 }}>REPS</p>
+        <RepsMark size={100} />
+        <p style={{ color: "#F2F1EC", fontFamily: '"Unbounded Variable", sans-serif', fontWeight: 800, fontSize: 30, letterSpacing: "-0.02em", margin: 0 }}>reps</p>
         <Spinner />
       </div>
     </div>
@@ -67,8 +64,8 @@ function Spinner() {
     <div style={{ width: 32, height: 32, position: "relative" }}>
       <svg viewBox="0 0 32 32" style={{ animation: "spin 1s linear infinite", width: 32, height: 32 }}>
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-        <circle cx="16" cy="16" r="13" fill="none" stroke="#27272a" strokeWidth="3" />
-        <circle cx="16" cy="16" r="13" fill="none" stroke="#a3e635" strokeWidth="3"
+        <circle cx="16" cy="16" r="13" fill="none" stroke="#2a2f35" strokeWidth="3" />
+        <circle cx="16" cy="16" r="13" fill="none" stroke="#c6ff3d" strokeWidth="3"
           strokeDasharray="20 62" strokeLinecap="round" />
       </svg>
     </div>

@@ -95,7 +95,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   // сворачивается, переживает переходы и перезагрузку; запись отмечается, когда завершат все
   const workout = useActiveWorkout();
   const startGroup = async (o: Occurrence) => {
-    const list = o.clientIds.map((id) => { const c = clients.find((x) => x.id === id); return { id, name: clientName(id), color: c?.color || "#a3e635", remaining: c?.remaining ?? null }; });
+    const list = o.clientIds.map((id) => { const c = clients.find((x) => x.id === id); return { id, name: clientName(id), color: c?.color || "#c6ff3d", remaining: c?.remaining ?? null }; });
     if (!(await clientsApi.confirmEmptyMembership(list))) return;
     const ok = workout.start({
       kind: "group", id: String(Date.now()),
@@ -134,7 +134,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   const gridDays = mode === "month" ? Array.from({ length: (new Date(gridEnd + "T00:00:00").getTime() - new Date(gridStart + "T00:00:00").getTime()) / 86400000 + 1 }, (_, i) => addDays(gridStart, i)) : [];
 
   const clientName = (id: string) => clients.find((c) => c.id === id)?.name || "—";
-  const clientColor = (id: string) => clients.find((c) => c.id === id)?.color || "#a3e635";
+  const clientColor = (id: string) => clients.find((c) => c.id === id)?.color || "#c6ff3d";
 
   // Неделя на телефоне шире экрана — держим выбранный день в начале видимой части
   const gridScroll = useRef<HTMLDivElement>(null);
@@ -436,7 +436,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
           <div className="p-4 space-y-3">
             <div className="flex items-start gap-3">
               <div className="min-w-0 flex-1">
-                <p className="text-4xl font-extrabold tracking-tight leading-none">{quickView.time || "—"}</p>
+                <p className="font-display text-4xl font-extrabold tracking-tight leading-none">{quickView.time || "—"}</p>
                 <p className="text-sm text-zinc-400 mt-1.5">{WEEKDAYS_FULL[(new Date(quickView.date + "T00:00:00").getDay() + 6) % 7]}, {fmt(quickView.date)} · {Number(quickView.duration) || 60} мин</p>
               </div>
               <div className="flex flex-col items-end gap-1.5 shrink-0">
@@ -455,7 +455,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                   <div key={id} className="flex items-center gap-3 bg-zinc-800/60 rounded-xl px-3 py-2.5">
                     {c?.avatarUrl
                       ? <img src={c.avatarUrl} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
-                      : <span className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center font-bold text-zinc-950" style={{ background: c?.color || "#a3e635" }}>{clientName(id)[0]}</span>}
+                      : <span className="w-10 h-10 rounded-full shrink-0 flex items-center justify-center font-bold text-zinc-950" style={{ background: c?.color || "#c6ff3d" }}>{clientName(id)[0]}</span>}
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold truncate">{clientName(id)}</p>
                       {rem != null && rem !== "" && (low

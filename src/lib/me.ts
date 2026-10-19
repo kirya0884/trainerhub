@@ -13,7 +13,7 @@ export async function ensureSelfClient(trainerId: string, name: string): Promise
   const found = await find();
   if (found) return found;
   const { data, error } = await supabase.from("clients")
-    .insert({ trainer_id: trainerId, name: name || "Я", goal: "", color: "#a3e635", joined_at: today(), is_self: true })
+    .insert({ trainer_id: trainerId, name: name || "Я", goal: "", color: "#c6ff3d", joined_at: today(), is_self: true })
     .select("id").single();
   // Две вкладки открыли «Я» одновременно — вторую вставку отбивает уникальный индекс
   if (error) { const again = await find(); if (again) return again; throw error; }

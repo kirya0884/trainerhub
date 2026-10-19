@@ -14,7 +14,7 @@ const fmtDateLabel = (s: string) => {
 };
 
 export const BOOKING_STATUS_LABEL: Record<string, string> = { scheduled: "Запланирована", done: "Проведена", cancelled: "Отменена", "no-show": "Не пришёл" };
-export const BOOKING_STATUS_COLOR: Record<string, string> = { scheduled: "#22d3ee", done: "#a3e635", cancelled: "#52525b", "no-show": "#fb923c" };
+export const BOOKING_STATUS_COLOR: Record<string, string> = { scheduled: "#22d3ee", done: "#c6ff3d", cancelled: "#52525b", "no-show": "#fb923c" };
 
 export default function BookingModal({ clients, booking, defaultDate, defaultTime, defaultClientIds, onSave, onDelete, onClose }: {
   clients: ClientListItem[];

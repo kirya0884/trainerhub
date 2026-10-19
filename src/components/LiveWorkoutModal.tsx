@@ -95,7 +95,7 @@ export default function LiveWorkoutModal({ clientId, clientName, clientColor, ac
           <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-700"
-              style={{ width: `${Math.round((doneCount / exercises.length) * 100)}%`, background: "var(--accent, #a3e635)" }}
+              style={{ width: `${Math.round((doneCount / exercises.length) * 100)}%`, background: "var(--accent, #c6ff3d)" }}
             />
           </div>
         )}
@@ -118,11 +118,11 @@ export default function LiveWorkoutModal({ clientId, clientName, clientColor, ac
               <div
                 key={ex.id}
                 className="flex items-start gap-3 rounded-xl p-3 transition"
-                style={{ background: done ? "rgba(163,230,53,0.07)" : "rgba(39,39,42,0.8)", border: `1px solid ${done ? "rgba(163,230,53,0.2)" : "rgba(63,63,70,0.6)"}` }}
+                style={{ background: done ? "color-mix(in srgb, var(--accent) 7%, transparent)" : "rgb(var(--bg-800) / 0.8)", border: `1px solid ${done ? "color-mix(in srgb, var(--accent) 20%, transparent)" : "rgb(var(--line-700) / 0.6)"}` }}
               >
                 <div className="shrink-0 mt-0.5">
                   {done
-                    ? <CheckCircle2 size={18} style={{ color: "var(--accent, #a3e635)" }} />
+                    ? <CheckCircle2 size={18} style={{ color: "var(--accent, #c6ff3d)" }} />
                     : <Circle size={18} className="text-zinc-600" />}
                 </div>
                 <div className="flex-1 min-w-0">

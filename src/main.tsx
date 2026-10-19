@@ -7,6 +7,7 @@ import OutboxBadge from "./components/OutboxBadge";
 // Шрифт в бандле, а не с Google Fonts: PWA должна работать в зале без сети,
 // а woff2 попадают в precache сервис-воркера (globPatterns в vite.config.ts)
 import "@fontsource-variable/onest";
+import "@fontsource-variable/unbounded";
 import "./index.css";
 import { registerSW } from "virtual:pwa-register";
 

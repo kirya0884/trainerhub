@@ -52,7 +52,7 @@ function SessionTimer({ startedAt }: { startedAt: number }) {
   return <>{`${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`}</>;
 }
 
-export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#a3e635", onProgress, minimized = false, onMinimize, onExpand, lastTime = null }: {
+export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#c6ff3d", onProgress, minimized = false, onMinimize, onExpand, lastTime = null }: {
   day: Day; startedAt: number;
   /** Последнее проведение этого дня — для «Как в прошлый раз» */
   lastTime?: LastTime | null;

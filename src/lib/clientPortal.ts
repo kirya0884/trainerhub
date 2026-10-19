@@ -5,6 +5,7 @@ import type { Metric, Session } from "../types";
 import { today, addDays } from "./format";
 import { enqueue, isNetworkError, pending, registerHandler } from "./outbox";
 import { fetchProgress } from "./progress";
+import { upgradeLime } from "./brand";
 
 export interface SelfClient {
   id: string; trainerId: string; name: string; color: string; goal: string;
@@ -26,9 +27,9 @@ export async function fetchSelfClient(authUserId: string): Promise<SelfClient | 
   if (error) throw error;
   if (!data) return null;
   return {
-    id: data.id, trainerId: data.trainer_id, name: data.name, color: data.color, goal: data.goal ?? "",
+    id: data.id, trainerId: data.trainer_id, name: data.name, color: upgradeLime(data.color), goal: data.goal ?? "",
     phone: data.phone ?? "", telegram: data.telegram ?? "", whatsapp: data.whatsapp ?? "", avatarUrl: data.avatar_url ?? "",
-    accentColor: data.accent_color || "#22d3ee",
+    accentColor: upgradeLime(data.accent_color) || "#22d3ee",
     health: { injuries: "", restrictions: "", notes: "", ...(data.health || {}) },
     membership: data.membership || {}, activeSession: data.active_session || null,
   };

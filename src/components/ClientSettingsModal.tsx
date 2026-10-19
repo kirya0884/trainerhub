@@ -6,7 +6,7 @@ import { fileToThumb } from "../lib/thumb";
 import { GOALS } from "../constants";
 import { notify } from "../lib/dialog";
 
-export const ACCENT_COLORS = ["#22d3ee", "#a3e635", "#fb923c", "#f472b6", "#a78bfa", "#facc15", "#34d399", "#f87171", "#60a5fa", "#e879f9"];
+export const ACCENT_COLORS = ["#22d3ee", "#c6ff3d", "#fb923c", "#f472b6", "#a78bfa", "#facc15", "#34d399", "#f87171", "#60a5fa", "#e879f9"];
 
 export interface ClientProfileFields {
   phone: string; telegram: string; whatsapp: string; avatarUrl: string; accentColor: string;

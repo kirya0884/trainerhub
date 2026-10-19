@@ -232,7 +232,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
             <Clock size={13} /> {whenLabel(nextOcc)}
           </span>
           <div className="flex items-end gap-4 mt-3">
-            <p className="text-5xl font-extrabold tracking-tight leading-none">{nextOcc.time || "—"}</p>
+            <p className="font-display text-5xl font-extrabold tracking-tight leading-none">{nextOcc.time || "—"}</p>
             <div className="min-w-0 pb-0.5">
               <p className="text-lg font-bold leading-snug flex flex-wrap items-center gap-x-1.5">
                 {nextOcc.clientIds.map((id) => {

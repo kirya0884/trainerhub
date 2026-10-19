@@ -30,6 +30,7 @@ import { useSwipeBack } from "./hooks/useSwipeBack";
 import { lazyRetry } from "./lib/lazy";
 import { ScreenSkeleton } from "./components/Skeleton";
 import { setAnalyticsContext } from "./lib/events";
+import RepsMark from "./components/RepsMark";
 
 // Разделы и окна грузятся при первом открытии (см. lib/lazy) — главная и список
 // подопечных остаются в основном файле, чтобы первый экран открывался сразу.
@@ -109,7 +110,8 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-extrabold tracking-tight text-center">Reps</h1>
+        <div className="flex justify-center"><RepsMark size={56} /></div>
+        <h1 className="text-2xl font-extrabold tracking-tight text-center">reps</h1>
         <p className="text-sm text-zinc-400 text-center">Придумай новый пароль</p>
         <form onSubmit={submit} className="space-y-3">
           <input type="password" required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
@@ -222,7 +224,7 @@ export default function App() {
   const [showSubscription, setShowSubscription] = useState(false);
   const [trainerName, setTrainerName] = useState("");
   const [trainerAvatar, setTrainerAvatar] = useState("");
-  const [trainerAccent, setTrainerAccent] = useState("#a3e635");
+  const [trainerAccent, setTrainerAccent] = useState("#c6ff3d");
   // Пишется через writeJson (в кавычках), поэтому и читаем через readJson — раньше
   // getItem возвращал '"light"', сравнение с "light" не проходило, и после
   // перезагрузки светлая тема слетала на тёмную.
@@ -322,7 +324,7 @@ export default function App() {
     // Клиента в аналитике выставляет его кабинет — здесь только тренер и выход
     if (isTrainer && session) setAnalyticsContext({ actor: "trainer", trainerId: session.user.id });
     else if (!session) setAnalyticsContext(null);
-    if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#a3e635"); }).catch((e) => console.error("[App] fetchTrainerSelf:", e));
+    if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#c6ff3d"); }).catch((e) => console.error("[App] fetchTrainerSelf:", e));
   }, [isTrainer, session]);
   // Высота нижней панели — для того, что прижато к низу экрана вне App (свёрнутая
   // тренировка, плашка «Обновить приложение»): они поднимаются над панелью.
@@ -452,9 +454,9 @@ export default function App() {
             onClick={() => go({ kind: "dashboard" })}
             title="На главный экран"
             aria-label="На главный экран"
-            className={`shrink-0 rounded-lg p-1 transition ${view.kind === "dashboard" ? "opacity-60" : "hover:bg-zinc-800"}`}
+            className={`shrink-0 rounded-lg p-1 transition ${view.kind === "dashboard" ? "" : "hover:bg-zinc-800"}`}
           >
-            <img src="/icon-512.png" alt="Reps" className="w-7 h-7 rounded-lg object-cover" />
+            <RepsMark size={28} />
           </button>
           {(() => {
             if (!ctxClientId || view.kind === "client") return null;

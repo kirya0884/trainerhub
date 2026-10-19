@@ -3,6 +3,7 @@ import { notifyClientsChanged } from "./clientsBus";
 import { CLIENT_COLORS } from "../constants";
 import { today } from "./format";
 import { ask } from "./dialog";
+import { upgradeLime } from "./brand";
 
 export interface ClientListItem {
   id: string;
@@ -43,7 +44,7 @@ export async function fetchClients(trainerId: string): Promise<ClientListItem[]>
     .order("created_at");
   if (error) throw error;
   return (data ?? []).map((c) => ({
-    id: c.id, name: c.name, goal: c.goal ?? "", color: c.color, status: c.status, format: c.format ?? "",
+    id: c.id, name: c.name, goal: c.goal ?? "", color: upgradeLime(c.color), status: c.status, format: c.format ?? "",
     activeSession: c.active_session, hasHealthFlags: !!(c.health?.injuries || c.health?.restrictions),
     remaining: remainingOf(c.membership),
     avatarUrl: c.avatar_url ?? "",
@@ -243,7 +244,7 @@ export async function fetchClient(clientId: string): Promise<ClientFull> {
     .single();
   if (error) throw error;
   return {
-    id: data.id, name: data.name, goal: data.goal ?? "", color: data.color, avatarUrl: data.avatar_url ?? "",
+    id: data.id, name: data.name, goal: data.goal ?? "", color: upgradeLime(data.color), avatarUrl: data.avatar_url ?? "",
     phone: data.phone ?? "", telegram: data.telegram ?? "", whatsapp: data.whatsapp ?? "", email: data.email ?? "",
     status: data.status, format: data.format ?? "", pauseReason: data.pause_reason ?? "", source: data.source ?? "", trial: !!data.trial,
     health: { ...emptyHealth, ...(data.health || {}) },

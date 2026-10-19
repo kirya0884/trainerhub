@@ -40,6 +40,8 @@ export default {
     extend: {
       fontFamily: {
         sans: ['"Onest Variable"', "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+        // Бренд «Сет»: заголовки и крупные цифры
+        display: ['"Unbounded Variable"', '"Onest Variable"', "system-ui", "sans-serif"],
       },
       colors: {
         zinc: family("bg"),

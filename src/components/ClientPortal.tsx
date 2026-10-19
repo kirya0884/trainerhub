@@ -220,7 +220,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             <p className="text-sm text-zinc-400">Следующая тренировка</p>
             {upcoming ? (
               <div className="flex items-end gap-3 mt-2">
-                <p className="text-5xl font-extrabold tracking-tight leading-none">{upcoming.time || "—"}</p>
+                <p className="font-display text-5xl font-extrabold tracking-tight leading-none">{upcoming.time || "—"}</p>
                 <p className="text-base font-semibold text-zinc-300 pb-0.5">{upcoming.date === todayFn() ? "Сегодня" : upcoming.date === addDays(todayFn(), 1) ? "Завтра" : fmtDate(upcoming.date)}</p>
               </div>
             ) : <p className="text-lg font-semibold text-zinc-300 mt-2">Пока нет записей</p>}
@@ -240,7 +240,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <p className="text-sm text-zinc-400">{m.type === "subscription" ? "Подписка" : "Осталось"}</p>
               {m.type !== "subscription" && m.remaining !== "" && m.remaining != null ? (
-                <p className={`text-[28px] font-extrabold tracking-tight mt-0.5 ${combinedRemaining(m as clientsApi.Membership) <= 2 ? "text-orange-400" : ""}`}>
+                <p className={`font-display text-[28px] font-extrabold tracking-tight mt-0.5 ${combinedRemaining(m as clientsApi.Membership) <= 2 ? "text-orange-400" : ""}`}>
                   {combinedRemaining(m as clientsApi.Membership)}{Number(m.remainingTotal || m.total) ? <span className="text-sm font-semibold text-zinc-500"> из {m.remainingTotal || m.total}</span> : null}
                 </p>
               ) : <p className="text-base font-semibold mt-1.5">{m.nextPaymentDate ? `оплата ${fmtDate(m.nextPaymentDate, true)}` : "активна"}</p>}
@@ -248,7 +248,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             <button onClick={() => { setTab("reporting"); setReportSub("body"); }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
               <p className="text-sm text-zinc-400">Вес</p>
               {lastWeight
-                ? <p className="text-[28px] font-extrabold tracking-tight mt-0.5">{String(lastWeight.weight).replace(".", ",")} <span className="text-sm font-semibold text-zinc-500">кг</span></p>
+                ? <p className="font-display text-[28px] font-extrabold tracking-tight mt-0.5">{String(lastWeight.weight).replace(".", ",")} <span className="text-sm font-semibold text-zinc-500">кг</span></p>
                 : <p className="text-base font-semibold mt-1.5 text-zinc-500">добавить замер</p>}
             </button>
           </div>

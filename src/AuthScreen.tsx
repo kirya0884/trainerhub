@@ -3,6 +3,7 @@ import { supabase } from "./lib/supabase";
 import { DocLink } from "./components/LegalDoc";
 import { markSignupConsent } from "./lib/consents";
 import { ArrowLeft, Dumbbell, User } from "lucide-react";
+import RepsMark from "./components/RepsMark";
 
 // Тренер — email+пароль (open signup, role:"trainer" в metadata создаёт строку в trainers через триггер).
 // Клиент — пароль выдаёт тренер (логин/пароль приходят на почту); ссылка на почту (magic-link) — запасной вариант.
@@ -84,7 +85,7 @@ export default function AuthScreen() {
   return (
     <div className="min-h-[100dvh] bg-zinc-950 text-zinc-100 flex flex-col justify-center px-5 py-10">
       <div className="w-full max-w-sm mx-auto">
-        <img src="/icon-192.png" alt="Reps" className="w-16 h-16 rounded-[20px]" />
+        <RepsMark size={64} />
         <h1 className="text-3xl font-extrabold tracking-tight mt-6 leading-tight">{title}</h1>
         <p className="text-[15px] text-zinc-400 mt-2">{subtitle}</p>
 

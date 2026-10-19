@@ -257,7 +257,7 @@ function WeekStrip({ start, kcal, goal, sel, onPick }: { start: string; kcal: Ma
     const v = kcal.get(d);
     if (v == null) return EMPTY_CELL;
     if (!goal || d === t) return MACRO_COLOR.kcal;
-    return Math.abs(v - goal) <= goal * 0.1 ? "#a3e635" : v > goal ? OVER : "#f5a524";
+    return Math.abs(v - goal) <= goal * 0.1 ? "#c6ff3d" : v > goal ? OVER : "#f5a524";
   };
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5">
@@ -321,7 +321,7 @@ function SummaryCard({ eaten, goal, onSetGoal }: { eaten: Macros; goal: Macros |
               strokeDasharray={C} strokeDashoffset={C * (1 - Math.min(1, share("kcal")))} style={{ transition: "stroke-dashoffset .4s ease" }} />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <b className="text-2xl font-extrabold tracking-tight leading-none">{api.fmtN(eaten.kcal, 0)}</b>
+            <b className="font-display text-2xl font-extrabold tracking-tight leading-none">{api.fmtN(eaten.kcal, 0)}</b>
             <small className="text-xs text-zinc-400 mt-1">{goal ? `из ${api.fmtN(goal.kcal, 0)} ккал` : "ккал"}</small>
           </div>
         </div>

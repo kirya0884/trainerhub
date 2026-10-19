@@ -345,7 +345,7 @@ function Kpi({ label, value, cur, prev, hint, sub, hide, accent }: { label: stri
 }
 
 function ClientDot({ c }: { c?: DashboardClient }) {
-  return <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c?.color || "#a3e635" }} />;
+  return <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c?.color || "#c6ff3d" }} />;
 }
 
 function Bars({ title, items, total, rub }: { title: string; items: { label: string; value: number; color?: string }[]; total: number; rub: (v: number) => string }) {
