@@ -103,16 +103,23 @@ export const reorderExercises = async (rows: { id: string; position: number }[])
   const err = res.find((r) => r.error)?.error; if (err) throw err;
 };
 
-// ponytail: serialise per-exercise to prevent concurrent DELETE+INSERT duplication
+// Подходы сохраняются upsert'ом по (exercise_id, position) — в базе стоит уникальность.
+// Раньше было «удалить всё → вставить заново» без проверки ошибок: при обрыве связи
+// удаление не проходило, вставка проходила, и подходы задваивались. Теперь повтор
+// безопасен, а лишние хвостовые подходы (если их стало меньше) удаляются отдельно.
+// Очередь на упражнение оставлена: правки одного упражнения уходят по порядку.
 const _srQ = new Map<string, Promise<void>>();
 export function setSetRows(exerciseId: string, rows: SetRow[]): Promise<void> {
   const run = async () => {
-    await supabase.from("plan_exercise_set_rows").delete().eq("exercise_id", exerciseId);
     if (rows.length) {
-      await supabase.from("plan_exercise_set_rows").insert(
-        rows.map((r, i) => ({ exercise_id: exerciseId, position: i, weight: r.weight, reps: r.reps }))
+      const { error } = await supabase.from("plan_exercise_set_rows").upsert(
+        rows.map((r, i) => ({ exercise_id: exerciseId, position: i, weight: r.weight, reps: r.reps })),
+        { onConflict: "exercise_id,position" },
       );
+      if (error) throw error;
     }
+    const { error: trimErr } = await supabase.from("plan_exercise_set_rows").delete().eq("exercise_id", exerciseId).gte("position", rows.length);
+    if (trimErr) throw trimErr;
   };
   const prev = _srQ.get(exerciseId) ?? Promise.resolve();
   // Молчание осознанное: гасим ошибку ПРЕДЫДУЩЕЙ операции в очереди, чтобы она
