@@ -254,7 +254,7 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
     <>
     {/* Свёрнутая — плашка внизу; сам экран остаётся смонтированным, чтобы не терять ввод */}
     {minimized && (
-      <WorkoutPill people={clients} title={clients.map((c) => c.name.trim().split(/s+/)[0]).join(" и ")}
+      <WorkoutPill people={clients} title={clients.map((c) => c.name.trim().split(" ")[0]).join(" и ")}
         sub={`${finishedIds.length}/${clients.length} записаны`} rest={restTimer.left > 0 ? fmtClock(restTimer.left) : undefined}
         onOpen={() => setMinimized(false)} />
     )}
