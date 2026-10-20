@@ -153,9 +153,19 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
 
       {/* Аватар, имя (редактируется на месте) и цель — по центру */}
       <div className="flex flex-col items-center text-center pt-1">
-        {client.avatarUrl
-          ? <img src={client.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover" />
-          : <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-zinc-950" style={{ background: client.color }}>{client.name.charAt(0).toUpperCase()}</div>}
+        {/* Фото подопечного ставит тренер: нажатие на аватар → выбор снимка (сжимается до превью) */}
+        <label className="relative cursor-pointer group" title="Сменить фото">
+          {client.avatarUrl
+            ? <img src={client.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover" />
+            : <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-zinc-950" style={{ background: client.color }}>{client.name.charAt(0).toUpperCase()}</div>}
+          <span className="absolute -bottom-0.5 -right-0.5 w-8 h-8 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-zinc-200 group-hover:bg-zinc-700 transition"><Camera size={15} /></span>
+          <input type="file" accept="image/*" aria-label="Сменить фото подопечного" className="hidden" onChange={async (e) => {
+            const f = e.target.files?.[0]; e.target.value = "";
+            if (!f) return;
+            try { patch({ avatarUrl: await fileToThumb(f, 320) }, true); }
+            catch (err) { console.error("[ClientProfile] фото:", err); notify("Не удалось загрузить фото."); }
+          }} />
+        </label>
         {editingName ? (
           <input autoFocus value={client.name} onChange={(e) => patch({ name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={(e) => e.key === "Enter" && setEditingName(false)} aria-label="Имя подопечного"
             className="mt-3 w-full max-w-xs h-11 bg-zinc-900 border border-zinc-700 rounded-xl text-center font-bold outline-none focus:border-lime-400/60 px-3" />

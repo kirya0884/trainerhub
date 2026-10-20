@@ -278,7 +278,8 @@ export async function inviteClient(clientId: string): Promise<{ ok?: boolean; wa
 // patch — камелкейс-поля клиента (включая membership/health целиком, если их трогаем — см. ClientProfile.patchMembership)
 export async function updateClient(clientId: string, patch: Record<string, any>) {
   const row: Record<string, any> = {};
-  for (const [k, v] of Object.entries(patch)) row[k === "pauseReason" ? "pause_reason" : k] = v;
+  const COLS: Record<string, string> = { pauseReason: "pause_reason", avatarUrl: "avatar_url" };
+  for (const [k, v] of Object.entries(patch)) row[COLS[k] ?? k] = v;
   const { error } = await supabase.from("clients").update(row).eq("id", clientId);
   if (error) throw error;
   // Н3: общий список подопечных живёт в App и раздаётся всем экранам — сообщаем,
