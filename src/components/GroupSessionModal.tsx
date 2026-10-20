@@ -1,4 +1,4 @@
-import { minibarRef } from "../lib/minibar";
+import WorkoutPill from "./WorkoutPill";
 import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
@@ -55,7 +55,7 @@ const tapSet = (slot: Slot, ex: Exercise, i: number, total: number, startRest: (
 };
 const selectCls = "h-10 bg-zinc-800 border border-zinc-700 rounded-xl px-3 text-sm outline-none focus:border-lime-400/50";
 
-export type SlotClient = { id: string; name: string; color: string; remaining?: string | null };
+export type SlotClient = { id: string; name: string; color: string; remaining?: string | null; avatarUrl?: string };
 
 // Один "слот" — полностью независимая тренировка одного подопечного: свой план/день/веса/повторы.
 // Слоты не размонтируются при переключении вкладок (см. ниже className="hidden"), поэтому ввод не теряется.
@@ -254,13 +254,9 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
     <>
     {/* Свёрнутая — плашка внизу; сам экран остаётся смонтированным, чтобы не терять ввод */}
     {minimized && (
-      <button onClick={() => setMinimized(false)} ref={minibarRef} style={{ bottom: "var(--tabbar-h, 0px)" }}
-        className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
-        <Users size={16} className="text-lime-400 shrink-0" />
-        <span className="flex-1 font-semibold truncate text-sm">{clients.map((c) => c.name).join(" и ")}</span>
-        {restTimer.left > 0 && <span className="font-mono text-sm shrink-0 text-zinc-300">отдых {fmtClock(restTimer.left)}</span>}
-        <span className="text-xs text-zinc-500 shrink-0">{finishedIds.length}/{clients.length} записаны</span>
-      </button>
+      <WorkoutPill people={clients} title={clients.map((c) => c.name).join(" и ")}
+        sub={`${finishedIds.length}/${clients.length} записаны`} rest={restTimer.left > 0 ? fmtClock(restTimer.left) : undefined}
+        onOpen={() => setMinimized(false)} />
     )}
     <div {...panelProps} className={`fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex-col outline-none ${minimized ? "hidden" : "flex"}`}>
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 pt-3 pb-2.5 shrink-0 space-y-2.5">

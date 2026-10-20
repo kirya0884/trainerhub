@@ -11,6 +11,7 @@ import ClientsList from "./components/ClientsList";
 import Dashboard from "./components/Dashboard";
 import { useBookings } from "./hooks/useBookings";
 import { useClients } from "./hooks/useClients";
+import type { ClientListItem } from "./lib/clients";
 import { usePlans } from "./hooks/usePlans";
 import { logEvent } from "./lib/events";
 import { loadViewState, saveViewState } from "./lib/viewState";
@@ -133,8 +134,10 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
  * свёрнутая плашка висит внизу поверх всего и открывается с любого экрана.
  * Раньше SessionModal жил внутри PlanEditor и исчезал при уходе с экрана плана.
  */
-function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients }: { trainerId: string; accent: string; bookingsHook: ReturnType<typeof useBookings>; reloadClients: () => void }) {
+function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients, clients }: { trainerId: string; accent: string; bookingsHook: ReturnType<typeof useBookings>; reloadClients: () => void; clients: ClientListItem[] }) {
   const { active, stop } = useActiveWorkout();
+  // Аватарки для свёрнутой тренировки — из общего списка подопечных
+  const person = (id: string) => clients.find((c) => c.id === id);
   // Совместная: кто уже записан — чтобы отметить запись календаря, когда завершат все
   const finished = useRef<Set<string>>(new Set());
   if (!active) return null;
@@ -143,7 +146,7 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients }: {
     const close = () => { clearSlotDrafts(g.id, g.clients.map((c) => c.id)); finished.current = new Set(); stop(); };
     return (
       <div style={{ "--accent": accent } as React.CSSProperties}>
-        <GroupSessionModal key={g.id} groupId={g.id} trainerId={trainerId} clients={g.clients} onClose={close}
+        <GroupSessionModal key={g.id} groupId={g.id} trainerId={trainerId} clients={g.clients.map((c) => ({ ...c, avatarUrl: person(c.id)?.avatarUrl }))} onClose={close}
           onClientFinished={async (clientId) => {
             finished.current.add(clientId);
             reloadClients();
@@ -170,6 +173,7 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients }: {
       key={active.day.id}
       day={active.day}
       planId={active.planId}
+      who={{ name: active.clientName, avatarUrl: person(active.clientId)?.avatarUrl, color: person(active.clientId)?.color }}
       onFinish={async (metrics, note, session) => {
         await finishOrQueue({
           trainerId, clientId: active.clientId, planId: active.planId,
@@ -568,7 +572,7 @@ export default function App() {
       </nav>
 
       {/* «+» — кружок справа над панелью (и над плашкой свёрнутой тренировки, если она есть) */}
-      <div className={`fixed right-4 z-40 ${kbOpen ? "hidden" : ""}`} style={{ bottom: "calc(var(--tabbar-h, 0px) + var(--minibar-h, 0px) + 12px)" }}>
+      <div className={`fixed right-4 z-40 ${kbOpen ? "hidden" : ""}`} style={{ bottom: "calc(var(--tabbar-h, 0px) + 12px)" }}>
             <button
               onClick={() => setShowFab((v) => !v)}
               aria-expanded={showFab}
@@ -605,7 +609,7 @@ export default function App() {
     </div>
     </PinGate>
     {/* Д3: вне переключателя экранов — переживает любую навигацию */}
-    <Suspense fallback={null}><ActiveWorkoutHost trainerId={session.user.id} accent={trainerAccent} bookingsHook={bookingsHook} reloadClients={reloadClients} /></Suspense>
+    <Suspense fallback={null}><ActiveWorkoutHost trainerId={session.user.id} accent={trainerAccent} bookingsHook={bookingsHook} reloadClients={reloadClients} clients={clients ?? []} /></Suspense>
     </ActiveWorkoutProvider>
     </>
   );

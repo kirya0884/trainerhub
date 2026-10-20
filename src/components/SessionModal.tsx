@@ -1,5 +1,5 @@
-import { minibarRef } from "../lib/minibar";
-import { AlertTriangle, Check, CheckCircle2, MessageSquare, Minimize2, Play, Timer, X } from "lucide-react";
+import WorkoutPill, { type PillPerson } from "./WorkoutPill";
+import { AlertTriangle, Check, CheckCircle2, MessageSquare, Minimize2, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
@@ -45,8 +45,8 @@ const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} к
 type SetVal = { weight: string; reps: string };
 type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number; setsDone?: Record<number, boolean> };
 
-export default function SessionModal({ day, planId, onFinish, onClose }: {
-  day: Day; planId?: string; onFinish: (metrics: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => void | Promise<void>; onClose: () => void;
+export default function SessionModal({ day, planId, who, onFinish, onClose }: {
+  day: Day; planId?: string; who?: PillPerson; onFinish: (metrics: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => void | Promise<void>; onClose: () => void;
 }) {
   // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
   // Вызов до любых ранних return — иначе порядок хуков поедет.
@@ -205,15 +205,9 @@ export default function SessionModal({ day, planId, onFinish, onClose }: {
 
   if (minimized) {
     return (
-      <button onClick={() => setMinimized(false)}
-        ref={minibarRef} style={{ bottom: "var(--tabbar-h, 0px)" }}
-        className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 text-zinc-100 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
-        <Play size={15} className="text-lime-400 shrink-0" />
-        <span className="flex-1 font-semibold truncate text-sm">{day.name}</span>
-        {restTimer.left > 0 && <span className="font-mono text-sm shrink-0 text-zinc-300">отдых {fmtClock(restTimer.left)}</span>}
-        <span className="font-mono text-lime-400 text-sm shrink-0">{timer}</span>
-        <span className="text-xs text-zinc-500 shrink-0">{doneEx}/{day.exercises.length} упр.</span>
-      </button>
+      <WorkoutPill people={[who ?? { name: day.name }]} title={who?.name || day.name}
+        sub={`${timer} · ${doneEx}/${day.exercises.length} упр.`} rest={restTimer.left > 0 ? fmtClock(restTimer.left) : undefined}
+        onOpen={() => setMinimized(false)} />
     );
   }
 
