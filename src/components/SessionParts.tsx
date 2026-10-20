@@ -1,6 +1,6 @@
 import { Check, Flame, History, Layers } from "lucide-react";
 import { fmtDate } from "../lib/format";
-import type { LastTime } from "../lib/sessionUtils";
+import type { LastFact, LastTime } from "../lib/sessionUtils";
 import { tonnageOf } from "../lib/sessionUtils";
 import type { Exercise } from "../types";
 
@@ -30,8 +30,15 @@ export function FlameRate({ value, onChange }: { value: number; onChange: (v: nu
  * упражнения, 1-й второго, затем 2-й первого и т. д. Раньше каждое упражнение
  * показывало все свои подходы подряд, и порядок выполнения не читался.
  */
-export function SupersetRounds({ title, color, items, labels, vals, meta, onSetVal, onTapSet, onFire, onNote }: {
-  title: string; color: string; items: Exercise[]; labels: string[];
+/** Колонки подходов с «было»: #, было, два поля, отметка */
+export const PREV_COLS = "grid-cols-[1.25rem_3.25rem_1fr_1fr_2.5rem]";
+/** «было»: вес×повторы этого подхода в прошлый раз (или прочерк, если подходов тогда было меньше) */
+export function PrevCell({ p }: { p?: { weight: string; reps: string } }) {
+  return <span className="text-[12px] text-zinc-500 text-center truncate" title="В прошлый раз">{p ? `${p.weight || "—"}×${p.reps || "—"}` : "—"}</span>;
+}
+
+export function SupersetRounds({ title, color, items, labels, vals, meta, onSetVal, onTapSet, onFire, onNote, prev = {} }: {
+  title: string; color: string; items: Exercise[]; labels: string[]; prev?: Record<string, LastFact>;
   vals: Record<string, SetVal[]>; meta: Record<string, ExMeta | undefined>;
   onSetVal: (exId: string, i: number, patch: Partial<SetVal>) => void;
   onTapSet: (ex: Exercise, i: number, total: number) => void;
@@ -76,6 +83,7 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
                   <div className="grid grid-cols-[1fr_3.5rem_3.5rem_2.5rem] gap-1.5 items-center">
                     <span className={`min-w-0 truncate text-sm font-medium ${isDone ? "text-zinc-500" : ""}`}>
                       <span className="font-bold mr-1" style={{ color }}>{labels[items.indexOf(ex)]}</span>{ex.name}
+                      {prev[ex.name.trim().toLowerCase()]?.sets[r] && <span className="block text-[11px] text-zinc-500 font-normal">было {prev[ex.name.trim().toLowerCase()]!.sets[r].weight || "—"}×{prev[ex.name.trim().toLowerCase()]!.sets[r].reps || "—"}</span>}
                     </span>
                     {ex.kind === "functional" ? (
                       <span className="col-span-2 text-xs text-zinc-400 text-center truncate">{[ex.duration, ex.weight].filter(Boolean).join(" · ") || "функц."}</span>

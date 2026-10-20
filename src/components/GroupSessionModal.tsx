@@ -5,7 +5,7 @@ import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { readSlotDraft, useSessionSlot } from "../hooks/useSessionSlot";
-import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionParts";
+import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, tonnageOf } from "./SessionParts";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
@@ -66,7 +66,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
   const s = useSessionSlot(client.id, trainerId, onFinished, groupId);
   const { plans, planId, setPlanId, plan, dayId, setDayId, day, membership, finished, busy,
     vals, meta, setVal, setMetaFor, setFire, mood, setMood, wellbeing, setWellbeing,
-    review, setReview, clientRating, setClientRating, doneEx, totalTonnage, finish } = s;
+    review, setReview, clientRating, setClientRating, doneEx, totalTonnage, finish, prevByName } = s;
   // Как в индивидуальной: текущее — первое невыполненное, выполненные сворачиваются
   const currentId = day?.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
@@ -119,13 +119,14 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
               {groupBlocks(day.exercises).map((block, bi) => {
                 if (block.group && block.items.length > 1) return (
                   <SupersetRounds key={bi} title={`${supersetName(block.items.length)} ${block.group}`} color={GROUP_COLORS[block.group]}
-                    items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
+                    prev={prevByName} items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
                     onSetVal={setVal} onTapSet={tap} onFire={setFire} onNote={(id, note) => setMetaFor(id, { note })} />
                 );
                 const cards = block.items.map((ex, k) => {
                   const idx = block.startIdx + k;
                   const rows = vals[ex.id] || [];
                   const n = rows.length;
+                  const prevSets = prevByName[ex.name.trim().toLowerCase()]?.sets;
                   const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
                   const md = meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0, setsDone: {} };
                   const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows, meta[ex.id]?.setsDone); // функциональное: вес тут не про подходы, тоннаж не считаем
@@ -164,15 +165,16 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
                         </div>
                       ) : (
                         <div className="space-y-1.5">
-                          <div className="grid grid-cols-[1.25rem_1fr_1fr_2.5rem] gap-1.5 text-[11px] text-zinc-500 text-center">
-                            <span>#</span><span>Вес, кг</span><span>Повторы</span><span />
+                          <div className={`grid ${prevSets ? PREV_COLS : "grid-cols-[1.25rem_1fr_1fr_2.5rem]"} gap-1.5 text-[11px] text-zinc-500 text-center`}>
+                            <span>#</span>{prevSets && <span>было</span>}<span>Вес, кг</span><span>Повторы</span><span />
                           </div>
                           {rows.map((r, i) => {
                             const isDone = md.setsDone?.[i] ?? false;
                             return (
                               <div key={i}>
-                                <div className="grid grid-cols-[1.25rem_1fr_1fr_2.5rem] gap-1.5 items-center">
+                                <div className={`grid ${prevSets ? PREV_COLS : "grid-cols-[1.25rem_1fr_1fr_2.5rem]"} gap-1.5 items-center`}>
                                   <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
+{prevSets && <PrevCell p={prevSets[i]} />}
                                   <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <button onClick={() => tap(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
@@ -330,6 +332,7 @@ function SetRowsFor({ name, color, ex, slot, startRest }: {
     );
   }
   const rows = slot.vals[ex.id] || [];
+  const prevSets = slot.prevByName[ex.name.trim().toLowerCase()]?.sets;
   const md = slot.meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0, setsDone: {} };
   return (
     <div className="py-2">
@@ -353,6 +356,7 @@ function SetRowsFor({ name, color, ex, slot, startRest }: {
             return (
               <div key={i} className="flex flex-col gap-1 shrink-0 w-16">
                 <div className="h-4 flex items-center justify-center text-[11px] text-zinc-500">{i + 1}</div>
+                {prevSets && <div className="h-4 -mt-1 flex items-center justify-center text-[10px] text-zinc-500 truncate" title="В прошлый раз">{prevSets[i] ? `${prevSets[i].weight || "—"}×${prevSets[i].reps || "—"}` : "—"}</div>}
                 <input value={r.weight} onChange={(e) => slot.setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг"
                   className={`h-10 w-full bg-zinc-800 rounded-xl text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                 <input value={r.reps} onChange={(e) => slot.setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт"

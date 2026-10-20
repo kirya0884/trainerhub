@@ -8,8 +8,8 @@ import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionParts";
-import { applyLastTime, lastTimeFor, type LastTime } from "../lib/sessionUtils";
+import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, tonnageOf } from "./SessionParts";
+import { applyLastTime, lastFactsByName, lastTimeFor, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
 import { parseNum, parseRest, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
@@ -140,11 +140,13 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   };
   // «Как в прошлый раз»: последнее проведение этого дня; до подстановки храним веса, чтобы вернуть план
   const [last, setLast] = useState<LastTime | null>(null);
+  // «было» у подходов — прошлый результат каждого упражнения (из любого дня плана)
+  const [prevByName, setPrevByName] = useState<Record<string, LastFact>>({});
   const [beforeLast, setBeforeLast] = useState<Record<string, SetVal[]> | null>(null);
   useEffect(() => {
     if (!planId) return;
     let alive = true;
-    fetchProgress(planId).then((d) => { if (alive) setLast(lastTimeFor(d.sessions, day)); }).catch((e) => console.error("[SessionModal] прошлый раз:", e));
+    fetchProgress(planId).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); } }).catch((e) => console.error("[SessionModal] прошлый раз:", e));
     return () => { alive = false; };
   }, [planId, day.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const applyLast = () => { if (!last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
@@ -288,13 +290,14 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
         )) : groupBlocks(day.exercises).map((block, bi) => {
           if (block.group && block.items.length > 1) return (
             <SupersetRounds key={bi} title={`${supersetName(block.items.length)} ${block.group}`} color={GROUP_COLORS[block.group]}
-              items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
+              prev={prevByName} items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
               onSetVal={setVal} onTapSet={tapSet} onFire={setFire} onNote={(id, note) => setMetaFor(id, { note })} />
           );
           const cards = block.items.map((ex, k) => {
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
             const n = rows.length;
+            const prevSets = prevByName[ex.name.trim().toLowerCase()]?.sets;
             const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
             const md = meta[ex.id] || { done: false, note: "", fires: {}, rpe: 0 };
             const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows, meta[ex.id]?.setsDone); // функциональное: вес тут не про подходы, тоннаж не считаем
@@ -326,15 +329,16 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
                 </div>
                 ) : (
                 <div className="space-y-1.5">
-                  <div className="grid grid-cols-[1.25rem_1fr_1fr_2.5rem] gap-1.5 text-[11px] text-zinc-500 text-center">
-                    <span>#</span><span>Повторы</span><span>Вес, кг</span><span />
+                  <div className={`grid ${prevSets ? PREV_COLS : "grid-cols-[1.25rem_1fr_1fr_2.5rem]"} gap-1.5 text-[11px] text-zinc-500 text-center`}>
+                    <span>#</span>{prevSets && <span>было</span>}<span>Повторы</span><span>Вес, кг</span><span />
                   </div>
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;
                     return (
                       <div key={i}>
-                        <div className="grid grid-cols-[1.25rem_1fr_1fr_2.5rem] gap-1.5 items-center">
+                        <div className={`grid ${prevSets ? PREV_COLS : "grid-cols-[1.25rem_1fr_1fr_2.5rem]"} gap-1.5 items-center`}>
                           <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
+{prevSets && <PrevCell p={prevSets[i]} />}
                           <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                           <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                           <button onClick={() => tapSet(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}

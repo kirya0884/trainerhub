@@ -4,7 +4,7 @@ import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
 import { parseNum, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
-import { applyLastTime, buildMetrics, lastTimeFor, tonnageOf, type LastTime } from "../lib/sessionUtils";
+import { applyLastTime, buildMetrics, lastFactsByName, lastTimeFor, tonnageOf, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
 import { finishOrQueue } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
@@ -132,12 +132,14 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
 
   // «Как в прошлый раз» — последнее проведение выбранного дня этого подопечного
   const [last, setLast] = useState<LastTime | null>(null);
+  // «было» у подходов — прошлый результат каждого упражнения (из любого дня плана)
+  const [prevByName, setPrevByName] = useState<Record<string, LastFact>>({});
   const [beforeLast, setBeforeLast] = useState<Record<string, SetVal[]> | null>(null);
   useEffect(() => {
     setLast(null); setBeforeLast(null);
     if (!plan || !day) return;
     let alive = true;
-    fetchProgress(plan.id).then((d) => { if (alive) setLast(lastTimeFor(d.sessions, day)); }).catch((e) => console.error("[useSessionSlot] прошлый раз:", e));
+    fetchProgress(plan.id).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); } }).catch((e) => console.error("[useSessionSlot] прошлый раз:", e));
     return () => { alive = false; };
   }, [plan?.id, day?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const applyLast = () => { if (!day || !last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
@@ -185,6 +187,6 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     vals, meta, setVal, setMetaFor, setFire, toggleSetDone, openSets,
     mood, setMood, wellbeing, setWellbeing, review, setReview, clientRating, setClientRating,
     doneEx, totalTonnage, finish,
-    last, lastApplied: !!beforeLast, applyLast, undoLast,
+    last, lastApplied: !!beforeLast, applyLast, undoLast, prevByName,
   };
 }

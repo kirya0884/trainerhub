@@ -6,8 +6,8 @@ import { buildMetrics } from "../lib/sessionUtils";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionParts";
-import { applyLastTime, type LastTime } from "../lib/sessionUtils";
+import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, tonnageOf } from "./SessionParts";
+import { applyLastTime, type LastFact, type LastTime } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
 import { ask } from "../lib/dialog";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
@@ -53,10 +53,12 @@ function SessionTimer({ startedAt }: { startedAt: number }) {
   return <>{`${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`}</>;
 }
 
-export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#c6ff3d", onProgress, minimized = false, onMinimize, onExpand, lastTime = null }: {
+export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#c6ff3d", onProgress, minimized = false, onMinimize, onExpand, lastTime = null, prevByName = {} }: {
   day: Day; startedAt: number;
   /** Последнее проведение этого дня — для «Как в прошлый раз» */
   lastTime?: LastTime | null;
+  /** «было» у подходов — прошлый результат каждого упражнения */
+  prevByName?: Record<string, LastFact>;
   onFinish: (metrics: Omit<Metric, "id">[], session: Omit<Session, "id">) => void;
   onCancel: () => void;
   accent?: string;
@@ -327,13 +329,14 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         )) : groupBlocks(day.exercises).map((block, bi) => {
           if (block.group && block.items.length > 1) return (
             <SupersetRounds key={bi} title={`${supersetName(block.items.length)} ${block.group}`} color={GROUP_COLORS[block.group]}
-              items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
+              prev={prevByName} items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
               onSetVal={setVal} onTapSet={tapSet} onFire={setFire} onNote={(id, note) => setMetaFor(id, { note })} />
           );
           const cards = block.items.map((ex, k) => {
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
             const n = rows.length;
+            const prevSets = prevByName[ex.name.trim().toLowerCase()]?.sets;
             const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
             const md = meta[ex.id] || { fires: {}, note: "", done: false };
             const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows, meta[ex.id]?.setsDone); // функциональное: вес тут не про подходы, тоннаж не считаем
@@ -366,15 +369,16 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                 </div>
                 ) : (
                 <div className="space-y-1.5">
-                  <div className="grid grid-cols-[1.25rem_1fr_1fr_2.5rem] gap-1.5 text-[11px] text-zinc-500 text-center">
-                    <span>#</span><span>Повторы</span><span>Вес, кг</span><span />
+                  <div className={`grid ${prevSets ? PREV_COLS : "grid-cols-[1.25rem_1fr_1fr_2.5rem]"} gap-1.5 text-[11px] text-zinc-500 text-center`}>
+                    <span>#</span>{prevSets && <span>было</span>}<span>Повторы</span><span>Вес, кг</span><span />
                   </div>
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;
                     return (
                       <div key={i}>
-                        <div className="grid grid-cols-[1.25rem_1fr_1fr_2.5rem] gap-1.5 items-center">
+                        <div className={`grid ${prevSets ? PREV_COLS : "grid-cols-[1.25rem_1fr_1fr_2.5rem]"} gap-1.5 items-center`}>
                           <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
+{prevSets && <PrevCell p={prevSets[i]} />}
                           <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                           <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                           <button onClick={() => tapSet(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
