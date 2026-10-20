@@ -3,13 +3,13 @@ import { Fragment, useEffect, useRef, useState } from "react";
 import { Bell, BellOff, Cake, CalendarClock, Check, ChevronRight, Clock, Hourglass, Play, TriangleAlert, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
 import { onClientsChanged } from "../lib/clientsBus";
-import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
+import type { DashboardClient } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
 import type { Booking } from "../lib/bookings";
 import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import { supabase } from "../lib/supabase";
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, isPushSupported } from "../lib/pushSubscribe";
-import { today, addDays } from "../lib/format";
+import { today, addDays, plural } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
 import { remainingOf } from "../lib/clients";
 import { notify } from "../lib/dialog";
@@ -36,7 +36,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
       className={`inline py-1 -my-1 rounded-lg text-left underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current transition ${className}`}
     >{name}</button>
   );
-  const [data, setData] = useState<{ clients: DashboardClient[]; payments: DashboardPayment[] } | null>(null);
+  const [data, setData] = useState<Awaited<ReturnType<typeof fetchDashboardData>> | null>(null);
   // Ш4б: какой чип «Требует внимания» раскрыт (имена под ним)
   const [attn, setAttn] = useState<"debt" | "exp" | "bday" | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -164,6 +164,9 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   const paymentsThisMonth = payments.filter((p) => p.date.startsWith(thisMonth));
   const cashReceived = paymentsThisMonth.filter((p) => p.payStatus === "paid").reduce((s, p) => s + p.amount, 0);
   const monthName = new Date(todayStr + "T00:00:00").toLocaleDateString("ru-RU", { month: "long" });
+  // Заработок за сегодня — по списаниям тренировок (цена на момент списания)
+  const todayCharges = data.charges.filter((x) => x.date === todayStr);
+  const earnedToday = { sum: todayCharges.reduce((s, x) => s + x.amount, 0), n: todayCharges.filter((x) => x.kind === "workout" || x.kind === "client").length };
   const cashPending = payments.filter((p) => p.payStatus !== "paid").reduce((s, p) => s + p.amount, 0);
 
 
@@ -353,6 +356,9 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-semibold text-zinc-400">Финансы · {monthName}</span>
           <span className="block text-lg font-bold text-zinc-100 leading-tight">{cashReceived.toLocaleString("ru-RU")} ₽ <span className="text-sm font-normal text-zinc-500">поступило</span></span>
+          {earnedToday.n > 0 && (
+            <span className="block text-[13px] text-lime-400">сегодня заработано {Math.round(earnedToday.sum).toLocaleString("ru-RU")} ₽ · {earnedToday.n} {plural(earnedToday.n, ["тренировка", "тренировки", "тренировок"])}</span>
+          )}
           {(cashPending > 0 || debt.length > 0) && (
             <span className="block text-[13px] text-orange-300 truncate">
               {[cashPending > 0 ? `ждут оплаты ${cashPending.toLocaleString("ru-RU")} ₽` : null, debt.length > 0 ? `пакет закончился у ${debt.length}` : null].filter(Boolean).join(" · ")}

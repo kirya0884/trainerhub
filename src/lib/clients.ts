@@ -311,10 +311,21 @@ export async function hasSessionOnDate(clientId: string, date: string): Promise<
   return (data ?? []).length > 0;
 }
 
-export async function decrementMembershipRemaining(clientId: string, membership: Membership) {
+// Заработок по проведённым тренировкам (таблица session_charges): цена одной тренировки
+// текущего блока на момент списания. Пишется после списания; сбой записи не ломает
+// тренировку — остаток важнее строки в статистике.
+export type ChargeKind = "workout" | "no_show" | "refund";
+export const blockPrice = (m: Membership) => Number(String(m.remainingPrice ?? "").replace(",", ".")) || sessionPrice(m);
+export async function logCharge(clientId: string, amount: number, kind: ChargeKind, date?: string) {
+  const { error } = await supabase.from("session_charges").insert({ client_id: clientId, amount: Math.round(amount * 100) / 100, kind, ...(date ? { date } : {}) });
+  if (error) console.error("[logCharge]", error.message);
+}
+
+export async function decrementMembershipRemaining(clientId: string, membership: Membership, charge: { kind?: ChargeKind; date?: string } = {}) {
   if (membership.type === "subscription" || membership.remaining === "" || membership.remaining == null) return membership;
   const left = Number(membership.remaining);
   if (Number.isNaN(left) || left <= 0) return membership;
+  const price = blockPrice(membership); // до списания: тренировка — из текущего блока
   let next = { ...membership, remaining: String(left - 1) };
   // ponytail: основной блок закончился — переносим "доп. блок" (другая цена) на его место
   if (Number(next.remaining) <= 0 && Number(next.extraRemaining) > 0) {
@@ -323,11 +334,12 @@ export async function decrementMembershipRemaining(clientId: string, membership:
   await updateClient(clientId, { membership: next });
   if (membership.split && membership.partnerClientId)
     await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining, remainingPrice: next.remainingPrice, extraRemaining: next.extraRemaining, extraPricePerSession: next.extraPricePerSession });
+  await logCharge(clientId, price, charge.kind ?? "workout", charge.date);
   return next;
 }
 
 // Возврат 1 тренировки в остаток пакета — при отмене/удалении тренировки по уважительной причине (зеркало decrementMembershipRemaining).
-export async function incrementMembershipRemaining(clientId: string, membership: Membership) {
+export async function incrementMembershipRemaining(clientId: string, membership: Membership, refund?: { date?: string }) {
   // Подписка: разовые к ней не добавляются, оплата помесячная.
   if (membership.type === "subscription") return membership;
 
@@ -352,6 +364,8 @@ export async function incrementMembershipRemaining(clientId: string, membership:
   };
   await updateClient(clientId, { membership: next });
   if (membership.split && membership.partnerClientId) await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining });
+  // Возврат по уважительной причине снимает заработок того дня
+  if (refund) await logCharge(clientId, -blockPrice(membership), "refund", refund.date);
   return next;
 }
 

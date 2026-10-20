@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { ArrowDownRight, ArrowLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Search } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchDashboardData } from "../lib/dashboard";
-import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
+import type { DashboardCharge, DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
 import type { Booking } from "../lib/bookings";
 import { cohortRetention, debtClients, revenueBySource, topClientsByRevenue, trialConversionRate } from "../lib/analytics";
@@ -57,15 +57,9 @@ const bucketsOf = (grain: Grain, from: string, to: string) => {
   }
   return out;
 };
-const pricePerSession = (c: DashboardClient) => {
-  const m = c.membership;
-  if (m.type === "subscription") return Number(m.pricePerSession) || 0;
-  const total = Number(m.total);
-  return total > 0 ? (Number(m.packagePrice) || 0) / total : 0;
-};
-
 export default function FinanceView({ trainerId, bookings, onOpenClient, onBack }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onBack: () => void }) {
-  const [data, setData] = useState<{ clients: DashboardClient[]; payments: DashboardPayment[] } | null>(null);
+  const [data, setData] = useState<{ clients: DashboardClient[]; payments: DashboardPayment[]; charges: DashboardCharge[] } | null>(null);
+  const [chart, setChart] = useState<"received" | "earned">("earned");
   const [error, setError] = useState("");
   const [grain, setGrain] = useState<Grain>("month");
   const [offset, setOffset] = useState(0);
@@ -86,14 +80,17 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
     const calc = (r: { from: string; to: string }) => {
       const pays = data.payments.filter((p) => p.date >= r.from && p.date <= r.to);
       const paid = pays.filter((p) => p.payStatus === "paid");
+      // Посещаемость — по календарю; заработок и число тренировок — по списаниям (цена на момент списания)
       const occs = r.from > t ? [] : expandBookings(bookings, r.from, r.to < t ? r.to : t);
-      const done = occs.filter((o) => o.status === "done");
+      const booked = occs.filter((o) => o.status === "done").length;
       const noShow = occs.filter((o) => o.status === "no-show").length;
-      const earned = done.reduce((s, o) => s + o.clientIds.reduce((a, id) => a + (byId[id] ? pricePerSession(byId[id]) : 0), 0), 0);
+      const charges = data.charges.filter((x) => x.date >= r.from && x.date <= r.to);
+      const earned = charges.reduce((s, x) => s + x.amount, 0);
+      const done = charges.filter((x) => x.kind === "workout" || x.kind === "client").length - charges.filter((x) => x.kind === "refund").length;
       const received = paid.reduce((s, p) => s + p.amount, 0);
       return {
-        pays, paid, received, earned, done: done.length,
-        attendance: done.length + noShow ? Math.round((done.length / (done.length + noShow)) * 100) : null,
+        pays, paid, received, earned, charges, done,
+        attendance: booked + noShow ? Math.round((booked / (booked + noShow)) * 100) : null,
         avg: paid.length ? received / paid.length : 0,
         payers: new Set(paid.map((p) => p.clientId)).size,
       };
@@ -124,7 +121,9 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
 
   const buckets = bucketsOf(grain, cur.from, cur.to).map((b) => ({
     label: b.label, from: b.key, to: b.end,
-    total: c.paid.filter((x) => x.date >= b.key && x.date <= b.end).reduce((s, x) => s + x.amount, 0),
+    total: chart === "received"
+      ? c.paid.filter((x) => x.date >= b.key && x.date <= b.end).reduce((s, x) => s + x.amount, 0)
+      : c.charges.filter((x) => x.date >= b.key && x.date <= b.end).reduce((s, x) => s + x.amount, 0),
   }));
   const byType = Object.entries(c.paid.reduce<Record<string, number>>((acc, x) => { const k = x.type || "other"; acc[k] = (acc[k] || 0) + x.amount; return acc; }, {}))
     .map(([k, v]) => ({ label: TYPE_LABEL[k] ?? "Другое", total: v })).sort((a, b) => b.total - a.total);
@@ -164,27 +163,33 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
 
       <div className="grid grid-cols-2 gap-2">
         <Kpi label="Поступило" value={rub(c.received)} cur={c.received} prev={p.received} hide={hide} hint="Оплаты со статусом «оплачено»" accent />
-        <Kpi label="Заработано" value={rub(c.earned)} cur={c.earned} prev={p.earned} hide={hide} hint="Стоимость проведённых тренировок по цене абонемента" />
+        <Kpi label="Заработано" value={rub(c.earned)} cur={c.earned} prev={p.earned} hide={hide} hint="Проведённые тренировки и «Не пришёл» со списанием — по цене тренировки на момент списания" />
         <Kpi label="Оплат" value={String(c.paid.length)} cur={c.paid.length} prev={p.paid.length} sub={c.paid.length ? `средний чек ${rub(c.avg)}` : undefined} />
         <Kpi label="Платящих клиентов" value={String(c.payers)} cur={c.payers} prev={p.payers} />
         <Kpi label="Проведено тренировок" value={String(c.done)} cur={c.done} prev={p.done} />
         <Kpi label="Посещаемость" value={c.attendance != null ? `${c.attendance}%` : "—"} cur={c.attendance ?? undefined} prev={p.attendance ?? undefined} hint="Проведённые из проведённых и «Не пришёл»" />
       </div>
 
-      <Card title="Поступления" sub={grain === "year" ? "по месяцам" : grain === "quarter" ? "по неделям" : "по дням"}>
-        {c.received > 0 && !hide ? (
+      <Card title={chart === "earned" ? "Заработано" : "Поступления"} sub={grain === "year" ? "по месяцам" : grain === "quarter" ? "по неделям" : "по дням"} right={
+        <div className="flex gap-0.5 bg-zinc-800/60 rounded-lg p-0.5">
+          {([["earned", "Заработано"], ["received", "Поступило"]] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setChart(k)} aria-pressed={chart === k} className={`px-2.5 h-7 rounded-md text-xs font-semibold transition ${chart === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
+          ))}
+        </div>
+      }>
+        {(chart === "earned" ? c.charges.length > 0 : c.received > 0) && !hide ? (
           <div style={{ height: 170 }} className="text-lime-400 -ml-2">
             <ResponsiveContainer>
               <BarChart data={buckets} margin={{ top: 6, right: 6, left: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={cc.grid} vertical={false} />
                 <XAxis dataKey="label" stroke={cc.axis} fontSize={11} tickLine={false} interval="preserveStartEnd" minTickGap={8} />
                 <YAxis stroke={cc.axis} fontSize={11} tickLine={false} width={44} tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}к` : String(v))} />
-                <Tooltip cursor={{ fill: cc.grid, opacity: 0.4 }} contentStyle={{ background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: cc.tooltipLabel }} formatter={(v: any) => [`${Number(v).toLocaleString("ru-RU")} ₽`, "Поступило"]} />
+                <Tooltip cursor={{ fill: cc.grid, opacity: 0.4 }} contentStyle={{ background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: cc.tooltipLabel }} formatter={(v: any) => [`${Math.round(Number(v)).toLocaleString("ru-RU")} ₽`, chart === "earned" ? "Заработано" : "Поступило"]} />
                 <Bar dataKey="total" fill="currentColor" radius={[4, 4, 0, 0]} maxBarSize={28} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           </div>
-        ) : <p className="text-sm text-zinc-500 text-center py-6">{hide ? "Суммы скрыты" : "За этот период оплат нет"}</p>}
+        ) : <p className="text-sm text-zinc-500 text-center py-6">{hide ? "Суммы скрыты" : chart === "earned" ? "За этот период тренировок со списанием нет" : "За этот период оплат нет"}</p>}
       </Card>
 
       {(pending.length > 0 || debt.length > 0) && (

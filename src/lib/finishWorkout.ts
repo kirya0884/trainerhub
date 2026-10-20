@@ -99,7 +99,7 @@ export async function finishWorkout(opts: {
       if (typeof st.charge === "object" && now !== st.charge.before) put({ charge: "done" });
       else {
         put({ charge: { before: now } });
-        membership = await decrementMembershipRemaining(clientId, fresh);
+        membership = await decrementMembershipRemaining(clientId, fresh, { kind: "workout", date: session.date });
         charged = true;
         put({ charge: "done" });
       }

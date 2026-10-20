@@ -318,8 +318,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   const confirmDeleteSession = async (reason: DeleteReason) => {
     if (!deletingSessionId) return;
     try {
+      const delDate = sessions.find((s) => s.id === deletingSessionId)?.date;
       await deleteSession(deletingSessionId, reason);
-      if (reason === "Уважительная" && membership) setMembership(await incrementMembershipRemaining(clientId, membership));
+      if (reason === "Уважительная" && membership) setMembership(await incrementMembershipRemaining(clientId, membership, { date: delDate }));
     } catch (e: any) {
       console.error("[PlanEditor] confirmDeleteSession:", e);
       notify("Не удалось удалить тренировку. Попробуй ещё раз.");

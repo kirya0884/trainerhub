@@ -78,7 +78,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
       for (const id of o.clientIds) {
         if (reasons[id] === "Уважительная") continue;
         const m = (await clientsApi.fetchClient(id)).membership;
-        if (m) await clientsApi.decrementMembershipRemaining(id, m);
+        if (m) await clientsApi.decrementMembershipRemaining(id, m, { kind: "no_show", date: o.date });
       }
       reloadClients();
       track("action", "no_show", { clients: o.clientIds.length, excused: o.clientIds.filter((id) => reasons[id] === "Уважительная").length });
@@ -529,7 +529,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                   try { already = await clientsApi.hasSessionOnDate(cid, occDate); }
                   catch (e) { console.error("[CalendarView] hasSessionOnDate:", e); }
                   if (already) { skipped.push(clientName(cid)); return; }
-                  await clientsApi.decrementMembershipRemaining(cid, cf.membership);
+                  await clientsApi.decrementMembershipRemaining(cid, cf.membership, { kind: "workout", date: occDate });
                 }));
                 reloadClients();
                 if (skipped.length) notify(`Тренировка за этот день уже была отмечена — повторно не списываем: ${skipped.join(", ")}`);
