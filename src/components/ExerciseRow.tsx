@@ -1,6 +1,7 @@
-import { Activity, GripVertical, Layers, Pencil, Plus, TrendingUp, Video, X } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, GripVertical, Layers, Pencil, Plus, TrendingUp, Video, X } from "lucide-react";
 import { memo, startTransition, useState } from "react";
 import type { Exercise, Metric } from "../types";
+import type { LastFact } from "../lib/sessionUtils";
 import NumField from "./NumField";
 import { ask } from "../lib/dialog";
 
@@ -10,7 +11,7 @@ function toEmbedUrl(url: string): string {
   return yt ? `https://www.youtube.com/embed/${yt[1]}` : url;
 }
 function ExerciseRow({
-  ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove, lastMetric,
+  ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove, lastMetric, lastFact,
   index, dragging, dropBefore, dropAfter, collapsed, onToggleCollapse, historyCount, onOpenHistory,
 }: {
   ex: Exercise; label: string; groupColor: string | null; suggestions: string[]; addToLibrary: (name: string) => void;
@@ -19,7 +20,7 @@ function ExerciseRow({
   collapsed?: boolean; onToggleCollapse?: (id: string) => void;
   historyCount?: number; onOpenHistory?: (name: string) => void;
   cycleGroup: () => void; update: (patch: Partial<Exercise>) => void; remove: () => void;
-  lastMetric?: Metric;
+  lastMetric?: Metric; lastFact?: LastFact;
 }) {
   const [acOpen, setAcOpen] = useState(false);
   const [showVideo, setShowVideo] = useState(false);
@@ -169,7 +170,25 @@ function ExerciseRow({
         )}
         <input value={ex.note} onChange={(e) => { const v = e.target.value; startTransition(() => update({ note: v })); }} placeholder="Комментарий: техника, на что обратить внимание..." className="w-full bg-transparent text-xs text-zinc-400 px-1 py-0.5 pl-6 outline-none focus:text-zinc-200" />
         {/* П10: строка факта стала входом в историю — свободного места в шапке строки нет */}
-        {(lastMetric || (historyCount ?? 0) > 0) && (
+        {/* План/факт: подходы последней тренировки; отличия от плана того дня — стрелкой */}
+        {lastFact && (
+          <button onClick={() => onOpenHistory?.(ex.name)} type="button" title="Факт последней тренировки — нажмите для всей истории"
+            className="pl-6 flex items-start gap-1.5 text-[12px] w-full text-left hover:opacity-80 transition">
+            <span className="text-zinc-500 shrink-0">Факт {lastFact.date.slice(8)}.{lastFact.date.slice(5, 7)}{lastFact.fromClient ? " · клиент сам" : ""}:</span>
+            <span className="flex flex-wrap gap-x-2 gap-y-0.5 min-w-0">
+              {lastFact.sets.map((s, i) => (
+                <span key={i} className={`inline-flex items-center whitespace-nowrap ${s.dir === "up" ? "text-lime-400" : s.dir === "down" ? "text-orange-400" : s.dir === "extra" ? "text-cyan-400" : "text-zinc-400"}`}>
+                  {s.weight || "—"}×{s.reps || "—"}
+                  {s.dir === "up" && <ArrowUp size={11} aria-label="больше плана" />}
+                  {s.dir === "down" && <ArrowDown size={11} aria-label="меньше плана" />}
+                  {s.dir === "extra" && <Plus size={11} aria-label="сверх плана" />}
+                </span>
+              ))}
+            </span>
+            {(historyCount ?? 0) > 1 && <TrendingUp size={12} className="ml-auto shrink-0 mt-0.5 text-cyan-400/80" />}
+          </button>
+        )}
+        {!lastFact && (lastMetric || (historyCount ?? 0) > 0) && (
           onOpenHistory ? (
             <button onClick={() => onOpenHistory(ex.name)} type="button"
               title="История упражнения: подходы по датам и график"
@@ -211,6 +230,7 @@ export default memo(ExerciseRow, (prev, next) =>
   prev.onOpenHistory === next.onOpenHistory &&
   prev.index === next.index &&
   prev.lastMetric === next.lastMetric &&
+  prev.lastFact === next.lastFact &&
   prev.groupColor === next.groupColor &&
   prev.suggestions === next.suggestions
 );

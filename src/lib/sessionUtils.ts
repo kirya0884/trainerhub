@@ -74,3 +74,30 @@ export function applyLastTime(day: Day, vals: Record<string, SetVal[]>, setsDone
   }
   return next;
 }
+
+// ── План/факт в плане ──
+// Факт последней тренировки по упражнению (по названию) и как он отличается от плана,
+// который был на тот момент (plannedSets сохраняются вместе с сессией).
+export type FactSet = { weight: string; reps: string; dir: "up" | "down" | "same" | "extra" };
+export type LastFact = { date: string; fromClient: boolean; sets: FactSet[]; changed: number };
+const cmp = (a: number | null, b: number | null) => (a == null || b == null || a === b ? 0 : a > b ? 1 : -1);
+export function lastFactsByName(sessions: Session[]): Record<string, LastFact> {
+  const out: Record<string, LastFact> = {};
+  const sorted = [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
+  for (const s of sorted) for (const it of s.items ?? []) {
+    const key = it.name.trim().toLowerCase();
+    if (!key || out[key]) continue;
+    const actual = (it.actualSets ?? []).filter((r) => r.weight || r.reps);
+    if (!actual.length) continue;
+    const planned = it.plannedSets ?? [];
+    const sets = actual.map((r, i): FactSet => {
+      const p = planned[i];
+      if (!p) return { ...r, dir: "extra" };
+      // Вес важнее: больше вес при меньших повторах — это шаг вверх
+      const d = cmp(parseNum(r.weight), parseNum(p.weight)) || cmp(parseNum(r.reps), parseNum(p.reps));
+      return { ...r, dir: d > 0 ? "up" : d < 0 ? "down" : "same" };
+    });
+    out[key] = { date: s.date, fromClient: !!s.fromClient, sets, changed: sets.filter((x) => x.dir !== "same").length };
+  }
+  return out;
+}

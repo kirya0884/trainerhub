@@ -152,7 +152,13 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
       const items = day.exercises.filter((ex) => ex.name).map((ex) => {
         const f = meta[ex.id]?.fires || {};
         const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
-        return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "" };
+        // План/факт — как в индивидуальной тренировке: без них «Как в прошлый раз»
+        // и строка факта в плане не видели совместные тренировки
+        const actualSets = (vals[ex.id] ?? []).filter((r) => r.weight || r.reps);
+        const plannedSets = ex.detailed && ex.setRows?.length
+          ? ex.setRows.map((r) => ({ weight: r.weight || "", reps: r.reps || "" }))
+          : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
+        return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "", plannedSets, ...(actualSets.length ? { actualSets } : {}) };
       });
       const session: Omit<Session, "id"> = {
         date: today(), dayName: day.name, dayId: day.id, mood, wellbeing, review: review.trim(), clientRating,

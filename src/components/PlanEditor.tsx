@@ -17,6 +17,7 @@ import type { Day, Metric, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import ExerciseRow from "./ExerciseRow";
 import ExerciseHistoryModal from "./ExerciseHistoryModal";
+import { lastFactsByName } from "../lib/sessionUtils";
 import { useDragSort } from "../hooks/useDragSort";
 import LibraryModal from "./LibraryModal";
 import MetricsView from "./MetricsView";
@@ -66,6 +67,8 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   const { progress, metrics, sessions, deletedSessions, reloadProgress, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
   const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m])), [metrics]);
+  // План/факт: подходы последней тренировки по каждому упражнению и отличия от плана того дня
+  const lastFacts = useMemo(() => lastFactsByName(sessions), [sessions]);
   // П10: сколько тренировок в истории по каждому названию. Наружу уходит число —
   // объект в props сломал бы мемоизацию ExerciseRow.
   const historyCounts = useMemo(() => {
@@ -352,7 +355,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
               onMoveUp={() => reorderExercises(day.id, ei, ei - 1)} onMoveDown={() => reorderExercises(day.id, ei, ei + 1)}
               cycleGroup={() => cycleGroup(day.id, ex.id, ex.group, day.exercises)}
               update={(patch) => { markSaving(); updateExercise(day.id, ex.id, patch); }} remove={() => deleteExercise(day.id, ex.id)}
-              lastMetric={lastMetrics[ex.name.toLowerCase()]}
+              lastMetric={lastMetrics[ex.name.toLowerCase()]} lastFact={lastFacts[ex.name.trim().toLowerCase()]}
               historyCount={historyCounts[ex.name.trim().toLowerCase()] ?? 0} onOpenHistory={openExHistory} />
           );
         });
