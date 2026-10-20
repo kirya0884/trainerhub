@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Bell, BellOff, Cake, CalendarClock, Check, ChevronRight, Clock, Hourglass, Play, TriangleAlert, Wallet } from "lucide-react";
 import { fetchDashboardData } from "../lib/dashboard";
+import { onClientsChanged } from "../lib/clientsBus";
 import type { DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
 import type { Booking } from "../lib/bookings";
@@ -45,6 +46,8 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   useEffect(() => {
     requestNotifyPermission();
     fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message));
+    // Списания и продления меняют «Требует внимания» и карточку финансов
+    return onClientsChanged(() => { fetchDashboardData(trainerId).then(setData).catch(console.error); });
   }, [trainerId]);
 
   useEffect(() => {

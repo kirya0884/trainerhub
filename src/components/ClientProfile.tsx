@@ -2,6 +2,7 @@ import { ArrowLeft, Check, Settings2, Apple, MoreHorizontal, CalendarCheck, Came
 import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
+import { onWorkoutFinished } from "../lib/clientsBus";
 import type { ClientFull, ClientNote, Measurement, Payment, PlanListItem, Photo } from "../lib/clients";
 import * as paymentsApi from "../lib/payments";
 import type { PackageTemplate, Promotion } from "../lib/payments";
@@ -68,7 +69,10 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     api.fetchNotes(clientId).then((v) => { if (alive) setNotes(v); }).catch((e) => console.error("[ClientProfile] заметки:", e));
     api.fetchClientPlans(clientId).then((v) => { if (alive) setPlans(v); }).catch((e) => console.error("[ClientProfile] планы:", e));
     portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch((e) => console.error("[ClientProfile] активность:", e));
-    return () => { alive = false; };
+    // Завершённая тренировка списала занятие — подтягиваем только абонемент. Не onClientsChanged:
+    // он приходит и от собственных сохранений карточки и перечитал бы абонемент посреди ввода
+    const off = onWorkoutFinished(() => api.fetchClient(clientId).then((v) => { if (alive) setClient((c) => (c ? { ...c, membership: v.membership } : v)); }).catch((e) => console.error("[ClientProfile] обновление абонемента:", e)));
+    return () => { alive = false; off(); };
   }, [clientId]);
 
   if (!client) return <div className="p-4"><ScreenSkeleton avatar /></div>;

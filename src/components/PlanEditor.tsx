@@ -10,7 +10,7 @@ import { fmtDate, initials, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
 import * as paymentsApi from "../lib/payments";
 import * as templatesApi from "../lib/templates";
-import { onWorkoutFinished } from "../lib/clientsBus";
+import { onClientsChanged, onWorkoutFinished } from "../lib/clientsBus";
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import * as plansApi from "../lib/plans";
 import type { Day, Metric, Session } from "../types";
@@ -272,10 +272,13 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
 
   useEffect(() => {
     let alive = true;
-    fetchClient(clientId)
+    const load = () => fetchClient(clientId)
       .then((c) => { if (alive) { setMembership(c.isSelf ? null : c.membership); setClientName(c.name); setClientColor(c.color); } })
       .catch((e) => console.error("[PlanEditor] fetchClient:", e));
-    return () => { alive = false; };
+    load();
+    // Остаток после завершённой тренировки — сразу, без перезахода на экран
+    const off = onClientsChanged(load);
+    return () => { alive = false; off(); };
   }, [clientId]);
 
 

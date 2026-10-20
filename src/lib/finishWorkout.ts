@@ -110,7 +110,9 @@ export async function finishWorkout(opts: {
   // до проверки, и гард 2 видел свою же свежую отметку «проведена» — тренировка
   // не списывалась у записей с выбранным днём плана. Fire-and-forget.
   // Дата — тренировки, а не сегодняшняя: из очереди её могут дослать на следующий день.
-  markSessionDone(trainerId, clientId, day.name, session.date);
+  // Ждём её (ошибки она глотает сама) — иначе календарь перечитывается по сигналу ниже
+  // раньше, чем запись стала «проведена», и показывает старый статус.
+  await markSessionDone(trainerId, clientId, day.name, session.date);
 
   loggedPending.delete(logKey);
   notifyWorkoutFinished(planId);
