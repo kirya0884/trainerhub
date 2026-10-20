@@ -1,6 +1,7 @@
 import { minibarRef } from "../lib/minibar";
 import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
+import { useScrollAnchor } from "../hooks/useScrollAnchor";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { readSlotDraft, useSessionSlot } from "../hooks/useSessionSlot";
 import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionParts";
@@ -70,7 +71,15 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
   // Только что отмеченное остаётся открытым (огоньки за последние подходы); раскрытые
   // выполненные сворачиваются, когда отмечают подход в другом упражнении
-  const tap = (ex: Exercise, i: number, total: number) => { tapSet(s, ex, i, total, startRest); setOpenDone({ [ex.id]: true }); };
+  const { anchor, offscreenAbove } = useScrollAnchor();
+  // Только что отмеченное — открыто; выполненные выше сворачиваются, лишь когда целиком
+  // ушли за верх экрана (тогда прокрутку можно компенсировать без прыжка)
+  const keepOpen = (exId: string) => {
+    const open = Object.keys(openDone).filter((k) => openDone[k] && k !== exId);
+    const hide = new Set(offscreenAbove(open));
+    return Object.fromEntries([[exId, true], ...open.filter((k) => !hide.has(k)).map((k) => [k, true])]) as Record<string, boolean>;
+  };
+  const tap = (ex: Exercise, i: number, total: number) => { anchor(); tapSet(s, ex, i, total, startRest); setOpenDone(keepOpen(ex.id)); };
 
   return (
     <div className={active ? "space-y-2.5" : "hidden"}>
@@ -123,7 +132,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
                   if (md.done && !openDone[ex.id]) {
                     const fact = rows.filter((r) => r.weight || r.reps).map((r) => `${r.weight || "—"}×${r.reps || "—"}`).join(", ");
                     return (
-                      <button key={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} !py-2 w-full flex items-center gap-2.5 text-left`}>
+                      <button key={ex.id} data-exid={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} !py-2 w-full flex items-center gap-2.5 text-left`}>
                         <CheckCircle2 size={18} className="text-lime-400 shrink-0" />
                         <span className="min-w-0 flex-1">
                           <span className="block font-semibold truncate"><span className="text-zinc-500 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</span>
@@ -134,7 +143,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
                     );
                   }
                   return (
-                    <div key={ex.id} className={shell}>
+                    <div key={ex.id} data-exid={ex.id} className={shell}>
                       <div className="flex items-start justify-between gap-2 mb-1.5">
                         <div className="min-w-0 flex-1">
                           <h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>

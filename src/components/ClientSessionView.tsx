@@ -10,6 +10,7 @@ import { FlameRate, LastTimeBar, SupersetRounds, tonnageOf } from "./SessionPart
 import { applyLastTime, type LastTime } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
 import { ask } from "../lib/dialog";
+import { useScrollAnchor } from "../hooks/useScrollAnchor";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -120,6 +121,14 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   // Как у тренера (SessionModal): текущее — первое невыполненное, выполненные сворачиваются
   const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
+  const { anchor, offscreenAbove } = useScrollAnchor();
+  // Только что отмеченное — открыто; выполненные выше сворачиваются, лишь когда целиком
+  // ушли за верх экрана (тогда прокрутку можно компенсировать без прыжка)
+  const keepOpen = (exId: string) => {
+    const open = Object.keys(openDone).filter((k) => openDone[k] && k !== exId);
+    const hide = new Set(offscreenAbove(open));
+    return Object.fromEntries([[exId, true], ...open.filter((k) => !hide.has(k)).map((k) => [k, true])]) as Record<string, boolean>;
+  };
   const [beforeLast, setBeforeLast] = useState<Record<string, SetVal[]> | null>(null);
   const applyLast = () => { if (!lastTime) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, lastTime)); };
   const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };
@@ -130,8 +139,9 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       : n + (vals[ex.id] || []).filter((_, i) => !meta[ex.id]?.setsDone?.[i]).length, 0);
   const tapSet = (ex: Day["exercises"][number], i: number, total: number) => {
     const was = meta[ex.id]?.setsDone?.[i] ?? false;
+    anchor(); // выполненное выше свернётся — нажатая кнопка остаётся под пальцем
     toggleSetDone(ex.id, i, total);
-    setOpenDone({ [ex.id]: true });
+    setOpenDone(keepOpen(ex.id));
     const sec = parseRest(ex.rest);
     if (!was && sec && openSets() > 1) restTimer.start(sec);
   };
@@ -333,7 +343,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             if (md.done && !openDone[ex.id]) {
               const fact = rows.filter((r) => r.weight || r.reps).map((r) => `${r.reps || "—"}×${r.weight || "—"}`).join(", ");
               return (
-                <button key={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} !py-2 w-full flex items-center gap-2.5 text-left`}>
+                <button key={ex.id} data-exid={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} !py-2 w-full flex items-center gap-2.5 text-left`}>
                   <CheckCircle2 size={18} className="text-lime-400 shrink-0" />
                   <span className="min-w-0 flex-1">
                     <span className="block font-semibold truncate"><span className="text-zinc-500 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</span>
@@ -344,7 +354,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
               );
             }
             return (
-              <div key={ex.id} className={shell}>
+              <div key={ex.id} data-exid={ex.id} className={shell}>
                 <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-2.5 h-8 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
                 {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-lime-400" /> отдых между подходами: {ex.rest}</p>}
                 {ex.kind === "functional" ? (
