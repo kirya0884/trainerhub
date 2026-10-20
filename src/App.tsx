@@ -22,9 +22,11 @@ import * as trainerApi from "./lib/trainer";
 import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
-import { clearSlotDrafts } from "./hooks/useSessionSlot";
+import { clearSlotDrafts, writeSlotDraft } from "./hooks/useSessionSlot";
+import type { PickClient } from "./components/ClientPickModal";
+import { confirmEmptyMembership } from "./lib/clients";
 import { finishOrQueue } from "./lib/finishWorkout";
-import { ActiveWorkoutProvider, useActiveWorkout } from "./hooks/useActiveWorkout";
+import { ActiveWorkoutProvider, useActiveWorkout, type GroupClient } from "./hooks/useActiveWorkout";
 import { urlToView, viewToUrl, type ViewLike } from "./lib/viewUrl";
 import { useHistoryNav } from "./hooks/useHistoryNav";
 import { useSwipeBack } from "./hooks/useSwipeBack";
@@ -135,9 +137,13 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
  * Раньше SessionModal жил внутри PlanEditor и исчезал при уходе с экрана плана.
  */
 function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients, clients }: { trainerId: string; accent: string; bookingsHook: ReturnType<typeof useBookings>; reloadClients: () => void; clients: ClientListItem[] }) {
-  const { active, stop } = useActiveWorkout();
+  const { active, stop, replace } = useActiveWorkout();
   // Аватарки для свёрнутой тренировки — из общего списка подопечных
   const person = (id: string) => clients.find((c) => c.id === id);
+  // «+ подопечный»: все, кого ещё нет в тренировке
+  const candidatesExcept = (ids: string[]): PickClient[] => clients.filter((c) => !ids.includes(c.id))
+    .map((c) => ({ id: c.id, name: c.name, color: c.color, avatarUrl: c.avatarUrl, remaining: c.remaining }));
+  const asGroupClient = (c: PickClient): GroupClient => ({ id: c.id, name: c.name, color: c.color, remaining: c.remaining ?? null });
   // Совместная: кто уже записан — чтобы отметить запись календаря, когда завершат все
   const finished = useRef<Set<string>>(new Set());
   if (!active) return null;
@@ -147,6 +153,8 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients, cli
     return (
       <div style={{ "--accent": accent } as React.CSSProperties}>
         <GroupSessionModal key={g.id} groupId={g.id} trainerId={trainerId} clients={g.clients.map((c) => ({ ...c, avatarUrl: person(c.id)?.avatarUrl }))} onClose={close}
+          addCandidates={candidatesExcept(g.clients.map((c) => c.id))}
+          onAddClient={async (c) => { if (await confirmEmptyMembership([c])) replace({ ...g, clients: [...g.clients, asGroupClient(c)] }); }}
           onClientFinished={async (clientId) => {
             finished.current.add(clientId);
             reloadClients();
@@ -174,6 +182,17 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients, cli
       day={active.day}
       planId={active.planId}
       who={{ name: active.clientName, avatarUrl: person(active.clientId)?.avatarUrl, color: person(active.clientId)?.color }}
+      // Своя тренировка тренера (вкладка «Я») в общий список не входит — туда не добавляем
+      addCandidates={person(active.clientId) ? candidatesExcept([active.clientId]) : undefined}
+      onAddClient={person(active.clientId) ? async (c, snap) => {
+        if (!(await confirmEmptyMembership([c]))) return false;
+        // Одиночная → совместная: введённое переносим в черновик слота первого подопечного,
+        // он откроется на том же плане и дне с теми же отметками
+        const gid = String(Date.now()), me = person(active.clientId)!;
+        writeSlotDraft(gid, active.clientId, { planId: active.planId, dayId: active.day.id, ...snap, finished: false });
+        replace({ kind: "group", id: gid, clients: [asGroupClient({ id: me.id, name: me.name, color: me.color, remaining: me.remaining }), asGroupClient(c)] });
+        return true;
+      } : undefined}
       onFinish={async (metrics, note, session) => {
         await finishOrQueue({
           trainerId, clientId: active.clientId, planId: active.planId,

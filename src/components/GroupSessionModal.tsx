@@ -1,5 +1,6 @@
 import WorkoutPill from "./WorkoutPill";
-import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, Users, X } from "lucide-react";
+import ClientPickModal, { type PickClient } from "./ClientPickModal";
+import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, UserPlus, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
 import { loadViewState, saveViewState } from "../lib/viewState";
@@ -225,7 +226,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
 // но все слоты остаются смонтированными (скрыты через "hidden"), поэтому введённые веса/повторы не теряются.
 // Живёт на уровне приложения (ActiveWorkoutHost), как одиночная: сворачивается в плашку,
 // переживает переходы по разделам, а введённое лежит в черновиках слотов (groupId).
-export default function GroupSessionModal({ groupId, clients, trainerId, onClose, onClientFinished }: { groupId: string; clients: SlotClient[]; trainerId: string; onClose: () => void; onClientFinished?: (clientId: string) => void }) {
+export default function GroupSessionModal({ groupId, clients, trainerId, onClose, onClientFinished, addCandidates, onAddClient }: { groupId: string; clients: SlotClient[]; trainerId: string; onClose: () => void; onClientFinished?: (clientId: string) => void; addCandidates?: PickClient[]; onAddClient?: (c: PickClient) => void }) {
   // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
   // Вызов до любых ранних return — иначе порядок хуков поедет.
   const { panelProps } = useModalA11y(() => setMinimized(true), "Совместная тренировка");
@@ -233,6 +234,7 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
   // После перезагрузки — кто уже записан, из черновиков
   const [finishedIds, setFinishedIds] = useState<string[]>(() => clients.filter((c) => readSlotDraft(groupId, c.id)?.finished).map((c) => c.id));
   const [minimized, setMinimized] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
   // Свёрнутая тренировка не держит прокрутку страницы
   useEffect(() => { document.body.style.overflow = minimized ? "" : "hidden"; return () => { document.body.style.overflow = ""; }; }, [minimized]);
   const allDone = clients.every((c) => finishedIds.includes(c.id));
@@ -263,6 +265,7 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0"><Users size={18} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">Совместная тренировка</h2></div>
           <div className="flex items-center gap-1 -mr-2 shrink-0">
+            {onAddClient && clients.length < 4 && <button onClick={() => setShowAdd(true)} aria-label="Добавить подопечного в тренировку" title="Добавить подопечного" className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><UserPlus size={20} /></button>}
             <button onClick={() => setMinimized(true)} aria-label="Свернуть" title="Свернуть" className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><Minimize2 size={20} /></button>
             <button onClick={exit} aria-label={allDone ? "Закрыть" : "Прервать тренировку"} title={allDone ? "Закрыть" : "Прервать"} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><X size={22} /></button>
           </div>
@@ -295,6 +298,10 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
         ))}
       </div>
       <div style={{ paddingBottom: "env(safe-area-inset-bottom)" }}><RestBar timer={restTimer} /></div>
+      {showAdd && onAddClient && (
+        <ClientPickModal title="Добавить в тренировку" candidates={addCandidates ?? []} onClose={() => setShowAdd(false)}
+          onPick={([c]) => { setShowAdd(false); onAddClient(c); setActiveId(c.id); }} />
+      )}
     </div>
     </>
   );

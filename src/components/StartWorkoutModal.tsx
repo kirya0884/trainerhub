@@ -1,4 +1,5 @@
-import { ChevronRight, Play, Search, Users } from "lucide-react";
+import { ChevronRight, Play, Users } from "lucide-react";
+import ClientPickModal, { type PickClient } from "./ClientPickModal";
 import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
@@ -10,8 +11,8 @@ import { ask, notify } from "../lib/dialog";
 
 // Запуск тренировки прямо из карточки подопечного: выбор плана (если их несколько) и дня.
 // Дальше всё как с кнопкой ▶ в редакторе плана — тренировка живёт в ActiveWorkoutHost.
-// «Тренировать вместе с…» открывает совместную тренировку на двоих (сплит): у каждого
-// свой план и день, выбираются уже на экране тренировки.
+// «Тренировать вместе с…» открывает совместную тренировку на 2–4 человек (не только сплит):
+// у каждого свой план и день, выбираются уже на экране тренировки.
 export default function StartWorkoutModal({ trainerId, self, partner, plans, onClose }: {
   trainerId: string; self: GroupClient; partner?: { id: string; name: string } | null; plans: PlanListItem[]; onClose: () => void;
 }) {
@@ -19,22 +20,23 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
   const workout = useActiveWorkout();
   const [others, setOthers] = useState<ClientListItem[] | null>(null);
   const [picking, setPicking] = useState(false);
-  const [q, setQ] = useState("");
   useEffect(() => {
     let alive = true;
     fetchClients(trainerId).then((list) => { if (alive) setOthers(list.filter((c) => c.id !== self.id)); })
       .catch((e) => { console.error("[StartWorkoutModal] подопечные:", e); if (alive) setOthers([]); });
     return () => { alive = false; };
   }, [trainerId, self.id]);
-  const startWith = async (id: string, name: string) => {
-    const c = others?.find((x) => x.id === id);
-    const other: GroupClient = { id, name: c?.name ?? name, color: c?.color || "#22d3ee", remaining: c?.remaining ?? null };
-    if (!(await confirmEmptyMembership([self, other]))) return;
-    if (!workout.start({ kind: "group", id: String(Date.now()), clients: [self, other] })) { notify("Одна тренировка уже идёт — заверши или сверни её."); return; }
+  // Совместная на 2–4 человек: этот подопечный + выбранные
+  const startWith = async (picked: { id: string; name: string }[]) => {
+    const list: GroupClient[] = picked.map(({ id, name }) => {
+      const c = others?.find((x) => x.id === id);
+      return { id, name: c?.name ?? name, color: c?.color || "#22d3ee", remaining: c?.remaining ?? null };
+    });
+    if (!(await confirmEmptyMembership([self, ...list]))) return;
+    if (!workout.start({ kind: "group", id: String(Date.now()), clients: [self, ...list] })) { notify("Одна тренировка уже идёт — заверши или сверни её."); return; }
     onClose();
   };
-  const term = q.trim().toLowerCase();
-  const options = (others ?? []).filter((c) => c.id !== partner?.id && (!term || c.name.toLowerCase().includes(term)));
+  const candidates: PickClient[] | null = others && others.map((c) => ({ id: c.id, name: c.name, color: c.color, avatarUrl: c.avatarUrl, remaining: c.remaining }));
   const [planId, setPlanId] = useState(plans[0]?.id ?? "");
   const [plan, setPlan] = useState<Plan | null>(null);
   const [error, setError] = useState("");
@@ -69,34 +71,15 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
         <div className="bg-zinc-800/50 rounded-2xl p-3 space-y-2">
           <p className="text-sm font-semibold flex items-center gap-1.5"><Users size={16} className="text-lime-400" /> Тренировать вместе с…</p>
           {partner && (
-            <button onClick={() => startWith(partner.id, partner.name)}
+            <button onClick={() => startWith([partner])}
               className="w-full h-11 rounded-xl bg-lime-400 text-zinc-950 font-bold text-sm flex items-center justify-center gap-2 hover:bg-lime-300 transition active:scale-[0.98]">
               <Users size={16} /> Сплит · {partner.name}
             </button>
           )}
-          {!picking ? (
-            <button onClick={() => setPicking(true)} className="w-full h-11 rounded-xl bg-zinc-800 text-zinc-100 font-semibold text-sm hover:bg-zinc-700 transition">
-              {partner ? "С другим подопечным" : "Выбрать подопечного"}
-            </button>
-          ) : (
-            <>
-              <div className="flex items-center gap-2 bg-zinc-900 rounded-xl px-3 h-11">
-                <Search size={16} className="text-zinc-500 shrink-0" />
-                <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Подопечный..." className="flex-1 min-w-0 bg-transparent outline-none" />
-              </div>
-              <div className="max-h-56 overflow-y-auto space-y-1">
-                {!others && <SkeletonRows rows={2} />}
-                {others && options.length === 0 && <p className="text-sm text-zinc-500 text-center py-3">Никого не найдено</p>}
-                {options.map((c) => (
-                  <button key={c.id} onClick={() => startWith(c.id, c.name)} className="w-full flex items-center gap-3 px-2 h-12 rounded-xl hover:bg-zinc-800 transition text-left">
-                    <span className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-zinc-950" style={{ background: c.color }}>{c.name[0]}</span>
-                    <span className="flex-1 min-w-0 font-semibold truncate">{c.name}</span>
-                    <ChevronRight size={18} className="text-zinc-500 shrink-0" />
-                  </button>
-                ))}
-              </div>
-            </>
-          )}
+          <button onClick={() => setPicking(true)} className="w-full h-11 rounded-xl bg-zinc-800 text-zinc-100 font-semibold text-sm hover:bg-zinc-700 transition">
+            {partner ? "С другими подопечными" : "Выбрать подопечных"}
+          </button>
+          {picking && <ClientPickModal title="Тренировать вместе" multi max={3} candidates={candidates} onPick={startWith} onClose={() => setPicking(false)} />}
           <p className="text-xs text-zinc-500">План и день для каждого — на экране тренировки.</p>
         </div>
 

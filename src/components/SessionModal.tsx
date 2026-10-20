@@ -1,5 +1,6 @@
 import WorkoutPill, { type PillPerson } from "./WorkoutPill";
-import { AlertTriangle, Check, CheckCircle2, MessageSquare, Minimize2, Timer, X } from "lucide-react";
+import ClientPickModal, { type PickClient } from "./ClientPickModal";
+import { AlertTriangle, Check, CheckCircle2, MessageSquare, Minimize2, Timer, UserPlus, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
@@ -45,8 +46,13 @@ const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} к
 type SetVal = { weight: string; reps: string };
 type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number; setsDone?: Record<number, boolean> };
 
-export default function SessionModal({ day, planId, who, onFinish, onClose }: {
-  day: Day; planId?: string; who?: PillPerson; onFinish: (metrics: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => void | Promise<void>; onClose: () => void;
+/** Что уже введено — для перехода в совместную тренировку без потери отметок */
+export type SessionSnapshot = { vals: Record<string, SetVal[]>; meta: Record<string, ExMeta>; mood: number; wellbeing: number; review: string; clientRating: number };
+
+export default function SessionModal({ day, planId, who, addCandidates, onAddClient, onFinish, onClose }: {
+  day: Day; planId?: string; who?: PillPerson;
+  /** «+ подопечный»: кого можно добавить и что сделать (true — переход состоялся) */
+  addCandidates?: PickClient[]; onAddClient?: (c: PickClient, snap: SessionSnapshot) => Promise<boolean>; onFinish: (metrics: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => void | Promise<void>; onClose: () => void;
 }) {
   // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
   // Вызов до любых ранних return — иначе порядок хуков поедет.
@@ -80,6 +86,7 @@ export default function SessionModal({ day, planId, who, onFinish, onClose }: {
   const [clientRating, setClientRating] = useState(0);
   const [minimized, setMinimized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
   // Автосейв прогресса тренировки (как у клиента) — переживает перезагрузку страницы
   const _vt = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -229,6 +236,7 @@ export default function SessionModal({ day, planId, who, onFinish, onClose }: {
             <p className="text-sm text-zinc-500 mt-0.5"><span className="font-mono font-bold text-base text-lime-400 mr-2">{timer}</span>{doneEx} из {day.exercises.length} упр.</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
+            {onAddClient && <button onClick={() => setShowAdd(true)} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Добавить подопечного" aria-label="Добавить подопечного в тренировку"><UserPlus size={20} /></button>}
             <button onClick={() => setMinimized(true)} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Свернуть" aria-label="Свернуть"><Minimize2 size={20} /></button>
             <button onClick={async () => { if (await ask("Прервать тренировку? Отметки будут удалены.", { danger: true, ok: "Прервать" })) { clearPersist(); onClose(); } }} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Прервать" aria-label="Прервать тренировку"><X size={22} /></button>
           </div>
@@ -362,6 +370,14 @@ export default function SessionModal({ day, planId, who, onFinish, onClose }: {
       </div>
 
       <RestBar timer={restTimer} />
+      {showAdd && onAddClient && (
+        <ClientPickModal title="Добавить в тренировку" candidates={addCandidates ?? []} onClose={() => setShowAdd(false)}
+          onPick={async ([c]) => {
+            setShowAdd(false);
+            // Отметки уходят в черновик совместной тренировки; свой черновик — только после перехода
+            if (await onAddClient(c, { vals, meta, mood, wellbeing, review, clientRating })) clearPersist();
+          }} />
+      )}
       <div className="border-t border-zinc-800 bg-zinc-900 px-3 pt-2.5 shrink-0" style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))" }}><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-sm text-zinc-500"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} disabled={submitting} className="ml-auto h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl px-6 text-base hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"><CheckCircle2 size={18} /> {submitting ? "Сохранение..." : "Завершить"}</button></div></div>
     </div>
   );

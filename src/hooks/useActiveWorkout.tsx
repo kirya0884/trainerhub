@@ -18,10 +18,12 @@ type Ctx = {
   active: ActiveWorkout | null;
   /** Возвращает false, если тренировка уже идёт — вторую поверх не открываем. */
   start: (w: ActiveWorkout) => boolean;
+  /** Заменить идущую тренировку другой: одиночная → совместная, добавить человека в совместную */
+  replace: (w: ActiveWorkout) => void;
   stop: () => void;
 };
 
-const WorkoutCtx = createContext<Ctx>({ active: null, start: () => false, stop: () => {} });
+const WorkoutCtx = createContext<Ctx>({ active: null, start: () => false, replace: () => {}, stop: () => {} });
 // Идущая тренировка переживает перезагрузку страницы: введённое лежит в черновиках,
 // а без этой записи после перезагрузки не было бы и самой тренировки, куда их вернуть.
 // Ключ свой у каждого аккаунта: иначе после «Выйти» тренировка доставалась бы
@@ -57,8 +59,9 @@ export function ActiveWorkoutProvider({ userId, children }: { userId: string; ch
     return true;
   }, [KEY]);
 
+  const replace = useCallback((w: ActiveWorkout) => { ref.current = w; setActive(w); writeJson(KEY, w); }, [KEY]);
   const stop = useCallback(() => { ref.current = null; setActive(null); removeKey(KEY); }, [KEY]);
-  const value = useMemo(() => ({ active, start, stop }), [active, start, stop]);
+  const value = useMemo(() => ({ active, start, replace, stop }), [active, start, replace, stop]);
   return <WorkoutCtx.Provider value={value}>{children}</WorkoutCtx.Provider>;
 }
 
