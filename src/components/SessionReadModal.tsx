@@ -1,12 +1,9 @@
-import { CheckCircle2, ChevronDown, ChevronRight, Circle, Eye, Flame, Layers, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, Eye, Flame, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useState } from "react";
 import { fmtDate } from "../lib/format";
-import { GROUP_COLORS } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
 import type { Session } from "../types";
-
-const SUPERSET_NAME: Record<number, string> = { 2: "Двусет", 3: "Трисет" };
 
 /** Просмотр пройденной тренировки. Read-only, карточки раскрываются/скрываются. */
 export default function SessionReadModal({ session, onClose }: { session: Session; onClose: () => void }) {

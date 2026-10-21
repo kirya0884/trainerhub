@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { usePrintBrand, PrintTopBar, PrintBrandHeader } from "./PrintTopBar";
+import { usePrintBrand, PrintTopBar } from "./PrintTopBar";
 import * as clientsApi from "../lib/clients";
 import { fetchClientSessionsSummary } from "../lib/progress";
 import { BODY_METRICS } from "../constants";

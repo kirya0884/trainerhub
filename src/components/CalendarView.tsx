@@ -38,7 +38,7 @@ const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_S
 const ROW_H = 48; // px за час
 
 export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans, openBooking, newBookingClientId, openOccurrence }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void; openBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } }) {
-  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, noShowOccurrence, rescheduleOccurrence, reload } = bookingsHook;
+  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, noShowOccurrence, rescheduleOccurrence } = bookingsHook;
   // B12: запоминаем режим просмотра, но НЕ дату — вернувшись через час, ожидаешь
   // увидеть текущую неделю, а не ту, на которой ушёл.
   const [mode, setMode] = useState<Mode>(() => loadViewState<Mode>("calendar-mode", "week"));

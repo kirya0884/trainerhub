@@ -7,7 +7,7 @@ import { fetchPlan } from "../lib/plans";
 import { confirmEmptyMembership, fetchClients, type ClientListItem, type PlanListItem } from "../lib/clients";
 import type { Plan } from "../types";
 import { useActiveWorkout, type GroupClient } from "../hooks/useActiveWorkout";
-import { ask, notify } from "../lib/dialog";
+import { notify } from "../lib/dialog";
 
 // Запуск тренировки прямо из карточки подопечного: выбор плана (если их несколько) и дня.
 // Дальше всё как с кнопкой ▶ в редакторе плана — тренировка живёт в ActiveWorkoutHost.

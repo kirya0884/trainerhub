@@ -258,7 +258,6 @@ export default function App() {
   const [tabOrder, setTabOrder] = useState<TabKind[]>(loadTabOrder);
   const [hiddenTabs, setHiddenTabs] = useState<TabKind[]>(loadHiddenTabs);
   const [splash, setSplash] = useState(true);
-  const [showMenu, setShowMenu] = useState(false);
   const [showFab, setShowFab] = useState(false);
   const [recentIds, setRecentIds] = useState<string[]>(loadIds(RECENT_KEY));
   const [pinnedIds, setPinnedIds] = useState<string[]>(loadIds(PINNED_KEY));

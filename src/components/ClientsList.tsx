@@ -1,4 +1,4 @@
-import { CalendarCheck, Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { CalendarCheck, Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search } from "lucide-react";
 import { useSwipeRow } from "../hooks/useSwipeRow";
 import { useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";

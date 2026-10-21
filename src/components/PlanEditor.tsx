@@ -1,11 +1,11 @@
-import { Archive, ArrowLeft, Check, MoreVertical, BarChart3, BookOpen, GripVertical, CalendarCheck, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, MessageSquare, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, Wallet, X, Copy } from "lucide-react";
+import { Archive, ArrowLeft, Check, MoreVertical, BarChart3, BookOpen, GripVertical, CalendarCheck, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, Wallet, X, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
 import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
 import { useProgress } from "../hooks/useProgress";
-import { decrementMembershipRemaining, incrementMembershipRemaining, fetchClient, sessionPrice, combinedRemaining, confirmEmptyMembership, remainingOf, type Membership } from "../lib/clients";
+import { incrementMembershipRemaining, fetchClient, sessionPrice, combinedRemaining, confirmEmptyMembership, remainingOf, type Membership } from "../lib/clients";
 import { fmtDate, initials, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
 import * as paymentsApi from "../lib/payments";
@@ -13,7 +13,7 @@ import * as templatesApi from "../lib/templates";
 import { onClientsChanged, onWorkoutFinished } from "../lib/clientsBus";
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import * as plansApi from "../lib/plans";
-import type { Day, Metric, Session } from "../types";
+import type { Day, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import ExerciseRow from "./ExerciseRow";
 import ExerciseHistoryModal from "./ExerciseHistoryModal";
@@ -64,7 +64,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     if (!list || list[from] == null || list[to] == null) return;
     reorderDays(list[from], list[to]);
   }, "dsday");
-  const { progress, metrics, sessions, deletedSessions, reloadProgress, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession } = useProgress(planId);
+  const { metrics, sessions, deletedSessions, reloadProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
   const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m])), [metrics]);
   // План/факт: подходы последней тренировки по каждому упражнению и отличия от плана того дня
@@ -89,7 +89,6 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     return c;
   }, [sessions, metrics]);
   const openExHistory = useCallback((name: string) => setHistoryFor(name), []);
-  const COLLAPSED_KEY = `trainerhub-collapsed-${planId}`;
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
     () => { try { return JSON.parse(localStorage.getItem(`trainerhub-collapsed-${planId}`) || "{}"); } catch { return {}; } }
   );
@@ -226,7 +225,6 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [viewingSession, setViewingSession] = useState<typeof sessions[0] | null>(null);
   const [showSessionTrash, setShowSessionTrash] = useState(false);
-  const [openJournal, setOpenJournal] = useState(false);
   const [openHistory, setOpenHistory] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [showPrint, setShowPrint] = useState(false);
@@ -257,7 +255,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     return next;
   }), [planId]);
   const toggleExOpen = useCallback((id: string) => toggleCollapse(`x:${id}`), [toggleCollapse]);
-  const cycleGroup = (dayId: string, exId: string, cur: string, exercises: Day["exercises"]) => {
+  const cycleGroup = (dayId: string, exId: string, cur: string) => {
     const i = GROUP_CYCLE.indexOf(cur || "");
     markSaving(); updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
   };
@@ -357,7 +355,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
               dropAfter={exDrag.drag?.key === day.id && exDrag.drag.over === day.exercises.length && ei === day.exercises.length - 1 && exDrag.drag.from !== ei}
               canMoveUp={ei > 0} canMoveDown={ei < day.exercises.length - 1}
               onMoveUp={() => reorderExercises(day.id, ei, ei - 1)} onMoveDown={() => reorderExercises(day.id, ei, ei + 1)}
-              cycleGroup={() => cycleGroup(day.id, ex.id, ex.group, day.exercises)}
+              cycleGroup={() => cycleGroup(day.id, ex.id, ex.group)}
               update={(patch) => { markSaving(); updateExercise(day.id, ex.id, patch); }} remove={() => deleteExercise(day.id, ex.id)}
               lastMetric={lastMetrics[ex.name.toLowerCase()]} lastFact={lastFacts[ex.name.trim().toLowerCase()]}
               historyCount={historyCounts[ex.name.trim().toLowerCase()] ?? 0} onOpenHistory={openExHistory} />

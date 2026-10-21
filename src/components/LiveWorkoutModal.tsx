@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, Circle, Layers, Timer, X } from "lucide-react";
+import { CheckCircle2, Circle, Layers, Timer } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { fetchPlan } from "../lib/plans";
 import type { Day } from "../types";

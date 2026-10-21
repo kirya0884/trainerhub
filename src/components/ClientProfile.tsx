@@ -1,5 +1,5 @@
 import { ArrowLeft, Check, Settings2, Apple, MoreHorizontal, CalendarCheck, Camera, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
 import { onWorkoutFinished } from "../lib/clientsBus";
@@ -283,7 +283,7 @@ function InviteBlock({ clientId, email, hasAccount }: { clientId: string; email:
   );
 }
 
-function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink, patchMembership, trainerId }: {
+function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink }: {
   client: ClientFull; patch: (p: Partial<ClientFull>, immediate?: boolean) => void; patchHealth: (p: Partial<ClientFull["health"]>) => void;
   notes: ClientNote[]; setNotes: (n: ClientNote[]) => void; clientId: string; tgLink: string; waLink: string;
   patchMembership: (p: Partial<ClientFull["membership"]>, immediate?: boolean) => void; trainerId: string;

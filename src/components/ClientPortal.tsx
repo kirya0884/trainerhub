@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageCircle, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User } from "lucide-react";
+import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ModalShell from "./ModalShell";
 import { LegalList } from "./LegalDoc";
