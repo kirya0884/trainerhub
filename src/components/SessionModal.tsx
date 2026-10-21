@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, WorkoutDatePick, resolveWorkoutDate, tonnageOf } from "./SessionParts";
+import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, WorkoutDatePick, confirmFinish, resolveWorkoutDate, tonnageOf } from "./SessionParts";
 import { applyLastTime, lastFactsByName, lastTimeFor, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
 import { fmtDate, parseNum, parseRest, today } from "../lib/format";
@@ -145,10 +145,12 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   // «было» у подходов — прошлый результат каждого упражнения (из любого дня плана)
   const [prevByName, setPrevByName] = useState<Record<string, LastFact>>({});
   const [beforeLast, setBeforeLast] = useState<Record<string, SetVal[]> | null>(null);
+  // История плана — ещё и для вопроса о повторе при завершении
+  const [sessions, setSessions] = useState<Session[] | null>(null);
   useEffect(() => {
     if (!planId) return;
     let alive = true;
-    fetchProgress(planId).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); } }).catch((e) => console.error("[SessionModal] прошлый раз:", e));
+    fetchProgress(planId).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); setSessions(d.sessions); } }).catch((e) => console.error("[SessionModal] прошлый раз:", e));
     return () => { alive = false; };
   }, [planId, day.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const applyLast = () => { if (!last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
@@ -181,7 +183,9 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
     if (submitting) return;
     const date = resolveWorkoutDate(workoutDate);
     if (!date) { notify("Выбери дату тренировки — не позже сегодняшней."); return; }
+    // Флаг — до первого await: повторный тап, пока идёт вопрос или запись, ничего не делает
     setSubmitting(true);
+    if (!(await confirmFinish(day, date, planId, sessions).catch(() => false))) { setSubmitting(false); return; }
     const metrics: Omit<Metric, "id">[] = [];
     day.exercises.forEach((ex) => {
       if (!ex.name || ex.kind === "functional") return;

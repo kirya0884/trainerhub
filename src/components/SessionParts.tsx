@@ -1,8 +1,11 @@
 import { Check, Flame, History, Layers } from "lucide-react";
 import { addDays, fmtDate, today } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
-import { tonnageOf } from "../lib/sessionUtils";
-import type { Exercise } from "../types";
+import { isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
+import { fetchProgress } from "../lib/progress";
+import { ask } from "../lib/dialog";
+import { pending } from "../lib/outbox";
+import type { Day, Exercise, Session } from "../types";
 
 // Общие куски экранов проведения тренировки: у тренера (SessionModal), у клиента
 // (ClientSessionView) и в группе (GroupSessionModal) — чтобы вели себя одинаково.
@@ -43,6 +46,30 @@ export const resolveWorkoutDate = (v: string | null) => {
   if (v === null) return t;
   return /^\d{4}-\d{2}-\d{2}$/.test(v) && v <= t ? v : null;
 };
+
+/**
+ * Вопросы перед записью тренировки у тренера. Каждая запись — списание из абонемента,
+ * поэтому повтор того же дня за ту же дату переспрашиваем (в данных были дубли через
+ * 8 минут и через 12 секунд), а пустой день пишем только без списания.
+ * История читается заново (окно могло висеть свёрнутым, пока день провели на другом
+ * устройстве); без сети — sessions, загруженная при открытии, плюс завершения, ждущие
+ * в очереди отправки. Завершение без сети не держим.
+ * false — тренер передумал, ничего не записываем.
+ */
+export async function confirmFinish(day: Day, date: string, planId: string | undefined, sessions: Session[] | null) {
+  if (planId) {
+    let list = sessions;
+    try { list = (await fetchProgress(planId)).sessions; }
+    catch (e) { console.error("[confirmFinish] история плана:", e); }
+    const queued = pending(undefined, "finish").some((i) => {
+      const p = i.payload as { planId?: string; day?: Day; session?: { date?: string } };
+      return p.planId === planId && p.day?.id === day.id && p.session?.date === date;
+    });
+    if ((queued || (list && isRepeatOf(list, day, date))) &&!(await ask(`«${day.name}» уже проведена ${fmtDate(date)}. Записать ещё раз?`, { ok: "Записать" }))) return false;
+  }
+  if (isEmptyDay(day)) return ask("В дне нет упражнений — записать без списания? Чтобы списать за пропуск, отметь «Не пришёл» в календаре.", { ok: "Записать" });
+  return true;
+}
 
 export function FlameRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (

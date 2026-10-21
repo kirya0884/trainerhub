@@ -4,6 +4,7 @@ import { enqueue, isNetworkError, registerHandler } from "./outbox";
 import { notify } from "./dialog";
 import type { Membership } from "./clients";
 import { fetchProgress, logSession } from "./progress";
+import { isEmptyDay } from "./sessionUtils";
 import { notifyWorkoutFinished } from "./clientsBus";
 import type { Day, Metric, Session } from "../types";
 import { track } from "./events";
@@ -67,6 +68,9 @@ export async function finishWorkout(opts: {
 
   let membership = opts.membership ?? null;
   let charged = false;
+  // Пустой день (ни одного упражнения) пишем без списания — тренер подтвердил это при
+  // завершении. Шаг сохраняется в очередь отправки вместе с остальными.
+  if (!st.charge && isEmptyDay(day)) put({ charge: "skip" });
   if (st.charge !== "skip" && st.charge !== "done") {
     // Гард двойного списания, два источника:
     // 1) клиент уже залогировал эту сессию сам (fromClient);
@@ -112,7 +116,9 @@ export async function finishWorkout(opts: {
   // Дата — тренировки, а не сегодняшняя: из очереди её могут дослать на следующий день.
   // Ждём её (ошибки она глотает сама) — иначе календарь перечитывается по сигналу ниже
   // раньше, чем запись стала «проведена», и показывает старый статус.
-  await markSessionDone(trainerId, clientId, day.name, session.date);
+  // Пустой день запись не закрывает: иначе у неё пропадёт «Не пришёл» со списанием,
+  // а гард выше не спишет настоящую тренировку в ту же дату.
+  if (!isEmptyDay(day)) await markSessionDone(trainerId, clientId, day.name, session.date);
 
   loggedPending.delete(logKey);
   notifyWorkoutFinished(planId);

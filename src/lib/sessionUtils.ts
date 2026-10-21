@@ -45,6 +45,13 @@ export const tonnageOf = (rows: SetVal[], setsDone?: Record<number, boolean>) =>
     return w != null && rp != null ? sum + w * rp : sum;
   }, 0);
 
+/** В дне нет ни одного упражнения — такую тренировку пишем без списания */
+export const isEmptyDay = (day: Day) => !day.exercises.some((ex) => ex.name);
+
+/** Тренер уже записывал этот день за эту дату (по id дня, у старых записей — по названию) */
+export const isRepeatOf = (sessions: Session[], day: Day, date: string) =>
+  sessions.some((s) => !s.fromClient && s.date === date && (s.dayId ? s.dayId === day.id : s.dayName === day.name));
+
 // ── «Как в прошлый раз» ──
 // Последнее проведение этого дня (в том же плане): по id дня, а у старых записей без
 // него — по названию. Фактические подходы каждого упражнения — по названию упражнения.

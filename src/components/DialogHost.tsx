@@ -30,7 +30,11 @@ export default function DialogHost() {
 function AskDialog({ ask }: { ask: Ask }) {
   const { panelProps } = useModalA11y(() => answer(false), ask.fields ? ask.text : "Подтверждение");
   const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries((ask.fields ?? []).map((f) => [f.key, f.value ?? ""])));
-  const submit = (e?: FormEvent) => { e?.preventDefault(); answer(true, values); };
+  // Окно выезжает снизу, и «Да» оказывается под пальцем: второй тап по кнопке, которая
+  // открыла вопрос, сам его подтверждал (или молча закрывал). Первые 400 мс кнопки не нажимаются.
+  const [armed, setArmed] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setArmed(true), 400); return () => clearTimeout(t); }, []);
+  const submit = (e?: FormEvent) => { e?.preventDefault(); if (armed) answer(true, values); };
   return (
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => answer(false)}>
       <div {...panelProps} onClick={(e) => e.stopPropagation()}
@@ -51,8 +55,8 @@ function AskDialog({ ask }: { ask: Ask }) {
         )}
         <div className="flex gap-2">
           {/* В опасном вопросе фокус на «Отмена» — случайный Enter ничего не удалит */}
-          <button onClick={() => answer(false)} autoFocus={ask.danger} className="flex-1 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 transition">{ask.cancel}</button>
-          <button onClick={() => (ask.fields ? submit() : answer(true))} autoFocus={!ask.danger && !ask.fields}
+          <button onClick={() => armed && answer(false)} autoFocus={ask.danger} className="flex-1 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 transition">{ask.cancel}</button>
+          <button onClick={() => (ask.fields ? submit() : armed && answer(true))} autoFocus={!ask.danger && !ask.fields}
             className={`flex-1 h-12 rounded-xl text-sm font-bold transition ${ask.danger ? "bg-red-500 hover:bg-red-400 text-white" : "bg-lime-400 hover:bg-lime-300 text-zinc-950"}`}>{ask.ok}</button>
         </div>
       </div>

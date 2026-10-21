@@ -306,7 +306,8 @@ export async function hasSessionOnDate(clientId: string, date: string): Promise<
   if (!ids.length) return false;
 
   const { data, error } = await supabase
-    .from("plan_sessions").select("id").in("plan_id", ids).eq("date", date).is("deleted_at", null).limit(1);
+    // Пустой день (0 упражнений) пишется без списания — проведённой тренировкой не считаем
+    .from("plan_sessions").select("id").in("plan_id", ids).eq("date", date).is("deleted_at", null).gt("total", 0).limit(1);
   if (error) throw error;
   return (data ?? []).length > 0;
 }

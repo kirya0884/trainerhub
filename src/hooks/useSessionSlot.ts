@@ -8,7 +8,7 @@ import { applyLastTime, buildMetrics, lastFactsByName, lastTimeFor, tonnageOf, t
 import { fetchProgress } from "../lib/progress";
 import { finishOrQueue } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
-import { resolveWorkoutDate } from "../components/SessionParts";
+import { confirmFinish, resolveWorkoutDate } from "../components/SessionParts";
 import type { Day, Plan, Session } from "../types";
 import { notify } from "../lib/dialog";
 
@@ -136,11 +136,13 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   // «было» у подходов — прошлый результат каждого упражнения (из любого дня плана)
   const [prevByName, setPrevByName] = useState<Record<string, LastFact>>({});
   const [beforeLast, setBeforeLast] = useState<Record<string, SetVal[]> | null>(null);
+  // История плана — ещё и для вопроса о повторе при завершении
+  const [sessions, setSessions] = useState<Session[] | null>(null);
   useEffect(() => {
-    setLast(null); setBeforeLast(null);
+    setLast(null); setBeforeLast(null); setSessions(null);
     if (!plan || !day) return;
     let alive = true;
-    fetchProgress(plan.id).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); } }).catch((e) => console.error("[useSessionSlot] прошлый раз:", e));
+    fetchProgress(plan.id).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); setSessions(d.sessions); } }).catch((e) => console.error("[useSessionSlot] прошлый раз:", e));
     return () => { alive = false; };
   }, [plan?.id, day?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const applyLast = () => { if (!day || !last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
@@ -154,8 +156,10 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     if (!day || !plan || busy) return;
     const date = resolveWorkoutDate(dateChoice);
     if (!date) { notify("Выбери дату тренировки — не позже сегодняшней."); return; }
+    // Флаг — до первого await: повторный тап, пока идёт вопрос или запись, ничего не делает
     setBusy(true);
     try {
+      if (!(await confirmFinish(day, date, plan.id, sessions))) return;
       const metrics = buildMetrics(day, vals, date);
       const items = day.exercises.filter((ex) => ex.name).map((ex) => {
         const f = meta[ex.id]?.fires || {};
