@@ -7,7 +7,8 @@ type SetVal = { weight: string; reps: string };
  *  Используется в GroupSessionModal и ClientSessionView. */
 export function buildMetrics(
   day: Day,
-  vals: Record<string, SetVal[]>
+  vals: Record<string, SetVal[]>,
+  date = today()
 ): Omit<Metric, "id">[] {
   const metrics: Omit<Metric, "id">[] = [];
   day.exercises.forEach((ex) => {
@@ -23,7 +24,7 @@ export function buildMetrics(
     });
     const rest = parseRest(ex.rest);
     metrics.push({
-      date: today(),
+      date,
       exercise: ex.name,
       weight: best ? String(best.w) : "",
       reps: best ? String(parseNum(best.reps) ?? "") : String(parseNum(rows[0].reps) ?? ""),

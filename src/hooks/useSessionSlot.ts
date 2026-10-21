@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
-import { parseNum, today } from "../lib/format";
+import { fmtDate, parseNum, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
 import { applyLastTime, buildMetrics, lastFactsByName, lastTimeFor, tonnageOf, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
 import { finishOrQueue } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
+import { resolveWorkoutDate } from "../components/SessionParts";
 import type { Day, Plan, Session } from "../types";
 import { notify } from "../lib/dialog";
 
@@ -148,11 +149,14 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
   const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [], meta[ex.id]?.setsDone)), 0) : 0;
 
-  const finish = async () => {
+  /** dateChoice: null — сегодня, иначе дата задним числом (общая на всю совместную) */
+  const finish = async (dateChoice: string | null) => {
     if (!day || !plan || busy) return;
+    const date = resolveWorkoutDate(dateChoice);
+    if (!date) { notify("Выбери дату тренировки — не позже сегодняшней."); return; }
     setBusy(true);
     try {
-      const metrics = buildMetrics(day, vals);
+      const metrics = buildMetrics(day, vals, date);
       const items = day.exercises.filter((ex) => ex.name).map((ex) => {
         const f = meta[ex.id]?.fires || {};
         const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
@@ -165,10 +169,10 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
         return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "", plannedSets, ...(actualSets.length ? { actualSets } : {}) };
       });
       const session: Omit<Session, "id"> = {
-        date: today(), dayName: day.name, dayId: day.id, mood, wellbeing, review: review.trim(), clientRating,
+        date, dayName: day.name, dayId: day.id, mood, wellbeing, review: review.trim(), clientRating,
         done: doneEx, total: day.exercises.length, fromClient: false, items,
       };
-      const note = `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`;
+      const note = `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`;
       // Д3: запись сессии, архивация дня, отметка в календаре и двойной гард
       // списания — всё в одной общей функции, а не копией на каждый экран.
       const res = await finishOrQueue({ trainerId, clientId, planId: plan.id, day, metrics, note, session, membership });

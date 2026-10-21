@@ -8,10 +8,10 @@ import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, tonnageOf } from "./SessionParts";
+import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, WorkoutDatePick, resolveWorkoutDate, tonnageOf } from "./SessionParts";
 import { applyLastTime, lastFactsByName, lastTimeFor, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
-import { parseNum, parseRest, today } from "../lib/format";
+import { fmtDate, parseNum, parseRest, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
 import { ask, notify } from "../lib/dialog";
 
@@ -84,6 +84,8 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   const [wellbeing, setWellbeing] = useState(0);
   const [review, setReview] = useState("");
   const [clientRating, setClientRating] = useState(0);
+  // Дата проведения: null — сегодня; иначе тренер вносит пропущенную задним числом
+  const [workoutDate, setWorkoutDate] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -177,6 +179,8 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
 
   const finish = async () => {
     if (submitting) return;
+    const date = resolveWorkoutDate(workoutDate);
+    if (!date) { notify("Выбери дату тренировки — не позже сегодняшней."); return; }
     setSubmitting(true);
     const metrics: Omit<Metric, "id">[] = [];
     day.exercises.forEach((ex) => {
@@ -187,7 +191,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
       rows.forEach((r) => { const w = parseNum(r.weight); if (w != null && (best == null || w > best.w)) best = { w, reps: r.reps }; });
       const rest = parseRest(ex.rest);
       metrics.push({
-        date: today(), exercise: ex.name, weight: best ? String(best.w) : "",
+        date, exercise: ex.name, weight: best ? String(best.w) : "",
         reps: best ? String(parseNum(best.reps) ?? "") : String(parseNum(rows[0].reps) ?? ""),
         rest: rest == null ? "" : String(rest), sets: String(rows.length),
       });
@@ -201,9 +205,9 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
         : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
       return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "", plannedSets, ...(exVals.length ? { actualSets: exVals } : {}) };
     });
-    const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
+    const session: Omit<Session, "id"> = { date, dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done: doneEx, total: day.exercises.length, fromClient: false, items };
     try {
-      await Promise.resolve(onFinish(metrics, `✅ Проведена: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`, session));
+      await Promise.resolve(onFinish(metrics, `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`, session));
       clearPersist();
       onClose();
     } catch (e) {
@@ -370,6 +374,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
           <div><p className="text-xs text-zinc-500 mb-1">Настроение</p><FeelingScale kind="mood" value={mood} onChange={setMood} /></div>
           <div><p className="text-xs text-zinc-500 mb-1">Оценка тренировки клиентом</p><div className="flex gap-1.5">{[1, 2, 3, 4, 5].map((n) => (<button key={n} onClick={() => setClientRating(n === clientRating ? 0 : n)} className={`flex-1 py-2 rounded-xl text-sm font-semibold transition ${n <= clientRating ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"}`}>{n}</button>))}</div></div>
           <div><p className="text-xs text-zinc-500 mb-1">Отзыв клиента</p><textarea value={review} onChange={(e) => setReview(e.target.value)} rows={2} placeholder="Что сказал клиент: ощущения, пожелания, обратная связь..." className="w-full bg-zinc-800 rounded-xl px-2.5 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" /></div>
+          <WorkoutDatePick value={workoutDate} onChange={setWorkoutDate} />
         </div>
       </div>
 

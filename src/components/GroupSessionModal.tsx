@@ -5,7 +5,7 @@ import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { readSlotDraft, useSessionSlot } from "../hooks/useSessionSlot";
-import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, tonnageOf } from "./SessionParts";
+import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, WorkoutDatePick, tonnageOf } from "./SessionParts";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
@@ -60,7 +60,7 @@ export type SlotClient = { id: string; name: string; color: string; remaining?: 
 
 // Один "слот" — полностью независимая тренировка одного подопечного: свой план/день/веса/повторы.
 // Слоты не размонтируются при переключении вкладок (см. ниже className="hidden"), поэтому ввод не теряется.
-function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest }: { client: SlotClient; trainerId: string; groupId: string; active: boolean; onFinished: () => void; startRest: (sec: number) => void }) {
+function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest, date, setDate }: { client: SlotClient; trainerId: string; groupId: string; active: boolean; onFinished: () => void; startRest: (sec: number) => void; date: string | null; setDate: (v: string | null) => void }) {
   // Д1: всё состояние слота живёт в хуке — так родитель может держать сразу двоих
   // и показывать их подходы рядом, а не по вкладкам.
   const s = useSessionSlot(client.id, trainerId, onFinished, groupId);
@@ -210,11 +210,12 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest 
                 <div><p className="text-xs text-zinc-500 mb-1">Настроение</p><FeelingScale kind="mood" value={mood} onChange={setMood} /></div>
                 <div><p className="text-xs text-zinc-500 mb-1">Оценка тренировки клиентом</p><div className="flex gap-1.5">{[1, 2, 3, 4, 5].map((n) => (<button key={n} onClick={() => setClientRating(n === clientRating ? 0 : n)} className={`flex-1 h-10 rounded-xl text-sm font-semibold transition ${n <= clientRating ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500 hover:text-zinc-300"}`}>{n}</button>))}</div></div>
                 <div><p className="text-xs text-zinc-500 mb-1">Отзыв клиента</p><textarea value={review} onChange={(e) => setReview(e.target.value)} rows={2} placeholder="Что сказал клиент..." className="w-full bg-zinc-800 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-lime-400/60 resize-none" /></div>
+                {!finished && <WorkoutDatePick value={date} onChange={setDate} />}
               </div>
 
               <div className="flex items-center gap-3">
                 <span className="text-sm text-zinc-500 shrink-0"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span>
-                {!finished && <button onClick={finish} disabled={busy} className="flex-1 min-w-0 h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"><CheckCircle2 size={18} className="shrink-0" /> <span className="truncate">Завершить: {client.name}</span> {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />}</button>}
+                {!finished && <button onClick={() => finish(date)} disabled={busy} className="flex-1 min-w-0 h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"><CheckCircle2 size={18} className="shrink-0" /> <span className="truncate">Завершить: {client.name}</span> {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />}</button>}
               </div>
             </>
           )}
@@ -237,6 +238,8 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
   const [finishedIds, setFinishedIds] = useState<string[]>(() => clients.filter((c) => readSlotDraft(groupId, c.id)?.finished).map((c) => c.id));
   const [minimized, setMinimized] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  // Дата проведения — одна на всех: null — сегодня, иначе задним числом
+  const [workoutDate, setWorkoutDate] = useState<string | null>(null);
   // Свёрнутая тренировка не держит прокрутку страницы
   useEffect(() => { document.body.style.overflow = minimized ? "" : "hidden"; return () => { document.body.style.overflow = ""; }; }, [minimized]);
   const allDone = clients.every((c) => finishedIds.includes(c.id));
@@ -294,9 +297,9 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-3 max-w-2xl w-full mx-auto">
-        {isPair && side && <PairSession a={clients[0]} b={clients[1]} trainerId={trainerId} groupId={groupId} onFinishedOne={markFinished} startRest={restTimer.start} />}
+        {isPair && side && <PairSession a={clients[0]} b={clients[1]} trainerId={trainerId} groupId={groupId} onFinishedOne={markFinished} startRest={restTimer.start} date={workoutDate} setDate={setWorkoutDate} />}
         {!(isPair && side) && clients.map((c) => (
-          <ClientSlot key={c.id} client={c} trainerId={trainerId} groupId={groupId} active={c.id === activeId} onFinished={() => markFinished(c.id)} startRest={restTimer.start} />
+          <ClientSlot key={c.id} client={c} trainerId={trainerId} groupId={groupId} active={c.id === activeId} onFinished={() => markFinished(c.id)} startRest={restTimer.start} date={workoutDate} setDate={setWorkoutDate} />
         ))}
       </div>
       <div style={{ paddingBottom: "env(safe-area-inset-bottom)" }}><RestBar timer={restTimer} /></div>
@@ -398,8 +401,9 @@ function PlanPicker({ c, slot }: { c: SlotClient; slot: Slot }) {
   );
 }
 
-function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest }: {
+function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest, date, setDate }: {
   a: SlotClient; b: SlotClient; trainerId: string; groupId: string; onFinishedOne: (id: string) => void; startRest: (sec: number) => void;
+  date: string | null; setDate: (v: string | null) => void;
 }) {
   const sa = useSessionSlot(a.id, trainerId, () => onFinishedOne(a.id), groupId);
   const sb = useSessionSlot(b.id, trainerId, () => onFinishedOne(b.id), groupId);
@@ -453,6 +457,9 @@ function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest }: {
             </div>
           ))}
 
+          {!(sa.finished && sb.finished) && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3"><WorkoutDatePick value={date} onChange={setDate} /></div>
+          )}
           {/* Завершение раздельное: у каждой своя сессия, своё списание, свои метрики */}
           <div className="grid grid-cols-2 gap-2">
             {[{ c: a, s: sa }, { c: b, s: sb }].map(({ c, s }) => (
@@ -470,7 +477,7 @@ function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest }: {
                 {s.finished ? (
                   <div className="flex items-center gap-1.5 text-xs text-lime-400"><CheckCircle2 size={14} /> записана</div>
                 ) : (
-                  <button onClick={s.finish} disabled={s.busy}
+                  <button onClick={() => s.finish(date)} disabled={s.busy}
                     className="w-full h-11 bg-lime-400 text-zinc-950 font-bold rounded-xl text-sm hover:bg-lime-300 transition disabled:opacity-50">
                     {s.busy ? "Сохраняю…" : "Завершить"}
                   </button>

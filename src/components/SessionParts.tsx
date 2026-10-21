@@ -1,5 +1,5 @@
 import { Check, Flame, History, Layers } from "lucide-react";
-import { fmtDate } from "../lib/format";
+import { addDays, fmtDate, today } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
 import { tonnageOf } from "../lib/sessionUtils";
 import type { Exercise } from "../types";
@@ -12,6 +12,37 @@ export { tonnageOf };
 // Только то, что читает блок суперсета — у тренера и клиента состояние подхода чуть разное
 type ExMeta = { note?: string; fires?: Record<number, number>; setsDone?: Record<number, boolean> };
 
+/**
+ * Дата проведения: «Сегодня» или другая — чтобы внести пропущенную тренировку задним
+ * числом. null — сегодня (берётся в момент завершения, по местному времени).
+ */
+export function WorkoutDatePick({ value, onChange }: { value: string | null; onChange: (v: string | null) => void }) {
+  const t = today();
+  return (
+    <div>
+      <p className="text-xs text-zinc-500 mb-1">Дата тренировки</p>
+      <div className="flex gap-1 p-1 bg-zinc-800/60 rounded-xl">
+        {([[false, "Сегодня"], [true, "Другая дата"]] as const).map(([other, label]) => (
+          <button key={label} type="button" onClick={() => onChange(other ? value ?? addDays(t, -1) : null)} aria-pressed={(value !== null) === other}
+            className={`flex-1 h-8 rounded-lg text-sm font-semibold transition ${(value !== null) === other ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-200"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {value !== null && (
+        <input type="date" value={value} max={t} onChange={(e) => onChange(e.target.value)} aria-label="Дата тренировки"
+          className="w-full h-10 mt-1.5 bg-zinc-800 rounded-xl px-3 text-sm text-zinc-100 outline-none focus:ring-2 focus:ring-lime-400/60" />
+      )}
+    </div>
+  );
+}
+
+/** Дата для записи: выбранная или сегодняшняя; null — выбрана пустая или будущая */
+export const resolveWorkoutDate = (v: string | null) => {
+  const t = today();
+  if (v === null) return t;
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) && v <= t ? v : null;
+};
 
 export function FlameRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
