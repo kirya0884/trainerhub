@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
-import { DocLink } from "./LegalDoc";
+import { DocLink } from "./LegalLink";
 import { recordConsents, type ConsentKind, type Role } from "../lib/consents";
 import { supabase } from "../lib/supabase";
 

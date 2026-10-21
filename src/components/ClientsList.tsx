@@ -1,13 +1,16 @@
 import { CalendarCheck, Archive, ChevronRight, HeartPulse, Play, Plus, RefreshCw, Search } from "lucide-react";
 import { useSwipeRow } from "../hooks/useSwipeRow";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { logEvent } from "../lib/events";
 import { useScrollRestore } from "../hooks/useScrollRestore";
-import RenewModal from "./RenewModal";
-import NewClientWizard from "./NewClientWizard";
-import LiveWorkoutModal from "./LiveWorkoutModal";
+import { lazyRetry } from "../lib/lazy";
 import type { ClientListItem } from "../lib/clients";
+
+// Окна грузятся при первом открытии — список остаётся в основном файле и открывается сразу
+const RenewModal = lazyRetry(() => import("./RenewModal"));
+const NewClientWizard = lazyRetry(() => import("./NewClientWizard"));
+const LiveWorkoutModal = lazyRetry(() => import("./LiveWorkoutModal"));
 
 export default function ClientsList({ trainerId, clients, reloadClients, onOpenClient, openForm, onBookClient }: { trainerId: string; clients: ClientListItem[] | null; reloadClients: () => void; onOpenClient: (id: string) => void; openForm?: boolean; onBookClient?: (clientId: string) => void }) {
   const [showForm, setShowForm] = useState(!!openForm);
@@ -155,8 +158,10 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
         ))}
       </div>
       {showForm && (
+        <Suspense fallback={null}>
         <NewClientWizard trainerId={trainerId} existingCount={clients?.length ?? 0} onClose={() => setShowForm(false)}
           onCreated={(id) => { setShowForm(false); reloadClients(); onOpenClient(id); }} />
+        </Suspense>
       )}
       {showArchive && (
         <p className="text-sm text-zinc-500 mb-3 flex items-center gap-1.5"><Archive size={14} /> Архив: эти подопечные скрыты из основного списка</p>
@@ -178,6 +183,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
         ))}
       </div>
       {liveClient && liveClient.activeSession && (
+        <Suspense fallback={null}>
         <LiveWorkoutModal
           clientId={liveClient.id}
           clientName={liveClient.name}
@@ -185,8 +191,9 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
           activeSession={liveClient.activeSession as any}
           onClose={() => setLiveClient(null)}
         />
+        </Suspense>
       )}
-      {renewing && <RenewModal trainerId={trainerId} clientId={renewing.clientId} name={renewing.name} onDone={reloadClients} onClose={() => setRenewing(null)} />}
+      {renewing && <Suspense fallback={null}><RenewModal trainerId={trainerId} clientId={renewing.clientId} name={renewing.name} onDone={reloadClients} onClose={() => setRenewing(null)} /></Suspense>}
     </div>
   );
 }

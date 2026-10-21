@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { LEGAL_VERSION } from "../legal/docs";
+import { LEGAL_VERSION } from "../legal/meta";
 
 // Журнал согласий (таблица user_consents). Требуемый набор зависит от роли;
 // при смене LEGAL_VERSION набор считается неполным — пользователь подтверждает заново.

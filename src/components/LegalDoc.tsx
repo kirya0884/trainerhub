@@ -26,20 +26,6 @@ export function LegalModal({ slug, onClose }: { slug: DocSlug; onClose: () => vo
   );
 }
 
-/** Ссылка-кнопка на документ: открывает окно поверх текущего экрана */
-export function DocLink({ slug, children, className = "" }: { slug: DocSlug; children?: React.ReactNode; className?: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      {/* span, а не button: кнопка — блок и рвёт строку текста согласия. preventDefault — чтобы клик
-          по ссылке внутри label не ставил галочку */}
-      <span role="button" tabIndex={0} onClick={(e) => { e.preventDefault(); setOpen(true); }} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpen(true); } }}
-        className={`cursor-pointer text-lime-400 hover:text-lime-300 underline underline-offset-2 ${className}`}>{children ?? DOCS[slug].short}</span>
-      {open && <LegalModal slug={slug} onClose={() => setOpen(false)} />}
-    </>
-  );
-}
-
 /** Список документов (из профиля тренера и кабинета клиента) */
 export function LegalList({ slugs, onClose }: { slugs: DocSlug[]; onClose: () => void }) {
   const [open, setOpen] = useState<DocSlug | null>(null);
@@ -60,21 +46,6 @@ export function LegalList({ slugs, onClose }: { slugs: DocSlug[]; onClose: () =>
 }
 
 /** Публичная страница #/legal/<slug> — открывается без входа (ссылка для магазинов приложений и сайта) */
-export function legalSlugFromHash(hash: string): DocSlug | null {
-  const m = hash.match(/^#\/legal\/([a-z-]+)/);
-  return m && m[1] in DOCS ? (m[1] as DocSlug) : null;
-}
-export function useLegalRoute() {
-  const [slug, setSlug] = useState(() => legalSlugFromHash(location.hash));
-  useEffect(() => {
-    const on = () => setSlug(legalSlugFromHash(location.hash));
-    window.addEventListener("hashchange", on);
-    return () => window.removeEventListener("hashchange", on);
-  }, []);
-  // Адрес #/ при старте приложение может переписать само — поэтому «назад» закрывает явно
-  const close = () => { setSlug(null); if (location.hash.startsWith("#/legal/")) location.hash = "#/"; };
-  return [slug, close] as const;
-}
 export function LegalPage({ slug, onClose }: { slug: DocSlug; onClose: () => void }) {
   const doc = DOCS[slug];
   useEffect(() => {

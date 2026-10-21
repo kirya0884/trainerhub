@@ -4,8 +4,7 @@ import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, UserRound, Pl
 import { supabase } from "./lib/supabase";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
-import { LegalPage, useLegalRoute } from "./components/LegalDoc";
-import ConsentGate from "./components/ConsentGate";
+import { useLegalRoute } from "./components/LegalLink";
 import { needsConsent } from "./lib/consents";
 import ClientsList from "./components/ClientsList";
 import Dashboard from "./components/Dashboard";
@@ -16,13 +15,12 @@ import { usePlans } from "./hooks/usePlans";
 import { logEvent } from "./lib/events";
 import { loadViewState, saveViewState } from "./lib/viewState";
 import PinGate from "./components/PinGate";
-import PinSettingsModal from "./components/PinSettingsModal";
 import * as portalApi from "./lib/clientPortal";
 import * as trainerApi from "./lib/trainer";
 import SplashScreen from "./components/SplashScreen";
 import type { SelfClient } from "./lib/clientPortal";
 import type { Sub } from "./components/ClientProfile";
-import { clearSlotDrafts, writeSlotDraft } from "./hooks/useSessionSlot";
+import { clearSlotDrafts, writeSlotDraft } from "./lib/slotDrafts";
 import type { PickClient } from "./components/ClientPickModal";
 import { confirmEmptyMembership } from "./lib/clients";
 import { finishOrQueue } from "./lib/finishWorkout";
@@ -51,6 +49,10 @@ const TrashModal = lazyRetry(() => import("./components/TrashModal"));
 const TrainerProfile = lazyRetry(() => import("./components/TrainerProfile"));
 const SessionModal = lazyRetry(() => import("./components/SessionModal"));
 const GroupSessionModal = lazyRetry(() => import("./components/GroupSessionModal"));
+const PinSettingsModal = lazyRetry(() => import("./components/PinSettingsModal"));
+// Редкие экраны до входа в данные: документ по ссылке #/legal/… и согласие (раз на версию документов)
+const LegalPage = lazyRetry(() => import("./components/LegalDoc").then((m) => ({ default: m.LegalPage })));
+const ConsentGate = lazyRetry(() => import("./components/ConsentGate"));
 
 type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { kind: "calendar"; newBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } } | { kind: "plans"; newPlan?: boolean } | { kind: "client"; clientId: string; sub?: Sub } | { kind: "plan"; planId: string; clientId: string; from?: "plans" | "me" } | { kind: "trainerProfile" } | { kind: "me"; meAction?: "food" | "workout" | "measure" } | { kind: "finance" };
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "me" | "trainerProfile";
@@ -376,13 +378,13 @@ export default function App() {
     writeJson("trainerhub-theme-v1", themeMode);
   }, [themeMode]);
 
-  if (legalSlug) return <LegalPage slug={legalSlug} onClose={closeLegal} />;
+  if (legalSlug) return <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><LegalPage slug={legalSlug} onClose={closeLegal} /></Suspense>;
   if (loading) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
   if (!session) return <AuthScreen />;
 
   if (isRecovery) return <PasswordResetScreen onDone={() => setIsRecovery(false)} />;
   if (selfClient === undefined || isTrainer === undefined || (consentRole && consentGate === undefined)) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
-  if (consentRole && consentGate) return <ConsentGate role={consentRole} onDone={() => setConsentGate(false)} />;
+  if (consentRole && consentGate) return <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><ConsentGate role={consentRole} onDone={() => setConsentGate(false)} /></Suspense>;
 
   if (selfClient) {
     return (
@@ -531,7 +533,7 @@ export default function App() {
           />
         )}
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
-        {showPinSettings && <PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} />}
+        {showPinSettings && <Suspense fallback={null}><PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} /></Suspense>}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
         {view.kind === "dashboard" && (

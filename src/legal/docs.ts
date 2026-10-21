@@ -1,8 +1,9 @@
 // Юридические документы Reps: одна точка правды для страниц, окон и журнала согласий.
 // ВАЖНО: реквизиты оператора ниже — заглушки. Их заполняет владелец сервиса (ИП/ООО/самозанятый),
-// после чего тексты стоит показать юристу. При любой правке текста — поднять LEGAL_VERSION:
-// пользователи увидят обновлённые документы и подтвердят их заново.
-export const LEGAL_VERSION = "2026-10-17";
+// после чего тексты стоит показать юристу. При любой правке текста — поднять LEGAL_VERSION
+// (legal/meta.ts): пользователи увидят обновлённые документы и подтвердят их заново.
+import { LEGAL_VERSION, type DocSlug } from "./meta";
+export { LEGAL_VERSION, type DocSlug };
 
 const FILL = (what: string) => `[${what} — заполнить]`;
 export const OPERATOR = {
@@ -14,7 +15,6 @@ export const OPERATOR = {
   site: "https://trainerhub-uyf5.vercel.app",
 };
 
-export type DocSlug = "privacy" | "terms" | "consent" | "consent-client";
 export type LegalDoc = { slug: DocSlug; title: string; short: string; sections: { h?: string; p: string[] }[] };
 
 const op = () => `${OPERATOR.name}, ИНН ${OPERATOR.inn}, ${OPERATOR.ogrn}, адрес: ${OPERATOR.address}, электронная почта: ${OPERATOR.email}`;

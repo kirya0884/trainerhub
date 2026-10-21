@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase } from "./lib/supabase";
-import { DocLink } from "./components/LegalDoc";
+import { DocLink } from "./components/LegalLink";
 import { markSignupConsent } from "./lib/consents";
 import { ArrowLeft, Dumbbell, User } from "lucide-react";
 import RepsMark from "./components/RepsMark";

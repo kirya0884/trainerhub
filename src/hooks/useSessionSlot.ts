@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
+import { touchDraft, writeJson } from "../lib/storage";
 import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
 import { fmtDate, parseNum, today } from "../lib/format";
@@ -11,6 +11,7 @@ import { feelingLabel } from "../components/FeelingScale";
 import { confirmFinish, resolveWorkoutDate } from "../components/SessionParts";
 import type { Day, Plan, Session } from "../types";
 import { notify } from "../lib/dialog";
+import { draftPrefix, readSlotDraft, type SlotDraft } from "../lib/slotDrafts";
 
 export type SetVal = { weight: string; reps: string };
 export type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number; setsDone?: Record<number, boolean> };
@@ -42,17 +43,8 @@ export const buildMeta = (day: Day): Record<string, ExMeta> => {
  * при ошибке любой из проверок списание пропускается — недосписать безопаснее,
  * чем списать дважды.
  */
-// Черновик слота совместной тренировки: всё введённое, чтобы пережить перезагрузку,
-// сворачивание и переключение «Рядом» ↔ «Вкладки» (там слоты монтируются заново).
-export type SlotDraft = {
-  planId: string; dayId: string; vals: Record<string, SetVal[]>; meta: Record<string, ExMeta>;
-  mood: number; wellbeing: number; review: string; clientRating: number; finished: boolean;
-};
-const draftPrefix = (groupId: string, clientId: string) => `th-gslot-${groupId}-${clientId}`;
-export const readSlotDraft = (groupId: string, clientId: string) => readJson<SlotDraft | null>(`${draftPrefix(groupId, clientId)}-vals`, null);
-/** Черновик слота заранее — так одиночная тренировка переходит в совместную без потери отметок */
-export const writeSlotDraft = (groupId: string, clientId: string, d: SlotDraft) => writeJson(`${draftPrefix(groupId, clientId)}-vals`, d);
-export const clearSlotDrafts = (groupId: string, clientIds: string[]) => clientIds.forEach((id) => removeKey(`${draftPrefix(groupId, id)}-vals`));
+// Черновики слотов — в lib/slotDrafts (App пишет их, не загружая этот модуль)
+export { readSlotDraft, writeSlotDraft, clearSlotDrafts, type SlotDraft } from "../lib/slotDrafts";
 
 export function useSessionSlot(clientId: string, trainerId: string, onFinished: () => void, groupId?: string) {
   // Черновик читаем один раз при монтировании
