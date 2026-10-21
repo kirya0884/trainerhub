@@ -12,12 +12,13 @@ export function useProgress(planId: string) {
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
-  const load = () => Promise.all([api.fetchProgress(planId), api.fetchDeletedSessions(planId)]).then(([d, del]) => {
+  const load = () => !planId ? Promise.resolve() : Promise.all([api.fetchProgress(planId), api.fetchDeletedSessions(planId)]).then(([d, del]) => {
     if (!mountedRef.current) return;
     setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setLoading(false);
   }).catch((e) => { if (!mountedRef.current) return; console.error("[useProgress] load:", e); setLoading(false); });
 
   useEffect(() => {
+    if (!planId) { setProgress([]); setMetrics([]); setSessions([]); setDeletedSessions([]); setLoading(false); return; }
     let alive = true;
     setLoading(true);
     Promise.all([api.fetchProgress(planId), api.fetchDeletedSessions(planId)]).then(([d, del]) => {
