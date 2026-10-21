@@ -41,8 +41,14 @@ export async function exportBackup(trainerId: string) {
   const recipeIds = foodRecipes.map((r: any) => r.id);
   const { data: foodRecipeItems } = recipeIds.length ? await supabase.from("food_recipe_items").select("*").in("recipe_id", recipeIds) : { data: [] as any[] };
 
+  // Журнал заработка (по подопечным из копии) и журнал согласий самого тренера.
+  // Согласия — только для справки: при импорте не восстанавливаются (см. importBackup).
+  const sessionCharges = await childByClient("session_charges");
+  const { data: consents } = await supabase.from("user_consents").select("*").eq("user_id", trainerId);
+
   return {
-    version: 2, exportedAt: new Date().toISOString(),
+    version: 3, exportedAt: new Date().toISOString(),
+    sessionCharges, consents: consents ?? [],
     nutritionLogs: await childByClient("nutrition_logs"), foodProducts: await childByClient("food_products"), foodRecipes, foodRecipeItems,
     foodEntries: await childByClient("food_entries"), nutritionGoals: await childByClient("nutrition_goals"), nutritionDays: await childByClient("nutrition_days"),
     clients, measurements: await childByClient("client_measurements"), photos: await childByClient("client_photos"),
@@ -71,7 +77,7 @@ export async function importBackup(trainerId: string, raw: any, onProgress?: (do
     ...(raw.sessions ?? []), ...(raw.sessionItems ?? []), ...(raw.bookings ?? []), ...(raw.bookingClients ?? []),
     ...(raw.packageTemplates ?? []), ...(raw.exerciseLibrary ?? []), ...(raw.planTemplates ?? []), ...(raw.dayTemplates ?? []),
     ...(raw.foodProducts ?? []), ...(raw.foodRecipes ?? []), ...(raw.foodRecipeItems ?? []), ...(raw.foodEntries ?? []),
-    ...(raw.nutritionGoals ?? []), ...(raw.nutritionDays ?? []),
+    ...(raw.nutritionGoals ?? []), ...(raw.nutritionDays ?? []), ...(raw.sessionCharges ?? []),
   ];
   const total = allItems.length;
   let done = 0;
@@ -256,5 +262,33 @@ export async function importBackup(trainerId: string, raw: any, onProgress?: (do
     await supabase.from("nutrition_days").upsert(row);
   }
   skippedNutrition += (raw.nutritionLogs ?? []).length;
+
+  // Журнал заработка. Подопечные из копии создаются заново (новые id), поэтому дубли
+  // возможны только у карточки «Я», куда данные переносятся повторно: строку, которая уже
+  // есть у этого подопечного (та же дата, вид, сумма и время создания), пропускаем.
+  // Строки подопечных, которых нет в копии (удалённых), не восстанавливаем — привязать не к кому.
+  const charges = (raw.sessionCharges ?? []).filter((ch: any) => idMap[ch.client_id]);
+  const chargeKey = (ch: any) => [remap(ch.client_id), ch.date, ch.kind, Number(ch.amount), new Date(ch.created_at).getTime()].join("|");
+  const targetIds = [...new Set(charges.map((ch: any) => remap(ch.client_id)))];
+  const { data: existingCharges } = targetIds.length
+    ? await supabase.from("session_charges").select("client_id,date,kind,amount,created_at").in("client_id", targetIds)
+    : { data: [] as any[] };
+  const seenCharges = new Set((existingCharges ?? []).map(chargeKey));
+  for (const ch of raw.sessionCharges ?? []) {
+    tick();
+    if (!idMap[ch.client_id]) continue;
+    const key = chargeKey(ch);
+    // сравниваем только с тем, что было в базе до импорта: одинаковые строки внутри файла — разные списания
+    if (seenCharges.has(key)) continue;
+    const { id, trainer_id, client_id, ...rest } = ch;
+    const { error } = await supabase.from("session_charges").insert({ ...rest, trainer_id: trainerId, client_id: remap(client_id) });
+    if (error) throw error;
+  }
+
+  // Журнал согласий (raw.consents) не восстанавливаем намеренно: это запись о том, что
+  // конкретный пользователь принял конкретную редакцию документов в конкретный момент.
+  // Вставка из файла создала бы задним числом новые строки от имени текущего пользователя
+  // (база это позволяет: insert своих строк разрешён, правка и удаление — нет, так что
+  // ошибку потом не исправить). Согласия текущей учётной записи берутся из самого входа.
   return { skippedNutrition };
 }

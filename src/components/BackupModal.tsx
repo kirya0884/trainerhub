@@ -45,7 +45,7 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
   return (
     <ModalShell title="Резервная копия" icon={<Database size={17} className="text-lime-400" />} onClose={onClose}>
       <div className="p-4 space-y-3 text-sm">
-        <p className="text-zinc-400">Экспорт сохраняет всех подопечных, планы, записи, шаблоны и питание в один JSON-файл.</p>
+        <p className="text-zinc-400">Экспорт сохраняет всех подопечных, планы, записи, шаблоны, питание и журнал заработка в один JSON-файл. Журнал ваших согласий тоже попадает в файл, но только для справки — при импорте он не восстанавливается.</p>
         <button onClick={doExport} disabled={busy} className="w-full flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 hover:bg-lime-300 transition disabled:opacity-50"><Download size={16} /> Экспортировать всё</button>
 
         <div className="border-t border-zinc-800 pt-3">
