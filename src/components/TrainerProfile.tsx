@@ -357,6 +357,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
             {onSignOut && <SettingsRow icon={LogOut} label="Выйти" danger onClick={onSignOut} />}
             <SettingsRow icon={Trash2} label="Удалить аккаунт" danger onClick={() => deleteMyAccount("trainer")} />
           </SettingsGroup>
+          <p className="text-center text-[11px] text-zinc-600">Версия {__APP_VERSION__}</p>
         </>
       )}
       {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}

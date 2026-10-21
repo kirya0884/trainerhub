@@ -215,7 +215,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   if (step === "feedback") {
     return (
-      <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col" style={{ "--accent": accent } as React.CSSProperties}>
+      <div data-workout className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col" style={{ "--accent": accent } as React.CSSProperties}>
         {draftFailed && (
           <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
@@ -249,7 +249,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   if (minimized) {
     return (
-      <button onClick={() => onExpand?.()}
+      <button data-workout onClick={() => onExpand?.()}
         style={{ "--accent": accent, bottom: "var(--tabbar-h, 0px)" } as React.CSSProperties}
         className="fixed left-0 right-0 z-50 flex items-center gap-3 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-left hover:bg-zinc-800 transition">
         <Play size={15} style={{ color: "var(--accent)" }} className="shrink-0" />
@@ -262,7 +262,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   }
 
   return (
-    <div style={{ "--accent": accent } as React.CSSProperties}>
+    <div data-workout style={{ "--accent": accent } as React.CSSProperties}>
     <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col">
       {draftFailed && (
         <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">

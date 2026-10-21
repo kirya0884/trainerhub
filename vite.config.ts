@@ -3,6 +3,10 @@ import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  // Версия сборки в профиле: короткий хеш коммита на Vercel, локально — дата сборки
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || new Date().toISOString().slice(0, 10)),
+  },
   plugins: [
     react(),
     VitePWA({

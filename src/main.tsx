@@ -17,10 +17,32 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
   </React.StrictMode>
 );
 
+// Новая версия ставится сама в безопасный момент: в первые секунды после запуска или
+// возврата в приложение, если нет идущей тренировки и не открыто ни одно окно (там может
+// быть недописанный текст). Кнопку не замечали — телефоны неделями сидели на старой сборке.
+// Иначе висит кнопка, а попытка повторяется при следующем возврате.
+const SAFE_WINDOW = 15_000;
+let shownAt = Date.now();
+let pending = false;
+const safeToReload = () => {
+  try {
+    if (Object.keys(localStorage).some((k) => k.startsWith("th-active-workout-v2-"))) return false;
+  } catch { /* нет доступа к хранилищу — тогда судим только по окнам */ }
+  return !document.querySelector('[aria-modal="true"], [data-workout]');
+};
+const applyIfSafe = () => {
+  if (!pending || document.hidden || Date.now() - shownAt > SAFE_WINDOW || !safeToReload()) return false;
+  pending = false;
+  updateSW(true);
+  return true;
+};
+
 // Регистрируем Service Worker с prompt-обновлением
 // (не auto-update — не хотим сбрасывать состояние во время тренировки)
 const updateSW = registerSW({
   onNeedRefresh() {
+    pending = true;
+    if (applyIfSafe()) return;
     // Не confirm() — он блокирует мобильный Safari. Висит до клика: если убрать
     // по таймеру, пользователь пропускает её и остаётся на старой версии.
     //
@@ -63,6 +85,10 @@ const updateSW = registerSW({
     // Молчание осознанное: проверка обновления фоновая, сеть может быть недоступна
     const check = () => reg.update().catch(() => {});
     setInterval(check, 15 * 60_000);
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) return;
+      shownAt = Date.now();
+      if (!applyIfSafe()) check();
+    });
   },
 });

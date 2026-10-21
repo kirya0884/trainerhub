@@ -1,6 +1,9 @@
 /// <reference types="vite/client" />
 /// <reference types="vite-plugin-pwa/client" />
 
+/** Версия сборки (define в vite.config.ts) */
+declare const __APP_VERSION__: string;
+
 // Временный тип для virtual:pwa-register до npm install vite-plugin-pwa
 declare module "virtual:pwa-register" {
   export type RegisterSWOptions = {
