@@ -4,7 +4,9 @@
 // возвращает Promise<boolean>; askInput() — окно с полями ввода вместо prompt,
 // возвращает значения или null при отмене. Рисует их DialogHost (подключён в main.tsx).
 
-export type Toast = { id: number; text: string; kind: "info" | "error" };
+export type Toast = { id: number; text: string; kind: "info" | "error"; action?: ToastAction };
+/** Кнопка в сообщении, например «Отменить» после переноса */
+export type ToastAction = { label: string; run: () => void };
 export type Field = { key: string; label: string; value?: string; placeholder?: string; numeric?: boolean };
 export type Ask = { id: number; text: string; ok: string; cancel: string; danger: boolean; fields?: Field[]; resolve: (v: boolean, values?: Record<string, string>) => void };
 type State = { toasts: Toast[]; ask: Ask | null; queue: Ask[] };
@@ -22,12 +24,14 @@ export function subscribe(l: (s: State) => void) {
 /** Похоже на ошибку — красный значок; остальное — нейтрально */
 const looksLikeError = (t: string) => /не удалось|ошибк|не получилось|проверьте интернет/i.test(t);
 
-export function notify(text: string, kind?: Toast["kind"]) {
-  const t: Toast = { id: ++seq, text, kind: kind ?? (looksLikeError(text) ? "error" : "info") };
+/** Возвращает id сообщения — чтобы закрыть его раньше (dismiss) */
+export function notify(text: string, kind?: Toast["kind"], action?: ToastAction) {
+  const t: Toast = { id: ++seq, text, kind: kind ?? (looksLikeError(text) ? "error" : "info"), action };
   state = { ...state, toasts: [...state.toasts.slice(-2), t] };
   emit();
-  // Длинный текст висит дольше: ~4 с плюс время на чтение
-  setTimeout(() => dismiss(t.id), Math.min(12000, 3500 + text.length * 40));
+  // Длинный текст висит дольше: ~4 с плюс время на чтение; с кнопкой — не меньше 5 с
+  setTimeout(() => dismiss(t.id), Math.max(action ? 5000 : 0, Math.min(12000, 3500 + text.length * 40)));
+  return t.id;
 }
 
 export function dismiss(id: number) {

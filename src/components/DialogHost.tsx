@@ -14,7 +14,15 @@ export default function DialogHost() {
   return (
     <>
       <div className="fixed inset-x-0 z-[70] flex flex-col items-center gap-2 px-3 pointer-events-none" style={{ top: "calc(env(safe-area-inset-top) + 12px)" }} aria-live="polite">
-        {toasts.map((t) => (
+        {toasts.map((t) => t.action ? (
+          // С кнопкой действия: кнопка в кнопке недопустима, поэтому плашка — div с двумя кнопками
+          <div key={t.id} className="pointer-events-auto w-full max-w-md flex items-center gap-2.5 rounded-2xl bg-zinc-800 border border-zinc-700 shadow-xl shadow-black/40 pl-3.5 pr-1 py-1 text-sm text-zinc-100">
+            {t.kind === "error" ? <AlertCircle size={18} className="text-red-400 shrink-0" /> : <Info size={18} className="text-lime-400 shrink-0" />}
+            <span className="flex-1 whitespace-pre-line leading-snug py-2">{t.text}</span>
+            <button onClick={() => { dismiss(t.id); t.action!.run(); }} className="h-11 px-3 rounded-xl font-bold text-lime-400 hover:bg-zinc-700 transition shrink-0">{t.action.label}</button>
+            <button onClick={() => dismiss(t.id)} aria-label="Закрыть" className="w-11 h-11 flex items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-700 transition shrink-0"><X size={16} /></button>
+          </div>
+        ) : (
           <button key={t.id} onClick={() => dismiss(t.id)}
             className="pointer-events-auto w-full max-w-md flex items-start gap-2.5 text-left rounded-2xl bg-zinc-800 border border-zinc-700 shadow-xl shadow-black/40 px-3.5 py-3 text-sm text-zinc-100">
             {t.kind === "error" ? <AlertCircle size={18} className="text-red-400 shrink-0 mt-px" /> : <Info size={18} className="text-lime-400 shrink-0 mt-px" />}

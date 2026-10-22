@@ -40,6 +40,8 @@ export const fmtN = (n: number, digits = 1) => {
 };
 /** «12,5» и «12.5» из поля ввода; пусто и мусор — 0 */
 export const num = (s: string) => { const v = Number(String(s).replace(",", ".").trim()); return Number.isFinite(v) && v > 0 ? v : 0; };
+/** Строка для поиска по названию: без регистра и «ё» — «мед» находит «Мёд» */
+export const searchKey = (s: string) => s.trim().toLowerCase().replace(/ё/g, "е");
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const macrosRow = (m: Macros) => ({ kcal: r2(m.kcal), protein: r2(m.protein), fat: r2(m.fat), carbs: r2(m.carbs) });
@@ -92,6 +94,19 @@ export async function deleteEntry(id: string) {
   if (error) throw error;
 }
 
+/** Перенос записей в другой приём пищи того же дня — одним запросом */
+export async function moveEntries(ids: string[], meal: Meal) {
+  if (!ids.length) return;
+  const { error } = await supabase.from("food_entries").update({ meal }).in("id", ids);
+  if (error) throw error;
+}
+
+export async function deleteEntries(ids: string[]) {
+  if (!ids.length) return;
+  const { error } = await supabase.from("food_entries").delete().in("id", ids);
+  if (error) throw error;
+}
+
 // ── Мои продукты ──
 const toProduct = (r: any): FoodProduct => ({
   id: r.id, name: r.name, favorite: !!r.favorite, lastGrams: r.last_grams == null ? null : Number(r.last_grams),
@@ -105,8 +120,8 @@ async function fetchProductsRaw(clientId: string): Promise<FoodProduct[]> {
   return (data ?? []).map(toProduct);
 }
 
-export async function addProduct(clientId: string, p: { name: string } & Macros): Promise<FoodProduct> {
-  const { data, error } = await supabase.from("food_products").insert({ client_id: clientId, name: p.name, ...macrosRow(p) }).select().single();
+export async function addProduct(clientId: string, p: { name: string; favorite?: boolean } & Macros): Promise<FoodProduct> {
+  const { data, error } = await supabase.from("food_products").insert({ client_id: clientId, name: p.name, ...macrosRow(p), ...(p.favorite ? { favorite: true } : {}) }).select().single();
   if (error) throw error;
   return toProduct(data);
 }
@@ -304,7 +319,9 @@ async function runFoodJob(job: FoodJob, st: FoodJobState, save: (s: FoodJobState
   if (job.touch?.recipeId) updateRecipeMeta(job.touch.recipeId, { lastGrams: job.touch.grams }).catch((err) => console.error("[food] touch:", err));
   return e;
 }
-registerHandler("food", async (item, save) => { if (!(item.state as FoodJobState).done) await runFoodJob(item.payload as FoodJob, item.state as FoodJobState, save); });
+// Дослана из очереди: id в очереди → id на сервере — чтобы перенос (и его отмена) нашёл запись
+const sentIds = new Map<string, string>();
+registerHandler("food", async (item, save) => { if (!(item.state as FoodJobState).done) sentIds.set(item.id, (await runFoodJob(item.payload as FoodJob, item.state as FoodJobState, save)).id); });
 
 /** Добавить еду; без сети — в очередь, а в дневник вернётся запись с пометкой «ждёт отправки» */
 export async function addEntryOrQueue(job: FoodJob): Promise<FoodEntry> {
@@ -328,12 +345,14 @@ export const pendingFood = (clientId: string, date: string): FoodEntry[] =>
 type FoodOp =
   | { op: "water"; clientId: string; date: string; cups: number }
   | { op: "grams"; clientId: string; date: string; entry: FoodEntry; grams: number }
-  | { op: "delete"; clientId: string; date: string; id: string };
+  | { op: "delete"; clientId: string; date: string; id: string }
+  | { op: "meal"; clientId: string; date: string; ids: string[]; meal: Meal };
 registerHandler("foodOp", async (item) => {
   const o = item.payload as FoodOp;
   if (o.op === "water") await setWater(o.clientId, o.date, o.cups);
   if (o.op === "grams") await updateEntryGrams(o.entry, o.grams);
   if (o.op === "delete") await deleteEntry(o.id);
+  if (o.op === "meal") await moveEntries(o.ids, o.meal);
 });
 const isLocal = (id: string) => id.startsWith("local-");
 const localItemId = (id: string) => id.slice("local-".length);
@@ -351,6 +370,7 @@ export function applyPendingOps(clientId: string, date: string, list: FoodEntry[
     if (o.clientId !== clientId || o.date !== date) continue;
     if (o.op === "grams") out = out.map((e) => (e.id === o.entry.id ? { ...scaleEntry(e, o.grams), pending: true } : e));
     if (o.op === "delete") out = out.filter((e) => e.id !== o.id);
+    if (o.op === "meal") out = out.map((e) => (o.ids.includes(e.id) ? { ...e, meal: o.meal, pending: true } : e));
   }
   return out;
 }
@@ -391,6 +411,45 @@ export async function deleteEntryOrQueue(clientId: string, e: FoodEntry) {
   catch (err) {
     if (!isNetworkError(err)) throw err;
     await enqueue("foodOp", { op: "delete", clientId, date: e.date, id: e.id } satisfies FoodOp, {});
+  }
+}
+
+export const MOVE_PARTIAL = "Перенесено частично: часть записей перенести не удалось.";
+/**
+ * Перенос в другой приём того же дня. Без сети — в очередь. queued — что-то ждёт отправки;
+ * missed — сколько записей уже нет (не отправленную удалили, а досланную не найти).
+ */
+export async function moveEntriesOrQueue(clientId: string, list: FoodEntry[], meal: Meal): Promise<{ queued: boolean; missed: number }> {
+  const ids = list.filter((e) => !isLocal(e.id)).map((e) => e.id);
+  let missed = 0, edited = false;
+  // Сначала очередь, потом сервер: правка очереди может не пройти (как раз отправляется) —
+  // тогда ещё ничего не перенесено
+  const queue = pending(undefined, "food");
+  for (const e of list.filter((x) => isLocal(x.id))) {
+    const it = queue.find((i) => i.id === localItemId(e.id));
+    if (it) {
+      if (!updateItem(it.id, { ...(it.payload as FoodJob), entry: { ...(it.payload as FoodJob).entry, meal } })) throw new Error(BUSY);
+      edited = true;
+    } else if (sentIds.has(localItemId(e.id))) ids.push(sentIds.get(localItemId(e.id))!);
+    else missed++;
+  }
+  let queued = false;
+  try { await moveEntries(ids, meal); }
+  catch (err) {
+    if (!isNetworkError(err)) throw edited ? new Error(MOVE_PARTIAL) : err;
+    await enqueue("foodOp", { op: "meal", clientId, date: list[0].date, ids, meal } satisfies FoodOp, {});
+    queued = true;
+  }
+  return { queued, missed };
+}
+
+export async function deleteEntriesOrQueue(clientId: string, list: FoodEntry[]) {
+  for (const e of list.filter((x) => isLocal(x.id))) if (!removeItem(localItemId(e.id))) throw new Error(BUSY);
+  const rest = list.filter((e) => !isLocal(e.id));
+  try { await deleteEntries(rest.map((e) => e.id)); }
+  catch (err) {
+    if (!isNetworkError(err)) throw err;
+    for (const e of rest) await enqueue("foodOp", { op: "delete", clientId, date: e.date, id: e.id } satisfies FoodOp, {});
   }
 }
 

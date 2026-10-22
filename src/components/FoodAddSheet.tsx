@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { BookOpen, Check, ChevronLeft, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { BookOpen, Check, ChevronLeft, ChevronRight, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
@@ -8,7 +8,10 @@ import * as api from "../lib/foodDiary";
 import type { FoodEntry, FoodProduct, Meal, Recipe } from "../lib/foodDiary";
 import { ask, notify } from "../lib/dialog";
 import { track } from "../lib/events";
+import { lazyRetry } from "../lib/lazy";
+import { today } from "../lib/format";
 
+const NutritionCatalog = lazyRetry(() => import("./NutritionCatalog"));
 const QUICK_GRAMS = [50, 100, 150, 200];
 const PORTIONS: [number, string][] = [[0.5, "½ порции"], [1, "1 порция"], [1.5, "1½"], [2, "2 порции"]];
 const per100 = (p: api.Macros) => `Б ${api.fmtN(p.protein)} · Ж ${api.fmtN(p.fat)} · У ${api.fmtN(p.carbs)} · ${api.fmtN(p.kcal, 0)} ккал`;
@@ -24,19 +27,25 @@ const itemUsed = (x: Item) => (x.kind === "product" ? x.p.lastUsedAt : x.r.lastU
 // Добавление в приём пищи: свой продукт или рецепт из списка (выбрал → граммы или порции)
 // или новый продукт (КБЖУ на 100 г с упаковки → граммы). Новый по умолчанию запоминается.
 // Свой продукт и рецепт можно поправить или удалить — записи в дневнике от этого не меняются.
-export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }: {
+export default function FoodAddSheet({ clientId, date, meal: initialMeal, initial, onAdded, onClose }: {
   clientId: string; date: string; meal: Meal; onAdded: (e: FoodEntry) => void; onClose: () => void;
+  /** Уже выбранный продукт или рецепт (из каталога): приём пищи тогда выбирается здесь же */
+  initial?: FoodProduct | Recipe;
 }) {
+  const initialRecipe = initial && "items" in initial ? initial : null;
+  const initialProduct = initial && !("items" in initial) ? initial : null;
+  const [meal, setMeal] = useState(initialMeal);
   const [products, setProducts] = useState<FoodProduct[] | null>(null);
   const [recipes, setRecipes] = useState<Recipe[] | null>(null);
   const [q, setQ] = useState("");
   const [list, setList] = useState<List>("recent");
-  const [picked, setPicked] = useState<FoodProduct | null>(null);
-  const [pickedRecipe, setPickedRecipe] = useState<Recipe | null>(null);
+  const [picked, setPicked] = useState<FoodProduct | null>(initialProduct);
+  const [pickedRecipe, setPickedRecipe] = useState<Recipe | null>(initialRecipe);
   const [recipeEdit, setRecipeEdit] = useState<Recipe | "new" | null>(null);
+  const [catalog, setCatalog] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState(false); // правка выбранного продукта
-  const [grams, setGrams] = useState("100");
+  const [grams, setGrams] = useState(() => initialRecipe ? str(initialRecipe.lastGrams ?? api.portionWeight(initialRecipe)) || "100" : String(initialProduct?.lastGrams ?? 100));
   const [busy, setBusy] = useState(false);
   // Форма продукта (новый или правка)
   const [name, setName] = useState("");
@@ -45,17 +54,18 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
 
   const loadRecipes = () => api.fetchRecipes(clientId).then((l) => { setRecipes(l); return l; })
     .catch((e) => { console.error("[FoodAddSheet] рецепты:", e); setRecipes([]); return [] as Recipe[]; });
-  useEffect(() => {
+  const loadAll = () => {
     api.fetchProducts(clientId).then(setProducts).catch((e) => { console.error("[FoodAddSheet] продукты:", e); setProducts([]); });
     loadRecipes();
-  }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+  };
+  useEffect(loadAll, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const term = q.trim().toLowerCase();
+  const term = api.searchKey(q);
   const shown = useMemo<Item[]>(() => {
     const ps: Item[] = (products ?? []).map((x) => ({ kind: "product", p: x }));
     const rs: Item[] = (recipes ?? []).map((r) => ({ kind: "recipe", r, per: api.recipePer100(r) }));
     let l = list === "recipes" ? rs : [...ps, ...rs];
-    if (term) l = l.filter((x) => itemName(x).toLowerCase().includes(term));
+    if (term) l = l.filter((x) => api.searchKey(itemName(x)).includes(term));
     if (list === "fav") l = l.filter(itemFav);
     if (list === "recent") { l = l.filter((x) => term || itemUsed(x)).sort((a, b) => itemUsed(b).localeCompare(itemUsed(a))); if (!term) l = l.slice(0, 30); }
     else l = [...l].sort((a, b) => itemName(a).localeCompare(itemName(b), "ru"));
@@ -128,6 +138,16 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
     onClose();
   }, "Не удалось добавить. Проверьте интернет и попробуйте ещё раз.");
 
+  if (catalog) {
+    // Каталог мог поменять продукты и рецепты — по возвращении список перечитываем
+    return (
+      <Suspense fallback={null}>
+        <NutritionCatalog clientId={clientId} onClose={() => { setCatalog(false); loadAll(); }}
+          onPick={(x) => { setCatalog(false); loadAll(); if ("items" in x) pickRecipe(x); else pick(x); }} />
+      </Suspense>
+    );
+  }
+
   if (recipeEdit) {
     return (
       <RecipeEditor clientId={clientId} recipe={recipeEdit === "new" ? null : recipeEdit} products={products ?? []}
@@ -177,6 +197,11 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
               <Search size={18} className="text-zinc-500 shrink-0" />
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Найти продукт или рецепт" className="flex-1 min-w-0 bg-transparent outline-none" />
             </label>
+            {!initial && (
+              <button onClick={() => setCatalog(true)} className="w-full h-11 -my-1 flex items-center justify-between px-1 text-sm font-semibold text-zinc-300 hover:text-zinc-100 transition">
+                Все продукты и рецепты <ChevronRight size={18} className="text-zinc-500" />
+              </button>
+            )}
             <div className="flex gap-1.5 overflow-x-auto -mx-4 px-4 pb-0.5">
               {LISTS.map(([k, l]) => (
                 <button key={k} onClick={() => setList(k)} aria-pressed={list === k} className={`${chip(list === k)} shrink-0 !px-3.5`}>{l}</button>
@@ -234,6 +259,12 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
 
         {base && (
           <>
+            {date !== today() && <p className="text-[13px] font-semibold text-zinc-400 px-0.5">В дневник за {new Date(date + "T00:00:00").toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</p>}
+            {initial && (
+              <div className="grid grid-cols-4 gap-1.5" role="group" aria-label="Приём пищи">
+                {api.MEALS.map((m) => <button key={m.key} onClick={() => setMeal(m.key)} aria-pressed={meal === m.key} className={`${chip(meal === m.key)} !h-11 !px-1`}>{m.label}</button>)}
+              </div>
+            )}
             <GramsInput value={grams} onChange={setGrams} />
             <div className="flex gap-1.5 flex-wrap">
               {pickedRecipe && pickedRecipe.servings > 1
@@ -259,7 +290,7 @@ export default function FoodAddSheet({ clientId, date, meal, onAdded, onClose }:
   );
 }
 
-function Per100({ label, value, onChange, color, placeholder = "0" }: { label: string; value: string; onChange: (v: string) => void; color: string; placeholder?: string }) {
+export function Per100({ label, value, onChange, color, placeholder = "0" }: { label: string; value: string; onChange: (v: string) => void; color: string; placeholder?: string }) {
   return (
     <label className="block text-center rounded-xl bg-zinc-800 px-1 py-2">
       <span className="block text-[11px] text-zinc-400">{label}</span>

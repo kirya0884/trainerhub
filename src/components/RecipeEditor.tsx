@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { BookOpen, ChevronLeft, Plus, Search, Trash2, X } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { MACRO_COLOR } from "./NutritionParts";
@@ -14,9 +14,11 @@ let seq = 0;
 
 // Рецепт: состав из своих продуктов (сырой вес), вес готового блюда и порции.
 // КБЖУ на 100 г и на порцию считаются сразу. Новый продукт для состава запоминается в «Мои продукты».
-export default function RecipeEditor({ clientId, recipe, products, onProductAdded, onSaved, onDeleted, onClose }: {
+export default function RecipeEditor({ clientId, recipe, products, onProductAdded, onSaved, onDeleted, onClose, onAddToDiary }: {
   clientId: string; recipe: Recipe | null; products: FoodProduct[];
   onProductAdded: (p: FoodProduct) => void; onSaved: (id: string) => void; onDeleted: (id: string) => void; onClose: () => void;
+  /** Из каталога «Продукты и рецепты»: записать рецепт в дневник (несохранённые правки сначала сохраняются) */
+  onAddToDiary?: (r: Recipe) => void;
 }) {
   const [name, setName] = useState(recipe?.name ?? "");
   const [rows, setRows] = useState<Row[]>(() => (recipe?.items ?? []).map((i) => ({ ...i, key: ++seq, g: str(i.grams) })));
@@ -32,6 +34,11 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
   const portion = api.portionWeight(draft);
   const perPortion = api.scale(per100, portion);
   const canSave = !!name.trim() && items.some((i) => i.grams > 0);
+  // Правки относительно открытого рецепта — для «Выйти без сохранения?» и «Добавить в дневник»
+  const snap = JSON.stringify([name, rows.map((r) => [r.productId, r.name, r.g]), cooked, servings]);
+  const initSnap = useRef(snap);
+  const dirty = snap !== initSnap.current;
+  const close = async () => { if (!dirty || busy || (await ask("Выйти без сохранения?", { ok: "Выйти", cancel: "Остаться" }))) onClose(); };
 
   const addRow = (p: { id: string | null; name: string } & api.Macros) => {
     setRows((l) => [...l, { productId: p.id, name: p.name, kcal: p.kcal, protein: p.protein, fat: p.fat, carbs: p.carbs, grams: 100, g: "100", key: ++seq }]);
@@ -42,30 +49,38 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
     setBusy(true);
     try { await f(); } catch (e) { console.error("[RecipeEditor]", e); notify(msg); setBusy(false); }
   };
-  const save = () => run(async () => {
-    if (!canSave) return;
-    const id = await api.saveRecipe(clientId, { id: recipe?.id, name: name.trim(), ...draft, items: items.filter((i) => i.grams > 0) });
+  const kept = { name: name.trim(), ...draft, items: items.filter((i) => i.grams > 0) };
+  const persist = async () => {
+    const id = await api.saveRecipe(clientId, { id: recipe?.id, ...kept });
     track(recipe ? "action" : "create", recipe ? "recipe_edit" : "recipe", { items: items.length });
-    onSaved(id);
+    return id;
+  };
+  const save = () => run(async () => { if (canSave) onSaved(await persist()); }, "Не удалось сохранить рецепт. Проверьте интернет.");
+  // С несохранёнными правками в дневник ушла бы старая версия — сначала сохраняем
+  const addToDiary = () => run(async () => {
+    if (!recipe || !onAddToDiary) return;
+    if (dirty) await persist();
+    onAddToDiary(dirty ? { ...recipe, ...kept } : recipe);
   }, "Не удалось сохранить рецепт. Проверьте интернет.");
   const remove = async () => {
     if (!recipe || !(await ask(`Удалить рецепт «${recipe.name}»? Записи в дневнике останутся.`, { danger: true, ok: "Удалить" }))) return;
     run(async () => { await api.deleteRecipe(recipe.id); onDeleted(recipe.id); }, "Не удалось удалить рецепт.");
   };
 
-  if (picking) return <IngredientPicker clientId={clientId} products={products} onPick={addRow} onProductAdded={onProductAdded} onBack={() => setPicking(false)} onClose={onClose} />;
+  if (picking) return <IngredientPicker clientId={clientId} products={products} onPick={addRow} onProductAdded={onProductAdded} onBack={() => setPicking(false)} onClose={close} />;
 
   const footer = (
     <div className="p-4 border-t border-zinc-800 shrink-0 space-y-2">
       <button onClick={save} disabled={busy || !canSave} className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition disabled:opacity-40">
         {busy ? "Сохраняю…" : recipe ? "Сохранить рецепт" : "Создать рецепт"}
       </button>
+      {recipe && onAddToDiary && <button onClick={addToDiary} disabled={busy || (dirty && !canSave)} className="w-full h-11 flex items-center justify-center gap-1.5 rounded-xl bg-zinc-800 text-sm font-semibold hover:bg-zinc-700 transition disabled:opacity-40"><Plus size={17} /> {dirty ? "Сохранить и добавить в дневник" : "Добавить в дневник"}</button>}
       {recipe && <button onClick={remove} disabled={busy} className="w-full h-10 flex items-center justify-center gap-1.5 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition"><Trash2 size={16} /> Удалить рецепт</button>}
     </div>
   );
 
   return (
-    <ModalShell title={recipe ? "Рецепт" : "Новый рецепт"} icon={<BookOpen size={16} className="text-lime-400" />} onClose={onClose} footer={footer}>
+    <ModalShell title={recipe ? "Рецепт" : "Новый рецепт"} icon={<BookOpen size={16} className="text-lime-400" />} onClose={close} footer={footer}>
       <div className="p-4 space-y-3">
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Название, например «Плов с курицей»"
           className="w-full h-12 px-3.5 rounded-xl bg-zinc-800 outline-none focus:ring-2 focus:ring-lime-400/50 font-semibold" />
@@ -133,8 +148,8 @@ function IngredientPicker({ clientId, products, onPick, onProductAdded, onBack, 
   const [creating, setCreating] = useState(false);
   const [p, setP] = useState(""); const [f, setF] = useState(""); const [c, setC] = useState(""); const [kcal, setKcal] = useState("");
   const [busy, setBusy] = useState(false);
-  const term = q.trim().toLowerCase();
-  const shown = useMemo(() => products.filter((x) => !term || x.name.toLowerCase().includes(term)).sort((a, b) => a.name.localeCompare(b.name, "ru")), [products, term]);
+  const term = api.searchKey(q);
+  const shown = useMemo(() => products.filter((x) => !term || api.searchKey(x.name).includes(term)).sort((a, b) => a.name.localeCompare(b.name, "ru")), [products, term]);
   const auto = api.kcalOf({ protein: api.num(p), fat: api.num(f), carbs: api.num(c) });
 
   const create = async () => {
