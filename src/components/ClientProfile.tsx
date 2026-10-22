@@ -33,6 +33,7 @@ import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 import StartWorkoutModal from "./StartWorkoutModal";
 import { ask, askInput, notify } from "../lib/dialog";
+import { checkEmail } from "../lib/emailCheck";
 import { track } from "../lib/events";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans";
@@ -254,28 +255,55 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   );
 }
 
-function InviteBlock({ clientId, email, hasAccount }: { clientId: string; email: string; hasAccount: boolean }) {
+function InviteBlock({ clientId, email, hasAccount, onFixEmail }: { clientId: string; email: string; hasAccount: boolean; onFixEmail: (email: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [created, setCreated] = useState(false);
+  const check = checkEmail(email);
+  const issued = hasAccount || created;
 
-  const invite = async () => {
+  // Письмо не дошло — пароль пришёл в ответе один раз: показываем его тренеру, чтобы передал сам.
+  const showCreds = async (res: api.InviteResult, resend: boolean) => {
+    const creds = `Логин: ${res.email}\nПароль: ${res.password}\nВход: ${window.location.origin} → «Я клиент»`;
+    const copy = await ask(`${resend ? "Пароль обновлён" : "Аккаунт создан"}, но письмо не дошло.\nПричина: ${res.warning}\n\n${creds}\n\nПароль показан один раз — скопируйте и передайте клиенту сами (например, в мессенджере).`, { ok: "Скопировать", cancel: "Закрыть" });
+    if (!copy) return;
+    try { await navigator.clipboard.writeText(creds); notify("Логин и пароль скопированы"); }
+    catch { await askInput("Скопируйте вручную", [{ key: "creds", label: "Логин и пароль", value: creds }], { ok: "Готово" }); }
+  };
+
+  const invite = async (resend: boolean) => {
+    if (resend && !(await ask("Выслать доступ заново? Будет создан новый пароль, старый перестанет работать. Сработает, только если клиент ещё ни разу не входил.", { ok: "Выслать" }))) return;
     setBusy(true); setMsg("");
     try {
-      const res = await api.inviteClient(clientId);
-      if (!res.error) setCreated(true);
-      setMsg(res.error ? res.error : res.warning ? res.warning : "Логин и пароль отправлены клиенту на почту.");
+      // Почта в поле сохраняется с задержкой — записываем сразу, функция читает адрес из базы.
+      await api.updateClient(clientId, { email });
+      const res = await api.inviteClient(clientId, resend);
+      setCreated(true);
+      if (res.emailFailed && res.password) {
+        setMsg(`Письмо не дошло: ${res.warning}`);
+        await showCreds(res, resend);
+      } else setMsg(`Логин и пароль отправлены на ${email}. Если письма нет — пусть клиент проверит «Спам».`);
     } catch (e: any) {
       setMsg(e.message || "Не удалось отправить доступ");
     } finally { setBusy(false); }
   };
 
-  if (hasAccount && !msg) return null;
+  const btn = "flex items-center gap-1.5 font-semibold rounded-lg px-3 py-1.5 text-sm transition disabled:opacity-40";
   return (
     <div className="space-y-1">
-      {!hasAccount && !created && (
-        <button onClick={invite} disabled={!email || busy} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-cyan-300 transition disabled:opacity-40">
+      {check.error && (
+        <p className="text-[11px] text-amber-400">
+          {check.error}
+          {check.suggestion && <> Возможно, <button type="button" onClick={() => onFixEmail(check.suggestion!)} className="underline font-semibold">{check.suggestion}</button>?</>}
+        </p>
+      )}
+      {!issued ? (
+        <button onClick={() => invite(false)} disabled={!email || !!check.error || busy} className={`${btn} bg-lime-400 text-zinc-950 hover:bg-cyan-300`}>
           <Send size={14} /> {busy ? "Отправка..." : "Отправить доступ клиенту"}
+        </button>
+      ) : (
+        <button onClick={() => invite(true)} disabled={!email || !!check.error || busy} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}>
+          <Send size={14} /> {busy ? "Отправка..." : "Выслать доступ заново"}
         </button>
       )}
       {msg && <p className="text-[11px] text-cyan-400">{msg}</p>}
@@ -344,8 +372,8 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
           <label className="text-xs text-zinc-500">WhatsApp<input value={client.whatsapp} onChange={(e) => patch({ whatsapp: e.target.value })} placeholder="79001234567" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
         </div>
         <label className="text-xs text-zinc-500 block">Email для входа в портал клиента<input type="email" value={client.email} onChange={(e) => patch({ email: e.target.value.trim() })} placeholder="client@mail.com" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" /></label>
-        <InviteBlock clientId={clientId} email={client.email} hasAccount={client.hasAccount} />
-        <p className="text-[11px] text-zinc-600 -mt-1">{client.hasAccount ? "Доступ уже выдан — логин и пароль отправлены на почту." : "Сгенерируем логин/пароль и отправим клиенту на почту."}</p>
+        <InviteBlock clientId={clientId} email={client.email} hasAccount={client.hasAccount} onFixEmail={(email) => patch({ email })} />
+        <p className="text-[11px] text-zinc-600 -mt-1">{client.hasAccount ? "Доступ уже выдан. Если письмо не пришло и клиент ещё не входил — вышлите доступ заново (будет новый пароль)." : "Сгенерируем логин/пароль и отправим клиенту на почту."}</p>
         <div className="flex flex-wrap gap-2">
           {client.phone && <a href={`tel:${client.phone}`} className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm transition"><Phone size={14} /> Позвонить</a>}
           {tgLink && <a href={tgLink} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 bg-sky-500/15 text-sky-300 hover:bg-sky-500/25 rounded-lg px-3 py-1.5 text-sm transition"><Send size={14} /> Telegram</a>}
