@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { AlertCircle, Info, X } from "lucide-react";
 import { answer, dismiss, subscribe, type Ask, type Toast } from "../lib/dialog";
 import { useModalA11y } from "../hooks/useModalA11y";
+import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 
 // Сообщения (сверху, исчезают сами, закрываются нажатием) и окно подтверждения.
 export default function DialogHost() {
@@ -35,10 +36,13 @@ function AskDialog({ ask }: { ask: Ask }) {
   const [armed, setArmed] = useState(false);
   useEffect(() => { const t = setTimeout(() => setArmed(true), 400); return () => clearTimeout(t); }, []);
   const submit = (e?: FormEvent) => { e?.preventDefault(); if (armed) answer(true, values); };
+  // Окно с полями открывается с клавиатурой — ставим его над ней (полоса «домой» тогда под клавиатурой)
+  const kb = useKeyboardViewport();
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => answer(false)}>
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => answer(false)}
+      style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       <div {...panelProps} onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-sm bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-4 space-y-4 outline-none" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
+        className="w-full sm:max-w-sm bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-4 space-y-4 outline-none" style={{ paddingBottom: kb ? 16 : "calc(env(safe-area-inset-bottom) + 16px)" }}>
         <p className={`leading-snug text-zinc-100 whitespace-pre-line pt-1 ${ask.fields ? "text-[17px] font-bold" : "text-[15px]"}`}>{ask.text}</p>
         {ask.fields && (
           <form onSubmit={submit} className="space-y-2.5">
