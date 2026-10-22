@@ -12,6 +12,7 @@ import { useBookings } from "./hooks/useBookings";
 import { useClients } from "./hooks/useClients";
 import type { ClientListItem } from "./lib/clients";
 import { usePlans } from "./hooks/usePlans";
+import { useSharedListSync } from "./hooks/useSharedListSync";
 import { logEvent } from "./lib/events";
 import { loadViewState, saveViewState } from "./lib/viewState";
 import PinGate from "./components/PinGate";
@@ -328,13 +329,22 @@ export default function App() {
     checkAccess(session.user.id);
   }, [session]);
 
-  // ponytail: поллинг раз в 15с — карточка клиента (абонемент/остаток тренировок и т.п.) должна
-  // подхватывать правки тренера без перезахода.
+  // Карточка клиента (абонемент/остаток тренировок и т.п.) должна подхватывать правки тренера
+  // без перезахода. Раньше — опрос раз в 15 с даже в фоне; теперь: событие UPDATE своей строки
+  // clients + перечитывание при возврате в приложение (оно же спасает, если realtime молчит из-за RLS).
+  const reloadSelfClient = () => {
+    if (!session) return;
+    portalApi.fetchSelfClient(session.user.id).then(setSelfClient).catch((e) => console.error("[App] reloadSelfClient:", e));
+  };
+  const selfClientId = isTrainer === false ? selfClient?.id : undefined;
+  useSharedListSync(!!session && !!selfClientId, ["clients"], reloadSelfClient, `portal-self-${selfClientId}`, { clients: `id=eq.${selfClientId}` });
+  // Запасной опрос на случай, если подписка молча не работает: только пока приложение на экране.
+  // 3 мин — правка тренера всё равно дойдёт за разумное время, а запросов в 12 раз меньше, чем было.
   useEffect(() => {
-    if (!session || isTrainer) return;
-    const id = setInterval(() => { portalApi.fetchSelfClient(session.user.id).then(setSelfClient).catch((e) => console.error("[App] pollSelfClient:", e)); }, 15000);
+    if (!session || isTrainer !== false) return;
+    const id = setInterval(() => { if (!document.hidden) reloadSelfClient(); }, 180_000);
     return () => clearInterval(id);
-  }, [session, isTrainer]);
+  }, [session, isTrainer]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const consentRole = isTrainer ? "trainer" : selfClient ? "client" : null;
   useEffect(() => {

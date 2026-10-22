@@ -17,6 +17,7 @@ import type { PlanListItem, Payment, Measurement } from "../lib/clients";
 import type { NutritionLog } from "../lib/nutrition";
 import { usePlan } from "../hooks/usePlan";
 import { useProgress } from "../hooks/useProgress";
+import { useSharedListSync } from "../hooks/useSharedListSync";
 import { GROUP_COLORS } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
 import MetricsView from "./MetricsView";
@@ -78,33 +79,54 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const activeSessionRef = useRef<typeof activeSession>(null);
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
 
+  // #6 merged notify check into first fetch
+  const refresh = (notifyOnLoad = false) => {
+    portalApi.fetchUpcomingBooking(client.id).then((ub) => {
+      setUpcoming(ub);
+      if (notifyOnLoad && ub) {
+        const todayStr = todayFn();
+        if (ub.date === todayStr && ub.time) {
+          const [hh, mm] = ub.time.split(":").map(Number);
+          const occMs = new Date(todayStr + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;
+          const diffMin = (occMs - Date.now()) / 60000;
+          if (diffMin >= 110 && diffMin <= 130) notifyUpcomingBooking("client", client.id, todayStr, ub.time);
+        }
+      }
+    }).catch((e) => console.error("[ClientPortal] fetchUpcoming:", e));
+    clientsApi.fetchClientPlans(client.id).then(setPlans).catch((e) => console.error("[ClientPortal] fetchPlans:", e));
+    clientsApi.fetchPayments(client.id).then(setPayments).catch((e) => console.error("[ClientPortal] fetchPayments:", e));
+    clientsApi.fetchMeasurements(client.id).then(setMeasurements).catch((e) => console.error("[ClientPortal] fetchMeasurements:", e));
+    nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
+    portalApi.fetchClientActivities(client.id).then(setActivities).catch((e) => console.error("[ClientPortal] fetchActivities:", e));
+  };
+  // Во время тренировки не обновляем — иначе сбивается ввод
+  const refreshIfIdle = () => { if (!activeSessionRef.current) refresh(); };
+  // Тренировка закончилась — догоняем то, что пропустили, пока она шла
+  const hadSession = useRef(!!activeSession);
+  useEffect(() => {
+    if (hadSession.current && !activeSession) refresh();
+    hadSession.current = !!activeSession;
+  }, [activeSession]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Вместо опроса раз в 20 с: перечитывание при возврате в приложение + события по таблицам,
+  // которые есть в публикации realtime (записи, участники записей, планы). Оплаты, замеры,
+  // питание и активности в публикацию не входят — они обновятся при возврате.
+  useSharedListSync(true, ["bookings", "booking_clients", "plans"], refreshIfIdle, `portal-sync-${client.id}`, {
+    bookings: `trainer_id=eq.${client.trainerId}`,
+    booking_clients: `client_id=eq.${client.id}`,
+    plans: `client_id=eq.${client.id}`,
+  });
+
   useEffect(() => {
     portalApi.fetchTrainerBrand(client.trainerId).then(setBrand).catch((e) => console.error("[ClientPortal] fetchBrand:", e));
-    // #6 merged notify check into first fetch; #8+#9 pause when hidden or active session
-    const refresh = (notifyOnLoad = false) => {
-      portalApi.fetchUpcomingBooking(client.id).then((ub) => {
-        setUpcoming(ub);
-        if (notifyOnLoad && ub) {
-          const todayStr = todayFn();
-          if (ub.date === todayStr && ub.time) {
-            const [hh, mm] = ub.time.split(":").map(Number);
-            const occMs = new Date(todayStr + "T00:00:00").getTime() + (hh * 60 + mm) * 60000;
-            const diffMin = (occMs - Date.now()) / 60000;
-            if (diffMin >= 110 && diffMin <= 130) notifyUpcomingBooking("client", client.id, todayStr, ub.time);
-          }
-        }
-      }).catch((e) => console.error("[ClientPortal] fetchUpcoming:", e));
-      clientsApi.fetchClientPlans(client.id).then(setPlans).catch((e) => console.error("[ClientPortal] fetchPlans:", e));
-      clientsApi.fetchPayments(client.id).then(setPayments).catch((e) => console.error("[ClientPortal] fetchPayments:", e));
-      clientsApi.fetchMeasurements(client.id).then(setMeasurements).catch((e) => console.error("[ClientPortal] fetchMeasurements:", e));
-      nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
-      portalApi.fetchClientActivities(client.id).then(setActivities).catch((e) => console.error("[ClientPortal] fetchActivities:", e));
-    };
     refresh(true);
+    // Запасной опрос, если подписка молча не работает (RLS, обрыв сокета): только пока приложение
+    // на экране. 3 мин — правки тренера всё равно доходят быстро через события/возврат, а опрос
+    // лишь страхует; это в 9 раз реже прежних 20 с.
     const id = setInterval(() => {
-      if (document.hidden || activeSessionRef.current) return;
-      refresh();
-    }, 20000);
+      if (document.hidden) return;
+      refreshIfIdle();
+    }, 180_000);
 
     // Уведомления клиенту
     requestNotifyPermission();

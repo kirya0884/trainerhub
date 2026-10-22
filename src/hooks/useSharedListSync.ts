@@ -22,8 +22,11 @@ const BURST = 250;             // склейка всплеска событий
  * Это уменьшает окно, в котором два окна затирают правки друг друга, но не
  * закрывает его: честная защита — проверка версии строки при записи, это
  * отдельная задача с миграцией.
+ *
+ * filters — необязательный фильтр событий по таблице (`client_id=eq.<id>`): кабинету
+ * клиента не нужны чужие события. Тренерские вызовы его не передают.
  */
-export function useSharedListSync(enabled: boolean, tables: string[], reload: () => void, channelKey: string) {
+export function useSharedListSync(enabled: boolean, tables: string[], reload: () => void, channelKey: string, filters: Record<string, string> = {}) {
   const reloadRef = useRef(reload);
   reloadRef.current = reload;
 
@@ -50,7 +53,8 @@ export function useSharedListSync(enabled: boolean, tables: string[], reload: ()
 
     const channel = supabase.channel(channelKey);
     for (const table of tables) {
-      channel.on("postgres_changes", { event: "*", schema: "public", table }, soon);
+      const filter = filters[table];
+      channel.on("postgres_changes", filter ? { event: "*", schema: "public", table, filter } : { event: "*", schema: "public", table }, soon);
     }
     channel.subscribe((status) => {
       if (status === "CHANNEL_ERROR") console.error(`[useSharedListSync] канал ${channelKey} не подключился`);
@@ -62,5 +66,5 @@ export function useSharedListSync(enabled: boolean, tables: string[], reload: ()
       if (burst) clearTimeout(burst);
       supabase.removeChannel(channel);
     };
-  }, [enabled, channelKey, tables.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [enabled, channelKey, tables.join(","), JSON.stringify(filters)]); // eslint-disable-line react-hooks/exhaustive-deps
 }
