@@ -22,6 +22,15 @@ function urlB64ToUint8(b64: string): Uint8Array<ArrayBuffer> {
   return arr as unknown as Uint8Array<ArrayBuffer>;
 }
 
+/** Подписка создана с текущим VAPID-ключом? (после смены ключей старые подписки не работают) */
+function hasCurrentKey(sub: PushSubscription): boolean {
+  const key = sub.options?.applicationServerKey;
+  if (!key || !VAPID_PUBLIC_KEY) return false;
+  const a = new Uint8Array(key);
+  const b = urlB64ToUint8(VAPID_PUBLIC_KEY);
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
 /** Проверяем доступность Push API */
 export function isPushSupported(): boolean {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
@@ -48,8 +57,17 @@ export async function subscribeToPush(trainerId: string): Promise<boolean> {
 
   try {
     const reg = await navigator.serviceWorker.ready;
-    // Повторно используем существующую подписку, если уже есть
-    const existing = await reg.pushManager.getSubscription();
+    // Повторно используем существующую подписку, если она создана с текущим ключом
+    let existing = await reg.pushManager.getSubscription();
+    if (existing && !hasCurrentKey(existing)) {
+      const { endpoint } = existing.toJSON() as { endpoint: string };
+      await existing.unsubscribe();
+      await supabase
+        .from("push_subscriptions")
+        .delete()
+        .match({ trainer_id: trainerId, endpoint });
+      existing = null;
+    }
     const sub =
       existing ??
       (await reg.pushManager.subscribe({
@@ -102,5 +120,5 @@ export async function isPushSubscribed(): Promise<boolean> {
   if (!isPushSupported()) return false;
   const reg = await navigator.serviceWorker.ready;
   const sub = await reg.pushManager.getSubscription();
-  return sub !== null;
+  return sub !== null && hasCurrentKey(sub);
 }

@@ -12,13 +12,27 @@ supabase link --project-ref <ВАШ_PROJECT_REF>
 
 ```bash
 supabase secrets set \
-  VAPID_PUBLIC_KEY="BKrFISh2J82hX76IrbQnEZZMi3c7ahtb6kPrk8hMnGLDBNFbd4VQ_2yRqyro3Vfo3shN5pzKrXamOJ6Qk_J_Dlc" \
-  VAPID_PRIVATE_KEY="FE8WC7e3qq9e2tNmkkNpCq1HX_VRIpADwcdvIsfaOjk" \
+  VAPID_PUBLIC_KEY="<новый публичный VAPID>" \
+  VAPID_PRIVATE_KEY="<новый приватный VAPID>" \
   VAPID_SUBJECT="mailto:your@email.com" \
-  SEND_PUSH_SECRET="nm81pQk17TYl2ERdHzGjWSeGfjxTSQcnYaJSk5dIAZ8"
+  SEND_PUSH_SECRET="<сгенерируйте: openssl rand -base64 32>"
 ```
 
 > ⚠️ VAPID_PRIVATE_KEY — секрет. Не коммитить в git!
+
+> ⚠️ Реальные ключи в репозиторий не коммитить — в этом файле только плейсхолдеры.
+
+### Секрет send_push_secret в Vault
+
+Триггер `notify_trainer_on_session_change` (миграция `migrations/20261022_push_secret_from_vault.sql`)
+читает секрет из Supabase Vault. Значение — то же, что `SEND_PUSH_SECRET` выше.
+Dashboard → Project Settings → Vault → Add new secret, имя `send_push_secret`, либо в SQL Editor:
+
+```sql
+select vault.create_secret('<значение SEND_PUSH_SECRET>', 'send_push_secret');
+```
+
+Без этого секрета тренировки сохраняются, но push-уведомления тренеру не уходят.
 
 ## 3. Деплой функции
 
@@ -47,7 +61,7 @@ Dashboard → Database → Webhooks → Create Webhook
 | Type           | HTTP Request                                            |
 | URL            | https://<PROJECT_REF>.supabase.co/functions/v1/send-push |
 | HTTP Method    | POST                                                    |
-| HTTP Headers   | x-webhook-secret: nm81pQk17TYl2ERdHzGjWSeGfjxTSQcnYaJSk5dIAZ8 |
+| HTTP Headers   | x-webhook-secret: <значение SEND_PUSH_SECRET> |
 
 ## 6. Применить SQL-миграцию
 
