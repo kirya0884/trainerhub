@@ -13,6 +13,7 @@ import { useClients } from "./hooks/useClients";
 import type { ClientListItem } from "./lib/clients";
 import { usePlans } from "./hooks/usePlans";
 import { useSharedListSync } from "./hooks/useSharedListSync";
+import { isTextField } from "./hooks/useKeyboardViewport";
 import { logEvent } from "./lib/events";
 import { loadViewState, saveViewState } from "./lib/viewState";
 import PinGate from "./components/PinGate";
@@ -237,9 +238,14 @@ export default function App() {
   // Экран согласия: undefined — ещё проверяем журнал, true — нужно подтвердить документы
   const [consentGate, setConsentGate] = useState<boolean | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
+  // Чей PIN-экран пройден (или PIN не задан) — id пользователя, чтобы смена входа сбрасывала сама
+  const [pinPassedId, setPinPassedId] = useState("");
+  // pin_hash тренера приходит вместе с проверкой доступа: undefined — ещё не знаем, null — PIN не задан
+  const [trainerPin, setTrainerPin] = useState<string | null | undefined>(undefined);
   // B17: общие данные грузим один раз здесь, а не в каждой вкладке заново.
   // Хуки обязаны вызываться до ранних return ниже, поэтому пустой id = «пока не грузим».
-  const dataTrainerId = isTrainer && session ? session.user.id : "";
+  // Обработку данных начинаем только после согласия с документами и PIN-экрана.
+  const dataTrainerId = isTrainer && session && consentGate === false && pinPassedId === session.user.id ? session.user.id : "";
   const bookingsHook = useBookings(dataTrainerId);
   const { clients, reload: reloadClients } = useClients(dataTrainerId);
   const { plans: allPlans, reload: reloadPlans } = usePlans(dataTrainerId);
@@ -314,18 +320,30 @@ export default function App() {
   // относится ли текущий вход к клиенту (подопечному) — тогда показываем ClientPortal вместо экранов тренера.
   // Если карточка не привязалась (email у клиента не указан/не совпадает) и это не аккаунт тренера —
   // показываем экран "нет доступа" вместо пустого тренерского интерфейса.
+  // Номер проверки: поздний ответ прежнего входа (после выхода или смены аккаунта) не применяем
+  const accessReq = useRef(0);
   const checkAccess = async (uid: string) => {
+    const req = ++accessReq.current;
     // Тренера проверяем первым — если аккаунт тренерский, ошибочная привязка клиента по совпавшему email не перехватит вход.
-    const { data: trainerRow } = await supabase.from("trainers").select("id").eq("id", uid).maybeSingle();
-    if (trainerRow) { setIsTrainer(true); setSelfClient(null); return; }
+    // PIN берём тем же запросом, а журнал согласий читаем параллельно — при старте на два ожидания меньше.
+    const trainerQ = Promise.resolve(supabase.from("trainers").select("id, pin_hash").eq("id", uid).maybeSingle());
+    const trainerConsent = needsConsent(uid, trainerQ.then(({ data }) => (data ? "trainer" : null)));
+    const { data: trainerRow } = await trainerQ;
+    if (trainerRow) {
+      const gate = await trainerConsent;
+      if (req !== accessReq.current) return;
+      setTrainerPin(trainerRow.pin_hash || null); setConsentGate(gate); setIsTrainer(true); setSelfClient(null);
+      return;
+    }
     const { error } = await supabase.rpc("link_client_self");
     if (error) console.warn("link_client_self:", error.message);
     const self = await portalApi.fetchSelfClient(uid);
+    if (req !== accessReq.current) return;
     setSelfClient(self);
     setIsTrainer(false);
   };
   useEffect(() => {
-    if (!session) { setSelfClient(undefined); setIsTrainer(undefined); return; }
+    if (!session) { accessReq.current++; setSelfClient(undefined); setIsTrainer(undefined); setTrainerPin(undefined); setPinPassedId(""); return; }
     checkAccess(session.user.id);
   }, [session]);
 
@@ -349,6 +367,8 @@ export default function App() {
   const consentRole = isTrainer ? "trainer" : selfClient ? "client" : null;
   useEffect(() => {
     if (!session || !consentRole) { setConsentGate(undefined); return; }
+    // Тренеру согласие проверяет checkAccess — параллельно с запросом trainers
+    if (consentRole === "trainer") return;
     let alive = true;
     needsConsent(session.user.id, consentRole).then((v) => { if (alive) setConsentGate(v); });
     return () => { alive = false; };
@@ -357,9 +377,13 @@ export default function App() {
   useEffect(() => {
     // Клиента в аналитике выставляет его кабинет — здесь только тренер и выход
     if (isTrainer && session) setAnalyticsContext({ actor: "trainer", trainerId: session.user.id });
-    else if (!session) setAnalyticsContext(null);
-    if (isTrainer && session) trainerApi.fetchTrainerSelf(session.user.id).then((s) => { setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#c6ff3d"); }).catch((e) => console.error("[App] fetchTrainerSelf:", e));
-  }, [isTrainer, session]);
+    // При выходе сбрасываем шапку — следующий вошедший не увидит чужие имя и аватар
+    else if (!session) { setAnalyticsContext(null); setTrainerName(""); setTrainerAvatar(""); setTrainerAccent("#c6ff3d"); }
+    // Поздний ответ прежнего тренера (после выхода или смены входа) в шапку не пишем
+    let alive = true;
+    if (dataTrainerId) trainerApi.fetchTrainerSelf(dataTrainerId).then((s) => { if (!alive) return; setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#c6ff3d"); }).catch((e) => console.error("[App] fetchTrainerSelf:", e));
+    return () => { alive = false; };
+  }, [isTrainer, session, dataTrainerId]);
   // Высота нижней панели — для того, что прижато к низу экрана вне App (свёрнутая
   // тренировка, плашка «Обновить приложение»): они поднимаются над панелью.
   // Клавиатура открыта = фокус в поле ввода. На iPhone с открытой клавиатурой fixed-панель
@@ -367,10 +391,7 @@ export default function App() {
   // время ввода прячем её, как это делают нативные приложения.
   const [kbOpen, setKbOpen] = useState(false);
   useEffect(() => {
-    const isField = (el: Element | null) =>
-      !!el && (el.matches("textarea, select, [contenteditable=''], [contenteditable='true']")
-        || (el.matches("input") && !["checkbox", "radio", "button", "submit", "reset", "range", "file", "color"].includes((el as HTMLInputElement).type)));
-    const onIn = () => setKbOpen(isField(document.activeElement));
+    const onIn = () => setKbOpen(isTextField(document.activeElement));
     // Фокус может сразу перейти в соседнее поле — проверяем уже после этого
     const onOut = () => setTimeout(onIn, 50);
     document.addEventListener("focusin", onIn);
@@ -475,9 +496,9 @@ export default function App() {
 
   return (
     <>
-    {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined} />}
+    {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined && trainerPin !== undefined} />}
     <ActiveWorkoutProvider key={session.user.id} userId={session.user.id}>
-    <PinGate id={session.user.id}>
+    <PinGate id={session.user.id} hash={trainerPin} onUnlock={() => setPinPassedId(session.user.id)}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-36 sm:pb-36" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4"
         style={swipeDx ? { transform: `translateX(${swipeDx}px)`, transition: "none" } : { transition: "transform .18s ease-out" }}>

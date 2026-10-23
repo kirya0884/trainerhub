@@ -6,15 +6,23 @@ const unlockKey = (id: string) => `trainerhub-pin-unlocked-${id}`;
 
 // Гейт показывается между успешным входом (Supabase auth) и основным интерфейсом, если у трен./клиента задан PIN.
 // Разблокировка живёт в sessionStorage — спрашиваем PIN заново при каждом новом открытии вкладки/браузера.
-export default function PinGate({ id, table = "trainers", children }: { id: string; table?: "trainers" | "clients"; children: React.ReactNode }) {
-  const [hash, setHash] = useState<string | null | "loading">("loading");
+// onUnlock — PIN не задан или уже введён: App по нему начинает грузить данные тренера.
+// known — хэш уже прочитан вызывающим (null — PIN не задан): тогда свой запрос не делаем.
+export default function PinGate({ id, table = "trainers", hash: known, onUnlock, children }: { id: string; table?: "trainers" | "clients"; hash?: string | null; onUnlock?: () => void; children: React.ReactNode }) {
+  const [fetched, setHash] = useState<string | null | "loading">("loading");
+  const hash = known !== undefined ? known : fetched;
   const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem(unlockKey(id)) === "1");
   const [pin, setPin] = useState("");
   const [err, setErr] = useState("");
 
-  useEffect(() => { fetchPinHash(id, table).then((h) => setHash(h || null)).catch((e) => console.error("[PinGate] чтение PIN:", e)); }, [id, table]);
+  // При ошибке чтения экран и раньше открывался без PIN — так и оставляем, но уже явно
+  const skipFetch = known !== undefined;
+  useEffect(() => { if (skipFetch) return; fetchPinHash(id, table).then((h) => setHash(h || null)).catch((e) => { console.error("[PinGate] чтение PIN:", e); setHash(null); }); }, [id, table, skipFetch]);
+  useEffect(() => { if (unlocked || hash === null) onUnlock?.(); }, [unlocked, hash]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (hash === "loading" || unlocked || !hash) return <>{children}</>;
+  if (unlocked || !hash) return <>{children}</>;
+  // Пока не знаем, задан ли PIN, экран не показываем — иначе он успевает запросить данные до PIN
+  if (hash === "loading") return <div className="min-h-screen bg-zinc-950" />;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -17,7 +17,8 @@ export function usePlans(trainerId: string) {
       .then((p) => { if (req === reqRef.current) setPlans(p); })
       .catch((e) => console.error("[usePlans]", e));
   };
-  useEffect(() => { load(); }, [trainerId]);
+  // Смена или выход пользователя — чужие планы не держим и поздний ответ не принимаем
+  useEffect(() => { reqRef.current++; setPlans(null); load(); }, [trainerId]);
 
   // А4: обновление из другого окна — возврат к окну и события репликации
   useSharedListSync(!!trainerId, ["plans"], load, `plans-sync-${trainerId}`);

@@ -27,9 +27,14 @@ export async function recordConsents(kinds: ConsentKind[], meta: Record<string, 
 /**
  * Нужно ли показать экран согласия. Сеть недоступна — не блокируем вход:
  * в зале без связи приложение должно открываться, спросим при следующем запуске.
+ * role может прийти обещанием: журнал читаем сразу, параллельно с выяснением роли; null — не эта роль.
  */
-export async function needsConsent(userId: string, role: Role): Promise<boolean> {
-  const { data, error } = await supabase.from("user_consents").select("kind").eq("user_id", userId).eq("version", LEGAL_VERSION);
+export async function needsConsent(userId: string, roleOrPromise: Role | Promise<Role | null>): Promise<boolean> {
+  const [{ data, error }, role] = await Promise.all([
+    supabase.from("user_consents").select("kind").eq("user_id", userId).eq("version", LEGAL_VERSION),
+    roleOrPromise,
+  ]);
+  if (!role) return false;
   if (error) { console.warn("[consents]", error.message); return false; }
   const have = new Set((data ?? []).map((r) => r.kind));
   const missing = REQUIRED[role].filter((k) => !have.has(k));

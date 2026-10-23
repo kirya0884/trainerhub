@@ -18,7 +18,8 @@ export function useClients(trainerId: string) {
       .then((c) => { if (req === reqRef.current) setClients(c); })
       .catch((e) => console.error("[useClients]", e));
   };
-  useEffect(() => { load(); }, [trainerId]);
+  // Смена или выход пользователя — чужой список не держим и поздний ответ не принимаем
+  useEffect(() => { reqRef.current++; setClients(null); load(); }, [trainerId]);
 
   // Н3: перезагрузка по сигналу об изменении абонемента. Склеиваем всплеск —
   // сплит платежа пишет две записи подряд, дёргать базу дважды незачем.
