@@ -68,6 +68,9 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
   };
   useEffect(() => { load(); }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!flash) return; const t = setTimeout(() => setFlash(null), 2500); return () => clearTimeout(t); }, [flash]);
+  // Имя удалённого: второе удаление за 2,5 с меняет текст — диктор объявит и его
+  const [gone, setGone] = useState("");
+  useEffect(() => { if (!gone) return; const t = setTimeout(() => setGone(""), 2500); return () => clearTimeout(t); }, [gone]);
 
   const term = api.searchKey(q);
   const shown = useMemo<Item[]>(() => {
@@ -97,7 +100,7 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
       await api.deleteProduct(p.id);
       setProducts((l) => (l ?? []).filter((x) => x.id !== p.id));
       setCard(null);
-      notify("Продукт удалён", "info");
+      setGone(p.name);
     } catch (e) { console.error("[NutritionCatalog] удаление:", e); notify("Не удалось удалить продукт. Проверьте интернет."); }
   };
   const addToDiary = (x: Item) => { setCard(null); setRecipeEdit(null); if (onPick) onPick(x); else setAdding(x); };
@@ -218,8 +221,8 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
             </div>
           )}
           {body}
-          {/* Сохранённое подсвечивается в списке; тост сверху закрывал бы шапку и «Назад» — для экранного диктора объявляем тут */}
-          <p role="status" className="sr-only">{flash ? "Сохранено" : ""}</p>
+          {/* Сохранённое подсвечивается в списке, удалённое исчезает из него; тост сверху закрывал бы шапку и «Назад» — для экранного диктора объявляем тут */}
+          <p role="status" className="sr-only">{flash ? "Сохранено" : gone ? `Продукт «${gone}» удалён` : ""}</p>
           {tab === "products" && filter === "fav" && shown.some(isRecipe) && <p className="text-[13px] text-zinc-500 px-0.5 mt-3">В «Избранном» видны и продукты, и рецепты — как в окне добавления.</p>}
         </div>
       </div>
@@ -258,7 +261,7 @@ function ProductCard({ product: p, recipes, onFav, onAdd, onEdit, onDelete, onCl
   const tiles = [["Ккал", p.kcal, MACRO_COLOR.kcal, 0], ["Белки", p.protein, MACRO_COLOR.protein, 1], ["Жиры", p.fat, MACRO_COLOR.fat, 1], ["Углеводы", p.carbs, MACRO_COLOR.carbs, 1]] as const;
   return (
     <ModalShell title={p.name} onClose={onClose}>
-      <div className="p-4 pt-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 16px)" }}>
+      <div className="p-4 pt-3">
         <div className="flex items-center justify-between -mt-1 mb-2">
           <p className="text-[13px] text-zinc-400">Свой продукт · на 100 г</p>
           <button onClick={onFav} aria-pressed={p.favorite} aria-label={p.favorite ? "Убрать из избранного" : "В избранное"}

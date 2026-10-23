@@ -146,9 +146,15 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
     if (!ids.delete(id)) ids.add(id);
     return { ...s, ids };
   });
-  // Долгое нажатие на запись включает режим выбора с ней отмеченной. fired гасит click после
-  // долгого нажатия; на телефоне click тогда не приходит — сбрасываем на каждом pointerdown.
-  const press = useRef<{ timer?: number; fired?: boolean }>({});
+  // Долгое нажатие на запись включает режим выбора с ней отмеченной. firedAt гасит click после
+  // долгого нажатия; на телефоне click тогда не приходит — сбрасываем на каждом pointerdown,
+  // а без pointerdown (Enter, Switch Control, VoiceOver) гасим только в пределах 800 мс.
+  const press = useRef<{ timer?: number; firedAt?: number }>({});
+  const swallowClick = () => {
+    const t = press.current.firedAt;
+    press.current.firedAt = undefined;
+    return t !== undefined && Date.now() - t < 800;
+  };
   // Где была запись под пальцем: в режиме выбора панели над ней меняются — держим её на месте
   const anchor = useRef<{ el: HTMLElement; top: number } | null>(null);
   const pressStart = (e: FoodEntry, el: HTMLElement) => {
@@ -156,15 +162,16 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
     press.current = {};
     if (asTrainer || selecting) return;
     press.current.timer = window.setTimeout(() => {
-      press.current.fired = true;
+      press.current.firedAt = Date.now();
       anchor.current = { el, top: el.getBoundingClientRect().top };
       setSel({ ids: new Set([e.id]), meal: e.meal });
     }, 500);
   };
   // На pointerup флаг не трогаем: click после долгого касания (где он бывает) приходит позже
-  // отдельной задачей и снял бы только что поставленную отметку. После pointercancel click не будет.
-  const pressEnd = () => clearTimeout(press.current.timer);
-  const pressCancel = () => { clearTimeout(press.current.timer); press.current.fired = false; };
+  // отдельной задачей и снял бы только что поставленную отметку. Отсчёт 800 мс — от отпускания:
+  // мышью click приходит и после долгого удержания. После pointercancel click не будет.
+  const pressEnd = () => { clearTimeout(press.current.timer); if (press.current.firedAt) press.current.firedAt = Date.now(); };
+  const pressCancel = () => { clearTimeout(press.current.timer); press.current.firedAt = undefined; };
   useLayoutEffect(() => {
     const a = anchor.current;
     anchor.current = null;
@@ -321,7 +328,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
               const on = !!sel?.ids.has(e.id);
               return (
                 <button key={e.id} disabled={asTrainer} {...(sel ? { role: "checkbox", "aria-checked": on } : {})}
-                  onClick={() => { if (press.current.fired) { press.current.fired = false; return; } if (sel) toggle(e.id); else setEditing(e); }}
+                  onClick={() => { if (swallowClick()) return; if (sel) toggle(e.id); else setEditing(e); }}
                   onPointerDown={(ev) => pressStart(e, ev.currentTarget)} onPointerUp={pressEnd} onPointerLeave={pressEnd} onPointerCancel={pressCancel}
                   onContextMenu={(ev) => { if (!asTrainer) ev.preventDefault(); }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 border-t border-zinc-800 text-left select-none [-webkit-touch-callout:none] transition ${on ? "bg-lime-400/10" : "enabled:hover:bg-zinc-800/50"}`}>
@@ -357,14 +364,16 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       {sel && (<>
         {/* Место под панелью действий: она выше нижней панели вкладок */}
         <div className="h-6" />
-        <div className="fixed inset-x-0 bottom-0 z-[45] bg-zinc-900 border-t border-zinc-800 px-3 pt-2.5" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 10px)" }}>
+        {/* Панель может появиться под пальцем долгого нажатия: click от того же касания (без своего
+            pointerdown) гасим по press.firedAt, новое касание панели флаг сбрасывает */}
+        <div onPointerDown={() => { press.current.firedAt = undefined; }}className="fixed inset-x-0 bottom-0 z-[45] bg-zinc-900 border-t border-zinc-800 px-3 pt-2.5" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 10px)" }}>
           <div className="max-w-lg mx-auto grid grid-cols-[1.3fr_1fr_1fr] gap-2">
             {([
               ["Перенести", ArrowRightLeft, () => setMoving({ list: selected, title: `Перенести ${records(selected.length)}` }), "bg-lime-400 text-zinc-950 hover:bg-lime-300"],
               ["Копировать", Copy, () => setCopying({ list: selected, title: `Скопировать ${records(selected.length)}` }), "bg-zinc-800 text-zinc-100 hover:bg-zinc-700"],
               ["Удалить", Trash2, deleteSelected, "bg-zinc-800 text-red-400 [.light-theme_&]:text-[#c9302c] hover:bg-zinc-700"],
             ] as const).map(([l, I, run, cls]) => (
-              <button key={l} onClick={run} disabled={!selected.length || busy}
+              <button key={l} onClick={() => { if (!swallowClick()) run(); }} disabled={!selected.length || busy}
                 className={`h-[52px] flex flex-col items-center justify-center gap-0.5 rounded-xl text-[13px] font-semibold transition disabled:opacity-40 ${cls}`}><I size={20} />{l}</button>
             ))}
           </div>
