@@ -3,6 +3,7 @@ import ClientPickModal, { type PickClient } from "./ClientPickModal";
 import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, UserPlus, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
+import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { readSlotDraft, useSessionSlot } from "../hooks/useSessionSlot";
 import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, WorkoutDatePick, tonnageOf } from "./SessionParts";
@@ -252,6 +253,9 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
   useEffect(() => { if (isPair) saveViewState("group-side-by-side", side); }, [side, isPair]);
   // Один таймер отдыха на всю группу — тренер отдыхает между подходами вместе с подопечными
   const restTimer = useRestTimer();
+  // С открытой клавиатурой экран стоит в видимой над ней области: таймер отдыха внизу
+  // не уходит под клавиатуру, а кнопки «Завершить» здесь в ленте и не перекрывают поля
+  const kb = useKeyboardViewport();
   const markFinished = (id: string) => {
     setFinishedIds((arr) => (arr.includes(id) ? arr : [...arr, id]));
     onClientFinished?.(id);
@@ -265,7 +269,8 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
         sub={`${finishedIds.length}/${clients.length} записаны`} rest={restTimer.left > 0 ? fmtClock(restTimer.left) : undefined}
         onOpen={() => setMinimized(false)} />
     )}
-    <div {...panelProps} className={`fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex-col outline-none ${minimized ? "hidden" : "flex"}`}>
+    <div {...panelProps} className={`fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex-col outline-none ${minimized ? "hidden" : "flex"}`}
+      style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 pt-3 pb-2.5 shrink-0 space-y-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0"><Users size={18} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">Совместная тренировка</h2></div>
@@ -302,7 +307,7 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
           <ClientSlot key={c.id} client={c} trainerId={trainerId} groupId={groupId} active={c.id === activeId} onFinished={() => markFinished(c.id)} startRest={restTimer.start} date={workoutDate} setDate={setWorkoutDate} />
         ))}
       </div>
-      <div style={{ paddingBottom: "env(safe-area-inset-bottom)" }}><RestBar timer={restTimer} /></div>
+      <div style={{ paddingBottom: kb ? 0 : "env(safe-area-inset-bottom)" }}><RestBar timer={restTimer} /></div>
       {showAdd && onAddClient && (
         <ClientPickModal title="Добавить в тренировку" candidates={addCandidates ?? []} onClose={() => setShowAdd(false)}
           onPick={([c]) => { setShowAdd(false); onAddClient(c); setActiveId(c.id); }} />

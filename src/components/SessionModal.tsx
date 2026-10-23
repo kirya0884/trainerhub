@@ -4,6 +4,7 @@ import { AlertTriangle, Check, CheckCircle2, MessageSquare, Minimize2, Timer, Us
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
+import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
@@ -158,6 +159,9 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
 
   // Таймер отдыха: стартует сам после отметки подхода, если в плане задан отдых (см. RestTimer).
   const restTimer = useRestTimer();
+  // С открытой клавиатурой экран стоит в видимой над ней области, а панель «Завершить»
+  // прячется до закрытия клавиатуры — так поля ввода не перекрыты
+  const kb = useKeyboardViewport();
   // Неотмеченные подходы по всей тренировке — после самого последнего отдых не нужен
   const openSets = () => day.exercises.reduce((n, ex) =>
     ex.kind === "functional" || !ex.name || meta[ex.id]?.done ? n
@@ -232,7 +236,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   // вне общего контейнера с text-zinc-100 — без своего цвета текст падал
   // на умолчание браузера и становился чёрным на тёмном фоне.
   return (
-    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col outline-none">
+    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col outline-none" style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       {draftFailed && (
         <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
@@ -391,7 +395,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
             if (await onAddClient(c, { vals, meta, mood, wellbeing, review, clientRating })) clearPersist();
           }} />
       )}
-      <div className="border-t border-zinc-800 bg-zinc-900 px-3 pt-2.5 shrink-0" style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))" }}><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-sm text-zinc-500"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} disabled={submitting} className="ml-auto h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl px-6 text-base hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"><CheckCircle2 size={18} /> {submitting ? "Сохранение..." : "Завершить"}</button></div></div>
+      {!kb && <div className="border-t border-zinc-800 bg-zinc-900 px-3 pt-2.5 shrink-0" style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))" }}><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-sm text-zinc-500"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} disabled={submitting} className="ml-auto h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl px-6 text-base hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50 flex items-center gap-2"><CheckCircle2 size={18} /> {submitting ? "Сохранение..." : "Завершить"}</button></div></div>}
     </div>
   );
 }

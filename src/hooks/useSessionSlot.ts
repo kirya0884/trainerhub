@@ -98,7 +98,9 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   }, [day?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!groupId || !dayId || !Object.keys(vals).length) return;
+    // Пустой день (без упражнений): vals пуст, но флаг «записана» всё равно сохраняем,
+    // иначе после перемонтирования слота снова появится «Завершить»
+    if (!groupId || !dayId || (!Object.keys(vals).length && !finished)) return;
     // Сразу, без задержки: при переключении «Рядом» ↔ «Вкладки» слот размонтируется,
     // и отложенная запись потеряла бы последний ввод
     const p = draftPrefix(groupId, clientId);

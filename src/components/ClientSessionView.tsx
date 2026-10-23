@@ -11,6 +11,7 @@ import { applyLastTime, type LastFact, type LastTime } from "../lib/sessionUtils
 import type { Day, Metric, Session } from "../types";
 import { ask } from "../lib/dialog";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
+import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -136,6 +137,9 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };
   // Таймер отдыха после отметки подхода, если отдых задан в плане и это не последний подход
   const restTimer = useRestTimer();
+  // С открытой клавиатурой экран стоит в видимой над ней области, а панель «Завершить»
+  // прячется до закрытия клавиатуры — так поля ввода не перекрыты
+  const kb = useKeyboardViewport();
   const openSets = () => day.exercises.reduce((n, ex) =>
     ex.kind === "functional" || !ex.name || meta[ex.id]?.done ? n
       : n + (vals[ex.id] || []).filter((_, i) => !meta[ex.id]?.setsDone?.[i]).length, 0);
@@ -215,7 +219,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   if (step === "feedback") {
     return (
-      <div data-workout className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col" style={{ "--accent": accent } as React.CSSProperties}>
+      // С клавиатурой экран отзыва стоит в видимой над ней области: поле и «Отправить тренеру» не уходят под неё
+      <div data-workout className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col" style={{ "--accent": accent, ...(kb ? { top: kb.top, bottom: kb.bottom } : {}) } as React.CSSProperties}>
         {draftFailed && (
           <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
@@ -263,7 +268,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   return (
     <div data-workout style={{ "--accent": accent } as React.CSSProperties}>
-    <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col" style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       {draftFailed && (
         <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
@@ -406,7 +411,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       </div>
 
       <RestBar timer={restTimer} />
-      <div className="border-t border-zinc-800 bg-zinc-900 px-3 pt-2.5 shrink-0" style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))" }}><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-sm text-zinc-500"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} className="ml-auto h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl px-6 text-base hover:bg-lime-300 transition active:scale-[0.98] flex items-center gap-2"><CheckCircle2 size={18} /> Завершить</button></div></div>
+      {!kb && <div className="border-t border-zinc-800 bg-zinc-900 px-3 pt-2.5 shrink-0" style={{ paddingBottom: "calc(0.625rem + env(safe-area-inset-bottom))" }}><div className="max-w-2xl mx-auto flex items-center gap-3"><span className="text-sm text-zinc-500"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span><button onClick={finish} className="ml-auto h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl px-6 text-base hover:bg-lime-300 transition active:scale-[0.98] flex items-center gap-2"><CheckCircle2 size={18} /> Завершить</button></div></div>}
     </div>
     </div>
   );
