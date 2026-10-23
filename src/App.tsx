@@ -572,7 +572,7 @@ export default function App() {
           <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.filter((kind) => kind !== "dashboard" && kind !== "trainerProfile").map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onMoveTab={(kind, dir) => moveTab(kind as TabKind, dir)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
-          <PlanEditor planId={view.planId} trainerId={session.user.id} clientId={view.clientId} onBack={goBack} />
+          <PlanEditor key={view.planId} planId={view.planId} trainerId={session.user.id} clientId={view.clientId} onBack={goBack} />
         )}
         </Suspense>
       </div>

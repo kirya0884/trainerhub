@@ -52,7 +52,7 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 };
 
 export default function PlanEditor({ planId, trainerId, clientId, onBack }: { planId: string; trainerId: string; clientId: string; onBack?: () => void }) {
-  const { plan, loading, error, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, addMesocycle, updateMesocycle, deleteMesocycle, reorderMesocycles, reload } = usePlan(planId);
+  const { plan, loading, error, saveStatus, retrySaves, settleSaves, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, exKey, addMesocycle, updateMesocycle, deleteMesocycle, reorderMesocycles, reload } = usePlan(planId);
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const exDrag = useDragSort((dayId, from, to) => reorderExercises(dayId, from, to));
   // Н2: дни переставляются перетаскиванием. Перетаскивание идёт внутри одного контейнера
@@ -92,12 +92,19 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>(
     () => { try { return JSON.parse(localStorage.getItem(`trainerhub-collapsed-${planId}`) || "{}"); } catch { return {}; } }
   );
-  const [saveStatus, setSaveStatus] = useState<'idle'|'saving'|'saved'>('idle');
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const markSaving = () => {
-    setSaveStatus('saving');
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => setSaveStatus('saved'), 700);
+  // Статус сохранения — настоящий, из очереди usePlan. Пока не всё ушло в базу,
+  // закрытие вкладки предупреждает, а «Назад» сначала дожимает очередь и спрашивает.
+  const unsaved = saveStatus === "saving" || saveStatus === "error" || saveStatus === "offline";
+  useEffect(() => {
+    if (!unsaved) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [unsaved]);
+  const leave = async () => {
+    if (!onBack) return;
+    if (unsaved && !["idle", "saved"].includes(await settleSaves(1500)) && !(await ask("Есть несохранённые изменения. Выйти?", { ok: "Выйти", cancel: "Остаться", danger: true }))) return;
+    onBack();
   };
   const CLIP_KEY = "trainerhub-day-clipboard";
   const CLIP_TTL = 600_000; // 10 min
@@ -254,10 +261,11 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     localStorage.setItem(`trainerhub-collapsed-${planId}`, JSON.stringify(next));
     return next;
   }), [planId]);
-  const toggleExOpen = useCallback((id: string) => toggleCollapse(`x:${id}`), [toggleCollapse]);
+  // По exKey: состояние строки не теряется, когда упражнение получает настоящий id
+  const toggleExOpen = useCallback((id: string) => toggleCollapse(`x:${exKey(id)}`), [toggleCollapse]);
   const cycleGroup = (dayId: string, exId: string, cur: string) => {
     const i = GROUP_CYCLE.indexOf(cur || "");
-    markSaving(); updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
+    updateExercise(dayId, exId, { group: GROUP_CYCLE[(i + 1) % GROUP_CYCLE.length] });
   };
 
   // Закрытие меню плана по Escape — клик мимо ловит подложка
@@ -348,15 +356,15 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         const rows = block.items.map((ex, k) => {
           const ei = block.startIdx + k;
           return (
-            <ExerciseRow key={ex.id} ex={ex} label={exLabel(day, ei)} groupColor={ex.group ? GROUP_COLORS[ex.group] : null} suggestions={allNames} addToLibrary={addToLibrary}
-              index={ei} collapsed={!collapsed[`x:${ex.id}`]} onToggleCollapse={toggleExOpen}
+            <ExerciseRow key={exKey(ex.id)} ex={ex} label={exLabel(day, ei)} groupColor={ex.group ? GROUP_COLORS[ex.group] : null} suggestions={allNames} addToLibrary={addToLibrary}
+              index={ei} collapsed={!collapsed[`x:${exKey(ex.id)}`]} onToggleCollapse={toggleExOpen}
               dragging={exDrag.drag?.key === day.id && exDrag.drag.from === ei}
               dropBefore={exDrag.drag?.key === day.id && exDrag.drag.over === ei && exDrag.drag.from !== ei}
               dropAfter={exDrag.drag?.key === day.id && exDrag.drag.over === day.exercises.length && ei === day.exercises.length - 1 && exDrag.drag.from !== ei}
               canMoveUp={ei > 0} canMoveDown={ei < day.exercises.length - 1}
               onMoveUp={() => reorderExercises(day.id, ei, ei - 1)} onMoveDown={() => reorderExercises(day.id, ei, ei + 1)}
               cycleGroup={() => cycleGroup(day.id, ex.id, ex.group)}
-              update={(patch) => { markSaving(); updateExercise(day.id, ex.id, patch); }} remove={() => deleteExercise(day.id, ex.id)}
+              update={(patch) => { updateExercise(day.id, ex.id, patch); }} remove={() => deleteExercise(day.id, ex.id)}
               lastMetric={lastMetrics[ex.name.toLowerCase()]} lastFact={lastFacts[ex.name.trim().toLowerCase()]}
               historyCount={historyCounts[ex.name.trim().toLowerCase()] ?? 0} onOpenHistory={openExHistory} />
           );
@@ -386,9 +394,16 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       {/* Шапка: назад, статус сохранения и меню; ниже — название заголовком, чипы и вкладки */}
       <div>
         <div className="flex items-center gap-1 -ml-2.5">
-          {onBack && <button onClick={onBack} aria-label="Назад" title="Назад" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-xl text-zinc-300 hover:bg-zinc-800 transition"><ArrowLeft size={22} /></button>}
-          <span className={`ml-auto text-sm transition-opacity duration-300 ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'}`}>
-            {saveStatus === 'saving' ? <span className="text-zinc-500">Сохранение…</span> : <span className="text-zinc-400 flex items-center gap-1"><Check size={14} className="text-lime-400" /> Сохранено</span>}
+          {onBack && <button onClick={leave} aria-label="Назад" title="Назад" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-xl text-zinc-300 hover:bg-zinc-800 transition"><ArrowLeft size={22} /></button>}
+          <span role="status" className={`ml-auto min-w-0 flex justify-end text-sm transition-opacity duration-300 ${saveStatus === 'idle' ? 'opacity-0' : 'opacity-100'}`}>
+            {saveStatus === 'saving' ? <span className="text-zinc-500">Сохраняю…</span>
+              : saveStatus === 'error' || saveStatus === 'offline' ? (
+                <button onClick={retrySaves} className="min-w-0 max-w-full flex items-center gap-1.5 h-9 px-3 rounded-xl bg-red-500/10 text-red-400 [.light-theme_&]:text-[#c9302c] font-semibold hover:bg-red-500/20 transition">
+                  <RotateCcw size={14} className="shrink-0" />
+                  <span className="truncate">{saveStatus === 'offline' ? 'Нет сети' : 'Не сохранено'} · <span className="underline underline-offset-2">Повторить</span></span>
+                </button>
+              )
+              : <span className="text-zinc-400 flex items-center gap-1"><Check size={14} className="text-lime-400" /> Сохранено</span>}
           </span>
           {/* П4: пять иконок свёрнуты в меню — строка названия перестала быть панелью инструментов */}
           <div className="relative shrink-0">
@@ -413,7 +428,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                     <Printer size={15} className="text-zinc-500 shrink-0" /> Печать / PDF
                   </button>
                   <div className="my-1 border-t border-zinc-800" />
-                  <button onClick={() => { setShowPlanMenu(false); markSaving(); updatePlanMeta({ visibleToClient: plan.visibleToClient === false ? true : false }); }}
+                  <button onClick={() => { setShowPlanMenu(false); updatePlanMeta({ visibleToClient: plan.visibleToClient === false ? true : false }); }}
                     className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-sm hover:bg-zinc-800 transition ${plan.visibleToClient === false ? "text-orange-400" : "text-zinc-300"}`}>
                     {plan.visibleToClient === false ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />}
                     {plan.visibleToClient === false ? "Показать клиенту" : "Скрыть от клиента"}
@@ -424,7 +439,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
           </div>
         </div>
         {editingName ? (
-          <input autoFocus value={plan.name} onChange={(e) => { markSaving(); updatePlanMeta({ name: e.target.value }); }} onBlur={() => setEditingName(false)} onKeyDown={(e) => e.key === "Enter" && setEditingName(false)}
+          <input autoFocus value={plan.name} onChange={(e) => { updatePlanMeta({ name: e.target.value }); }} onBlur={() => setEditingName(false)} onKeyDown={(e) => e.key === "Enter" && setEditingName(false)}
             aria-label="Название плана" placeholder="Название плана" className="mt-1 w-full h-12 bg-zinc-900 border border-zinc-700 rounded-xl px-3.5 font-bold outline-none focus:border-lime-400/60" />
         ) : (
           <button onClick={() => setEditingName(true)} title="Изменить название" className="mt-1 group flex items-center gap-2 max-w-full text-left">
@@ -549,7 +564,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                     <Layers size={14} className="text-cyan-400 shrink-0" />
                     <span className="flex-1 min-w-0 font-semibold truncate">{meso.name}</span>
                     <span className="text-xs text-zinc-500 shrink-0">{cnt} дн.</span>
-                    <button onClick={() => { markSaving(); updateMesocycle(meso.id, { archivedAt: null }); }}
+                    <button onClick={() => { updateMesocycle(meso.id, { archivedAt: null }); }}
                       title="Вернуть блок в Тренировки" aria-label="Вернуть блок в Тренировки"
                       className="p-1.5 rounded-lg hover:bg-lime-400/15 hover:text-lime-400 active:text-lime-400 text-zinc-500 transition shrink-0"><RotateCcw size={15} /></button>
                     <button onClick={async () => { if (await ask(`Удалить блок «${meso.name}»? Дни останутся без блока.`, { danger: true, ok: "Удалить" })) deleteMesocycle(meso.id); }}
@@ -597,7 +612,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                   <GripVertical size={16} />
                 </button>
                 {renamingDay === day.id ? (
-                  <input autoFocus value={day.name} onChange={(e) => { markSaving(); updateDay(day.id, { name: e.target.value }); }} onBlur={() => setRenamingDay(null)} onKeyDown={(e) => e.key === "Enter" && setRenamingDay(null)}
+                  <input autoFocus value={day.name} onChange={(e) => { updateDay(day.id, { name: e.target.value }); }} onBlur={() => setRenamingDay(null)} onKeyDown={(e) => e.key === "Enter" && setRenamingDay(null)}
                     aria-label="Название дня" className="flex-1 min-w-0 h-11 bg-zinc-800 rounded-xl px-3 font-semibold outline-none focus:ring-1 focus:ring-lime-400/40" />
                 ) : (
                   <button onClick={() => toggleCollapse(day.id)} aria-expanded={isOpen} title={isOpen ? "Свернуть день" : "Развернуть день"} className="flex-1 min-w-0 text-left py-1">
@@ -623,21 +638,21 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                       <div className="fixed inset-0 z-10" onClick={() => setDayMenu(null)} />
                       <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-60 shadow-xl">
                         <button onClick={() => { setDayMenu(null); setRenamingDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Pencil size={15} className="text-zinc-500 shrink-0" /> Переименовать</button>
-                        <button onClick={() => { setDayMenu(null); markSaving(); updateDay(day.id, { visibleToClient: hidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm hover:bg-zinc-800 transition ${hidden ? "text-orange-400" : "text-zinc-200"}`}>
+                        <button onClick={() => { setDayMenu(null); updateDay(day.id, { visibleToClient: hidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm hover:bg-zinc-800 transition ${hidden ? "text-orange-400" : "text-zinc-200"}`}>
                           {hidden ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />} {hidden ? "Показать клиенту" : "Скрыть от клиента"}
                         </button>
-                        <button onClick={() => { setDayMenu(null); markSaving(); updateDay(day.id, { method: day.method === "circuit" ? "" : "circuit" }); }}
+                        <button onClick={() => { setDayMenu(null); updateDay(day.id, { method: day.method === "circuit" ? "" : "circuit" }); }}
                           title="Круговая: подходы идут кругами по всем упражнениям" className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm hover:bg-zinc-800 transition ${day.method === "circuit" ? "text-cyan-400" : "text-zinc-200"}`}>
                           <Repeat size={15} className={`shrink-0 ${day.method === "circuit" ? "" : "text-zinc-500"}`} /> {day.method === "circuit" ? "Сделать обычной" : "Сделать круговой"}
                         </button>
                         <label className="w-full flex items-center gap-2.5 px-2.5 h-11 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                           <CalendarCheck size={15} className="text-zinc-500 shrink-0" /> Дата
-                          <input type="date" value={day.dateOf ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { dateOf: e.target.value || null }); }} className="ml-auto min-w-0 w-[8.5rem] bg-zinc-800 rounded-lg px-2 h-8 outline-none" title="Дата проведения" />
+                          <input type="date" value={day.dateOf ?? ""} onChange={(e) => { updateDay(day.id, { dateOf: e.target.value || null }); }} className="ml-auto min-w-0 w-[8.5rem] bg-zinc-800 rounded-lg px-2 h-8 outline-none" title="Дата проведения" />
                         </label>
                         {hasMesos && (
                           <label className="w-full flex items-center gap-2.5 px-2.5 h-11 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                             <Layers size={15} className="text-zinc-500 shrink-0" /> Блок
-                            <select value={day.mesocycleId ?? ""} onChange={(e) => { markSaving(); updateDay(day.id, { mesocycleId: e.target.value || null }); }} className="ml-auto min-w-0 max-w-[8.5rem] bg-zinc-800 rounded-lg px-2 h-8 outline-none">
+                            <select value={day.mesocycleId ?? ""} onChange={(e) => { updateDay(day.id, { mesocycleId: e.target.value || null }); }} className="ml-auto min-w-0 max-w-[8.5rem] bg-zinc-800 rounded-lg px-2 h-8 outline-none">
                               <option value="">Без блока</option>
                               {sortedMesos.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                             </select>
@@ -693,11 +708,11 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                           <div className="absolute right-0 top-full mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-56 shadow-xl">
                             <button disabled={mi === 0} onClick={() => { setMesoMenu(null); reorderMesocycles(mi, mi - 1); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><ChevronUp size={15} className="text-zinc-500 shrink-0" /> Блок выше</button>
                             <button disabled={mi === sortedMesos.length - 1} onClick={() => { setMesoMenu(null); reorderMesocycles(mi, mi + 1); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><ChevronDown size={15} className="text-zinc-500 shrink-0" /> Блок ниже</button>
-                            <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { visibleToClient: mesoHidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm hover:bg-zinc-800 transition ${mesoHidden ? "text-orange-400" : "text-zinc-200"}`}>
+                            <button onClick={() => { setMesoMenu(null); updateMesocycle(meso.id, { visibleToClient: mesoHidden ? true : false }); }} className={`w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm hover:bg-zinc-800 transition ${mesoHidden ? "text-orange-400" : "text-zinc-200"}`}>
                               {mesoHidden ? <EyeOff size={15} className="shrink-0" /> : <Eye size={15} className="text-zinc-500 shrink-0" />} {mesoHidden ? "Показать клиенту" : "Скрыть от клиента"}
                             </button>
                             <button onClick={() => { setMesoMenu(null); duplicateMeso(meso.id); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать с днями</button>
-                            <button onClick={() => { setMesoMenu(null); markSaving(); updateMesocycle(meso.id, { archivedAt: new Date().toISOString() }); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Archive size={15} className="text-zinc-500 shrink-0" /> В архив с днями</button>
+                            <button onClick={() => { setMesoMenu(null); updateMesocycle(meso.id, { archivedAt: new Date().toISOString() }); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Archive size={15} className="text-zinc-500 shrink-0" /> В архив с днями</button>
                             <div className="my-1 border-t border-zinc-800" />
                             <button onClick={async () => { setMesoMenu(null); if (await ask(`Удалить блок «${meso.name}»? Дни останутся без блока.`, { danger: true, ok: "Удалить" })) deleteMesocycle(meso.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить блок</button>
                           </div>
@@ -856,7 +871,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       {/* П4: заметка внизу — заполняется редко, а сверху занимала строку наравне с названием */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
         <label htmlFor="plan-note" className="block text-xs text-zinc-500 mb-1.5">Заметка к плану</label>
-        <input id="plan-note" value={plan.note} onChange={(e) => { markSaving(); updatePlanMeta({ note: e.target.value }); }}
+        <input id="plan-note" value={plan.note} onChange={(e) => { updatePlanMeta({ note: e.target.value }); }}
           placeholder="Напр. прогрессия каждые 2 недели"
           className="w-full bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm outline-none focus:border-lime-400/50" />
       </div>
