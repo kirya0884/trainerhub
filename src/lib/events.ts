@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { isNetworkError } from "./outbox";
 
 // B16: событийная аналитика. Таблица app_events append-only на уровне RLS —
 // политик на UPDATE и DELETE нет вовсе, поэтому база их отклонит.
@@ -38,7 +39,8 @@ export function deviceKind() {
 function insert(row: Record<string, unknown>) {
   supabase.from("app_events")
     .insert({ ...row, session_id: sessionId(), device: deviceKind() })
-    .then(({ error }) => { if (error) console.error("[analytics]", error.message); });
+    // Без сети событие просто теряется — это не ошибка, консоль не засоряем
+    .then(({ error }) => { if (error && !isNetworkError(error)) console.error("[analytics]", error.message); });
 }
 
 /** Кто работает в приложении; при смене — событие начала сеанса */

@@ -1,5 +1,5 @@
-import { ArrowLeft, Check, Settings2, Apple, MoreHorizontal, CalendarCheck, Camera, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, Check, CloudOff, Settings2, Apple, MoreHorizontal, CalendarCheck, Camera, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
 import { onWorkoutFinished } from "../lib/clientsBus";
@@ -29,6 +29,11 @@ import type { Booking } from "../lib/bookings";
 import ActivityTab from "./ActivityTab";
 import GoalsDashboard from "./GoalsDashboard";
 import * as portalApi from "../lib/clientPortal";
+import { cached, fmtSavedAt, onRevalidate, releaseStale, revalidate, staleAtOf } from "../lib/offlineCache";
+import { isNetworkError } from "../lib/outbox";
+
+// Отказ правки карточки из кэша — не чаще раза в 4 с (иначе сообщение на каждую букву)
+let lockedToastAt = 0;
 import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 import StartWorkoutModal from "./StartWorkoutModal";
@@ -51,6 +56,8 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   // Имя — крупным заголовком; правка по тапу (у полей ввода на iOS шрифт не меньше 16 px — см. index.css)
   const [editingName, setEditingName] = useState(false);
   const [client, setClient] = useState<ClientFull | null>(null);
+  // Карточка с телефона (нет сети) — время копии; тогда только просмотр: правки ушли бы в никуда
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLog[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -63,34 +70,57 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
 
   useEffect(() => {
     let alive = true;
-    api.fetchClient(clientId).then((v) => { if (alive) setClient(v); }).catch((e) => console.error("[ClientProfile] fetchClient:", e));
-    api.fetchMeasurements(clientId).then((v) => { if (alive) setMeasurements(v); }).catch((e) => console.error("[ClientProfile] fetchMeasurements:", e));
-    nutritionApi.fetchNutritionLogs(clientId).then((v) => { if (alive) setNutritionLogs(v); }).catch((e) => console.error("[ClientProfile] питание:", e));
-    api.fetchPhotos(clientId).then((v) => { if (alive) setPhotos(v); }).catch((e) => console.error("[ClientProfile] фото:", e));
-    api.fetchNotes(clientId).then((v) => { if (alive) setNotes(v); }).catch((e) => console.error("[ClientProfile] заметки:", e));
-    api.fetchClientPlans(clientId).then((v) => { if (alive) setPlans(v); }).catch((e) => console.error("[ClientProfile] планы:", e));
-    portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch((e) => console.error("[ClientProfile] активность:", e));
+    // Карточка и планы без сети — последние сохранённые, чтобы начать тренировку в зале
+    // Без сети замеры, фото, заметки не грузятся — это ожидаемо: одно предупреждение, а не шквал ошибок
+    let warned = false;
+    const fail = (what: string) => (e: unknown) => {
+      if (!isNetworkError(e)) { console.error(`[ClientProfile] ${what}:`, e); return; }
+      if (!warned) { warned = true; console.warn("[ClientProfile] нет сети — часть карточки не загружена"); }
+    };
+    const loadClient = () => cached(`client:${clientId}`, () => api.fetchClient(clientId))
+      .then((v) => { if (alive) { setClient(v); setCachedAt(staleAtOf(`client:${clientId}`)); } }).catch(fail("карточка"));
+    const loadPlans = () => cached(`cplans:${clientId}`, () => api.fetchClientPlans(clientId)).then((v) => { if (alive) setPlans(v); }).catch(fail("планы"));
+    loadClient();
+    api.fetchMeasurements(clientId).then((v) => { if (alive) setMeasurements(v); }).catch(fail("замеры"));
+    nutritionApi.fetchNutritionLogs(clientId).then((v) => { if (alive) setNutritionLogs(v); }).catch(fail("питание"));
+    api.fetchPhotos(clientId).then((v) => { if (alive) setPhotos(v); }).catch(fail("фото"));
+    api.fetchNotes(clientId).then((v) => { if (alive) setNotes(v); }).catch(fail("заметки"));
+    loadPlans();
+    portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch(fail("активность"));
     // Завершённая тренировка списала занятие — подтягиваем только абонемент. Не onClientsChanged:
     // он приходит и от собственных сохранений карточки и перечитал бы абонемент посреди ввода
     const off = onWorkoutFinished(() => api.fetchClient(clientId).then((v) => { if (alive) setClient((c) => (c ? { ...c, membership: v.membership } : v)); }).catch((e) => console.error("[ClientProfile] обновление абонемента:", e)));
-    return () => { alive = false; off(); };
+    // Перечитываем то, что пришло с телефона (карточка тогда только для просмотра — правок в ней нет)
+    const offOnline = onRevalidate(() => {
+      if (staleAtOf(`client:${clientId}`) !== null) loadClient();
+      if (staleAtOf(`cplans:${clientId}`) !== null) loadPlans();
+    });
+    return () => { alive = false; off(); offOnline(); releaseStale(`client:${clientId}`); releaseStale(`cplans:${clientId}`); };
   }, [clientId]);
 
   if (!client) return <div className="p-4"><ScreenSkeleton avatar /></div>;
   const activePlans = (plans ?? []).filter((p) => !p.archived);
 
+  const locked = () => {
+    if (cachedAt === null) return false;
+    if (Date.now() - lockedToastAt > 4000) { lockedToastAt = Date.now(); notify("Нет сети: карточка открыта с телефона, только для просмотра. Править можно, когда появится интернет."); }
+    return true;
+  };
   // Текстовые поля — debounce per-field, чтобы не слать запрос на каждую букву. Чекбоксы/селекты — сразу.
   const patch = (p: Partial<ClientFull>, immediate = false) => {
+    if (locked()) return;
     setClient((c) => (c ? { ...c, ...p } : c));
     if (immediate) api.updateClient(clientId, p);
     else persist("client", p, (pp) => api.updateClient(clientId, pp));
   };
   const patchHealth = (p: Partial<ClientFull["health"]>) => {
+    if (locked()) return;
     const merged = { ...client.health, ...p };
     setClient({ ...client, health: merged });
     persist("health", { health: merged }, (pp) => api.updateClient(clientId, pp));
   };
   const patchMembership = (p: Partial<ClientFull["membership"]>, immediate = false) => {
+    if (locked()) return;
     const merged = { ...client.membership, ...p };
     setClient({ ...client, membership: merged });
     if (immediate) { persist.cancel("membership"); api.updateClient(clientId, { membership: merged }); }
@@ -104,6 +134,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const outOfStock = client.membership.type !== "subscription" && client.membership.remaining !== "" && remainingNum <= 0;
   const overdue = client.membership.type === "subscription" && client.membership.nextPaymentDate && client.membership.nextPaymentDate < today();
   const deleteClient = async () => {
+    if (locked()) return;
     if (!(await ask(`Удалить «${client.name}»? Карточка переместится в корзину — её можно восстановить позже.`, { danger: true, ok: "Удалить" }))) return;
     try { await api.deleteClient(clientId); onBack(); }
     catch (e) { console.error("[ClientProfile] deleteClient:", e); notify("Не удалось удалить карточку. Попробуй ещё раз."); }
@@ -118,6 +149,13 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
 
   return (
     <div>
+      {cachedAt !== null && (
+        <div role="status" className="mb-3 flex items-start gap-2 bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-2.5 text-sm text-zinc-300">
+          <CloudOff size={16} className="text-zinc-400 shrink-0 mt-0.5" />
+          <span className="flex-1">Нет сети — карточка с телефона на {fmtSavedAt(cachedAt)}. Только просмотр; тренировку начать можно.</span>
+          <button onClick={revalidate} className="shrink-0 text-lime-400 font-semibold hover:text-lime-300 transition">Обновить</button>
+        </div>
+      )}
       {showReport && <ClientProgressPrintView clientId={clientId} planIds={(plans ?? []).map((p) => p.id)} clientName={client.name} trainerId={trainerId} onClose={() => setShowReport(false)} />}
 
       {/* Шапка: назад, закрепить, меню действий (отчёт, удаление) */}
@@ -503,13 +541,26 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     } catch (e) { console.error("[PaymentsTab] saveAsTemplate:", e); notify("Не удалось сохранить шаблон."); }
   };
 
+  // Запись оплаты может идти секунды (запись без таймаута, см. lib/supabase): пока она идёт,
+  // кнопки неактивны, а флаг в ref ставится до первого await — второе нажатие не создаст
+  // второй платёж и второе начисление пакета.
+  const payLock = useRef(false);
+  const [paying, setPaying] = useState(false);
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
+    if (payLock.current) return;
+    payLock.current = true; setPaying(true);
     try { const merged = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus); patchMembership(merged, true); track("action", "payment", { status: payStatus, via: "profile" }); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); notify("Не удалось записать оплату."); }
+    finally { payLock.current = false; setPaying(false); }
   };
+  const paidLock = useRef(new Set<string>());
+  const [markingIds, setMarkingIds] = useState<string[]>([]);
   const doMarkPaymentPaid = async (id: string) => {
+    if (paidLock.current.has(id)) return;
+    paidLock.current.add(id); setMarkingIds((l) => [...l, id]);
     try { await paymentsApi.markPaymentPaid(id); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] markPaymentPaid:", e); notify("Не удалось обновить платёж."); }
+    finally { paidLock.current.delete(id); setMarkingIds((l) => l.filter((x) => x !== id)); }
   };
 
   const editPayment = async (p: Payment) => {
@@ -596,15 +647,15 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
             </div>
           )}
           <DateField label="Дата оплаты" value={payDate} onChange={(e) => setPayDate(e.target.value || today())} />
-          <button onClick={() => doMarkPaid("paid")} disabled={!basePrice}
+          <button onClick={() => doMarkPaid("paid")} disabled={!basePrice || paying}
             className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
-            <Check size={18} strokeWidth={2.75} /> {basePrice ? `Оплачено · ${rub(payAmount)}` : "Укажите цену пакета"}
+            <Check size={18} strokeWidth={2.75} /> {paying ? "Сохраняю…" : basePrice ? `Оплачено · ${rub(payAmount)}` : "Укажите цену пакета"}
           </button>
           {preview && preview.amount !== basePrice && <p className="text-[13px] text-orange-300 text-center -mt-1">{preview.label}: вместо {rub(basePrice)}</p>}
           <div className="grid grid-cols-2 gap-2">
-            <button onClick={() => doMarkPaid("deferred")} disabled={!basePrice} title="Блок начислен, оплата ожидается"
+            <button onClick={() => doMarkPaid("deferred")} disabled={!basePrice || paying} title="Блок начислен, оплата ожидается"
               className="h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-semibold transition disabled:opacity-40"><Clock size={16} className="text-orange-300" /> Позже</button>
-            <button onClick={() => doMarkPaid("installment")} disabled={!basePrice} title="Блок начислен, оплата разбита на части"
+            <button onClick={() => doMarkPaid("installment")} disabled={!basePrice || paying} title="Блок начислен, оплата разбита на части"
               className="h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-semibold transition disabled:opacity-40"><SplitSquareVertical size={16} className="text-cyan-300" /> Частями</button>
           </div>
         </div>
@@ -631,7 +682,7 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
                   <p className="text-[13px] text-zinc-400 truncate">{[fmtDate(p.date), p.type === "subscription" ? "подписка" : "пакет", p.promoApplied, p.note].filter(Boolean).join(" · ")}</p>
                 </div>
                 {p.payStatus !== "paid" && (
-                  <button onClick={() => doMarkPaymentPaid(p.id)} title="Отметить оплаченным" className="h-9 px-2.5 rounded-lg text-[13px] font-semibold text-lime-400 hover:bg-lime-400/10 transition shrink-0">Оплачен</button>
+                  <button onClick={() => doMarkPaymentPaid(p.id)} disabled={markingIds.includes(p.id)} title="Отметить оплаченным" className="h-9 px-2.5 rounded-lg text-[13px] font-semibold text-lime-400 hover:bg-lime-400/10 transition shrink-0 disabled:opacity-50">{markingIds.includes(p.id) ? "Сохраняю…" : "Оплачен"}</button>
                 )}
                 <button onClick={() => setPayMenu(payMenu === p.id ? null : p.id)} aria-label="Действия с платежом" aria-expanded={payMenu === p.id}
                   className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition"><MoreHorizontal size={19} /></button>

@@ -1,4 +1,10 @@
 import { supabase } from "./supabase";
+import { patchCache } from "./offlineCache";
+
+// Новый PIN — сразу и в кэш для зала: иначе следующий запуск без сети открылся бы со старым (или без PIN)
+type Access = { trainer: boolean; pin?: string | null; self?: { pinHash?: string | null } | null };
+const rememberPin = (table: "trainers" | "clients", h: string | null) =>
+  patchCache<Access>("access", (a) => (table === "trainers" ? (a.trainer ? { ...a, pin: h } : a) : (a.self ? { ...a, self: { ...a.self, pinHash: h } } : a)));
 
 // PIN — доп. защита экрана на общем устройстве, не основной auth-фактор (см. комментарий к trainers.pin_hash).
 // Хэш — нативный SHA-256 (Web Crypto), без bcrypt-зависимости: достаточно для этой угрозы.
@@ -18,12 +24,17 @@ export async function verifyPin(pin: string, storedHash: string): Promise<boolea
   return (await hash(pin)) === storedHash;
 }
 
-export async function setPin(id: string, pin: string, table: "trainers" | "clients" = "trainers") {
-  const { error } = await supabase.from(table).update({ pin_hash: await hash(pin) }).eq("id", id);
+/** Возвращает новый хэш — App держит его для экрана PIN */
+export async function setPin(id: string, pin: string, table: "trainers" | "clients" = "trainers"): Promise<string> {
+  const h = await hash(pin);
+  const { error } = await supabase.from(table).update({ pin_hash: h }).eq("id", id);
   if (error) throw error;
+  rememberPin(table, h);
+  return h;
 }
 
 export async function clearPin(id: string, table: "trainers" | "clients" = "trainers") {
   const { error } = await supabase.from(table).update({ pin_hash: "" }).eq("id", id);
   if (error) throw error;
+  rememberPin(table, null);
 }

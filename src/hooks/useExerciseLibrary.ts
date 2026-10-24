@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { isNetworkError } from "../lib/outbox";
 import { BUILTIN_EX_NAMES } from "../data/exerciseLibrary";
 import * as api from "../lib/library";
 
@@ -6,7 +7,8 @@ import * as api from "../lib/library";
 export function useExerciseLibrary(trainerId: string) {
   const [customNames, setCustomNames] = useState<string[]>([]);
 
-  useEffect(() => { let alive = true; api.fetchCustomExercises(trainerId).then((n) => { if (alive) setCustomNames(n); }).catch((e) => console.error("[useExerciseLibrary]", e)); return () => { alive = false; }; }, [trainerId]);
+  // Без сети — просто без своих упражнений в подсказках, это не ошибка
+  useEffect(() => { let alive = true; api.fetchCustomExercises(trainerId).then((n) => { if (alive) setCustomNames(n); }).catch((e) => { if (!isNetworkError(e)) console.error("[useExerciseLibrary]", e); }); return () => { alive = false; }; }, [trainerId]);
 
   const allNames = useMemo(() => [...BUILTIN_EX_NAMES, ...customNames], [customNames]);
 

@@ -3,6 +3,7 @@ import { useSharedListSync } from "./useSharedListSync";
 import * as api from "../lib/clients";
 import { onClientsChanged } from "../lib/clientsBus";
 import type { ClientListItem } from "../lib/clients";
+import { cached, peekCache } from "../lib/offlineCache";
 
 // Общий список подопечных на всё приложение: грузится один раз в App.tsx и раздаётся пропсами,
 // иначе каждое переключение вкладки размонтирует компонент и тянет тех же клиентов заново.
@@ -14,12 +15,13 @@ export function useClients(trainerId: string) {
   const load = () => {
     if (!trainerId) return;
     const req = ++reqRef.current;
-    api.fetchClients(trainerId)
+    cached("clients", () => api.fetchClients(trainerId))
       .then((c) => { if (req === reqRef.current) setClients(c); })
       .catch((e) => console.error("[useClients]", e));
   };
-  // Смена или выход пользователя — чужой список не держим и поздний ответ не принимаем
-  useEffect(() => { reqRef.current++; setClients(null); load(); }, [trainerId]);
+  // Смена или выход пользователя — чужой список не держим и поздний ответ не принимаем.
+  // Сохранённый список показываем сразу, пока идёт запрос (без сети — он и останется)
+  useEffect(() => { reqRef.current++; setClients(trainerId ? peekCache<ClientListItem[]>("clients")?.data ?? null : null); load(); }, [trainerId]);
 
   // Н3: перезагрузка по сигналу об изменении абонемента. Склеиваем всплеск —
   // сплит платежа пишет две записи подряд, дёргать базу дважды незачем.

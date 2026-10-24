@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { cached } from "./offlineCache";
 import type { Mesocycle, Plan, Exercise, SetRow } from "../types";
 
 // ponytail: построчный CRUD без батчинга — для размеров планов тренера (десятки дней/упражнений) этого достаточно
@@ -7,19 +8,24 @@ export async function fetchPlan(planId: string): Promise<Plan> {
   const { data: plan, error } = await supabase.from("plans").select("id,name,note,visible_to_client").eq("id", planId).single();
   if (error) throw error;
 
-  const { data: mesos } = await supabase.from("plan_mesocycles").select("id,plan_id,name,position,visible_to_client,archived_at").eq("plan_id", planId).order("position");
+  // Ошибки не глотаем: план без дней из-за оборвавшейся связи попал бы в кэш для зала
+  const { data: mesos, error: e1 } = await supabase.from("plan_mesocycles").select("id,plan_id,name,position,visible_to_client,archived_at").eq("plan_id", planId).order("position");
+  if (e1) throw e1;
 
-  const { data: days } = await supabase.from("plan_days").select("id,name,weekday,date_of,position,visible_to_client,mesocycle_id,method,archived_at").eq("plan_id", planId).order("position");
+  const { data: days, error: e2 } = await supabase.from("plan_days").select("id,name,weekday,date_of,position,visible_to_client,mesocycle_id,method,archived_at").eq("plan_id", planId).order("position");
+  if (e2) throw e2;
   const dayIds = (days ?? []).map((d) => d.id);
 
-  const { data: exercises } = dayIds.length
+  const { data: exercises, error: e3 } = dayIds.length
     ? await supabase.from("plan_exercises").select("*").in("day_id", dayIds).order("position")
-    : { data: [] as any[] };
+    : { data: [] as any[], error: null };
+  if (e3) throw e3;
   const exIds = (exercises ?? []).map((e) => e.id);
 
-  const { data: setRows } = exIds.length
+  const { data: setRows, error: e4 } = exIds.length
     ? await supabase.from("plan_exercise_set_rows").select("*").in("exercise_id", exIds).order("position")
-    : { data: [] as any[] };
+    : { data: [] as any[], error: null };
+  if (e4) throw e4;
 
   const rowsByEx: Record<string, SetRow[]> = {};
   for (const r of setRows ?? []) (rowsByEx[r.exercise_id] ??= []).push({ id: r.id, weight: r.weight, reps: r.reps });
@@ -51,6 +57,9 @@ export async function fetchPlan(planId: string): Promise<Plan> {
     })),
   };
 }
+
+/** План для экранов и старта тренировки; без сети — последний сохранённый */
+export const fetchPlanCached = (planId: string) => cached(`plan:${planId}`, () => fetchPlan(planId));
 
 export const updatePlanMeta = async (planId: string, patch: Partial<Pick<Plan, "name" | "note" | "visibleToClient">>) => {
   const row: Record<string, any> = { ...patch };

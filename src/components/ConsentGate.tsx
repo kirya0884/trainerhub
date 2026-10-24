@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import { DocLink } from "./LegalLink";
 import { recordConsents, type ConsentKind, type Role } from "../lib/consents";
-import { supabase } from "../lib/supabase";
+import { signOutAndForget } from "../lib/offlineCache";
 
 type Age = "adult" | "teen" | "child";
 
@@ -93,7 +93,7 @@ export default function ConsentGate({ role, onDone }: { role: Role; onDone: () =
         <button onClick={submit} disabled={!ready || busy} className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
           {busy ? "Сохраняем…" : "Продолжить"}
         </button>
-        <button onClick={() => supabase.auth.signOut()} className="w-full h-11 text-sm text-zinc-500 hover:text-zinc-300">Не согласен — выйти</button>
+        <button onClick={() => signOutAndForget()} className="w-full h-11 text-sm text-zinc-500 hover:text-zinc-300">Не согласен — выйти</button>
         <p className="text-xs text-zinc-500 leading-relaxed">Согласие можно отозвать в любой момент: удалить аккаунт в профиле или написать оператору — контакты в политике.</p>
       </div>
     </div>

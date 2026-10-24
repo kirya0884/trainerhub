@@ -4,6 +4,7 @@ import * as trainerApi from "../lib/trainer";
 import type { TrainerProfileData, TrainerStats } from "../lib/trainer";
 import { fileToThumb } from "../lib/thumb";
 import { supabase } from "../lib/supabase";
+import { cached, onRevalidate, releaseStale, signOutAndForget, staleAtOf } from "../lib/offlineCache";
 import SubscriptionModal from "./SubscriptionModal";
 import { LegalList } from "./LegalDoc";
 import { deleteMyAccount } from "../lib/account";
@@ -56,10 +57,15 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
 
   useEffect(() => {
     let alive = true;
-    trainerApi.fetchTrainerSelf(trainerId).then((s) => { if (alive) { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); } }).catch((e) => console.error("[TrainerProfile] fetchSelf:", e));
-    trainerApi.fetchTrainerStats(trainerId).then((s) => { if (alive) setStats(s); }).catch((e) => console.error("[TrainerProfile] fetchStats:", e));
+    // Без сети — сохранённые: профиль (и кнопка «Выйти» в нём) должен открываться и в зале
+    const loadProfile = () => cached("trainer", () => trainerApi.fetchTrainerSelf(trainerId)).then((s) => { if (alive) { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); } }).catch((e) => console.error("[TrainerProfile] fetchSelf:", e));
+    const loadStats = () => cached("stats", () => trainerApi.fetchTrainerStats(trainerId)).then((s) => { if (alive) setStats(s); }).catch((e) => console.error("[TrainerProfile] fetchStats:", e));
+    loadProfile(); loadStats();
+    // Вернулась сеть (или ожил сервер) — перечитываем то, что было с телефона
+    const off = onRevalidate(() => { if (staleAtOf("trainer") !== null) loadProfile(); if (staleAtOf("stats") !== null) loadStats(); });
     fetchPackageTemplates(trainerId).then((t) => { if (alive) setTemplates(t); }).catch((e) => console.error("[TrainerProfile] fetchTemplates:", e));
-    return () => { alive = false; };
+    // «trainer» нужен и шапке приложения — её отметку не снимаем
+    return () => { alive = false; off(); releaseStale("stats"); };
   }, [trainerId]);
 
   const onPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,7 +242,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         <button
           onClick={async () => {
             if (!(await ask("Выйти из аккаунта на всех устройствах?", { danger: true, ok: "Выйти" }))) return;
-            await supabase.auth.signOut({ scope: "global" });
+            await signOutAndForget({ scope: "global" });
           }}
           className="w-full flex items-center justify-center gap-1.5 text-sm text-zinc-500 hover:text-red-400 transition py-1"
         >

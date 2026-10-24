@@ -5,7 +5,8 @@ import type { Membership, PlanListItem } from "../lib/clients";
 import { fmtDate, parseNum, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
 import { applyLastTime, buildMetrics, lastFactsByName, lastTimeFor, tonnageOf, type LastFact, type LastTime } from "../lib/sessionUtils";
-import { fetchProgress } from "../lib/progress";
+import { fetchProgressCached } from "../lib/progress";
+import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
 import { finishOrQueue } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
 import { confirmFinish, resolveWorkoutDate } from "../components/SessionParts";
@@ -75,7 +76,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
 
   useEffect(() => {
     if (!planId) { setPlan(null); setDayId(""); return; }
-    plansApi.fetchPlan(planId).then((p) => {
+    plansApi.fetchPlanCached(planId).then((p) => {
       setPlan(p);
       const fromDraft = !restored.current && draft?.planId === planId && p.days.some((d) => d.id === draft.dayId);
       setDayId(fromDraft ? draft!.dayId : p.days[0]?.id || "");
@@ -136,8 +137,11 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     setLast(null); setBeforeLast(null); setSessions(null);
     if (!plan || !day) return;
     let alive = true;
-    fetchProgress(plan.id).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); setSessions(d.sessions); } }).catch((e) => console.error("[useSessionSlot] прошлый раз:", e));
-    return () => { alive = false; };
+    // «Было» и история; вернулась сеть — перечитываем (могли быть с телефона)
+    const load = () => fetchProgressCached(plan.id).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); setSessions(d.sessions); } }).catch((e) => console.error("[useSessionSlot] прошлый раз:", e));
+    load();
+    const offOnline = onRevalidate(() => { if (staleAtOf(`progress:${plan.id}`) !== null) load(); });
+    return () => { alive = false; offOnline(); releaseStale(`progress:${plan.id}`); };
   }, [plan?.id, day?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const applyLast = () => { if (!day || !last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
   const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };

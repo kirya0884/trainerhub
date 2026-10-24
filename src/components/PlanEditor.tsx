@@ -1,4 +1,4 @@
-import { Archive, ArrowLeft, Check, MoreVertical, BarChart3, BookOpen, GripVertical, CalendarCheck, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, Wallet, X, Copy } from "lucide-react";
+import { Archive, ArrowLeft, Check, CloudOff, MoreVertical, BarChart3, BookOpen, GripVertical, CalendarCheck, ChevronDown, ChevronRight, ChevronUp, Clipboard, ClipboardPaste, Eye, EyeOff, FileStack, Flame, HeartPulse, History, Layers, MoreHorizontal, Pencil, Play, Plus, Printer, Repeat, RotateCcw, Trash, Trash2, Wallet, X, Copy } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GROUP_COLORS, GROUP_CYCLE } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
@@ -13,6 +13,7 @@ import * as templatesApi from "../lib/templates";
 import { onClientsChanged, onWorkoutFinished } from "../lib/clientsBus";
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import * as plansApi from "../lib/plans";
+import { cached, fmtSavedAt, onRevalidate, releaseStale, revalidate, staleAtOf } from "../lib/offlineCache";
 import type { Day, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import ExerciseRow from "./ExerciseRow";
@@ -52,7 +53,7 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 };
 
 export default function PlanEditor({ planId, trainerId, clientId, onBack }: { planId: string; trainerId: string; clientId: string; onBack?: () => void }) {
-  const { plan, loading, error, saveStatus, retrySaves, settleSaves, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, exKey, addMesocycle, updateMesocycle, deleteMesocycle, reorderMesocycles, reload } = usePlan(planId);
+  const { plan, loading, error, offlineAt, locked, saveStatus, retrySaves, settleSaves, updatePlanMeta, addDay, updateDay, deleteDay, reorderDays, addExercise, updateExercise, deleteExercise, reorderExercises, exKey, addMesocycle, updateMesocycle, deleteMesocycle, reorderMesocycles, reload } = usePlan(planId);
   const { allNames, customNames, addToLibrary } = useExerciseLibrary(trainerId);
   const exDrag = useDragSort((dayId, from, to) => reorderExercises(dayId, from, to));
   // Н2: дни переставляются перетаскиванием. Перетаскивание идёт внутри одного контейнера
@@ -185,7 +186,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
 
   /** Общая обёртка для применения шаблонов: один и тот же замок, одно и то же сообщение. */
   const runAdd = async (fn: () => Promise<void>, failMsg: string) => {
-    if (addBusy) return;
+    if (addBusy || locked()) return;
     setAddBusy(true);
     try { await fn(); reload(); }
     catch (e) { console.error("[PlanEditor] runAdd:", e); notify(failMsg); }
@@ -194,8 +195,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   // B06: дублировать день — один клик с автоименем. Копирование в буфер оставлено:
   // оно нужно, чтобы перенести день в ДРУГОЙ план, а дубликат работает внутри текущего.
   const [dupBusy, setDupBusy] = useState<string | null>(null);
+  // Копирование, вставка и шаблоны пишут в план мимо usePlan — без сети (план с телефона) тоже нельзя
   const duplicateDay = async (day: Day) => {
-    if (dupBusy) return;
+    if (dupBusy || locked()) return;
     setDupBusy(day.id);
     try {
       await templatesApi.applyDayTemplate(planId, { ...day, name: `${day.name} (копия)` }, plan?.days.length ?? 0);
@@ -204,7 +206,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     finally { setDupBusy(null); }
   };
   const duplicateMeso = async (mesoId: string) => {
-    if (dupBusy) return;
+    if (dupBusy || locked()) return;
     setDupBusy(mesoId);
     try {
       await plansApi.duplicateMesocycle(planId, mesoId);
@@ -214,7 +216,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   };
 
   const handlePasteDay = async () => {
-    if (!dayClipboard || !pasteInput?.trim() || addBusy) return;
+    if (!dayClipboard || !pasteInput?.trim() || addBusy || locked()) return;
     setAddBusy(true);
     try {
       await templatesApi.applyDayTemplate(planId, { id: "", name: pasteInput.trim(), weekday: null, exercises: dayClipboard.exercises } as Day, (plan?.days.length ?? 0));
@@ -278,13 +280,14 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
 
   useEffect(() => {
     let alive = true;
-    const load = () => fetchClient(clientId)
+    const load = () => cached(`client:${clientId}`, () => fetchClient(clientId))
       .then((c) => { if (alive) { setMembership(c.isSelf ? null : c.membership); setClientName(c.name); setClientColor(c.color); } })
       .catch((e) => console.error("[PlanEditor] fetchClient:", e));
     load();
-    // Остаток после завершённой тренировки — сразу, без перезахода на экран
+    // Остаток после завершённой тренировки — сразу, без перезахода на экран; и когда вернулась сеть
     const off = onClientsChanged(load);
-    return () => { alive = false; off(); };
+    const offOnline = onRevalidate(() => { if (staleAtOf(`client:${clientId}`) !== null) load(); });
+    return () => { alive = false; off(); offOnline(); releaseStale(`client:${clientId}`); };
   }, [clientId]);
 
 
@@ -357,7 +360,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
           const ei = block.startIdx + k;
           return (
             <ExerciseRow key={exKey(ex.id)} ex={ex} label={exLabel(day, ei)} groupColor={ex.group ? GROUP_COLORS[ex.group] : null} suggestions={allNames} addToLibrary={addToLibrary}
-              index={ei} collapsed={!collapsed[`x:${exKey(ex.id)}`]} onToggleCollapse={toggleExOpen}
+              index={ei} collapsed={!collapsed[`x:${exKey(ex.id)}`]} onToggleCollapse={toggleExOpen} readOnly={offlineAt !== null}
               dragging={exDrag.drag?.key === day.id && exDrag.drag.from === ei}
               dropBefore={exDrag.drag?.key === day.id && exDrag.drag.over === ei && exDrag.drag.from !== ei}
               dropAfter={exDrag.drag?.key === day.id && exDrag.drag.over === day.exercises.length && ei === day.exercises.length - 1 && exDrag.drag.from !== ei}
@@ -391,6 +394,13 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
 
   return (
     <div className="space-y-4">
+      {offlineAt !== null && (
+        <div role="status" className="flex items-start gap-2 bg-zinc-900 border border-zinc-800 rounded-2xl px-3 py-2.5 text-sm text-zinc-300">
+          <CloudOff size={16} className="text-zinc-400 shrink-0 mt-0.5" />
+          <span className="flex-1">Нет сети — план с телефона на {fmtSavedAt(offlineAt)}. Только просмотр: править можно, когда появится интернет. Тренировку провести можно.</span>
+          <button onClick={revalidate} className="shrink-0 text-lime-400 font-semibold hover:text-lime-300 transition">Обновить</button>
+        </div>
+      )}
       {/* Шапка: назад, статус сохранения и меню; ниже — название заголовком, чипы и вкладки */}
       <div>
         <div className="flex items-center gap-1 -ml-2.5">

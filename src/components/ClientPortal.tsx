@@ -22,13 +22,13 @@ import { GROUP_COLORS } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
 import MetricsView from "./MetricsView";
 import { addDays, fmtDate, today as todayFn } from "../lib/format";
-import { supabase } from "../lib/supabase";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
 import { lastFactsByName, lastTimeFor } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
 import { flushOutbox, isNetworkError } from "../lib/outbox";
+import { cached, patchCache, signOutAndForget } from "../lib/offlineCache";
 import { setAnalyticsContext, track } from "../lib/events";
 
 type Tab = "profile" | "program" | "nutrition" | "reporting";
@@ -78,10 +78,15 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
 
   const activeSessionRef = useRef<typeof activeSession>(null);
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
+  // Текущая тренировка — и в кэш для зала: без сети не должна открыться уже законченная
+  useEffect(() => {
+    patchCache<{ trainer: boolean; self?: portalApi.SelfClient | null }>("access", (a) => (a.self ? { ...a, self: { ...a.self, activeSession } } : a));
+  }, [activeSession]);
 
   // #6 merged notify check into first fetch
+  // Ближайшая запись и план без сети — последние сохранённые: кабинет открывается в зале
   const refresh = (notifyOnLoad = false) => {
-    portalApi.fetchUpcomingBooking(client.id).then((ub) => {
+    cached("upcoming", () => portalApi.fetchUpcomingBooking(client.id)).then((ub) => {
       setUpcoming(ub);
       if (notifyOnLoad && ub) {
         const todayStr = todayFn();
@@ -93,7 +98,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
         }
       }
     }).catch((e) => console.error("[ClientPortal] fetchUpcoming:", e));
-    clientsApi.fetchClientPlans(client.id).then(setPlans).catch((e) => console.error("[ClientPortal] fetchPlans:", e));
+    cached(`cplans:${client.id}`, () => clientsApi.fetchClientPlans(client.id)).then(setPlans).catch((e) => console.error("[ClientPortal] fetchPlans:", e));
     clientsApi.fetchPayments(client.id).then(setPayments).catch((e) => console.error("[ClientPortal] fetchPayments:", e));
     clientsApi.fetchMeasurements(client.id).then(setMeasurements).catch((e) => console.error("[ClientPortal] fetchMeasurements:", e));
     nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
@@ -192,7 +197,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             <button onClick={() => { setShowNav(false); setShowSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Settings size={18} className="text-zinc-400" /> <span className="font-medium">Мои данные и здоровье</span></button>
             <button onClick={() => { setShowNav(false); setShowPinSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Lock size={18} className="text-zinc-400" /> <span className="font-medium">PIN-код на вход</span></button>
             <button onClick={() => { setShowNav(false); setShowDocs(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><ScrollText size={18} className="text-zinc-400" /> <span className="font-medium">Документы</span></button>
-            <button onClick={() => supabase.auth.signOut()} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-red-400"><LogOut size={18} /> <span className="font-medium">Выйти</span></button>
+            <button onClick={() => signOutAndForget()} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-red-400"><LogOut size={18} /> <span className="font-medium">Выйти</span></button>
             <button onClick={() => { setShowNav(false); deleteMyAccount("client"); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-zinc-500"><Trash2 size={18} /> <span className="font-medium">Удалить аккаунт</span></button>
           </div>
         </ModalShell>

@@ -4,51 +4,57 @@ import { today } from "./format";
 // Бэкап тренера целиком: clients + их дочерние коллекции, plans + их дни/упражнения/прогресс,
 // bookings и шаблоны. Экспорт — просто вложенный JSON (Blob/URL.createObjectURL, без библиотек).
 // Импорт — ВСТАВКА новых строк с новыми id (а не замена), чтобы случайно не затереть текущие данные.
+// Каждая выборка обязана пройти: копия, в которой молча нет целой таблицы (оборвалась связь),
+// хуже, чем никакой — её считают полной. Ошибка прерывает экспорт, файл не скачивается.
+async function must(q: PromiseLike<{ data: any[] | null; error: unknown }>): Promise<any[]> {
+  const { data, error } = await q;
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function exportBackup(trainerId: string) {
-  const { data: clients } = await supabase.from("clients").select("*").eq("trainer_id", trainerId).is("deleted_at", null);
-  const clientIds = (clients ?? []).map((c) => c.id);
+  const clients = await must(supabase.from("clients").select("*").eq("trainer_id", trainerId).is("deleted_at", null));
+  const clientIds = clients.map((c) => c.id);
 
   const childByClient = async (table: string) =>
-    clientIds.length ? (await supabase.from(table).select("*").in("client_id", clientIds)).data ?? [] : [];
+    clientIds.length ? must(supabase.from(table).select("*").in("client_id", clientIds)) : [];
 
-  const { data: plans } = clientIds.length
-    ? await supabase.from("plans").select("*").in("client_id", clientIds).is("deleted_at", null)
-    : { data: [] as any[] };
-  const planIds = (plans ?? []).map((p) => p.id);
+  const plans = clientIds.length ? await must(supabase.from("plans").select("*").in("client_id", clientIds).is("deleted_at", null)) : [];
+  const planIds = plans.map((p) => p.id);
 
-  const { data: days } = planIds.length ? await supabase.from("plan_days").select("*").in("plan_id", planIds) : { data: [] as any[] };
-  const dayIds = (days ?? []).map((d) => d.id);
-  const { data: exercises } = dayIds.length ? await supabase.from("plan_exercises").select("*").in("day_id", dayIds) : { data: [] as any[] };
-  const exIds = (exercises ?? []).map((e) => e.id);
-  const { data: setRows } = exIds.length ? await supabase.from("plan_exercise_set_rows").select("*").in("exercise_id", exIds) : { data: [] as any[] };
-  const { data: progressNotes } = planIds.length ? await supabase.from("plan_progress_notes").select("*").in("plan_id", planIds) : { data: [] as any[] };
-  const { data: metrics } = planIds.length ? await supabase.from("plan_metrics").select("*").in("plan_id", planIds) : { data: [] as any[] };
-  const { data: sessions } = planIds.length ? await supabase.from("plan_sessions").select("*").in("plan_id", planIds) : { data: [] as any[] };
-  const sessionIds = (sessions ?? []).map((s) => s.id);
-  const { data: sessionItems } = sessionIds.length ? await supabase.from("plan_session_items").select("*").in("session_id", sessionIds) : { data: [] as any[] };
+  const days = planIds.length ? await must(supabase.from("plan_days").select("*").in("plan_id", planIds)) : [];
+  const dayIds = days.map((d) => d.id);
+  const exercises = dayIds.length ? await must(supabase.from("plan_exercises").select("*").in("day_id", dayIds)) : [];
+  const exIds = exercises.map((e) => e.id);
+  const setRows = exIds.length ? await must(supabase.from("plan_exercise_set_rows").select("*").in("exercise_id", exIds)) : [];
+  const progressNotes = planIds.length ? await must(supabase.from("plan_progress_notes").select("*").in("plan_id", planIds)) : [];
+  const metrics = planIds.length ? await must(supabase.from("plan_metrics").select("*").in("plan_id", planIds)) : [];
+  const sessions = planIds.length ? await must(supabase.from("plan_sessions").select("*").in("plan_id", planIds)) : [];
+  const sessionIds = sessions.map((s) => s.id);
+  const sessionItems = sessionIds.length ? await must(supabase.from("plan_session_items").select("*").in("session_id", sessionIds)) : [];
 
-  const { data: bookings } = await supabase.from("bookings").select("*").eq("trainer_id", trainerId);
-  const bookingIds = (bookings ?? []).map((b) => b.id);
-  const { data: bookingClients } = bookingIds.length ? await supabase.from("booking_clients").select("*").in("booking_id", bookingIds) : { data: [] as any[] };
+  const bookings = await must(supabase.from("bookings").select("*").eq("trainer_id", trainerId));
+  const bookingIds = bookings.map((b) => b.id);
+  const bookingClients = bookingIds.length ? await must(supabase.from("booking_clients").select("*").in("booking_id", bookingIds)) : [];
 
-  const { data: packageTemplates } = await supabase.from("package_templates").select("*").eq("trainer_id", trainerId);
-  const { data: exerciseLibrary } = await supabase.from("exercise_library").select("*").eq("trainer_id", trainerId);
-  const { data: planTemplates } = await supabase.from("plan_templates").select("*").eq("trainer_id", trainerId);
-  const { data: dayTemplates } = await supabase.from("day_templates").select("*").eq("trainer_id", trainerId);
+  const packageTemplates = await must(supabase.from("package_templates").select("*").eq("trainer_id", trainerId));
+  const exerciseLibrary = await must(supabase.from("exercise_library").select("*").eq("trainer_id", trainerId));
+  const planTemplates = await must(supabase.from("plan_templates").select("*").eq("trainer_id", trainerId));
+  const dayTemplates = await must(supabase.from("day_templates").select("*").eq("trainer_id", trainerId));
 
   // Питание: дневник, свои продукты и рецепты, цели, вода и комментарии по дням
   const foodRecipes = await childByClient("food_recipes");
   const recipeIds = foodRecipes.map((r: any) => r.id);
-  const { data: foodRecipeItems } = recipeIds.length ? await supabase.from("food_recipe_items").select("*").in("recipe_id", recipeIds) : { data: [] as any[] };
+  const foodRecipeItems = recipeIds.length ? await must(supabase.from("food_recipe_items").select("*").in("recipe_id", recipeIds)) : [];
 
   // Журнал заработка (по подопечным из копии) и журнал согласий самого тренера.
   // Согласия — только для справки: при импорте не восстанавливаются (см. importBackup).
   const sessionCharges = await childByClient("session_charges");
-  const { data: consents } = await supabase.from("user_consents").select("*").eq("user_id", trainerId);
+  const consents = await must(supabase.from("user_consents").select("*").eq("user_id", trainerId));
 
   return {
     version: 3, exportedAt: new Date().toISOString(),
-    sessionCharges, consents: consents ?? [],
+    sessionCharges, consents,
     nutritionLogs: await childByClient("nutrition_logs"), foodProducts: await childByClient("food_products"), foodRecipes, foodRecipeItems,
     foodEntries: await childByClient("food_entries"), nutritionGoals: await childByClient("nutrition_goals"), nutritionDays: await childByClient("nutrition_days"),
     clients, measurements: await childByClient("client_measurements"), photos: await childByClient("client_photos"),

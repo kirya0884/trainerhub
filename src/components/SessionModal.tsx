@@ -11,7 +11,8 @@ import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, WorkoutDatePick, confirmFinish, resolveWorkoutDate, tonnageOf } from "./SessionParts";
 import { applyLastTime, lastFactsByName, lastTimeFor, type LastFact, type LastTime } from "../lib/sessionUtils";
-import { fetchProgress } from "../lib/progress";
+import { fetchProgressCached } from "../lib/progress";
+import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
 import { fmtDate, parseNum, parseRest, today } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
 import { ask, notify } from "../lib/dialog";
@@ -151,8 +152,11 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   useEffect(() => {
     if (!planId) return;
     let alive = true;
-    fetchProgress(planId).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); setSessions(d.sessions); } }).catch((e) => console.error("[SessionModal] прошлый раз:", e));
-    return () => { alive = false; };
+    // «Было» и история; вернулась сеть — перечитываем (могли быть с телефона)
+    const load = () => fetchProgressCached(planId).then((d) => { if (alive) { setLast(lastTimeFor(d.sessions, day)); setPrevByName(lastFactsByName(d.sessions)); setSessions(d.sessions); } }).catch((e) => console.error("[SessionModal] прошлый раз:", e));
+    load();
+    const offOnline = onRevalidate(() => { if (staleAtOf(`progress:${planId}`) !== null) load(); });
+    return () => { alive = false; offOnline(); releaseStale(`progress:${planId}`); };
   }, [planId, day.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const applyLast = () => { if (!last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
   const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };

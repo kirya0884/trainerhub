@@ -3,7 +3,8 @@ import ClientPickModal, { type PickClient } from "./ClientPickModal";
 import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
-import { fetchPlan } from "../lib/plans";
+import { fetchPlanCached } from "../lib/plans";
+import { cached, releaseStale } from "../lib/offlineCache";
 import { confirmEmptyMembership, fetchClients, type ClientListItem, type PlanListItem } from "../lib/clients";
 import type { Plan } from "../types";
 import { useActiveWorkout, type GroupClient } from "../hooks/useActiveWorkout";
@@ -22,7 +23,7 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
   const [picking, setPicking] = useState(false);
   useEffect(() => {
     let alive = true;
-    fetchClients(trainerId).then((list) => { if (alive) setOthers(list.filter((c) => c.id !== self.id)); })
+    cached("clients", () => fetchClients(trainerId)).then((list) => { if (alive) setOthers(list.filter((c) => c.id !== self.id)); })
       .catch((e) => { console.error("[StartWorkoutModal] подопечные:", e); if (alive) setOthers([]); });
     return () => { alive = false; };
   }, [trainerId, self.id]);
@@ -45,11 +46,11 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
     if (!planId) return;
     let alive = true;
     setPlan(null); setError("");
-    fetchPlan(planId).then((p) => { if (alive) setPlan(p); }).catch((e) => {
+    fetchPlanCached(planId).then((p) => { if (alive) setPlan(p); }).catch((e) => {
       console.error("[StartWorkoutModal] план:", e);
       if (alive) setError("Не удалось загрузить план");
     });
-    return () => { alive = false; };
+    return () => { alive = false; releaseStale(`plan:${planId}`); };
   }, [planId]);
 
   // Все дни, кроме дней из блоков в архиве (проведённые дни остаются в плане)

@@ -1,16 +1,23 @@
 import { supabase } from "./supabase";
+import { cached } from "./offlineCache";
 import type { Metric, ProgressNote, Session, SessionItem } from "../types";
 
 export interface ProgressData { progress: ProgressNote[]; metrics: Metric[]; sessions: Session[] }
 
+// Ошибки не глотаем: пустая история вместо упавшего запроса попала бы в кэш для зала
+// и обманула бы проверки при завершении тренировки
 export async function fetchProgress(planId: string): Promise<ProgressData> {
-  const { data: progress } = await supabase.from("plan_progress_notes").select("id,date,text").eq("plan_id", planId).order("date", { ascending: false });
-  const { data: metrics } = await supabase.from("plan_metrics").select("*").eq("plan_id", planId).order("date");
-  const { data: sessions } = await supabase.from("plan_sessions").select("*").eq("plan_id", planId).is("deleted_at", null).order("date", { ascending: false });
+  const { data: progress, error: e1 } = await supabase.from("plan_progress_notes").select("id,date,text").eq("plan_id", planId).order("date", { ascending: false });
+  if (e1) throw e1;
+  const { data: metrics, error: e2 } = await supabase.from("plan_metrics").select("*").eq("plan_id", planId).order("date");
+  if (e2) throw e2;
+  const { data: sessions, error: e3 } = await supabase.from("plan_sessions").select("*").eq("plan_id", planId).is("deleted_at", null).order("date", { ascending: false });
+  if (e3) throw e3;
   const sessIds = (sessions ?? []).map((s) => s.id);
-  const { data: items } = sessIds.length
+  const { data: items, error: e4 } = sessIds.length
     ? await supabase.from("plan_session_items").select("*").in("session_id", sessIds)
-    : { data: [] as any[] };
+    : { data: [] as any[], error: null };
+  if (e4) throw e4;
   const itemsBySession: Record<string, SessionItem[]> = {};
   for (const it of items ?? []) (itemsBySession[it.session_id] ??= []).push({ name: it.name, effort: it.effort ?? 0, rpe: it.rpe ?? 0, note: it.note ?? "", actualSets: it.actual_sets ?? undefined, plannedSets: it.planned_sets ?? undefined, plannedSummary: it.planned_summary ?? undefined });
 
@@ -24,6 +31,11 @@ export async function fetchProgress(planId: string): Promise<ProgressData> {
     })),
   };
 }
+
+/** История для экранов, без сети — сохранённая (последние 30 тренировок). Завершение
+ *  тренировки берёт только свежую fetchProgress: проверки на устаревших данных опасны. */
+export const fetchProgressCached = (planId: string) => cached(`progress:${planId}`, () => fetchProgress(planId),
+  (d) => ({ ...d, sessions: d.sessions.slice(0, 30), metrics: d.metrics.slice(-300) }));
 
 // Сводка для PDF-отчёта по клиенту: сессии и журнал упражнений по всем (неархивным) планам клиента.
 // ponytail: без фото — печатный отчёт текстовый; замеры подтягивает вызывающий код через clients.fetchMeasurements

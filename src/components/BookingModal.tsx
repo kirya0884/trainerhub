@@ -22,7 +22,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
   defaultDate?: string;
   defaultTime?: string;
   defaultClientIds?: string[];
-  onSave: (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => void;
+  onSave: (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => void | Promise<void>;
   onDelete?: () => void;
   onClose: () => void;
 }) {
@@ -58,12 +58,18 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
 
   const toggleClient = (id: string) => setClientIds((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]));
 
-  const save = () => {
+  // Сохранение с «проведена» списывает тренировку: пока оно идёт, второе нажатие не принимаем
+  const saveLock = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
     if (!clientIds.length) { notify("Выбери хотя бы одного подопечного"); return; }
-    onSave({
+    if (saveLock.current) return;
+    saveLock.current = true; setSaving(true);
+    try { await onSave({
       planId: booking?.planId ?? null, dayId: selectedDayId || null, dayName: selectedDayName || null, date, time, duration: Number(duration) || 60, status, note,
       recurring, recurUntil: recurring ? recurUntil || null : null, exceptions: booking?.exceptions ?? {},
-    }, clientIds);
+    }, clientIds); }
+    finally { saveLock.current = false; setSaving(false); }
   };
 
   // Дата: лента ближайших двух недель; дальше — через календарь. У занятия из еженедельной
@@ -203,8 +209,8 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
         {booking && onDelete && (
           <button onClick={onDelete} title="Удалить запись" aria-label="Удалить запись" className="w-12 h-12 shrink-0 flex items-center justify-center rounded-xl bg-zinc-800 hover:bg-red-500/15 text-zinc-400 hover:text-red-400 transition"><Trash2 size={18} /></button>
         )}
-        <button onClick={save} disabled={!clientIds.length} className="flex-1 h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
-          {booking ? "Сохранить" : clientIds.length ? `Записать · ${wd(date)} ${time}` : "Выберите подопечного"}
+        <button onClick={save} disabled={!clientIds.length || saving} className="flex-1 h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
+          {saving ? "Сохраняю…" : booking ? "Сохранить" : clientIds.length ? `Записать · ${wd(date)} ${time}` : "Выберите подопечного"}
         </button>
       </div>
     </ModalShell>

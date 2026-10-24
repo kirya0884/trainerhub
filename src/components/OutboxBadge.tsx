@@ -3,9 +3,11 @@ import { CloudOff, RefreshCw, TriangleAlert } from "lucide-react";
 import { flushOutbox, isFlushing, pending, startOutbox, subscribeOutbox } from "../lib/outbox";
 import { supabase } from "../lib/supabase";
 import { notify } from "../lib/dialog";
+import { fmtSavedAt, getStaleAt, revalidate, subscribeStale } from "../lib/offlineCache";
 
 // Значок слева внизу над панелью: нет сети и/или есть неотправленное. Нажатие — отправить
-// сейчас. Пока всё отправлено и сеть есть — значка нет.
+// сейчас. Пока всё отправлено и сеть есть — значка нет. Если на экране сохранённые данные
+// (lib/offlineCache) — пишем, на какое время они.
 export default function OutboxBadge() {
   const [owner, setOwner] = useState("");
   const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
@@ -16,18 +18,25 @@ export default function OutboxBadge() {
     supabase.auth.getSession().then(({ data }) => setOwner(data.session?.user.id ?? "")).catch(() => {});
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setOwner(s?.user.id ?? ""));
     const un = subscribeOutbox(() => setTick((n) => n + 1));
+    const unStale = subscribeStale(() => setTick((n) => n + 1));
     const on = () => setOnline(true), off = () => setOnline(false);
     window.addEventListener("online", on); window.addEventListener("offline", off);
-    return () => { data.subscription.unsubscribe(); un(); window.removeEventListener("online", on); window.removeEventListener("offline", off); };
+    return () => { data.subscription.unsubscribe(); un(); unStale(); window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, []);
 
   const mine = owner ? pending(owner) : [];
   const failed = mine.filter((i) => i.error);
-  if (online && mine.length === 0) return null;
+  const staleAt = getStaleAt();
+  // Сеть вроде есть, но запросы падают и на экране сохранённое — для тренера это тоже «нет сети»
+  const offline = !online || staleAt !== null;
+  if (!offline && mine.length === 0) return null;
   const busy = isFlushing();
 
   const onTap = async () => {
     if (!navigator.onLine) { notify("Нет интернета. Всё сохранено на телефоне и отправится само, когда появится сеть.", "info"); return; }
+    // Сеть «есть», а на экране сохранённое — пробуем обновить экраны сейчас, не дожидаясь таймера
+    if (staleAt !== null) revalidate();
+    if (!mine.length) return;
     await flushOutbox();
     const left = pending(owner);
     if (!left.length) notify("Всё отправлено.", "info");
@@ -36,10 +45,15 @@ export default function OutboxBadge() {
 
   return (
     <button onClick={onTap} aria-live="polite"
-      className={`fixed left-4 z-40 h-10 pl-3 pr-3.5 rounded-full flex items-center gap-2 text-[13px] font-semibold shadow-lg shadow-black/40 border transition ${failed.length ? "bg-orange-500/15 border-orange-400/40 text-orange-300" : "bg-zinc-900 border-zinc-700 text-zinc-200"}`}
+      className={`fixed left-4 z-40 min-h-10 max-w-[calc(100vw-6.5rem)] py-1 pl-3 pr-3.5 rounded-full flex items-center gap-2 text-left text-[13px] font-semibold leading-tight shadow-lg shadow-black/40 border transition ${failed.length ? "bg-orange-500/15 border-orange-400/40 text-orange-300" : "bg-zinc-900 border-zinc-700 text-zinc-200"}`}
       style={{ bottom: "calc(var(--tabbar-h, 0px) + var(--minibar-h, 0px) + 16px)" }}>
-      {!online ? <CloudOff size={16} className="text-zinc-400" /> : failed.length ? <TriangleAlert size={16} /> : <RefreshCw size={16} className={busy ? "animate-spin text-lime-400" : "text-lime-400"} />}
-      {!online && mine.length === 0 ? "Нет сети" : `${!online ? "Нет сети · " : busy ? "Отправляем · " : ""}не отправлено: ${mine.length}`}
+      {offline ? <CloudOff size={16} className="text-zinc-400 shrink-0" /> : failed.length ? <TriangleAlert size={16} /> : <RefreshCw size={16} className={busy ? "animate-spin text-lime-400" : "text-lime-400"} />}
+      {offline ? (
+        <span className="flex flex-col">
+          <span>Нет сети{staleAt !== null && ` · данные на ${fmtSavedAt(staleAt)}`}</span>
+          {mine.length > 0 && <span className="text-[11px] font-medium text-zinc-400">не отправлено: {mine.length}</span>}
+        </span>
+      ) : `${busy ? "Отправляем · " : ""}не отправлено: ${mine.length}`}
     </button>
   );
 }

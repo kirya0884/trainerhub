@@ -4,7 +4,8 @@ import ModalShell from "./ModalShell";
 import { clearPin, fetchPinHash, setPin } from "../lib/pin";
 import { ask } from "../lib/dialog";
 
-export default function PinSettingsModal({ id, table = "trainers", onClose }: { id: string; table?: "trainers" | "clients"; onClose: () => void }) {
+// onChanged — новый хэш PIN (null — снят): экран PIN в App должен знать о нём сразу
+export default function PinSettingsModal({ id, table = "trainers", onClose, onChanged }: { id: string; table?: "trainers" | "clients"; onClose: () => void; onChanged?: (hash: string | null) => void }) {
   const [hasPin, setHasPin] = useState(false);
   const [pin, setPinVal] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -17,14 +18,14 @@ export default function PinSettingsModal({ id, table = "trainers", onClose }: { 
     if (pin.length < 4) { setErr("PIN должен быть не короче 4 цифр"); return; }
     if (pin !== confirm) { setErr("PIN не совпадает"); return; }
     setBusy(true);
-    try { await setPin(id, pin, table); setHasPin(true); setPinVal(""); setConfirm(""); setErr(""); }
+    try { onChanged?.(await setPin(id, pin, table)); setHasPin(true); setPinVal(""); setConfirm(""); setErr(""); }
     finally { setBusy(false); }
   };
 
   const clear = async () => {
     if (!(await ask("Снять PIN-защиту входа?", { danger: true, ok: "Снять" }))) return;
     setBusy(true);
-    try { await clearPin(id, table); setHasPin(false); }
+    try { await clearPin(id, table); onChanged?.(null); setHasPin(false); }
     finally { setBusy(false); }
   };
 

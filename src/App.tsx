@@ -34,6 +34,8 @@ import { lazyRetry } from "./lib/lazy";
 import { ScreenSkeleton } from "./components/Skeleton";
 import { setAnalyticsContext } from "./lib/events";
 import RepsMark from "./components/RepsMark";
+import { cached, onRevalidate, patchCache, setCacheOwner, signOutAndForget, staleAtOf } from "./lib/offlineCache";
+import { isNetworkError } from "./lib/outbox";
 
 // Разделы и окна грузятся при первом открытии (см. lib/lazy) — главная и список
 // подопечных остаются в основном файле, чтобы первый экран открывался сразу.
@@ -308,12 +310,33 @@ export default function App() {
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
+    // Кэш для зала (lib/offlineCache) принадлежит вошедшему: выход или другой вход удаляет чужой
+    const apply = (s: Session | null) => {
+      setCacheOwner(s?.user.id ?? "");
+      // Тот же вход тем же токеном — прежний объект, чтобы не перезапускать проверку доступа.
+      // user сравниваем целиком: после USER_UPDATED токен тот же, а данные пользователя новые.
+      setSession((prev) => (prev && s && prev.access_token === s.access_token && JSON.stringify(prev.user) === JSON.stringify(s.user) ? prev : s));
+    };
+    // Без сети истёкший токен не обновить: supabase секунд 25 пытается и отвечает
+    // «не вошёл», хотя вход лежит на телефоне. Берём сохранённый — данные тогда из кэша,
+    // а токен обновится сам, когда вернётся сеть.
+    const stored = () => readJson<Session | null>((supabase.auth as unknown as { storageKey: string }).storageKey, null);
+    if (!navigator.onLine && stored()?.user) { apply(stored()); setLoading(false); }
+    // Сеть «есть», но висит: обновление истёкшего токена тянется до полминуты — через 4 с
+    // открываем сохранённый вход, ответ supabase применится, когда придёт
+    const slow = setTimeout(() => { if (stored()?.user) { apply(stored()); setLoading(false); } }, 4000);
+    supabase.auth.getSession().then(({ data, error }) => {
+      clearTimeout(slow);
+      apply(data.session ?? (error && isNetworkError(error) && stored()?.user ? stored() : null));
+      setLoading(false);
+    });
     const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       if (event === "PASSWORD_RECOVERY") setIsRecovery(true);
-      setSession(s);
+      // Пустой стартовый ответ без сети — не выход: сессию выше уже решил getSession
+      if (event === "INITIAL_SESSION" && !s) return;
+      apply(s);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => { clearTimeout(slow); sub.subscription.unsubscribe(); };
   }, []);
 
   // После входа клиента по magic-link — привязываем auth.uid() к его карточке, затем проверяем,
@@ -322,37 +345,64 @@ export default function App() {
   // показываем экран "нет доступа" вместо пустого тренерского интерфейса.
   // Номер проверки: поздний ответ прежнего входа (после выхода или смены аккаунта) не применяем
   const accessReq = useRef(0);
+  // Проверка доступа не удалась: offline — нет сети и нет сохранённой роли (первый вход), error — прочее
+  const [accessError, setAccessError] = useState<"" | "offline" | "error">("");
   const checkAccess = async (uid: string) => {
     const req = ++accessReq.current;
-    // Тренера проверяем первым — если аккаунт тренерский, ошибочная привязка клиента по совпавшему email не перехватит вход.
-    // PIN берём тем же запросом, а журнал согласий читаем параллельно — при старте на два ожидания меньше.
-    const trainerQ = Promise.resolve(supabase.from("trainers").select("id, pin_hash").eq("id", uid).maybeSingle());
-    const trainerConsent = needsConsent(uid, trainerQ.then(({ data }) => (data ? "trainer" : null)));
-    const { data: trainerRow } = await trainerQ;
-    if (trainerRow) {
+    setAccessError("");
+    // Роль и PIN запоминаются на телефоне (lib/offlineCache): без сети вход открывается с ними
+    let trainerConsent: Promise<boolean> = Promise.resolve(false);
+    try {
+      const access = await cached<{ trainer: boolean; pin?: string | null; self?: SelfClient | null }>("access", async () => {
+        // Тренера проверяем первым — если аккаунт тренерский, ошибочная привязка клиента по совпавшему email не перехватит вход.
+        // PIN берём тем же запросом, а журнал согласий читаем параллельно — при старте на два ожидания меньше.
+        const trainerQ = Promise.resolve(supabase.from("trainers").select("id, pin_hash").eq("id", uid).maybeSingle());
+        trainerConsent = needsConsent(uid, trainerQ.then(({ data }) => (data ? "trainer" : null)));
+        const { data: trainerRow, error: trainerErr } = await trainerQ;
+        if (trainerErr) throw trainerErr;
+        if (trainerRow) return { trainer: true, pin: trainerRow.pin_hash || null };
+        const { error } = await supabase.rpc("link_client_self");
+        if (error) console.warn("link_client_self:", error.message);
+        return { trainer: false, self: await portalApi.fetchSelfClient(uid) };
+      });
+      // Из сохранённого — согласие не спрашиваем (без сети needsConsent тоже не блокирует вход)
       const gate = await trainerConsent;
       if (req !== accessReq.current) return;
-      setTrainerPin(trainerRow.pin_hash || null); setConsentGate(gate); setIsTrainer(true); setSelfClient(null);
-      return;
+      if (access.trainer) { setTrainerPin(access.pin ?? null); setConsentGate(gate); setIsTrainer(true); setSelfClient(null); }
+      else { setSelfClient(access.self ?? null); setIsTrainer(false); }
+    } catch (e) {
+      if (req !== accessReq.current) return;
+      console.error("[App] checkAccess:", e);
+      setAccessError(isNetworkError(e) ? "offline" : "error");
     }
-    const { error } = await supabase.rpc("link_client_self");
-    if (error) console.warn("link_client_self:", error.message);
-    const self = await portalApi.fetchSelfClient(uid);
-    if (req !== accessReq.current) return;
-    setSelfClient(self);
-    setIsTrainer(false);
   };
   useEffect(() => {
-    if (!session) { accessReq.current++; setSelfClient(undefined); setIsTrainer(undefined); setTrainerPin(undefined); setPinPassedId(""); return; }
+    if (!session) { accessReq.current++; setAccessError(""); setSelfClient(undefined); setIsTrainer(undefined); setTrainerPin(undefined); setPinPassedId(""); return; }
     checkAccess(session.user.id);
   }, [session]);
+  // Роль и PIN были взяты с телефона — перечитываем вместе с остальным (lib/offlineCache onRevalidate)
+  useEffect(() => {
+    if (!session) return;
+    return onRevalidate(() => { if (staleAtOf("access") !== null) checkAccess(session.user.id); });
+  }, [session]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Экран «Нет интернета» сам повторяет проверку, когда сеть вернулась
+  useEffect(() => {
+    if (accessError !== "offline" || !session) return;
+    const retry = () => checkAccess(session.user.id);
+    window.addEventListener("online", retry);
+    return () => window.removeEventListener("online", retry);
+  }, [accessError, session]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Карточка клиента (абонемент/остаток тренировок и т.п.) должна подхватывать правки тренера
   // без перезахода. Раньше — опрос раз в 15 с даже в фоне; теперь: событие UPDATE своей строки
   // clients + перечитывание при возврате в приложение (оно же спасает, если realtime молчит из-за RLS).
   const reloadSelfClient = () => {
     if (!session) return;
-    portalApi.fetchSelfClient(session.user.id).then(setSelfClient).catch((e) => console.error("[App] reloadSelfClient:", e));
+    portalApi.fetchSelfClient(session.user.id).then((self) => {
+      setSelfClient(self);
+      // И в кэш для зала — иначе без сети открылась бы давно закончившаяся «текущая» тренировка
+      patchCache<{ trainer: boolean; self?: SelfClient | null }>("access", (a) => (a.trainer ? a : { ...a, self }));
+    }).catch((e) => console.error("[App] reloadSelfClient:", e));
   };
   const selfClientId = isTrainer === false ? selfClient?.id : undefined;
   useSharedListSync(!!session && !!selfClientId, ["clients"], reloadSelfClient, `portal-self-${selfClientId}`, { clients: `id=eq.${selfClientId}` });
@@ -381,8 +431,11 @@ export default function App() {
     else if (!session) { setAnalyticsContext(null); setTrainerName(""); setTrainerAvatar(""); setTrainerAccent("#c6ff3d"); }
     // Поздний ответ прежнего тренера (после выхода или смены входа) в шапку не пишем
     let alive = true;
-    if (dataTrainerId) trainerApi.fetchTrainerSelf(dataTrainerId).then((s) => { if (!alive) return; setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#c6ff3d"); }).catch((e) => console.error("[App] fetchTrainerSelf:", e));
-    return () => { alive = false; };
+    const load = () => cached("trainer", () => trainerApi.fetchTrainerSelf(dataTrainerId)).then((s) => { if (!alive) return; setTrainerName(s.profile.name); setTrainerAvatar(s.profile.avatarUrl); setTrainerAccent(s.profile.accentColor || "#c6ff3d"); }).catch((e) => { if (!isNetworkError(e)) console.error("[App] fetchTrainerSelf:", e); });
+    if (dataTrainerId) load();
+    // Шапка с телефона — перечитываем вместе с остальным
+    const off = dataTrainerId ? onRevalidate(() => { if (staleAtOf("trainer") !== null) load(); }) : undefined;
+    return () => { alive = false; off?.(); };
   }, [isTrainer, session, dataTrainerId]);
   // Высота нижней панели — для того, что прижато к низу экрана вне App (свёрнутая
   // тренировка, плашка «Обновить приложение»): они поднимаются над панелью.
@@ -414,12 +467,33 @@ export default function App() {
   if (!session) return <AuthScreen />;
 
   if (isRecovery) return <PasswordResetScreen onDone={() => setIsRecovery(false)} />;
+  // Вместо вечной заставки: без сети и без сохранённого входа — объясняем; прочая ошибка — повтор
+  if (accessError) {
+    return (
+      <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-4">
+        <div role="alert" className="max-w-sm text-center space-y-3">
+          <p className="text-lg font-semibold">{accessError === "offline" ? "Нет интернета" : "Не удалось открыть аккаунт"}</p>
+          <p className="text-sm text-zinc-500">
+            {accessError === "offline"
+              ? "Чтобы открыть приложение, нужна сеть. После этого оно будет открываться и без неё."
+              : "Сервер не ответил как нужно. Попробуйте ещё раз через минуту."}
+          </p>
+          <div className="flex gap-2 justify-center pt-1">
+            <button onClick={() => checkAccess(session.user.id)} className="bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-lime-300 transition">Повторить</button>
+            {/* Без сети supabase выйти не даёт (выход идёт через сервер) — кнопку не показываем */}
+            {accessError === "error" && <button onClick={() => signOutAndForget()} className="text-sm text-zinc-500 hover:text-zinc-300 px-3 py-2">Выйти</button>}
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (selfClient === undefined || isTrainer === undefined || (consentRole && consentGate === undefined)) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
   if (consentRole && consentGate) return <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><ConsentGate role={consentRole} onDone={() => setConsentGate(false)} /></Suspense>;
 
   if (selfClient) {
     return (
-      <PinGate id={selfClient.id} table="clients">
+      // PIN клиента — из проверки доступа (и из кэша без сети); старый кэш без него — PinGate спросит сеть
+      <PinGate id={selfClient.id} table="clients" hash={selfClient.pinHash}>
         <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6">
           <Suspense fallback={<ScreenSkeleton />}><ClientPortal client={selfClient} /></Suspense>
         </div>
@@ -437,7 +511,7 @@ export default function App() {
           </p>
           <div className="flex gap-2 justify-center pt-1">
             <button onClick={() => checkAccess(session.user.id)} className="bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-lime-300 transition">Повторить</button>
-            <button onClick={() => supabase.auth.signOut()} className="text-sm text-zinc-500 hover:text-zinc-300 px-3 py-2">Выйти</button>
+            <button onClick={() => signOutAndForget()} className="text-sm text-zinc-500 hover:text-zinc-300 px-3 py-2">Выйти</button>
           </div>
         </div>
       </div>
@@ -564,7 +638,7 @@ export default function App() {
           />
         )}
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
-        {showPinSettings && <Suspense fallback={null}><PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} /></Suspense>}
+        {showPinSettings && <Suspense fallback={null}><PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} onChanged={setTrainerPin} /></Suspense>}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
         {view.kind === "dashboard" && (
@@ -590,7 +664,7 @@ export default function App() {
           <MeTab trainerId={session.user.id} trainerName={trainerName} action={view.meAction} onOpenPlan={(planId, clientId) => go({ kind: "plan", planId, clientId, from: "me" })} />
         )}
         {view.kind === "trainerProfile" && (
-          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.filter((kind) => kind !== "dashboard" && kind !== "trainerProfile").map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onMoveTab={(kind, dir) => moveTab(kind as TabKind, dir)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => supabase.auth.signOut()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
+          <TrainerProfile trainerId={session.user.id} email={session.user.email || ""} themeMode={themeMode} onThemeChange={setThemeMode} tabs={tabOrder.filter((kind) => kind !== "dashboard" && kind !== "trainerProfile").map((kind) => ({ kind, label: TAB_DEFS[kind].label, icon: TAB_DEFS[kind].icon, visible: !hiddenTabs.includes(kind) }))} onToggleTab={(kind) => toggleTabVisible(kind as TabKind)} onMoveTab={(kind, dir) => moveTab(kind as TabKind, dir)} onOpenPin={() => setShowPinSettings(true)} onOpenTrash={() => setShowTrash(true)} onOpenBackup={() => setShowBackup(true)} onSignOut={() => signOutAndForget()} onSaved={(name, avatarUrl, accentColor) => { setTrainerName(name); setTrainerAvatar(avatarUrl); if (accentColor) setTrainerAccent(accentColor); }} />
         )}
         {view.kind === "plan" && (
           <PlanEditor key={view.planId} planId={view.planId} trainerId={session.user.id} clientId={view.clientId} onBack={goBack} />

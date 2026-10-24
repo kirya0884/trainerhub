@@ -3,6 +3,7 @@ import * as api from "../lib/plans";
 import { notify } from "../lib/dialog";
 import { createSaveQueue, isTransient, withRetry, WAIT, type SaveStatus } from "../lib/saveQueue";
 import type { Day, Exercise, Mesocycle, Plan, SetRow } from "../types";
+import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
 
 // Сбой сети — «проверьте интернет»; отказ базы (права, связи) — про интернет не говорить
 const failMsg = (what: string, e: unknown) => isTransient(e)
@@ -65,22 +66,48 @@ export function usePlan(planId: string) {
     return () => { window.removeEventListener("online", online); document.removeEventListener("visibilitychange", hide); };
   }, [q]);
 
+  // Без сети план берётся с телефона (lib/offlineCache) — и тогда он только для просмотра:
+  // очередь сохранений живёт в памяти и пропадает при закрытии приложения, а перестановки
+  // шлют позиции всех строк по старой копии и затёрли бы правки с другого устройства.
+  // offlineAt — время сохранённой копии; null — план свежий из сети.
+  const [offlineAt, setOfflineAt] = useState<number | null>(null);
+  const offlineRef = useRef(offlineAt);
+  offlineRef.current = offlineAt;
+  const lockedToastAt = useRef(0);
+  const locked = () => {
+    if (offlineRef.current === null) return false;
+    if (Date.now() - lockedToastAt.current > 4000) {
+      lockedToastAt.current = Date.now();
+      notify("Нет сети: план открыт с телефона, только для просмотра. Править можно, когда появится интернет.");
+    }
+    return true;
+  };
+  const got = (p: Plan) => { setPlan(p); setOfflineAt(staleAtOf(`plan:${planId}`)); setLoading(false); };
+
   const load = () =>
-    api.fetchPlan(planId)
-      .then((p) => { if (!mountedRef.current) return; setPlan(p); setLoading(false); })
+    api.fetchPlanCached(planId)
+      .then((p) => { if (!mountedRef.current) return; got(p); })
       .catch((e) => { if (!mountedRef.current) return; setError(e.message); setLoading(false); });
 
   useEffect(() => {
     if (!planId) { setPlan(null); setLoading(false); return; }
     let alive = true;
     setLoading(true);
-    api.fetchPlan(planId)
-      .then((p) => { if (alive) { setPlan(p); setLoading(false); } })
+    api.fetchPlanCached(planId)
+      .then((p) => { if (alive) got(p); })
       .catch((e) => { if (alive) { setError(e.message); setLoading(false); } });
     return () => { alive = false; };
-  }, [planId]);
+  }, [planId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Сеть вернулась, а на экране копия с телефона — перечитываем (правок в ней быть не могло)
+  useEffect(() => {
+    const off = onRevalidate(() => { if (offlineRef.current !== null) load(); });
+    // Ушли с экрана — отметка «план из кэша» больше не про то, что на экране
+    return () => { off(); releaseStale(`plan:${planId}`); };
+  }, [planId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updatePlanMeta = (patch: Partial<Pick<Plan, "name" | "note" | "visibleToClient">>) => {
+    if (locked()) return;
     setPlan((p) => (p ? { ...p, ...patch } : p));
     // Переключатель — сразу, текст — после 400 мс простоя
     q.enqueue("plan", "meta", patch, (pp) => api.updatePlanMeta(planId, pp), "visibleToClient" in patch ? 0 : 400);
@@ -93,6 +120,7 @@ export function usePlan(planId: string) {
     q.enqueue("mesos", "order", { rows: mesos.map((m, i) => ({ id: m.id, position: i })) }, (pp) => api.reorderMesocycles(pp.rows), 0);
 
   const addDay = async (name: string) => {
+    if (locked()) return;
     if (!plan || !name.trim()) return;
     // П2: новый день встаёт сверху. Самый свежий блок теперь тоже наверху,
     // то есть с наименьшей позицией — сортировка по возрастанию, не по убыванию.
@@ -111,6 +139,7 @@ export function usePlan(planId: string) {
   };
 
   const updateDay = (dayId: string, patch: Partial<Pick<Day, "name" | "weekday" | "dateOf" | "visibleToClient" | "mesocycleId" | "method" | "archivedAt">>) => {
+    if (locked()) return;
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, ...patch } : d)) } : p));
     // Переключатели пишем сразу, без дебаунса: пользователь может уйти с экрана раньше,
     // чем сработает отложенная запись, и «день проведён» потеряется.
@@ -119,6 +148,7 @@ export function usePlan(planId: string) {
   };
 
   const deleteDay = async (dayId: string) => {
+    if (locked()) return;
     const plan = planRef.current;
     if (!plan) return;
     const snapshot = plan.days;
@@ -142,6 +172,7 @@ export function usePlan(planId: string) {
   };
 
   const reorderDays = async (from: number, to: number) => {
+    if (locked()) return;
     if (!plan || from === to) return;
     const arr = [...plan.days];
     const [m] = arr.splice(from, 1);
@@ -151,6 +182,7 @@ export function usePlan(planId: string) {
   };
 
   const addExercise = async (dayId: string, name = "") => {
+    if (locked()) return;
     if (!plan) return;
     const day = plan.days.find((d) => d.id === dayId);
     if (!day) return;
@@ -211,6 +243,7 @@ export function usePlan(planId: string) {
   };
 
   const updateExercise = (dayId: string, exId: string, patch: Partial<Exercise>) => {
+    if (locked()) return;
     setPlan((p) =>
       p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: d.exercises.map((e) => (e.id === exId ? { ...e, ...patch } : e)) } : d)) } : p
     );
@@ -229,6 +262,7 @@ export function usePlan(planId: string) {
   };
 
   const deleteExercise = async (dayId: string, exId: string) => {
+    if (locked()) return;
     const snapshot = planRef.current?.days.find((d) => d.id === dayId)?.exercises;
     setPlan((p) => (p ? { ...p, days: p.days.map((d) => (d.id === dayId ? { ...d, exercises: d.exercises.filter((e) => e.id !== exId) } : d)) } : p));
     const id = realId(exId);
@@ -261,6 +295,7 @@ export function usePlan(planId: string) {
   };
 
   const reorderExercises = async (dayId: string, from: number, to: number) => {
+    if (locked()) return;
     // Из актуального плана, а не из замыкания: стрелки живут в мемоизированной строке
     const day = planRef.current?.days.find((d) => d.id === dayId);
     if (!day || from === to) return;
@@ -278,6 +313,7 @@ export function usePlan(planId: string) {
   // ── Мезоциклы ──
   /** Р1: перестановка блоков. Пишем позиции разом, как reorderDays. */
   const reorderMesocycles = async (from: number, to: number) => {
+    if (locked()) return;
     if (!plan || from === to) return;
     const list = [...(plan.mesocycles ?? [])].sort((a, b) => a.position - b.position);
     const arr = [...list];
@@ -289,6 +325,7 @@ export function usePlan(planId: string) {
   };
 
   const addMesocycle = async () => {
+    if (locked()) return;
     if (!plan) return;
     // П2: новый блок сверху. Имя считаем от количества — позиция теперь всегда 0.
     const snapshot = plan.mesocycles ?? [];
@@ -304,6 +341,7 @@ export function usePlan(planId: string) {
   };
 
   const updateMesocycle = (mesoId: string, patch: Partial<Pick<Mesocycle, "name" | "visibleToClient" | "archivedAt">>) => {
+    if (locked()) return;
     setPlan((p) => (p ? { ...p, mesocycles: (p.mesocycles ?? []).map((m) => (m.id === mesoId ? { ...m, ...patch } : m)) } : p));
     // Переключатели пишем сразу, без дебаунса — как у дней
     const now = "visibleToClient" in patch || "archivedAt" in patch;
@@ -311,6 +349,7 @@ export function usePlan(planId: string) {
   };
 
   const deleteMesocycle = async (mesoId: string) => {
+    if (locked()) return;
     if (!plan) return;
     const snapMesos = plan.mesocycles ?? [];
     const snapDays = plan.days;
@@ -327,7 +366,7 @@ export function usePlan(planId: string) {
   };
 
   return {
-    plan, loading, error,
+    plan, loading, error, offlineAt, locked,
     saveStatus, retrySaves: q.flushAll, settleSaves: q.settle,
     updatePlanMeta, addDay, updateDay, deleteDay, reorderDays,
     addExercise, updateExercise, deleteExercise, reorderExercises,

@@ -3,16 +3,23 @@ import { useSharedListSync } from "./useSharedListSync";
 import { onWorkoutFinished } from "../lib/clientsBus";
 import * as api from "../lib/bookings";
 import type { Booking } from "../lib/bookings";
+import { cached, peekCache } from "../lib/offlineCache";
 
 export function useBookings(trainerId: string) {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const reqRef = useRef(0);
 
-  const load = () => { const req = ++reqRef.current; api.fetchBookings(trainerId).then((b) => { if (req === reqRef.current) { setBookings(b); setLoading(false); } }).catch((e) => { if (req === reqRef.current) setLoading(false); console.error("[useBookings]", e); }); };
+  const load = () => { const req = ++reqRef.current; cached("bookings", () => api.fetchBookings(trainerId)).then((b) => { if (req === reqRef.current) { setBookings(b); setLoading(false); } }).catch((e) => { if (req === reqRef.current) setLoading(false); console.error("[useBookings]", e); }); };
   // trainerId пуст, пока App.tsx не понял, тренер это или клиент — до тех пор не ходим в базу.
-  // Смена или выход пользователя — чужие записи не держим и поздний ответ не принимаем
-  useEffect(() => { reqRef.current++; setBookings([]); setLoading(true); if (trainerId) load(); }, [trainerId]);
+  // Смена или выход пользователя — чужие записи не держим и поздний ответ не принимаем.
+  // Сохранённые показываем сразу, пока идёт запрос
+  useEffect(() => {
+    reqRef.current++;
+    const saved = trainerId ? peekCache<Booking[]>("bookings")?.data : undefined;
+    setBookings(saved ?? []); setLoading(!saved);
+    if (trainerId) load();
+  }, [trainerId]);
 
   const addBooking = async (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => { await api.addBooking(trainerId, patch, clientIds); await load(); };
   const updateBooking = async (id: string, patch: Partial<Omit<Booking, "id" | "clientIds">>, clientIds?: string[]) => {

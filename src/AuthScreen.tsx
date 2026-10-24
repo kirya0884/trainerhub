@@ -2,6 +2,7 @@ import { useState } from "react";
 import { supabase } from "./lib/supabase";
 import { DocLink } from "./components/LegalLink";
 import { markSignupConsent } from "./lib/consents";
+import { isNetworkError } from "./lib/outbox";
 import { ArrowLeft, Dumbbell, User } from "lucide-react";
 import RepsMark from "./components/RepsMark";
 
@@ -14,6 +15,7 @@ function localizeError(msg: string): string {
   if (/password should be/i.test(msg)) return "Пароль слишком короткий (минимум 6 символов)";
   if (/for security purposes/i.test(msg)) return "Слишком много попыток — подожди немного и попробуй снова";
   if (/rate limit/i.test(msg)) return "Слишком много запросов — подожди минуту";
+  if (isNetworkError(msg)) return "Нет интернета. Проверьте подключение";
   return msg;
 }
 

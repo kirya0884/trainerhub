@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Bell, BellOff, Cake, CalendarClock, Check, ChevronRight, Clock, Hourglass, Play, TriangleAlert, Wallet } from "lucide-react";
-import { fetchDashboardData } from "../lib/dashboard";
+import { fetchDashboardData as fetchFresh } from "../lib/dashboard";
+import { cached, onRevalidate, peekCache, releaseStale, staleAtOf } from "../lib/offlineCache";
 import { onClientsChanged } from "../lib/clientsBus";
 import type { DashboardClient } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
@@ -13,6 +14,13 @@ import { today, addDays, plural } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
 import { remainingOf } from "../lib/clients";
 import { notify } from "../lib/dialog";
+
+// Без сети главная открывается с последними сохранёнными данными. Храним оплаты и списания
+// за последний год (неоплаченные — все): за годы работы история не влезла бы в бюджет кэша.
+const fetchDashboardData = (trainerId: string) => cached("dashboard", () => fetchFresh(trainerId), (d) => {
+  const cut = addDays(today(), -400);
+  return { ...d, payments: d.payments.filter((p) => p.payStatus !== "paid" || p.date >= cut), charges: d.charges.filter((c) => c.date >= cut) };
+});
 
 const greeting = () => { const h = new Date().getHours(); return h < 12 ? "Доброе утро" : h < 18 ? "Добрый день" : "Добрый вечер"; };
 // Ш4б: обычный заголовок раздела вместо мелкого капса с разрядкой над каждым блоком
@@ -36,7 +44,8 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
       className={`inline py-1 -my-1 rounded-lg text-left underline decoration-dotted underline-offset-2 hover:decoration-solid focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-current transition ${className}`}
     >{name}</button>
   );
-  const [data, setData] = useState<Awaited<ReturnType<typeof fetchDashboardData>> | null>(null);
+  // Сохранённое — сразу, как у списков: при истёкшем входе и висящей сети иначе был бы долгий скелетон
+  const [data, setData] = useState<Awaited<ReturnType<typeof fetchDashboardData>> | null>(() => peekCache<Awaited<ReturnType<typeof fetchDashboardData>>>("dashboard")?.data ?? null);
   // Ш4б: какой чип «Требует внимания» раскрыт (имена под ним)
   const [attn, setAttn] = useState<"debt" | "exp" | "bday" | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -46,8 +55,10 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   useEffect(() => {
     requestNotifyPermission();
     fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message));
-    // Списания и продления меняют «Требует внимания» и карточку финансов
-    return onClientsChanged(() => { fetchDashboardData(trainerId).then(setData).catch(console.error); });
+    // Списания и продления меняют «Требует внимания» и карточку финансов; вернулась сеть — перечитываем
+    const reload = () => { fetchDashboardData(trainerId).then(setData).catch(console.error); };
+    const off = onClientsChanged(reload), offOnline = onRevalidate(() => { if (staleAtOf("dashboard") !== null) reload(); });
+    return () => { off(); offOnline(); releaseStale("dashboard"); };
   }, [trainerId]);
 
   useEffect(() => {

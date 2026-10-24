@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "../lib/supabase";
+import { onRevalidate } from "../lib/offlineCache";
 
 const FOCUS_COOLDOWN = 10_000; // не чаще раза в 10 с при возврате в окно
 const BURST = 250;             // склейка всплеска событий, как в Н3
@@ -11,9 +12,10 @@ const BURST = 250;             // склейка всплеска событий
  * «планы на большом экране, календарь в соседнем окне» для тренера обычный —
  * и второе окно не узнавало об изменениях вовсе.
  *
- * Два источника обновления:
+ * Источники обновления:
  *  - возврат в окно (visibilitychange/focus) — самое дешёвое и самое действенное;
- *  - события репликации по таблицам.
+ *  - события репликации по таблицам;
+ *  - вернулась сеть или на экране сохранённые данные — перечитываем (lib/offlineCache onRevalidate).
  *
  * ВАЖНО: перечитываются только общие СПИСКИ. Открытый редактор плана и режим
  * проведения тренировки держат своё состояние и сюда не подключены — иначе
@@ -50,6 +52,7 @@ export function useSharedListSync(enabled: boolean, tables: string[], reload: ()
 
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("focus", onVisible);
+    const offRevalidate = onRevalidate(soon);
 
     const channel = supabase.channel(channelKey);
     for (const table of tables) {
@@ -63,6 +66,7 @@ export function useSharedListSync(enabled: boolean, tables: string[], reload: ()
     return () => {
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("focus", onVisible);
+      offRevalidate();
       if (burst) clearTimeout(burst);
       supabase.removeChannel(channel);
     };

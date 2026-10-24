@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as api from "../lib/progress";
+import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
 import type { DeletedSession, DeleteReason } from "../lib/progress";
 import type { Metric, ProgressNote, Session } from "../types";
 
@@ -12,7 +13,7 @@ export function useProgress(planId: string) {
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
-  const load = () => !planId ? Promise.resolve() : Promise.all([api.fetchProgress(planId), api.fetchDeletedSessions(planId)]).then(([d, del]) => {
+  const load = () => !planId ? Promise.resolve() : Promise.all([api.fetchProgressCached(planId), api.fetchDeletedSessions(planId).catch(() => [])]).then(([d, del]) => {
     if (!mountedRef.current) return;
     setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setLoading(false);
   }).catch((e) => { if (!mountedRef.current) return; console.error("[useProgress] load:", e); setLoading(false); });
@@ -21,12 +22,17 @@ export function useProgress(planId: string) {
     if (!planId) { setProgress([]); setMetrics([]); setSessions([]); setDeletedSessions([]); setLoading(false); return; }
     let alive = true;
     setLoading(true);
-    Promise.all([api.fetchProgress(planId), api.fetchDeletedSessions(planId)]).then(([d, del]) => {
+    Promise.all([api.fetchProgressCached(planId), api.fetchDeletedSessions(planId).catch(() => [])]).then(([d, del]) => {
       if (!alive) return;
       setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setLoading(false);
     }).catch((e) => { if (!alive) return; console.error("[useProgress] init:", e); setLoading(false); });
     return () => { alive = false; };
   }, [planId]);
+  // Вернулась сеть — история могла быть с телефона
+  useEffect(() => {
+    const off = onRevalidate(() => { if (staleAtOf(`progress:${planId}`) !== null) load(); });
+    return () => { off(); releaseStale(`progress:${planId}`); }; // ушли с экрана — отметка снята
+  }, [planId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const addProgress = async () => { try { const row = await api.addProgress(planId); setProgress((p) => [row, ...p]); } catch (e) { console.error("[useProgress] addProgress:", e); } };
   const updateProgress = (id: string, patch: Partial<Pick<ProgressNote, "date" | "text">>) => {

@@ -11,10 +11,13 @@ export async function fetchDashboardData(trainerId: string) {
     .from("clients").select("id,name,color,status,membership,birthday,joined_at,trial,source,active_session").eq("trainer_id", trainerId).eq("is_self", false).is("deleted_at", null);
   if (error) throw error;
   const clientIds = (clients ?? []).map((c) => c.id);
-  const { data: payments } = clientIds.length
+  // Ошибки не глотаем: главная без оплат из-за оборвавшейся связи попала бы в кэш для зала
+  const { data: payments, error: e1 } = clientIds.length
     ? await supabase.from("client_payments").select("id,client_id,amount,date,type,note,pay_status").in("client_id", clientIds)
-    : { data: [] as any[] };
-  const { data: charges } = await supabase.from("session_charges").select("client_id,date,amount,kind").eq("trainer_id", trainerId);
+    : { data: [] as any[], error: null };
+  if (e1) throw e1;
+  const { data: charges, error: e2 } = await supabase.from("session_charges").select("client_id,date,amount,kind").eq("trainer_id", trainerId);
+  if (e2) throw e2;
   return {
     charges: (charges ?? []).map((c) => ({ clientId: c.client_id, date: c.date, amount: Number(c.amount) || 0, kind: c.kind } as DashboardCharge)),
     clients: (clients ?? []).map((c) => ({ id: c.id, name: c.name, color: upgradeLime(c.color), status: c.status, membership: c.membership || {}, birthday: c.birthday || "", joinedAt: c.joined_at || "", trial: !!c.trial, source: c.source || "", isTraining: !!(c.active_session && c.active_session.status === "active") } as DashboardClient)),

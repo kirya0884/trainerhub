@@ -41,13 +41,15 @@ function DraftNum({ value, onValue, ...rest }: DraftProps & { label: string; pla
 }
 function ExerciseRow({
   ex, label, groupColor, suggestions, addToLibrary, canMoveUp, canMoveDown, onMoveUp, onMoveDown, cycleGroup, update, remove, lastMetric, lastFact,
-  index, dragging, dropBefore, dropAfter, collapsed, onToggleCollapse, historyCount, onOpenHistory,
+  index, dragging, dropBefore, dropAfter, collapsed, onToggleCollapse, historyCount, onOpenHistory, readOnly,
 }: {
   ex: Exercise; label: string; groupColor: string | null; suggestions: string[]; addToLibrary: (name: string) => void;
   canMoveUp: boolean; canMoveDown: boolean; onMoveUp: () => void; onMoveDown: () => void;
   index: number; dragging?: boolean; dropBefore?: boolean; dropAfter?: boolean;
   collapsed?: boolean; onToggleCollapse?: (id: string) => void;
   historyCount?: number; onOpenHistory?: (name: string) => void;
+  /** План с телефона без сети — только просмотр: поле названия не забирает фокус */
+  readOnly?: boolean;
   cycleGroup: () => void; update: (patch: Partial<Exercise>) => void; remove: () => void;
   lastMetric?: Metric; lastFact?: LastFact;
 }) {
@@ -124,7 +126,7 @@ function ExerciseRow({
         {handle}
         {editingName ? (
           <div className="relative flex-1 min-w-0">
-            <input autoFocus value={name.props.value} onChange={(e) => { name.set(e.target.value); setAcOpen(true); }} onFocus={() => { name.props.onFocus(); setAcOpen(true); }}
+            <input autoFocus={!readOnly} value={name.props.value} onChange={(e) => { name.set(e.target.value); setAcOpen(true); }} onFocus={() => { name.props.onFocus(); setAcOpen(true); }}
               onBlur={() => { name.props.onBlur(); setTimeout(() => { setAcOpen(false); if (ex.name.trim()) setEditingName(false); }, 150); }}
               onKeyDown={(e) => { if (e.key === "Enter" && ex.name.trim()) { setAcOpen(false); setEditingName(false); } }}
               placeholder="Название упражнения" aria-label="Название упражнения" className="w-full h-9 bg-zinc-800 rounded-xl px-2.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
@@ -260,6 +262,7 @@ export default memo(ExerciseRow, (prev, next) =>
   prev.onToggleCollapse === next.onToggleCollapse &&
   prev.historyCount === next.historyCount &&
   prev.onOpenHistory === next.onOpenHistory &&
+  prev.readOnly === next.readOnly &&
   prev.index === next.index &&
   prev.lastMetric === next.lastMetric &&
   prev.lastFact === next.lastFact &&

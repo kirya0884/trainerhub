@@ -7,6 +7,7 @@
 
 import { supabase } from "./supabase";
 import { track } from "./events";
+import { freeCacheSpace } from "./storage";
 
 export type OutboxKind = "finish" | "clientFinish" | "food" | "foodOp" | "product";
 export interface OutboxItem<P = any, S = any> {
@@ -30,7 +31,11 @@ let flushing = false;
 
 const read = (): OutboxItem[] => { try { return JSON.parse(localStorage.getItem(KEY) || "[]"); } catch { return []; } };
 const write = (l: OutboxItem[]) => {
-  try { localStorage.setItem(KEY, JSON.stringify(l)); } catch (e) { console.error("[outbox] запись:", e); }
+  const raw = JSON.stringify(l);
+  try { localStorage.setItem(KEY, raw); } catch (e) {
+    // Не влезло — освобождаем место за счёт кэша для зала (он восстановим из сети): очередь важнее
+    if (!freeCacheSpace(() => localStorage.setItem(KEY, raw))) console.error("[outbox] запись:", e);
+  }
   listeners.forEach((f) => f());
 };
 
@@ -38,7 +43,8 @@ const write = (l: OutboxItem[]) => {
 export function isNetworkError(e: unknown) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return true;
   const m = String((e as any)?.message ?? e ?? "");
-  return /failed to fetch|networkerror|network request failed|load failed|fetch failed|timeout|ERR_INTERNET|ERR_NETWORK/i.test(m);
+  // timeout / timed out — запрос оборван по таймауту (lib/supabase): сеть есть, но не отвечает
+  return /failed to fetch|networkerror|network request failed|load failed|fetch failed|timeout|timed out|ERR_INTERNET|ERR_NETWORK/i.test(m);
 }
 
 export function registerHandler(kind: OutboxKind, h: Handler) { handlers[kind] = h; }
@@ -55,6 +61,9 @@ export function updateItem(id: string, payload: unknown) {
   write(read().map((i) => (i.id === id ? { ...i, payload } : i)));
   return true;
 }
+
+/** Выход из аккаунта: его неотправленное с телефона убираем (см. lib/offlineCache signOutAndForget) */
+export function removeOwner(owner: string) { write(read().filter((i) => i.owner !== owner)); }
 
 export function subscribeOutbox(f: () => void) { listeners.add(f); return () => { listeners.delete(f); }; }
 

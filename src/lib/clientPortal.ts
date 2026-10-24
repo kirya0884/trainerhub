@@ -14,6 +14,8 @@ export interface SelfClient {
   membership: Record<string, any>;
   /** offlineStart — начата без сети: «начало» дошлётся вместе с завершением */
   activeSession: { planId: string; dayId: string; dayName: string; startedAt: number; offlineStart?: boolean } | null;
+  /** PIN кабинета: null — не задан. Хранится в кэше для зала, чтобы без сети PIN спрашивался */
+  pinHash?: string | null;
 }
 
 export interface ClientActivity {
@@ -22,7 +24,7 @@ export interface ClientActivity {
 
 export async function fetchSelfClient(authUserId: string): Promise<SelfClient | null> {
   const { data, error } = await supabase
-    .from("clients").select("id,trainer_id,name,color,goal,phone,telegram,whatsapp,avatar_url,accent_color,health,membership,active_session")
+    .from("clients").select("id,trainer_id,name,color,goal,phone,telegram,whatsapp,avatar_url,accent_color,health,membership,active_session,pin_hash")
     .eq("auth_user_id", authUserId).maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -31,7 +33,7 @@ export async function fetchSelfClient(authUserId: string): Promise<SelfClient | 
     phone: data.phone ?? "", telegram: data.telegram ?? "", whatsapp: data.whatsapp ?? "", avatarUrl: data.avatar_url ?? "",
     accentColor: upgradeLime(data.accent_color) || "#22d3ee",
     health: { injuries: "", restrictions: "", notes: "", ...(data.health || {}) },
-    membership: data.membership || {}, activeSession: data.active_session || null,
+    membership: data.membership || {}, activeSession: data.active_session || null, pinHash: data.pin_hash || null,
   };
 }
 
@@ -77,10 +79,13 @@ export interface UpcomingBooking { date: string; time: string; duration: number 
 
 // Клиент может читать только bookings, в которых он участвует (см. миграцию 0003) — раскрываем повторы на лету и берём ближайшее занятие
 export async function fetchUpcomingBooking(clientId: string): Promise<UpcomingBooking | null> {
-  const { data: links } = await supabase.from("booking_clients").select("booking_id").eq("client_id", clientId);
+  // Ошибку не глотаем: «записей нет» вместо упавшего запроса попало бы в кэш для зала
+  const { data: links, error: e1 } = await supabase.from("booking_clients").select("booking_id").eq("client_id", clientId);
+  if (e1) throw e1;
   const ids = (links ?? []).map((l) => l.booking_id);
   if (!ids.length) return null;
-  const { data } = await supabase.from("bookings").select("*").in("id", ids);
+  const { data, error: e2 } = await supabase.from("bookings").select("*").in("id", ids);
+  if (e2) throw e2;
   const bookings: Booking[] = (data ?? []).map((b: any) => toBooking(b, clientId));
   const todayStr = today();
   const occs = expandBookings(bookings, todayStr, addDays(todayStr, 60)).filter((o) => o.status !== "cancelled");
