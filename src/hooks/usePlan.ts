@@ -367,7 +367,7 @@ export function usePlan(planId: string) {
 
   return {
     plan, loading, error, offlineAt, locked,
-    saveStatus, retrySaves: q.flushAll, settleSaves: q.settle,
+    saveStatus, retrySaves: q.retry, settleSaves: q.settle,
     updatePlanMeta, addDay, updateDay, deleteDay, reorderDays,
     addExercise, updateExercise, deleteExercise, reorderExercises,
     exKey: (id: string) => tempKey.current.get(id) ?? id,

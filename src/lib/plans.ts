@@ -4,6 +4,13 @@ import type { Mesocycle, Plan, Exercise, SetRow } from "../types";
 
 // ponytail: построчный CRUD без батчинга — для размеров планов тренера (десятки дней/упражнений) этого достаточно
 
+// Перестановка — одним вызовом SQL-функции (миграция 20261029_plan_write_rpc), а не PATCH на каждую
+// строку: пачка из 15 PATCH сразу 28.10 совпала с началом сбоя. Неизменившиеся строки функция пропускает сама.
+const reorder = async (fn: "reorder_plan_days" | "reorder_plan_exercises" | "reorder_plan_mesocycles", rows: { id: string; position: number }[]) => {
+  const { error } = await supabase.rpc(fn, { p_rows: rows });
+  if (error) throw error;
+};
+
 export async function fetchPlan(planId: string): Promise<Plan> {
   const { data: plan, error } = await supabase.from("plans").select("id,name,note,visible_to_client").eq("id", planId).single();
   if (error) throw error;
@@ -85,10 +92,7 @@ export const updateDay = async (dayId: string, patch: Record<string, any>) => {
   if (error) throw error;
 };
 export const deleteDay = async (dayId: string) => { const { error } = await supabase.from("plan_days").delete().eq("id", dayId); if (error) throw error; };
-export const reorderDays = async (rows: { id: string; position: number }[]) => {
-  const res = await Promise.all(rows.map((r) => supabase.from("plan_days").update({ position: r.position }).eq("id", r.id)));
-  const err = res.find((r) => r.error)?.error; if (err) throw err;
-};
+export const reorderDays = (rows: { id: string; position: number }[]) => reorder("reorder_plan_days", rows);
 
 export async function addExercise(dayId: string, position: number, name = "", detailed = false) {
   const { data, error } = await supabase
@@ -107,28 +111,22 @@ export async function updateExercise(exId: string, patch: Record<string, any>) {
   if (error) throw error;
 }
 export const deleteExercise = async (exId: string) => { const { error } = await supabase.from("plan_exercises").delete().eq("id", exId); if (error) throw error; };
-export const reorderExercises = async (rows: { id: string; position: number }[]) => {
-  const res = await Promise.all(rows.map((r) => supabase.from("plan_exercises").update({ position: r.position }).eq("id", r.id)));
-  const err = res.find((r) => r.error)?.error; if (err) throw err;
-};
+export const reorderExercises = (rows: { id: string; position: number }[]) => reorder("reorder_plan_exercises", rows);
 
 // Подходы сохраняются upsert'ом по (exercise_id, position) — в базе стоит уникальность.
 // Раньше было «удалить всё → вставить заново» без проверки ошибок: при обрыве связи
 // удаление не проходило, вставка проходила, и подходы задваивались. Теперь повтор
-// безопасен, а лишние хвостовые подходы (если их стало меньше) удаляются отдельно.
+// безопасен, а лишние хвостовые подходы (если их стало меньше) удаляются там же.
+// Upsert и удаление хвоста — один вызов SQL-функции replace_set_rows (миграция 20261029_plan_write_rpc).
 // Очередь на упражнение оставлена: правки одного упражнения уходят по порядку.
 const _srQ = new Map<string, Promise<void>>();
 export function setSetRows(exerciseId: string, rows: SetRow[]): Promise<void> {
   const run = async () => {
-    if (rows.length) {
-      const { error } = await supabase.from("plan_exercise_set_rows").upsert(
-        rows.map((r, i) => ({ exercise_id: exerciseId, position: i, weight: r.weight, reps: r.reps })),
-        { onConflict: "exercise_id,position" },
-      );
-      if (error) throw error;
-    }
-    const { error: trimErr } = await supabase.from("plan_exercise_set_rows").delete().eq("exercise_id", exerciseId).gte("position", rows.length);
-    if (trimErr) throw trimErr;
+    const { error } = await supabase.rpc("replace_set_rows", {
+      p_exercise_id: exerciseId,
+      p_rows: rows.map((r) => ({ weight: r.weight, reps: r.reps })),
+    });
+    if (error) throw error;
   };
   const prev = _srQ.get(exerciseId) ?? Promise.resolve();
   // Молчание осознанное: гасим ошибку ПРЕДЫДУЩЕЙ операции в очереди, чтобы она
@@ -251,7 +249,4 @@ export const updateMesocycle = async (mesoId: string, patch: Partial<Pick<Mesocy
   if (error) throw error;
 };
 export const deleteMesocycle = async (mesoId: string) => { const { error } = await supabase.from("plan_mesocycles").delete().eq("id", mesoId); if (error) throw error; };
-export const reorderMesocycles = async (rows: { id: string; position: number }[]) => {
-  const res = await Promise.all(rows.map((r) => supabase.from("plan_mesocycles").update({ position: r.position }).eq("id", r.id)));
-  const err = res.find((r) => r.error)?.error; if (err) throw err;
-};
+export const reorderMesocycles = (rows: { id: string; position: number }[]) => reorder("reorder_plan_mesocycles", rows);

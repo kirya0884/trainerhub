@@ -9,7 +9,8 @@
 // сообщает, что сети нет. Тогда же появляется плашка «Нет сети · данные на …».
 //
 // Пока что-то на экране из кэша, экраны перечитывают своё (onRevalidate): при возврате сети,
-// раз в 25 с и при возврате в приложение — «сеть есть, но висела» тоже проходит сама.
+// раз в 90 с (только пока приложение на экране) и при возврате в приложение — «сеть есть, но висела»
+// тоже проходит сама. Чаще не надо: во время сбоя базы (28.10) частые перечитывания её добивали.
 //
 // Кэш — самое неважное в хранилище: общий объём ограничен (BUDGET), а если места не
 // хватает очереди отправки или черновику тренировки, кэш удаляется целиком (lib/storage).
@@ -26,7 +27,7 @@ const MAX_ITEMS = 40;
 /** Без сети supabase долго пытается обновить истёкший вход — столько ждём, потом берём сохранённое */
 const SESSION_WAIT = 3000;
 /** Как часто перечитывать, пока что-то из кэша; через сколько снять отметки ушедших экранов */
-const RECHECK = 25_000;
+const RECHECK = 90_000;
 const SWEEP = 15_000;
 /** Кэш ответов базы в service worker (sw.ts) */
 const SW_API_CACHE = "supabase-api";
@@ -138,11 +139,12 @@ export function revalidate() {
 if (typeof window !== "undefined") {
   let lastKick = 0;
   const kick = () => {
-    if (!stale.size || !navigator.onLine || document.hidden || Date.now() - lastKick < 5000) return;
+    if (!stale.size || !navigator.onLine || document.visibilityState !== "visible" || Date.now() - lastKick < 5000) return;
     lastKick = Date.now();
     revalidate();
   };
-  window.addEventListener("online", () => { lastKick = Date.now(); revalidate(); });
+  // Приложение в фоне — не перечитываем; вернётся на экран — перечитает по visibilitychange
+  window.addEventListener("online", () => { if (document.visibilityState !== "visible") return; lastKick = Date.now(); revalidate(); });
   window.addEventListener("focus", kick);
   document.addEventListener("visibilitychange", kick);
   setInterval(kick, RECHECK);

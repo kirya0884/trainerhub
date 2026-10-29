@@ -7,8 +7,12 @@ import { isNetworkError } from "./outbox";
 // - у каждой сущности (упражнение, день, план…) одна очередь: одновременно не больше
 //   одного запроса, перекрывающиеся сохранения одной строки больше не ждут блокировок друг друга;
 // - правки копятся в «слоте» и уходят последним значением — повтор не затрёт новое старым;
-// - временные сбои (сеть, таймаут, 5xx) повторяются через 1, 3, 8 с, дальше — состояние «error»,
-//   которое держится, пока не сохранится (повтор вручную или следующей правкой);
+// - временные сбои (сеть, таймаут, 5xx) повторяются через 5, 15, 30, 60 с (±20%). Состояние «error»
+//   — с первой неудачи или если ответа нет 20 с (повторы идут в фоне, на время попытки — «Сохраняю…»),
+//   дальше держится, пока не сохранится (сам повтор, повтор вручную или следующей правкой). Паузы
+//   длинные: 28.10 база «замерла» на минуты, и частые повторы (один upsert 14 раз) её только добивали.
+//   Зависший запрос не обрываем и параллельно не дублируем — ждём его ответа.
+//   «Повторить» обрывает паузу — повтор сразу; без сети (браузер знает) попытки не тратим, ждём её;
 // - отказ базы (права, валидация, связи) не повторяется: правка выбрасывается, onFatal сообщает;
 // - сущность можно придержать (hold): пока идёт удаление или упражнение ещё создаётся.
 
@@ -24,8 +28,23 @@ type Entity = {
   inflight: Promise<void> | null; failed: boolean; hold: boolean;
 };
 
-const RETRY_DELAYS = [1000, 3000, 8000];
+const RETRY_DELAYS = [5000, 15000, 30000, 60000];
+/** Пауза перед повтором ±20%: телефоны после общего сбоя не повторяют в одну секунду */
+const backoff = (i: number) => RETRY_DELAYS[i] * (0.8 + Math.random() * 0.4);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const isOffline = () => typeof navigator !== "undefined" && navigator.onLine === false;
+/** Запрос сущности висит дольше — показываем «Не сохранено», не дожидаясь ответа (28.10 ответ шёл 125 с) */
+const SLOW = 20_000;
+
+// Паузы между повторами и ожидание сети. Кончаются сами (ms), с возвратом сети или по wakeAll («Повторить»).
+const wakers = new Set<() => void>();
+const wait = (ms = Infinity) => new Promise<void>((r) => {
+  const done = () => { clearTimeout(t); window.removeEventListener("online", done); wakers.delete(done); r(); };
+  const t = ms < Infinity ? setTimeout(done, ms) : undefined;
+  window.addEventListener("online", done);
+  wakers.add(done);
+});
+const wakeAll = () => [...wakers].forEach((f) => f());
 
 /** Временный сбой — имеет смысл повторить. Права, валидация, связи (4xx) — нет. */
 export function isTransient(e: unknown) {
@@ -38,13 +57,14 @@ export function isTransient(e: unknown) {
   return /^(57|53|08|55P03|40001|40P01|XX)/.test(code) || /^PGRST00\d$/.test(code);
 }
 
-/** Разовая операция (удаление): те же повторы, что у очереди, без слотов. Только для идемпотентных. */
+/** Разовая операция (удаление): те же паузы, что у очереди, без слотов. Только для идемпотентных.
+ *  Без сети — сразу ошибка, не ждём: вызывающий откатит и скажет «Проверьте интернет». */
 export async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
   for (let i = 0; ; i++) {
     try { return await fn(); }
     catch (e) {
-      if (!isTransient(e) || i >= RETRY_DELAYS.length) throw e;
-      await sleep(RETRY_DELAYS[i]);
+      if (!isTransient(e) || isOffline() || i >= RETRY_DELAYS.length) throw e;
+      await wait(backoff(i));
     }
   }
 }
@@ -78,13 +98,24 @@ export function createSaveQueue(onChange: (s: SaveStatus) => void, onFatal: (key
   const drain = async (ent: Entity, key: string) => {
     let attempt = 0;
     while (ent.slots.size && !ent.hold) {
+      // Новая попытка или ожидание сети: «Не сохранено» снимаем — видно «Сохраняю…» или «Нет сети»
+      if (ent.failed) { ent.failed = false; emit(); }
+      // Сети нет — попытки не тратим: ждём её; правки тем временем сливаются в слотах
+      if (isOffline()) { emit(); await wait(); if (entities.get(key) !== ent) return; continue; }
       const [name, slot] = ent.slots.entries().next().value!;
       ent.slots.delete(name);
+      // Ответа нет дольше SLOW — честно «Не сохранено», но второй запрос не шлём: обрыв fetch
+      // не отменяет запрос на сервере, и старый мог бы выполниться после нового и затереть правку.
+      // Следующая попытка — только после настоящего ответа на этот.
+      const slow = setTimeout(() => { ent.failed = true; offline = isOffline(); emit(); }, SLOW);
       try {
         await (ent.inflight = slot.run(slot.patch));
+        clearTimeout(slow);
         ent.inflight = null;
         attempt = 0; saved = true; offline = false;
+        if (ent.failed) { ent.failed = false; emit(); } // ответ пришёл — «Не сохранено» снимаем
       } catch (e) {
+        clearTimeout(slow);
         ent.inflight = null;
         if (entities.get(key) !== ent) return; // сущность удалена или переехала (drop/move)
         if (e !== WAIT && !isTransient(e)) {
@@ -100,10 +131,14 @@ export function createSaveQueue(onChange: (s: SaveStatus) => void, onFatal: (key
         ent.slots.set(name, { patch: { ...slot.patch, ...newer?.patch }, run: newer?.run ?? slot.run });
         if (e === WAIT) { ent.hold = true; return; }
         offline = isNetworkError(e);
+        if (isOffline()) continue; // сеть пропала — попытку не считаем, ждём её в начале цикла
         if (attempt >= RETRY_DELAYS.length) { console.error(`[saveQueue] ${key} ${name}: не сохранилось после повторов`, e); ent.failed = true; return; }
         if (!attempt) console.warn(`[saveQueue] ${key} ${name}: сбой, повторяю`, e);
+        // Сразу «Не сохранено · Повторить», а не минуты «Сохраняю…»; автоповторы идут в фоне
+        ent.failed = true;
         emit();
-        await sleep(RETRY_DELAYS[attempt++]);
+        // Пока пауза, цикл занят (ent.loop): новые правки сущности сливаются в слот, а не уходят отдельно
+        await wait(backoff(attempt++));
         if (entities.get(key) !== ent) return; // за паузу сущность удалили или она переехала
       }
     }
@@ -149,6 +184,8 @@ export function createSaveQueue(onChange: (s: SaveStatus) => void, onFatal: (key
   return {
     enqueue,
     flushAll,
+    /** «Повторить»: паузы между повторами обрываются, упавшее и отложенное уходит сразу */
+    retry: () => { wakeAll(); flushAll(); },
     status,
     /** Есть неотправленное: правки в слотах (в т.ч. упавшие и придержанные) или запрос в полёте */
     pending: () => [...entities.values()].some((e) => e.slots.size > 0 || e.loop !== null),

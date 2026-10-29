@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { fetchPlan, addDay, addExercise, updateExercise, setSetRows } from "./plans";
+import { fetchPlan, addDay } from "./plans";
 import type { Day } from "../types";
 
 export interface PlanVersion { id: string; label: string; createdAt: string; days: Day[] }
@@ -30,11 +30,25 @@ export async function restorePlanVersion(planId: string, version: PlanVersion) {
     const d = version.days[i];
     const dayRow = await addDay(planId, d.name, i);
     if (d.weekday != null) await supabase.from("plan_days").update({ weekday: d.weekday }).eq("id", dayRow.id);
-    for (let j = 0; j < d.exercises.length; j++) {
-      const e = d.exercises[j];
-      const exRow = await addExercise(dayRow.id, j, e.name);
-      await updateExercise(exRow.id, { sets: e.sets, reps: e.reps, weight: e.weight, rest: e.rest, note: e.note, video: e.video, detailed: e.detailed, group: e.group, tempo: e.tempo, duration: e.duration, target: e.target });
-      if (e.setRows?.length) await setSetRows(exRow.id, e.setRows);
+    if (!d.exercises.length) continue;
+    // Упражнения и подходы дня — двумя запросами, а не 3–4 на каждое упражнение. Значения — как
+    // раньше (вставка с пустыми полями + правка тем, что есть в снапшоте): чего в снапшоте нет,
+    // берёт значение по умолчанию (defaultToNull: false), а не null.
+    const { data: exRows, error: exErr } = await supabase.from("plan_exercises").insert(
+      d.exercises.map((e, j) => ({
+        day_id: dayRow.id, position: j, name: e.name ?? "", sets: e.sets ?? "", reps: e.reps ?? "", weight: e.weight ?? "", rest: e.rest ?? "",
+        kind: "", pulse_zone: "", detailed: e.detailed ?? false,
+        note: e.note, video: e.video, exercise_group: e.group, tempo: e.tempo, duration: e.duration, target: e.target,
+      })),
+      { defaultToNull: false },
+    ).select("id,position");
+    if (exErr) throw exErr;
+    // Подходы — к упражнению по его позиции (= индексу в снапшоте), не по порядку строк ответа
+    const rows = (exRows ?? []).flatMap((exRow) =>
+      (d.exercises[exRow.position]?.setRows ?? []).map((r, i) => ({ exercise_id: exRow.id, position: i, weight: r.weight, reps: r.reps })));
+    if (rows.length) {
+      const { error: srErr } = await supabase.from("plan_exercise_set_rows").insert(rows);
+      if (srErr) throw srErr;
     }
   }
 }
