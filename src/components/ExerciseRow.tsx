@@ -4,12 +4,7 @@ import type { Exercise, Metric } from "../types";
 import type { LastFact } from "../lib/sessionUtils";
 import NumField from "./NumField";
 import { ask } from "../lib/dialog";
-
-// Конвертирует ссылку YouTube в embed-форму; прочие ссылки (прямые .mp4 и т.п.) возвращает как есть.
-function toEmbedUrl(url: string): string {
-  const yt = url.match(/(?:youtu\.be\/|[?&]v=|embed\/)([\w-]{11})/);
-  return yt ? `https://www.youtube.com/embed/${yt[1]}` : url;
-}
+import { toEmbedUrl } from "../lib/videoEmbed";
 
 // Черновик текстового поля: ввод меняет своё состояние синхронно. Раньше поле обновлялось через
 // startTransition, React до применения перехода откатывал его к старому значению — на Android-клавиатурах
@@ -165,7 +160,7 @@ function ExerciseRow({
               /\.(mp4|webm|ogg)$/i.test(ex.video) ? (
                 <video src={ex.video} controls className="w-full max-h-56 rounded-xl bg-black" />
               ) : (
-                <iframe src={toEmbedUrl(ex.video)} className="w-full aspect-video rounded-xl" allowFullScreen loading="lazy" title={ex.name || "Видео упражнения"} />
+                <VideoEmbed url={ex.video} title={ex.name || "Видео упражнения"} />
               )
             )}
           </div>
@@ -269,3 +264,11 @@ export default memo(ExerciseRow, (prev, next) =>
   prev.groupColor === next.groupColor &&
   prev.suggestions === next.suggestions
 );
+
+// Не YouTube/Vimeo по https — iframe не рендерим, ссылка остаётся только в поле выше
+function VideoEmbed({ url, title }: { url: string; title: string }) {
+  const src = toEmbedUrl(url);
+  return src
+    ? <iframe src={src} className="w-full aspect-video rounded-xl" allowFullScreen loading="lazy" title={title} />
+    : <p className="text-xs text-zinc-500">Видео не встроить: поддерживаются ссылки YouTube и Vimeo (https) или файл .mp4.</p>;
+}

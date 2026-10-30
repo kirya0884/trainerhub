@@ -15,6 +15,8 @@ function localizeError(msg: string): string {
   if (/password should be/i.test(msg)) return "Пароль слишком короткий (минимум 6 символов)";
   if (/for security purposes/i.test(msg)) return "Слишком много попыток — подожди немного и попробуй снова";
   if (/rate limit/i.test(msg)) return "Слишком много запросов — подожди минуту";
+  // Вход по ссылке без созданного аккаунта (shouldCreateUser: false)
+  if (/signups not allowed for otp/i.test(msg)) return "Для этой почты нет доступа. Попросите тренера отправить приглашение";
   if (isNetworkError(msg)) return "Нет интернета. Проверьте подключение";
   return msg;
 }
@@ -49,7 +51,9 @@ export default function AuthScreen() {
     setBusy(true); resetMsg();
     let error: any = null;
     if (mode === "client" && useLink) {
-      ({ error } = await supabase.auth.signInWithOtp({ email }));
+      // Только для уже выданного доступа: аккаунт клиента создаёт register-client, а лишний аккаунт
+      // на чужую почту не дал бы тренеру потом выдать доступ (аудит 30.10, п.1)
+      ({ error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } }));
       if (!error) setMsg("Ссылка для входа отправлена на почту — проверь ящик.");
     } else if (mode === "client") {
       ({ error } = await supabase.auth.signInWithPassword({ email, password }));

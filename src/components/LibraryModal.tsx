@@ -5,12 +5,12 @@ import * as libraryApi from "../lib/library";
 import { fileToThumb } from "../lib/thumb";
 import ModalShell from "./ModalShell";
 import { notify } from "../lib/dialog";
+import { toEmbedUrl } from "../lib/videoEmbed";
 
 type Item = BuiltinExercise & { custom?: boolean };
 
 // Видео-ссылку (YouTube и т.п.) показываем как iframe, остальное (data URL фото) — как картинку.
 const isVideoUrl = (url: string) => /youtube\.com|youtu\.be|vimeo\.com/.test(url);
-const toEmbedUrl = (url: string) => url.replace(/youtu\.be\/([\w-]+)/, "youtube.com/embed/$1").replace("watch?v=", "embed/");
 
 export default function LibraryModal({ trainerId, customNames, addToLibrary, onPick, onClose }: {
   trainerId: string; customNames: string[]; addToLibrary: (name: string) => void; onPick: (name: string) => void; onClose: () => void;
@@ -48,6 +48,7 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
   const items: Item[] = [...BUILTIN_EXERCISES, ...customNames.map((name) => ({ name, group: "Мои", equipment: "", primary: "", secondary: "", type: "", cues: [], level: "", description: "", notes: "", custom: true }))];
   const filtered = items.filter((i) => (group === "Все" || i.group === group) && i.name.toLowerCase().includes(q.toLowerCase()));
   const saveCustom = () => { const n = custom.trim(); if (!n) return; addToLibrary(n); onPick(n); setCustom(""); };
+  const embed = detail && media[detail.name] ? toEmbedUrl(media[detail.name]) : null;
 
   return (
     <ModalShell title={detail ? "Упражнение" : "Библиотека упражнений"} icon={<BookOpen size={17} className="text-lime-400" />} onClose={onClose} wide
@@ -76,7 +77,9 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
             <p className="text-sm font-semibold flex items-center gap-1.5"><Film size={15} className="text-cyan-400" /> Фото/видео техники</p>
             {media[detail.name] && (
               isVideoUrl(media[detail.name]) ? (
-                <div className="aspect-video rounded-lg overflow-hidden bg-zinc-800"><iframe src={toEmbedUrl(media[detail.name])} className="w-full h-full" allowFullScreen /></div>
+                embed
+                  ? <div className="aspect-video rounded-lg overflow-hidden bg-zinc-800"><iframe src={embed} className="w-full h-full" allowFullScreen title={`Видео: ${detail.name}`} /></div>
+                  : <p className="text-xs text-zinc-500">Видео не встроить: поддерживаются ссылки YouTube и Vimeo (https).</p>
               ) : (
                 <img src={media[detail.name]} alt="" className="max-h-56 rounded-lg border border-zinc-700" />
               )

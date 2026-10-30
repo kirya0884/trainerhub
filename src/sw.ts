@@ -2,7 +2,7 @@
 import { cleanupOutdatedCaches, precacheAndRoute } from "workbox-precaching";
 import { clientsClaim } from "workbox-core";
 import { registerRoute } from "workbox-routing";
-import { NetworkFirst, CacheFirst } from "workbox-strategies";
+import { CacheFirst } from "workbox-strategies";
 import { ExpirationPlugin } from "workbox-expiration";
 
 // Объявляем тип self как ServiceWorkerGlobalScope (вместо window из DOM lib)
@@ -33,24 +33,26 @@ clientsClaim();
 cleanupOutdatedCaches();
 precacheAndRoute(self.__WB_MANIFEST);
 
-// ── 2. Runtime: Supabase REST (GET) → NetworkFirst ───────────────────────────
-// При офлайне отдаём последний закешированный ответ (1h TTL)
-registerRoute(
-  ({ url, request }: { url: URL; request: Request }) =>
-    url.hostname.endsWith("supabase.co") && request.method === "GET",
-  new NetworkFirst({
-    cacheName: "supabase-api",
-    networkTimeoutSeconds: 8,
-    plugins: [
-      new ExpirationPlugin({ maxEntries: 200, maxAgeSeconds: 60 * 60 }),
-    ],
-  })
-);
+// ── 2. Ответы Supabase НЕ кэшируем ──────────────────────────────────────────
+// Раньше GET к supabase.co шли через NetworkFirst в кэш "supabase-api": клиенты, оплаты,
+// /auth/v1/user оставались в Cache Storage телефона. Офлайн держит lib/offlineCache
+// (в localStorage, под id вошедшего, чистится при выходе), здесь запросы идут мимо SW.
+// При активации новой версии убираем то, что накопили прежние: кэш "supabase-api" целиком
+// и картинки из хранилища Supabase (аватары, фото прогресса), попавшие в "static-assets".
+const isSupabase = (url: URL) => url.hostname.endsWith(".supabase.co");
+self.addEventListener("activate", (event: ExtendableEvent) => {
+  event.waitUntil((async () => {
+    await caches.delete("supabase-api");
+    const cache = await caches.open("static-assets");
+    const keys = await cache.keys();
+    await Promise.all(keys.filter((r) => isSupabase(new URL(r.url))).map((r) => cache.delete(r)));
+  })().catch(() => {}));
+});
 
 // ── 3. Картинки и шрифты → CacheFirst (30 дней) ──────────────────────────────
 registerRoute(
-  ({ request }: { request: Request }) =>
-    request.destination === "image" || request.destination === "font",
+  ({ url, request }: { url: URL; request: Request }) =>
+    !isSupabase(url) && (request.destination === "image" || request.destination === "font"),
   new CacheFirst({
     cacheName: "static-assets",
     plugins: [

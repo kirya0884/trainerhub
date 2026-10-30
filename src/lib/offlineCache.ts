@@ -19,6 +19,7 @@ import { supabase } from "./supabase";
 import { CACHE_PREFIX, readJson, removeKey, writeJson } from "./storage";
 import { flushOutbox, isNetworkError, pending, removeOwner } from "./outbox";
 import { ask, notify } from "./dialog";
+import { unsubscribeFromPush } from "./pushSubscribe";
 
 /** Общий объём кэша в символах (~1,4 МБ хранилища), старое вытесняется */
 const BUDGET = 700_000;
@@ -64,14 +65,15 @@ export function setCacheOwner(id: string) {
 
 const activeKey = (uid: string) => `th-active-workout-v2-${uid}`;
 
-/** Всё этого пользователя на телефоне: кэш, его очередь отправки, идущая тренировка и черновики */
+/** Всё этого пользователя на телефоне: кэш, его очередь отправки, идущая тренировка, черновики,
+ *  кэш дневника питания (lib/foodDiary) и данные калькулятора КБЖУ — вес/рост/возраст (NutritionGoalsSheet) */
 function forgetUser(uid: string) {
   setCacheOwner("");
   if (!uid) return;
   removeOwner(uid);
   try {
     const drop = [activeKey(uid)];
-    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^th-(tsess|gslot)-/.test(k)) drop.push(k); }
+    for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^th-(tsess-|gslot-|food-cache:|nutri-calc-)/.test(k)) drop.push(k); }
     drop.forEach((k) => removeKey(k));
   } catch (e) { console.error("[offlineCache] черновики:", e); }
 }
@@ -91,6 +93,8 @@ export async function signOutAndForget(opts?: { scope?: "global" | "local" | "ot
     `${left ? `Не отправлено: ${left} (тренировки или питание).` : "Идёт тренировка."} При выходе это удалится с телефона и в базу не попадёт.${navigator.onLine ? "" : " Можно остаться и выйти, когда появится интернет, — тогда всё отправится."} Выйти и удалить?`,
     { danger: true, ok: "Выйти и удалить" },
   ))) return;
+  // Push-подписку снимаем до выхода: строку в push_subscriptions удалить может только эта сессия
+  if (uid) await unsubscribeFromPush(uid);
   forgetUser(uid);
   const { error } = navigator.onLine ? await supabase.auth.signOut(opts) : { error: new Error("Failed to fetch (offline)") };
   if (!error) return;

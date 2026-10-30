@@ -614,7 +614,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
         </div>
       )}
       {showDocs && <LegalList slugs={["privacy", "consent-client", "terms"]} onClose={() => setShowDocs(false)} />}
-      {showPinSettings && <PinSettingsModal id={client.id} table="clients" onClose={() => setShowPinSettings(false)} />}
+      {showPinSettings && <PinSettingsModal onClose={() => setShowPinSettings(false)} />}
       {showSettings && (
         <ClientSettingsModal clientId={client.id} initial={profile} onClose={() => setShowSettings(false)} onSaved={(p) => setProfile(p)} />
       )}

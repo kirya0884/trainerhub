@@ -34,7 +34,7 @@ import { lazyRetry } from "./lib/lazy";
 import { ScreenSkeleton } from "./components/Skeleton";
 import { setAnalyticsContext } from "./lib/events";
 import RepsMark from "./components/RepsMark";
-import { cached, onRevalidate, patchCache, setCacheOwner, signOutAndForget, staleAtOf } from "./lib/offlineCache";
+import { cached, onRevalidate, patchCache, peekCache, setCacheOwner, signOutAndForget, staleAtOf } from "./lib/offlineCache";
 import { isNetworkError } from "./lib/outbox";
 
 // Разделы и окна грузятся при первом открытии (см. lib/lazy) — главная и список
@@ -71,6 +71,13 @@ const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
 const DEFAULT_TAB_ORDER: TabKind[] = ["dashboard", "clients", "plans", "calendar", "me", "trainerProfile"];
 const RECENT_KEY = "trainerhub-recent-clients-v1";
 const PINNED_KEY = "trainerhub-pinned-clients-v1";
+// Кэш проверки доступа версии до 30.10 хранил хэш PIN (pin / self.pinHash) — по нему узнаём, был ли PIN задан
+type LegacySelf = SelfClient & { pinHash?: string | null };
+const cachedHasPin = (): boolean => {
+  const a = peekCache<{ trainer: boolean; hasPin?: boolean; pin?: string | null; self?: LegacySelf | null }>("access")?.data;
+  if (!a) return false;
+  return a.trainer ? a.hasPin ?? !!a.pin : a.self?.hasPin ?? !!a.self?.pinHash;
+};
 const RECENT_MAX = 8;
 // B10: недавние и закреплённые подопечные — личная настройка устройства,
 // та же схема, что у порядка вкладок: localStorage, без бэкенда.
@@ -242,8 +249,8 @@ export default function App() {
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
   // Чей PIN-экран пройден (или PIN не задан) — id пользователя, чтобы смена входа сбрасывала сама
   const [pinPassedId, setPinPassedId] = useState("");
-  // pin_hash тренера приходит вместе с проверкой доступа: undefined — ещё не знаем, null — PIN не задан
-  const [trainerPin, setTrainerPin] = useState<string | null | undefined>(undefined);
+  // Задан ли PIN тренера — приходит вместе с проверкой доступа: undefined — ещё не знаем
+  const [trainerPin, setTrainerPin] = useState<boolean | undefined>(undefined);
   // B17: общие данные грузим один раз здесь, а не в каждой вкладке заново.
   // Хуки обязаны вызываться до ранних return ниже, поэтому пустой id = «пока не грузим».
   // Обработку данных начинаем только после согласия с документами и PIN-экрана.
@@ -339,10 +346,10 @@ export default function App() {
     return () => { clearTimeout(slow); sub.subscription.unsubscribe(); };
   }, []);
 
-  // После входа клиента по magic-link — привязываем auth.uid() к его карточке, затем проверяем,
-  // относится ли текущий вход к клиенту (подопечному) — тогда показываем ClientPortal вместо экранов тренера.
-  // Если карточка не привязалась (email у клиента не указан/не совпадает) и это не аккаунт тренера —
-  // показываем экран "нет доступа" вместо пустого тренерского интерфейса.
+  // После входа проверяем, относится ли текущий вход к клиенту (подопечному) — тогда показываем ClientPortal
+  // вместо экранов тренера. Карточку ко входу привязывает только register-client («Отправить доступ»);
+  // привязки по совпавшему email при входе больше нет (аудит 30.10, п.1). Нет карточки и это не
+  // аккаунт тренера — показываем экран "нет доступа" вместо пустого тренерского интерфейса.
   // Номер проверки: поздний ответ прежнего входа (после выхода или смены аккаунта) не применяем
   const accessReq = useRef(0);
   // Проверка доступа не удалась: offline — нет сети и нет сохранённой роли (первый вход), error — прочее
@@ -353,22 +360,26 @@ export default function App() {
     // Роль и PIN запоминаются на телефоне (lib/offlineCache): без сети вход открывается с ними
     let trainerConsent: Promise<boolean> = Promise.resolve(false);
     try {
-      const access = await cached<{ trainer: boolean; pin?: string | null; self?: SelfClient | null }>("access", async () => {
-        // Тренера проверяем первым — если аккаунт тренерский, ошибочная привязка клиента по совпавшему email не перехватит вход.
-        // PIN берём тем же запросом, а журнал согласий читаем параллельно — при старте на два ожидания меньше.
-        const trainerQ = Promise.resolve(supabase.from("trainers").select("id, pin_hash").eq("id", uid).maybeSingle());
+      // pin — хэш из кэша старой версии (до 30.10): по нему только узнаём, был ли PIN задан
+      const access = await cached<{ trainer: boolean; hasPin?: boolean; pin?: string | null; self?: SelfClient | null }>("access", async () => {
+        // Тренера проверяем первым — если аккаунт тренерский, карточка клиента с тем же входом не перехватит вход.
+        // Задан ли PIN и журнал согласий читаем параллельно — при старте на два ожидания меньше.
+        const trainerQ = Promise.resolve(supabase.from("trainers").select("id").eq("id", uid).maybeSingle());
+        // Сбой has_my_pin (503, таймаут, нет функции) вход не ломает: берём сохранённое, иначе «PIN не задан»
+        const pinQ = Promise.resolve(supabase.rpc("has_my_pin"))
+          .then(({ data, error }) => { if (error) throw error; return !!data; })
+          .catch((e) => { console.warn("[App] has_my_pin:", e); return cachedHasPin(); });
         trainerConsent = needsConsent(uid, trainerQ.then(({ data }) => (data ? "trainer" : null)));
         const { data: trainerRow, error: trainerErr } = await trainerQ;
         if (trainerErr) throw trainerErr;
-        if (trainerRow) return { trainer: true, pin: trainerRow.pin_hash || null };
-        const { error } = await supabase.rpc("link_client_self");
-        if (error) console.warn("link_client_self:", error.message);
-        return { trainer: false, self: await portalApi.fetchSelfClient(uid) };
+        if (trainerRow) return { trainer: true, hasPin: await pinQ };
+        const self = await portalApi.fetchSelfClient(uid);
+        return { trainer: false, self: self && { ...self, hasPin: await pinQ } };
       });
       // Из сохранённого — согласие не спрашиваем (без сети needsConsent тоже не блокирует вход)
       const gate = await trainerConsent;
       if (req !== accessReq.current) return;
-      if (access.trainer) { setTrainerPin(access.pin ?? null); setConsentGate(gate); setIsTrainer(true); setSelfClient(null); }
+      if (access.trainer) { setTrainerPin(access.hasPin ?? !!access.pin); setConsentGate(gate); setIsTrainer(true); setSelfClient(null); }
       else { setSelfClient(access.self ?? null); setIsTrainer(false); }
     } catch (e) {
       if (req !== accessReq.current) return;
@@ -398,10 +409,11 @@ export default function App() {
   // clients + перечитывание при возврате в приложение (оно же спасает, если realtime молчит из-за RLS).
   const reloadSelfClient = () => {
     if (!session) return;
+    // PIN здесь не перечитываем (срабатывает на каждое изменение во время тренировки) — оставляем известный
     portalApi.fetchSelfClient(session.user.id).then((self) => {
-      setSelfClient(self);
+      setSelfClient((prev) => (self && prev ? { ...self, hasPin: prev.hasPin } : self));
       // И в кэш для зала — иначе без сети открылась бы давно закончившаяся «текущая» тренировка
-      patchCache<{ trainer: boolean; self?: SelfClient | null }>("access", (a) => (a.trainer ? a : { ...a, self }));
+      patchCache<{ trainer: boolean; self?: SelfClient | null }>("access", (a) => (a.trainer ? a : { ...a, self: self && { ...self, hasPin: a.self?.hasPin } }));
     }).catch((e) => console.error("[App] reloadSelfClient:", e));
   };
   const selfClientId = isTrainer === false ? selfClient?.id : undefined;
@@ -493,7 +505,7 @@ export default function App() {
   if (selfClient) {
     return (
       // PIN клиента — из проверки доступа (и из кэша без сети); старый кэш без него — PinGate спросит сеть
-      <PinGate id={selfClient.id} table="clients" hash={selfClient.pinHash}>
+      <PinGate id={selfClient.id} hasPin={selfClient.hasPin ?? !!(selfClient as LegacySelf).pinHash}>
         <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6">
           <Suspense fallback={<ScreenSkeleton />}><ClientPortal client={selfClient} /></Suspense>
         </div>
@@ -572,7 +584,7 @@ export default function App() {
     <>
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined && trainerPin !== undefined} />}
     <ActiveWorkoutProvider key={session.user.id} userId={session.user.id}>
-    <PinGate id={session.user.id} hash={trainerPin} onUnlock={() => setPinPassedId(session.user.id)}>
+    <PinGate id={session.user.id} hasPin={trainerPin} onUnlock={() => setPinPassedId(session.user.id)}>
     <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-36 sm:pb-36" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4"
         style={swipeDx ? { transform: `translateX(${swipeDx}px)`, transition: "none" } : { transition: "transform .18s ease-out" }}>
@@ -638,7 +650,7 @@ export default function App() {
           />
         )}
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
-        {showPinSettings && <Suspense fallback={null}><PinSettingsModal id={session.user.id} onClose={() => setShowPinSettings(false)} onChanged={setTrainerPin} /></Suspense>}
+        {showPinSettings && <Suspense fallback={null}><PinSettingsModal onClose={() => setShowPinSettings(false)} onChanged={setTrainerPin} /></Suspense>}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
         {view.kind === "dashboard" && (

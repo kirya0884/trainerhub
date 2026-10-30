@@ -14,17 +14,19 @@ export interface SelfClient {
   membership: Record<string, any>;
   /** offlineStart — начата без сети: «начало» дошлётся вместе с завершением */
   activeSession: { planId: string; dayId: string; dayName: string; startedAt: number; offlineStart?: boolean } | null;
-  /** PIN кабинета: null — не задан. Хранится в кэше для зала, чтобы без сети PIN спрашивался */
-  pinHash?: string | null;
+  /** Задан ли PIN кабинета (сам хэш на сервере). Хранится в кэше для зала, чтобы без сети PIN спрашивался */
+  hasPin?: boolean;
 }
 
 export interface ClientActivity {
   id: string; date: string; type: string; value: string; unit: string;
 }
 
+// hasPin здесь не заполняется: App узнаёт его один раз при проверке доступа (has_my_pin),
+// а перечитывание карточки по realtime во время тренировки PIN не трогает
 export async function fetchSelfClient(authUserId: string): Promise<SelfClient | null> {
   const { data, error } = await supabase
-    .from("clients").select("id,trainer_id,name,color,goal,phone,telegram,whatsapp,avatar_url,accent_color,health,membership,active_session,pin_hash")
+    .from("clients").select("id,trainer_id,name,color,goal,phone,telegram,whatsapp,avatar_url,accent_color,health,membership,active_session")
     .eq("auth_user_id", authUserId).maybeSingle();
   if (error) throw error;
   if (!data) return null;
@@ -33,7 +35,7 @@ export async function fetchSelfClient(authUserId: string): Promise<SelfClient | 
     phone: data.phone ?? "", telegram: data.telegram ?? "", whatsapp: data.whatsapp ?? "", avatarUrl: data.avatar_url ?? "",
     accentColor: upgradeLime(data.accent_color) || "#22d3ee",
     health: { injuries: "", restrictions: "", notes: "", ...(data.health || {}) },
-    membership: data.membership || {}, activeSession: data.active_session || null, pinHash: data.pin_hash || null,
+    membership: data.membership || {}, activeSession: data.active_session || null,
   };
 }
 
@@ -103,8 +105,10 @@ export const startSession = (clientId: string, planId: string, dayId: string, da
   supabase.rpc("start_client_session", { p_client_id: clientId, p_plan_id: planId, p_day_id: dayId, p_day_name: dayName }).then(({ error }) => { if (error) throw error; });
 export const cancelSession = (clientId: string) =>
   supabase.rpc("cancel_client_session", { p_client_id: clientId }).then(({ error }) => { if (error) throw error; });
-export const finishClientSession = (clientId: string) =>
-  supabase.rpc("finish_client_session", { p_client_id: clientId }).then(({ error }) => { if (error) throw error; });
+// booking — занятие в календаре, которое сервер отметит «проведена» вместе с завершением (п.6 аудита 30.10)
+export const finishClientSession = (clientId: string, booking?: { id: string; occDate: string | null } | null) =>
+  supabase.rpc("finish_client_session", { p_client_id: clientId, p_booking_id: booking?.id ?? null, p_occ_date: booking?.occDate ?? null })
+    .then(({ error }) => { if (error) throw error; });
 
 // Клиенту разрешена запись только в plan_metrics / plan_sessions / plan_session_items (RLS client_inserts_own) —
 // без progress_notes, поэтому в отличие от lib/progress.logSession здесь без авто-заметки тренеру
@@ -125,29 +129,24 @@ export async function logClientSession(planId: string, metricsIn: Omit<Metric, "
   }
 }
 
-// Отмечает запись в календаре тренера как проведённую, когда клиент завершает тренировку.
-// fire-and-forget: если RLS не разрешает — тихо игнорируем, тренер отметит вручную.
-export async function markClientBookingDone(trainerId: string, clientId: string, dayName: string, date: string) {
+// Занятие в календаре тренера, которое закрывает эта тренировка клиента: отметку «проведена»
+// ставит сервер внутри finish_client_session (UPDATE на bookings клиенту не разрешён; групповые
+// и не сегодняшние занятия сервер не отмечает — их отмечает тренер). Не нашли — null, тренер отметит сам.
+async function findClientBooking(trainerId: string, clientId: string, dayName: string, date: string): Promise<{ id: string; occDate: string | null } | null> {
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("bookings")
       .select("*, booking_clients(client_id)")
       .eq("trainer_id", trainerId)
       .eq("day_name", dayName);
+    if (error) throw error;
     const rows = (data ?? []).filter((b: any) => (b.booking_clients ?? []).some((x: any) => x.client_id === clientId));
     // Запись, которая действительно приходится на этот день — с учётом дня недели повтора
     // и переносов. Раньше любая еженедельная запись с этим днём плана считалась подходящей,
     // и при двух сериях (пн и чт) «проведена» могла встать не на ту.
     const occ = expandBookings(rows.map((b: any) => toBooking(b, clientId)), date, date).find((o) => o.status === "scheduled");
-    if (!occ) return;
-    if (occ.isOccurrence) {
-      const ex = rows.find((b: any) => b.id === occ.id)?.exceptions ?? {};
-      const exceptions = { ...ex, [occ.occDate]: { ...(ex[occ.occDate] ?? {}), status: "done" } };
-      await supabase.from("bookings").update({ exceptions }).eq("id", occ.id);
-    } else {
-      await supabase.from("bookings").update({ status: "done" }).eq("id", occ.id);
-    }
-  } catch (e) { console.error("[markClientBookingDone]", e); }
+    return occ ? { id: occ.id, occDate: occ.isOccurrence ? occ.occDate : null } : null;
+  } catch (e) { console.error("[findClientBooking]", e); return null; }
 }
 
 // ── Тренировка клиента без интернета ──
@@ -178,10 +177,9 @@ async function runClientFinish(job: ClientFinishJob, st: ClientFinishState, save
       if (error) throw error;
       stillOn = !!data?.active_session;
     }
-    if (stillOn) await finishClientSession(job.clientId);
+    if (stillOn) await finishClientSession(job.clientId, await findClientBooking(job.trainerId, job.clientId, job.dayName, job.session.date));
     put({ finished: true });
   }
-  markClientBookingDone(job.trainerId, job.clientId, job.dayName, job.session.date);
 }
 registerHandler("clientFinish", async (item, save) => {
   await runClientFinish(item.payload as ClientFinishJob, item.state as ClientFinishState, save, true);

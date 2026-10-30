@@ -94,13 +94,15 @@ export async function subscribeToPush(trainerId: string): Promise<boolean> {
 }
 
 /**
- * Отписать тренера от Web Push (браузер + Supabase).
+ * Отписать тренера от Web Push (браузер + Supabase). Зовётся и при выходе из аккаунта
+ * (lib/offlineCache signOutAndForget) — до signOut, пока сессия ещё позволяет удалить строку.
+ * getRegistration, а не ready: без зарегистрированного SW ready не завершится никогда и подвесит выход.
  */
 export async function unsubscribeFromPush(trainerId: string): Promise<void> {
   if (!isPushSupported()) return;
   try {
-    const reg = await navigator.serviceWorker.ready;
-    const sub = await reg.pushManager.getSubscription();
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
     if (!sub) return;
     const { endpoint } = sub.toJSON() as { endpoint: string };
     await sub.unsubscribe();
