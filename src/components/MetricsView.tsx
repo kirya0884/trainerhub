@@ -2,12 +2,13 @@ import { BarChart3, Plus, X } from "lucide-react";
 import { useState } from "react";
 import TrendChart from "./TrendChart";
 import { EXERCISE_METRICS } from "../constants";
-import { today } from "../lib/format";
-import type { Day, Metric } from "../types";
+import { parseNum, today } from "../lib/format";
+import { tonnageOf } from "../lib/sessionUtils";
+import type { Day, Metric, Session } from "../types";
 import NumField from "./NumField";
 
-export default function MetricsView({ days, metrics, addMetric, deleteMetric }: {
-  days: Day[]; metrics: Metric[]; addMetric: (m: Omit<Metric, "id">) => void; deleteMetric: (id: string) => void;
+export default function MetricsView({ days, metrics, sessions, addMetric, deleteMetric }: {
+  days: Day[]; metrics: Metric[]; sessions: Session[]; addMetric: (m: Omit<Metric, "id">) => void; deleteMetric: (id: string) => void;
 }) {
   const exercises = [...new Set(days.flatMap((d) => d.exercises.map((e) => e.name).filter(Boolean)))];
   const [sel, setSel] = useState(exercises[0] || "");
@@ -17,14 +18,29 @@ export default function MetricsView({ days, metrics, addMetric, deleteMetric }: 
 
   const curExercise = exercises.includes(sel) ? sel : (exercises[0] || "");
   const m = EXERCISE_METRICS.find((x) => x.key === metric)!;
-  const series = metrics
-    .filter((x) => x.exercise === curExercise)
+  // Тоннаж — по фактическим подходам тренировок, тем же tonnageOf, что в тренировке и журнале
+  // (раньше: макс. вес × повторы × подходы). Из ручного замера — только за даты без тренировки.
+  const sessionTonnage = new Map<string, number>();
+  if (metric === "tonnage") {
+    const key = curExercise.trim().toLowerCase();
+    for (const s of sessions) for (const it of s.items ?? []) {
+      if (it.name.trim().toLowerCase() !== key || !it.actualSets?.length) continue;
+      const t = tonnageOf(it.actualSets); // неотмеченные подходы (done: false) tonnageOf пропускает
+      // Только t > 0: тренировка с нулевым тоннажем не должна закрывать ручной замер за эту дату
+      if (t > 0) sessionTonnage.set(s.date, (sessionTonnage.get(s.date) ?? 0) + t);
+    }
+  }
+  const series = [
+    ...[...sessionTonnage].map(([date, t]) => ({ date, value: Math.round(t) as number | null })),
+    ...metrics.filter((x) => x.exercise === curExercise && !sessionTonnage.has(x.date)),
+  ]
     .sort((a, b) => (a.date < b.date ? -1 : 1))
     .map((x) => {
       let value: number | null;
-      if (metric === "tonnage") {
-        const w = parseFloat(x.weight), r = parseFloat(x.reps), s = parseFloat(x.sets || "1");
-        value = isNaN(w) || isNaN(r) ? null : Math.round(w * r * (isNaN(s) ? 1 : s));
+      if ("value" in x) value = x.value;
+      else if (metric === "tonnage") {
+        const w = parseNum(x.weight), r = parseNum(x.reps), s = parseNum(x.sets);
+        value = w == null || r == null ? null : Math.round(Math.max(0, w) * r * (s ?? 1));
       } else {
         const raw = (x as any)[metric];
         value = raw === "" || raw == null ? null : Number(raw);

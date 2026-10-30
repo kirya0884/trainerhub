@@ -2,20 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { touchDraft, writeJson } from "../lib/storage";
 import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
-import { fmtDate, parseNum, today } from "../lib/format";
+import { fmtDate, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
-import { applyLastTime, buildMetrics, lastFactsByName, lastTimeFor, tonnageOf, type LastFact, type LastTime } from "../lib/sessionUtils";
+import { applyLastTime, buildMetrics, doneSets, factSets, itemRpe, lastFactsByName, lastTimeFor, tonnageOf, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgressCached } from "../lib/progress";
 import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
 import { finishOrQueue } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
-import { confirmFinish, resolveWorkoutDate } from "../components/SessionParts";
+import { askUnmarked, confirmFinish, resolveWorkoutDate } from "../components/SessionParts";
 import type { Day, Plan, Session } from "../types";
 import { notify } from "../lib/dialog";
 import { draftPrefix, readSlotDraft, type SlotDraft } from "../lib/slotDrafts";
 
-export type SetVal = { weight: string; reps: string };
-export type ExMeta = { done: boolean; note: string; fires: Record<number, number>; rpe: number; setsDone?: Record<number, boolean> };
+export type SetVal = { weight: string; reps: string; rpe?: number };
+export type ExMeta = { done: boolean; note: string; setsDone?: Record<number, boolean> };
 
 export const buildVals = (day: Day): Record<string, SetVal[]> => {
   const init: Record<string, SetVal[]> = {};
@@ -23,7 +23,7 @@ export const buildVals = (day: Day): Record<string, SetVal[]> => {
     if (ex.detailed && ex.setRows?.length) init[ex.id] = ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }));
     else {
       const n = Math.max(1, Math.min(12, parseInt(ex.sets) || 3));
-      init[ex.id] = Array.from({ length: n }, () => ({ weight: ex.weight ? String(parseNum(ex.weight) ?? "") : "", reps: ex.reps || "" }));
+      init[ex.id] = Array.from({ length: n }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
     }
   });
   return init;
@@ -31,7 +31,7 @@ export const buildVals = (day: Day): Record<string, SetVal[]> => {
 
 export const buildMeta = (day: Day): Record<string, ExMeta> => {
   const m: Record<string, ExMeta> = {};
-  day.exercises.forEach((ex) => { m[ex.id] = { done: false, note: "", fires: {}, rpe: 0, setsDone: {} }; });
+  day.exercises.forEach((ex) => { m[ex.id] = { done: false, note: "", setsDone: {} }; });
   return m;
 };
 
@@ -111,12 +111,10 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   const setVal = (exId: string, i: number, patch: Partial<SetVal>) =>
     setVals((a) => ({ ...a, [exId]: (a[exId] ?? []).map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
   const setMetaFor = (exId: string, patch: Partial<ExMeta>) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], ...patch } }));
-  const setFire = (exId: string, idx: number, v: number) =>
-    setMeta((m) => ({ ...m, [exId]: { ...m[exId], fires: { ...m[exId].fires, [idx]: v } } }));
   // Отметка подхода, как в индивидуальной тренировке: все подходы отмечены — упражнение выполнено
   const toggleSetDone = (exId: string, setIdx: number, total: number) =>
     setMeta((m) => {
-      const cur = m[exId] || { done: false, note: "", fires: {}, rpe: 0, setsDone: {} };
+      const cur = m[exId] || { done: false, note: "", setsDone: {} };
       const sd = { ...(cur.setsDone || {}), [setIdx]: !cur.setsDone?.[setIdx] };
       const allDone = Array.from({ length: total }, (_, i) => i).every((i) => sd[i]);
       return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
@@ -147,7 +145,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };
 
   const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
-  const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [], meta[ex.id]?.setsDone)), 0) : 0;
+  const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(doneSets(vals[ex.id] || [], meta[ex.id]))), 0) : 0;
 
   /** dateChoice: null — сегодня, иначе дата задним числом (общая на всю совместную) */
   const finish = async (dateChoice: string | null) => {
@@ -158,23 +156,27 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     setBusy(true);
     try {
       if (!(await confirmFinish(day, date, plan.id, sessions))) return;
-      const metrics = buildMetrics(day, vals, date);
+      // Есть заполненные, но не отмеченные подходы — спросить; закрыли окно — ничего не пишем
+      const m = await askUnmarked(day, vals, meta);
+      if (!m) return;
+      if (m !== meta) setMeta(m);
+      const done = day.exercises.filter((ex) => m[ex.id]?.done).length;
+      const metrics = buildMetrics(day, vals, m, date);
       const items = day.exercises.filter((ex) => ex.name).map((ex) => {
-        const f = meta[ex.id]?.fires || {};
-        const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
         // План/факт — как в индивидуальной тренировке: без них «Как в прошлый раз»
-        // и строка факта в плане не видели совместные тренировки
-        const actualSets = (vals[ex.id] ?? []).filter((r) => r.weight || r.reps);
+        // и строка факта в плане не видели совместные тренировки. Все подходы с отметкой done
+        const actualSets = factSets(vals[ex.id] ?? [], m[ex.id]);
         const plannedSets = ex.detailed && ex.setRows?.length
           ? ex.setRows.map((r) => ({ weight: r.weight || "", reps: r.reps || "" }))
           : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
-        return { name: ex.name, effort, rpe: meta[ex.id]?.rpe || 0, note: meta[ex.id]?.note || "", plannedSets, ...(actualSets.length ? { actualSets } : {}) };
+        // effort (огоньки) больше не собираем: усилие — RPE в каждом подходе
+        return { name: ex.name, effort: 0, rpe: itemRpe(actualSets), note: m[ex.id]?.note || "", plannedSets, ...(actualSets.length ? { actualSets } : {}) };
       });
       const session: Omit<Session, "id"> = {
         date, dayName: day.name, dayId: day.id, mood, wellbeing, review: review.trim(), clientRating,
-        done: doneEx, total: day.exercises.length, fromClient: false, items,
+        done, total: day.exercises.length, fromClient: false, items,
       };
-      const note = `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${doneEx}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`;
+      const note = `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${done}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`;
       // Д3: запись сессии, архивация дня, отметка в календаре и двойной гард
       // списания — всё в одной общей функции, а не копией на каждый экран.
       const res = await finishOrQueue({ trainerId, clientId, planId: plan.id, day, metrics, note, session, membership });
@@ -190,7 +192,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   return {
     plans, planId, setPlanId, plan, dayId, setDayId, day,
     membership, finished, busy,
-    vals, meta, setVal, setMetaFor, setFire, toggleSetDone, openSets,
+    vals, meta, setVal, setMetaFor, toggleSetDone, openSets,
     mood, setMood, wellbeing, setWellbeing, review, setReview, clientRating, setClientRating,
     doneEx, totalTonnage, finish,
     last, lastApplied: !!beforeLast, applyLast, undoLast, prevByName,

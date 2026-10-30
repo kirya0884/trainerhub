@@ -206,6 +206,7 @@ function ExerciseRow({
             <span className="text-zinc-500 shrink-0">Факт {lastFact.date.slice(8)}.{lastFact.date.slice(5, 7)}{lastFact.fromClient ? " · клиент сам" : ""}:</span>
             <span className="flex flex-wrap gap-x-2 gap-y-0.5 min-w-0">
               {lastFact.sets.map((s, i) => (
+                s.dir === "skip" ? <span key={i} className="text-zinc-600" title="Подход не отмечен">—</span> :
                 <span key={i} className={`inline-flex items-center whitespace-nowrap ${s.dir === "up" ? "text-lime-400" : s.dir === "down" ? "text-orange-400" : s.dir === "extra" ? "text-cyan-400" : "text-zinc-400"}`}>
                   {s.weight || "—"}×{s.reps || "—"}
                   {s.dir === "up" && <ArrowUp size={11} aria-label="больше плана" />}

@@ -27,6 +27,12 @@ export default function PeriodizationModal({ days, planId, onClose, onDone }: { 
             {MESO_SCHEMES.map((s) => <option key={s.value} value={s.value} className="bg-zinc-900">{s.label}</option>)}
           </select>
         </label>
+        <p className="text-xs text-zinc-500 leading-relaxed">
+          {scheme === "wave"
+            ? "Блок из 4 недель: база → объём (вес −5%, +1 подход) → интенсивность (вес +7,5%, −1 подход) → разгрузка. Каждый следующий блок на 2,5% тяжелее."
+            : "Блок из 4 недель: вес +2,5% каждую неделю, 4-я — разгрузка. Каждый следующий блок стартует на 2,5% выше."}
+          {" "}Разгрузка: вес −10% (до 20 кг — с округлением вниз до целого), подходов вдвое меньше. Вес не выше +10% к плану — дальше растут повторы: +1 к верхней границе, не больше +4. До 20 кг внутри блока растут повторы, а с новым блоком вес делает шаг и повторы возвращаются к исходным. У функциональных меняются только подходы.
+        </p>
         <button onClick={run} disabled={busy || days.length === 0} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 hover:bg-lime-300 transition disabled:opacity-50">{busy ? "Генерация..." : `Создать ${weeks - 1} доп. недел${weeks - 1 === 1 ? "ю" : "и"}`}</button>
       </div>
     </ModalShell>

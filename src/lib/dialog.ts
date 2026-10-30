@@ -8,7 +8,8 @@ export type Toast = { id: number; text: string; kind: "info" | "error"; action?:
 /** Кнопка в сообщении, например «Отменить» после переноса */
 export type ToastAction = { label: string; run: () => void };
 export type Field = { key: string; label: string; value?: string; placeholder?: string; numeric?: boolean };
-export type Ask = { id: number; text: string; ok: string; cancel: string; danger: boolean; fields?: Field[]; resolve: (v: boolean, values?: Record<string, string>) => void };
+/** alt — вторая явная кнопка (choose); тогда закрытие окна (фон, Esc) — это отмена */
+export type Ask = { id: number; text: string; ok: string; cancel: string; danger: boolean; fields?: Field[]; alt?: string; resolve: (v: boolean | "alt", values?: Record<string, string>) => void };
 type State = { toasts: Toast[]; ask: Ask | null; queue: Ask[] };
 
 let state: State = { toasts: [], ask: null, queue: [] };
@@ -41,7 +42,7 @@ export function dismiss(id: number) {
 
 export function ask(text: string, opts: { ok?: string; cancel?: string; danger?: boolean } = {}): Promise<boolean> {
   return new Promise((resolve) => {
-    const a: Ask = { id: ++seq, text, ok: opts.ok ?? "Да", cancel: opts.cancel ?? "Отмена", danger: !!opts.danger, resolve };
+    const a: Ask = { id: ++seq, text, ok: opts.ok ?? "Да", cancel: opts.cancel ?? "Отмена", danger: !!opts.danger, resolve: (v) => resolve(v === true) };
     if (state.ask) state = { ...state, queue: [...state.queue, a] };
     else state = { ...state, ask: a };
     emit();
@@ -58,7 +59,17 @@ export function askInput(text: string, fields: Field[], opts: { ok?: string; can
   });
 }
 
-export function answer(v: boolean, values?: Record<string, string>) {
+/** Вопрос с двумя вариантами и отменой: "ok", "alt" или null — нажали «Отмена»/фон/Esc */
+export function choose(text: string, opts: { ok: string; alt: string; cancel?: string }): Promise<"ok" | "alt" | null> {
+  return new Promise((resolve) => {
+    const a: Ask = { id: ++seq, text, ok: opts.ok, alt: opts.alt, cancel: opts.cancel ?? "Отмена", danger: false, resolve: (v) => resolve(v === true ? "ok" : v === "alt" ? "alt" : null) };
+    if (state.ask) state = { ...state, queue: [...state.queue, a] };
+    else state = { ...state, ask: a };
+    emit();
+  });
+}
+
+export function answer(v: boolean | "alt", values?: Record<string, string>) {
   if (!state.ask) return;
   state.ask.resolve(v, values);
   const [next, ...rest] = state.queue;

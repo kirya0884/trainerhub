@@ -287,18 +287,37 @@ export type Activity = "low" | "light" | "mid" | "high";
 export type Aim = "lose" | "keep" | "gain";
 export const ACTIVITY: [Activity, string, number][] = [["low", "Низкая", 1.2], ["light", "1–2 тренировки", 1.375], ["mid", "3–4 тренировки", 1.55], ["high", "5+ тренировок", 1.725]];
 export const AIMS: [Aim, string][] = [["lose", "Похудение"], ["keep", "Поддержание"], ["gain", "Набор"]];
+/** Проверка ввода калькулятора: текст ошибки по полю; пустое поле — не ошибка (просто ещё не введено) */
+export function calcInputErrors(p: { weight: number; height: number; age: number }) {
+  const e: { weight?: string; height?: string; age?: string } = {};
+  if (p.weight && (p.weight < 30 || p.weight > 300)) e.weight = "Вес — от 30 до 300 кг.";
+  if (p.height >= 1.2 && p.height <= 2.3) e.height = "Похоже, рост в метрах — введите в сантиметрах, например 180.";
+  else if (p.height && (p.height < 120 || p.height > 230)) e.height = "Рост — от 120 до 230 см.";
+  if (p.age && p.age < 16) e.age = "Калькулятор рассчитан на взрослых — с 16 лет. Для подростков цели подбирает врач.";
+  else if (p.age > 90) e.age = "Возраст — от 16 до 90 лет.";
+  return e;
+}
+const MIN_CARBS = 130;
 /**
  * Обмен по Миффлину — Сан-Жеору × активность; похудение −15%, набор +10%.
- * Белок от веса (2 / 1,6 / 1,8 г на кг), жиры 0,9 г на кг, углеводы — остаток калорий.
+ * БЖУ — от расчётного веса: фактический, но не больше веса при ИМТ 25. Это оценка вместо
+ * сухой массы — процент жира не вводится. Белок 2 / 1,6 / 1,8 г на кг, жиры 25% калорий
+ * (не меньше 0,6 г на кг), углеводы — остаток, цель не меньше 130 г. Не хватает — жиры до 20%
+ * калорий, затем белок до 1,6 г на кг; всё равно меньше 130 г — lowKcal (калорий слишком мало).
  */
-export function calcGoal(p: { sex: Sex; weight: number; height: number; age: number; activity: Activity; aim: Aim }): Macros {
+export function calcGoal(p: { sex: Sex; weight: number; height: number; age: number; activity: Activity; aim: Aim }): Macros & { lowKcal: boolean } {
   const bmr = 10 * p.weight + 6.25 * p.height - 5 * p.age + (p.sex === "m" ? 5 : -161);
   const tdee = bmr * ACTIVITY.find((a) => a[0] === p.activity)![2];
   const kcal = Math.round((tdee * { lose: 0.85, keep: 1, gain: 1.1 }[p.aim]) / 10) * 10;
-  const protein = Math.round(p.weight * { lose: 2, keep: 1.6, gain: 1.8 }[p.aim]);
-  const fat = Math.round(p.weight * 0.9);
-  const carbs = Math.max(0, Math.round((kcal - protein * 4 - fat * 9) / 4));
-  return { kcal, protein, fat, carbs };
+  const refW = Math.min(p.weight, 25 * (p.height / 100) ** 2);
+  const fatMin = 0.6 * refW;
+  let protein = Math.round(refW * { lose: 2, keep: 1.6, gain: 1.8 }[p.aim]);
+  let fat = Math.round(Math.max((kcal * 0.25) / 9, fatMin));
+  const rest = () => (kcal - protein * 4 - fat * 9) / 4;
+  if (rest() < MIN_CARBS) fat = Math.round(Math.max((kcal * 0.2) / 9, fatMin));
+  if (rest() < MIN_CARBS) protein = Math.min(protein, Math.round(refW * 1.6));
+  const carbs = Math.max(0, Math.round(rest()));
+  return { kcal, protein, fat, carbs, lowKcal: rest() < MIN_CARBS };
 }
 
 // ── Без интернета ──

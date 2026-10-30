@@ -65,12 +65,22 @@ function AskDialog({ ask }: { ask: Ask }) {
             <button type="submit" className="hidden" aria-hidden tabIndex={-1} />
           </form>
         )}
+        {ask.alt ? (
+          // Два варианта и отмена: столбиком, чтобы длинные подписи не обрезались
+          <div className="flex flex-col gap-2">
+            <button onClick={() => armed && answer(true)} className="h-12 rounded-xl text-sm font-bold bg-lime-400 hover:bg-lime-300 text-zinc-950 transition">{ask.ok}</button>
+            {/* Фокус на втором варианте («как есть»): случайный Enter ничего не меняет */}
+            <button onClick={() => armed && answer("alt")} autoFocus className="h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 transition">{ask.alt}</button>
+            <button onClick={() => armed && answer(false)} className="h-11 rounded-xl text-sm font-semibold text-zinc-400 hover:bg-zinc-800 transition">{ask.cancel}</button>
+          </div>
+        ) : (
         <div className="flex gap-2">
           {/* В опасном вопросе фокус на «Отмена» — случайный Enter ничего не удалит */}
           <button onClick={() => armed && answer(false)} autoFocus={ask.danger} className="flex-1 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 transition">{ask.cancel}</button>
           <button onClick={() => (ask.fields ? submit() : armed && answer(true))} autoFocus={!ask.danger && !ask.fields}
             className={`flex-1 h-12 rounded-xl text-sm font-bold transition ${ask.danger ? "bg-red-500 hover:bg-red-400 text-white" : "bg-lime-400 hover:bg-lime-300 text-zinc-950"}`}>{ask.ok}</button>
         </div>
+        )}
       </div>
     </div>
   );

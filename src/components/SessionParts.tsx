@@ -1,19 +1,19 @@
-import { Check, Flame, History, Layers } from "lucide-react";
+import { Check, History, Layers } from "lucide-react";
 import { addDays, fmtDate, today } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
-import { isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
+import { RPE_SCALE, doneSets, fmtRpe, isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
-import { ask } from "../lib/dialog";
+import { ask, choose } from "../lib/dialog";
 import { pending } from "../lib/outbox";
 import type { Day, Exercise, Session } from "../types";
 
 // Общие куски экранов проведения тренировки: у тренера (SessionModal), у клиента
 // (ClientSessionView) и в группе (GroupSessionModal) — чтобы вели себя одинаково.
 
-type SetVal = { weight: string; reps: string };
-export { tonnageOf };
+type SetVal = { weight: string; reps: string; rpe?: number };
+export { doneSets, tonnageOf };
 // Только то, что читает блок суперсета — у тренера и клиента состояние подхода чуть разное
-type ExMeta = { note?: string; fires?: Record<number, number>; setsDone?: Record<number, boolean> };
+type ExMeta = { note?: string; setsDone?: Record<number, boolean> };
 
 /**
  * Дата проведения: «Сегодня» или другая — чтобы внести пропущенную тренировку задним
@@ -71,15 +71,63 @@ export async function confirmFinish(day: Day, date: string, planId: string | und
   return true;
 }
 
-export function FlameRate({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+/**
+ * Перед записью: есть упражнения, где подходы заполнены, но не отмечены (часто — тренировку
+ * вносят задним числом или забыли отметить). В итог идут только отмеченные, поэтому спрашиваем.
+ * «Отметить» — отмечаются только эти заполненные подходы; «как есть» — без изменений;
+ * закрыли окно — null: завершение отменяется, человек возвращается к тренировке.
+ */
+export async function askUnmarked<M extends { done: boolean; setsDone?: Record<number, boolean> }>(
+  day: Day, vals: Record<string, SetVal[]>, meta: Record<string, M>, client = false,
+): Promise<Record<string, M> | null> {
+  // У тренера «заполнен» — есть вес или повторы (нужно для внесения задним числом).
+  // У клиента — только подход, который он менял сам: отличается от плана или стоит RPE;
+  // нетронутые плановые подходы — не факт, о них не спрашиваем.
+  const filled = (ex: Exercise, r: SetVal, i: number) => {
+    if (!(r.weight || r.reps)) return false;
+    if (!client) return true;
+    const p = ex.detailed && ex.setRows?.length ? ex.setRows[i] : { weight: ex.weight, reps: ex.reps };
+    return !!r.rpe || !p || r.weight !== (p.weight || "") || r.reps !== (p.reps || "");
+  };
+  const open = day.exercises
+    .filter((ex) => ex.name && ex.kind !== "functional" && meta[ex.id] && !meta[ex.id].done)
+    .map((ex) => ({ ex, idx: (vals[ex.id] ?? []).flatMap((r, i) => (filled(ex, r, i) && !meta[ex.id].setsDone?.[i] ? [i] : [])) }))
+    .filter((x) => x.idx.length);
+  if (!open.length) return meta;
+  const n = open.length;
+  const names = open.slice(0, 4).map((x) => `«${x.ex.name}»`).join(", ") + (n > 4 ? ` и ещё ${n - 4}` : "");
+  // По умолчанию (фокус) — «как есть»: случайный Enter ничего не засчитывает
+  const res = client
+    ? await choose(`Вы не отметили подходы: ${names}. Засчитать заполненные как сделанные?`,
+      { ok: "Засчитать", alt: "Отправить как есть", cancel: "Вернуться к тренировке" })
+    : await choose(`Есть неотмеченные подходы: ${names}. Отметить их как сделанные?`,
+      { ok: "Отметить", alt: "Сохранить как есть", cancel: "Вернуться к тренировке" });
+  if (res === null) return null;
+  if (res === "alt") return meta;
+  const next = { ...meta };
+  for (const { ex, idx } of open) {
+    const rows = vals[ex.id] ?? [];
+    const sd = { ...(next[ex.id].setsDone ?? {}) };
+    idx.forEach((i) => { sd[i] = true; });
+    // Выполнено, если отмечены все непустые подходы
+    next[ex.id] = { ...next[ex.id], setsDone: sd, done: rows.every((r, i) => sd[i] || !(r.weight || r.reps)) };
+  }
+  return next;
+}
+
+/**
+ * RPE подхода — одна шкала по запасу повторов. Компактная ячейка 44×44: по тапу системный
+ * список значений с подписями (на телефоне — крупный выбор). 9,5 — только у тренера.
+ */
+export function RpePick({ value, onChange, trainer, label }: { value?: number; onChange: (v: number) => void; trainer?: boolean; label: string }) {
   return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map((n) => (
-        <button key={n} onClick={() => onChange(value === n ? 0 : n)} className="p-0.5 transition" title={`${n} из 5`}>
-          <Flame size={18} className={n <= value ? "text-orange-400" : "text-zinc-700"} fill={n <= value ? "#fb923c" : "none"} />
-        </button>
-      ))}
-    </div>
+    <span className="relative h-11 w-full min-w-0 rounded-lg bg-zinc-800 flex items-center justify-center font-semibold focus-within:ring-2 focus-within:ring-cyan-400/60">
+      <span aria-hidden className={value ? "text-sm text-cyan-400" : "text-[11px] text-zinc-500"}>{value ? fmtRpe(value) : "RPE"}</span>
+      <select value={value || ""} onChange={(e) => onChange(Number(e.target.value) || 0)} aria-label={label} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+        <option value="">Не указано</option>
+        {RPE_SCALE.filter((o) => trainer || !o.trainerOnly).map((o) => <option key={o.v} value={o.v}>{fmtRpe(o.v)} — {o.label}</option>)}
+      </select>
+    </span>
   );
 }
 
@@ -88,27 +136,32 @@ export function FlameRate({ value, onChange }: { value: number; onChange: (v: nu
  * упражнения, 1-й второго, затем 2-й первого и т. д. Раньше каждое упражнение
  * показывало все свои подходы подряд, и порядок выполнения не читался.
  */
-/** Колонки подходов с «было»: #, было, два поля, отметка */
-export const PREV_COLS = "grid-cols-[1.25rem_3.25rem_1fr_1fr_2.5rem]";
+/** Колонки подходов: #, два поля, RPE, отметка; с «было» — ещё колонка после # */
+export const SET_COLS = "grid-cols-[1.25rem_1fr_1fr_2.75rem_2.5rem]";
+export const PREV_COLS = "grid-cols-[1.25rem_3.25rem_1fr_1fr_2.75rem_2.5rem]";
 /** «было»: вес×повторы этого подхода в прошлый раз (или прочерк, если подходов тогда было меньше) */
-export function PrevCell({ p }: { p?: { weight: string; reps: string } }) {
-  return <span className="text-[12px] text-zinc-500 text-center truncate" title="В прошлый раз">{p ? `${p.weight || "—"}×${p.reps || "—"}` : "—"}</span>;
+export function PrevCell({ p }: { p?: { weight: string; reps: string; dir?: string } }) {
+  return <span className="text-[12px] text-zinc-500 text-center truncate" title="В прошлый раз">{p && p.dir !== "skip" ? `${p.weight || "—"}×${p.reps || "—"}` : "—"}</span>;
 }
 
-export function SupersetRounds({ title, color, items, labels, vals, meta, onSetVal, onTapSet, onFire, onNote, prev = {} }: {
+// Суперсет: на узком экране (до 640 px) название — отдельной строкой во всю ширину, под ним
+// повторы/вес/RPE/отметка; шире — всё в одну строку. Иначе на 320 px названию оставалось ~40 px.
+const SUPERSET_COLS = "grid-cols-[1fr_1fr_2.75rem_2.5rem] sm:grid-cols-[1fr_3.5rem_3.5rem_2.75rem_2.5rem]";
+
+export function SupersetRounds({ title, color, items, labels, vals, meta, onSetVal, onTapSet, onNote, prev = {}, trainer }: {
   title: string; color: string; items: Exercise[]; labels: string[]; prev?: Record<string, LastFact>;
   vals: Record<string, SetVal[]>; meta: Record<string, ExMeta | undefined>;
   onSetVal: (exId: string, i: number, patch: Partial<SetVal>) => void;
   onTapSet: (ex: Exercise, i: number, total: number) => void;
-  onFire: (exId: string, i: number, v: number) => void;
   onNote: (exId: string, note: string) => void;
+  trainer?: boolean;
 }) {
   const named = items.filter((ex) => ex.name);
   const rounds = Math.max(0, ...named.map((ex) => (vals[ex.id] || []).length));
   // Текущий подход — первый, где есть неотмеченное
   const current = Array.from({ length: rounds }, (_, r) => r)
     .find((r) => named.some((ex) => r < (vals[ex.id] || []).length && !meta[ex.id]?.setsDone?.[r]));
-  const tonnage = named.reduce((s, ex) => s + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [], meta[ex.id]?.setsDone)), 0);
+  const tonnage = named.reduce((s, ex) => s + (ex.kind === "functional" ? 0 : tonnageOf(doneSets(vals[ex.id] || [], meta[ex.id]))), 0);
 
   return (
     <div className="rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800" style={{ boxShadow: `inset 3px 0 0 ${color}` }}>
@@ -124,9 +177,9 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
 
       {Array.from({ length: rounds }, (_, r) => (
         <div key={r} className={`pl-4 pr-3 py-2 border-t border-zinc-800 ${r === current ? "bg-lime-400/5" : ""}`}>
-          <div className="grid grid-cols-[1fr_3.5rem_3.5rem_2.5rem] gap-1.5 items-center text-[11px] text-zinc-500 mb-1">
-            <span className={`font-semibold ${r === current ? "text-lime-400" : ""}`}>Подход {r + 1}</span>
-            <span className="text-center">Повт.</span><span className="text-center">Кг</span><span />
+          <div className={`grid ${SUPERSET_COLS} gap-1.5 items-center text-[11px] text-zinc-500 mb-1`}>
+            <span className={`col-span-4 sm:col-span-1 font-semibold ${r === current ? "text-lime-400" : ""}`}>Подход {r + 1}</span>
+            <span className="text-center">Повт.</span><span className="text-center">Кг</span><span className="text-center">RPE</span><span />
           </div>
           <div className="space-y-1.5">
             {named.map((ex) => {
@@ -135,22 +188,22 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
               const row = rows[r];
               const md = meta[ex.id];
               const isDone = md?.setsDone?.[r] ?? false;
-              const showFire = ex.kind !== "functional" && r >= rows.length - 2;
               return (
                 <div key={ex.id}>
-                  <div className="grid grid-cols-[1fr_3.5rem_3.5rem_2.5rem] gap-1.5 items-center">
-                    <span className={`min-w-0 truncate text-sm font-medium ${isDone ? "text-zinc-500" : ""}`}>
+                  <div className={`grid ${SUPERSET_COLS} gap-1.5 items-center`}>
+                    <span className={`col-span-4 sm:col-span-1 min-w-0 truncate text-sm font-medium ${isDone ? "text-zinc-500" : ""}`}>
                       <span className="font-bold mr-1" style={{ color }}>{labels[items.indexOf(ex)]}</span>{ex.name}
-                      {prev[ex.name.trim().toLowerCase()]?.sets[r] && <span className="block text-[11px] text-zinc-500 font-normal">было {prev[ex.name.trim().toLowerCase()]!.sets[r].weight || "—"}×{prev[ex.name.trim().toLowerCase()]!.sets[r].reps || "—"}</span>}
+                      {prev[ex.name.trim().toLowerCase()]?.sets[r] && prev[ex.name.trim().toLowerCase()]!.sets[r].dir !== "skip" && <span className="block text-[11px] text-zinc-500 font-normal">было {prev[ex.name.trim().toLowerCase()]!.sets[r].weight || "—"}×{prev[ex.name.trim().toLowerCase()]!.sets[r].reps || "—"}</span>}
                     </span>
                     {ex.kind === "functional" ? (
-                      <span className="col-span-2 text-xs text-zinc-400 text-center truncate">{[ex.duration, ex.weight].filter(Boolean).join(" · ") || "функц."}</span>
+                      <span className="col-span-3 text-xs text-zinc-400 text-center truncate">{[ex.duration, ex.weight].filter(Boolean).join(" · ") || "функц."}</span>
                     ) : (
                       <>
                         <input value={row.reps} onChange={(e) => onSetVal(ex.id, r, { reps: e.target.value })} inputMode="text" placeholder="повт" aria-label={`${ex.name}, подход ${r + 1}: повторы`}
                           className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                         <input value={row.weight} onChange={(e) => onSetVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" aria-label={`${ex.name}, подход ${r + 1}: вес`}
                           className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                        <RpePick value={row.rpe} onChange={(v) => onSetVal(ex.id, r, { rpe: v })} trainer={trainer} label={`${ex.name}, подход ${r + 1}: RPE`} />
                       </>
                     )}
                     <button onClick={() => onTapSet(ex, r, rows.length)} aria-pressed={isDone} aria-label={isDone ? `${ex.name}: снять отметку с подхода ${r + 1}` : `${ex.name}: подход ${r + 1} выполнен`}
@@ -158,12 +211,6 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
                       <Check size={20} strokeWidth={2.5} />
                     </button>
                   </div>
-                  {showFire && (
-                    <div className="flex items-center gap-1.5 pl-1">
-                      <span className="text-xs text-zinc-500">Усилие</span>
-                      <FlameRate value={md?.fires?.[r] || 0} onChange={(v) => onFire(ex.id, r, v)} />
-                    </div>
-                  )}
                 </div>
               );
             })}

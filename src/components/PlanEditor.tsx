@@ -17,7 +17,7 @@ import type { Day, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import ExerciseRow from "./ExerciseRow";
 import ExerciseHistoryModal from "./ExerciseHistoryModal";
-import { lastFactsByName } from "../lib/sessionUtils";
+import { fmtRpe, isFact, lastFactsByName } from "../lib/sessionUtils";
 import { useDragSort } from "../hooks/useDragSort";
 import LibraryModal from "./LibraryModal";
 import MetricsView from "./MetricsView";
@@ -135,7 +135,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     const hasAnySets = s.items?.some((i) => i.actualSets?.length || i.plannedSets?.length);
     if (hasAnySets) {
       const exercises: Day["exercises"] = (s.items ?? []).map((item) => {
-        const src = item.actualSets?.length ? item.actualSets : item.plannedSets ?? [];
+        // Факт — только отмеченные подходы; если отмеченных нет — план сессии
+        const facts = (item.actualSets ?? []).filter(isFact);
+        const src = facts.length ? facts : item.plannedSets ?? [];
         const pe = planExByName(item.name);
         return {
           id: crypto.randomUUID(), name: item.name,
@@ -560,7 +562,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       {sub === "progress" && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
           <h3 className="font-semibold flex items-center gap-1.5 mb-3"><BarChart3 size={16} className="text-lime-400" /> Прогрессия</h3>
-          <MetricsView days={plan.days} metrics={metrics} addMetric={addMetric} deleteMetric={deleteMetric} />
+          <MetricsView days={plan.days} metrics={metrics} sessions={sessions} addMetric={addMetric} deleteMetric={deleteMetric} />
         </div>
       )}
 
@@ -845,6 +847,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                     )}
                     {s.items?.some((i) => i.effort) && (
                       <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-zinc-500">
+                        <span className="text-zinc-600">Нагрузка (старая шкала):</span>
                         {s.items.filter((i) => i.effort).map((i, idx) => (
                           <span key={idx} className="flex items-center gap-1">{i.name}: {Array.from({ length: i.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400" />)}</span>
                         ))}
@@ -855,7 +858,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                         {s.items.filter((i) => i.rpe > 0).map((i, idx) => (
                           <span key={idx} className="flex items-center gap-1 bg-zinc-700/40 rounded-lg px-1.5 py-0.5">
                             <span className="text-zinc-400 truncate max-w-[80px]">{i.name}:</span>
-                            <span className="text-cyan-400 font-semibold">RPE {i.rpe}</span>
+                            <span className="text-cyan-400 font-semibold">RPE {fmtRpe(i.rpe)}</span>
                           </span>
                         ))}
                       </div>

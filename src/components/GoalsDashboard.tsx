@@ -6,6 +6,7 @@ import {
   saveClientGoals, dateRange, periodRange,
 } from "../lib/goals";
 import { fmtDate } from "../lib/format";
+import { notify } from "../lib/dialog";
 import { ScreenSkeleton } from "./Skeleton";
 
 type Period = 7 | 14 | 30;
@@ -15,6 +16,8 @@ const ACTIVITY_FIELDS: { key: keyof ClientGoals; label: string; unit: string; pl
   { key: "activeMinutes", label: "Акт. минут", unit: "мин/день", placeholder: "30" },
   { key: "sessionsPerWeek", label: "Тренировок", unit: "в неделю", placeholder: "3" },
 ];
+
+const OVER = "#f2555a";
 
 function calcCals(p: number, c: number, f: number) { return Math.round(p * 4 + c * 4 + f * 9); }
 
@@ -35,22 +38,25 @@ function DonutRing({ pct, color, size = 80 }: { pct: number; color: string; size
   );
 }
 
-function RingCard({ label, unit, actual, goal, periodDays, color }: {
-  label: string; unit: string; actual: number; goal: number; periodDays: number; color: string;
+// limit — цель-потолок (калории, жиры, углеводы): больше 110% — перебор, красным и подписью,
+// как в дневнике. Белок выше цели — не перебор, у него просто процент.
+function RingCard({ label, unit, actual, goal, periodDays, color, limit = false }: {
+  label: string; unit: string; actual: number; goal: number; periodDays: number; color: string; limit?: boolean;
 }) {
   if (!goal) return null;
   const target = goal * periodDays;
-  const pct = target > 0 ? Math.min(100, (actual / target) * 100) : 0;
-  const col = pct >= 90 ? "#c6ff3d" : pct >= 65 ? "#fbbf24" : "#f87171";
+  const pct = target > 0 ? (actual / target) * 100 : 0;
+  const over = limit && pct > 110;
+  const col = over ? OVER : pct >= 90 ? "#c6ff3d" : pct >= 65 ? "#fbbf24" : "#f87171";
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="relative">
-        <DonutRing pct={pct} color={color} size={80} />
+        <DonutRing pct={pct} color={over ? OVER : color} size={80} />
         <div className="absolute inset-0 flex items-center justify-center">
           <span className="text-xs font-bold" style={{ color: col }}>{Math.round(pct)}%</span>
         </div>
       </div>
-      <span className="text-[11px] text-zinc-400 text-center leading-tight">{label}</span>
+      <span className="text-[11px] text-zinc-400 text-center leading-tight">{label}{over && <b className="block font-semibold" style={{ color: OVER }}>перебор</b>}</span>
       <span className="text-[11px] text-zinc-600 text-center">{Math.round(actual)}&nbsp;/&nbsp;{Math.round(target)}&nbsp;{unit}</span>
     </div>
   );
@@ -83,6 +89,8 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
   const [loading, setLoading] = useState(true);
   const [goalsOpen, setGoalsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [goalsFailed, setGoalsFailed] = useState(false);
+  const [dataFailed, setDataFailed] = useState(false);
 
   const goalsToDraft = (g: ClientGoals): Record<string, string> => ({
     protein: g.protein != null ? String(g.protein) : "",
@@ -103,23 +111,29 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
 
   const loadAll = async () => {
     setLoading(true);
-    try {
-      const { from, to } = periodRange(period);
-      const [g, n, a, s] = await Promise.all([
-        fetchClientGoals(clientId),
-        fetchNutritionByDay(clientId, from, to),
-        fetchActivityByDay(clientId, from, to),
-        fetchSessionsInPeriod(clientId, from, to),
-      ]);
-      setGoals(g); setDraft(goalsToDraft(g));
-      setNutrition(n); setActivities(a); setSessions(s);
-    } catch (e) { console.error("[GoalsDashboard] loadAll:", e); }
-    finally { setLoading(false); }
+    const { from, to } = periodRange(period);
+    // Каждый источник отдельно: сбой одного не роняет экран. Цели не загрузились — сохранять
+    // нельзя, иначе пустой черновик затрёт заданные цели.
+    const [g, n, a, s] = await Promise.allSettled([
+      fetchClientGoals(clientId),
+      fetchNutritionByDay(clientId, from, to),
+      fetchActivityByDay(clientId, from, to),
+      fetchSessionsInPeriod(clientId, from, to),
+    ]);
+    for (const r of [g, n, a, s]) if (r.status === "rejected") console.error("[GoalsDashboard] loadAll:", r.reason);
+    setGoalsFailed(g.status === "rejected");
+    if (g.status === "fulfilled") { setGoals(g.value); setDraft(goalsToDraft(g.value)); }
+    setDataFailed(n.status === "rejected" || a.status === "rejected" || s.status === "rejected");
+    setNutrition(n.status === "fulfilled" ? n.value : []);
+    setActivities(a.status === "fulfilled" ? a.value : []);
+    setSessions(s.status === "fulfilled" ? s.value : 0);
+    setLoading(false);
   };
 
   useEffect(() => { loadAll(); }, [clientId, period]);
 
   const handleSave = async () => {
+    if (goalsFailed) return;
     setSaving(true);
     try {
       const p = parseFloat(draft.protein || "0") || 0;
@@ -138,6 +152,9 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
       }
       await saveClientGoals(clientId, parsed);
       setGoals(parsed);
+    } catch (e) {
+      console.error("[GoalsDashboard] сохранение целей:", e);
+      notify("Не удалось сохранить цели. Проверьте интернет и попробуйте ещё раз.");
     } finally { setSaving(false); }
   };
 
@@ -190,7 +207,8 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
                 ))}
               </div>
             </div>
-            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-lime-300 transition disabled:opacity-50">
+            {goalsFailed && <p role="alert" className="text-xs text-red-400">Не удалось загрузить текущие цели — сохранить нельзя, чтобы не затереть их. Обновите экран.</p>}
+            <button onClick={handleSave} disabled={saving || goalsFailed} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-lime-300 transition disabled:opacity-50">
               <Save size={14} /> {saving ? "Сохранение…" : "Сохранить цели"}
             </button>
           </div>
@@ -210,8 +228,15 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
         <span className="text-xs text-zinc-600 hidden sm:inline">{fmtDate(rangeFrom)} — {fmtDate(rangeTo)}</span>
       </div>
 
+      {dataFailed && !goalsFailed && <p role="alert" className="text-xs text-red-400">Часть данных за период не загрузилась — проценты могут быть неполными. Обновите экран.</p>}
+
       {/* Compliance */}
-      {!hasNutGoals && !hasActGoals && !hasSessionGoal ? (
+      {goalsFailed ? (
+        <div role="alert" className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center space-y-3">
+          <p className="text-zinc-400 text-sm">Не удалось загрузить цели</p>
+          <button onClick={loadAll} className="h-10 px-4 rounded-xl bg-zinc-800 text-sm font-semibold hover:bg-zinc-700 transition">Повторить</button>
+        </div>
+      ) : !hasNutGoals && !hasActGoals && !hasSessionGoal ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center space-y-2">
           <Target size={28} className="mx-auto text-zinc-700" />
           <p className="text-zinc-400 text-sm">Цели не заданы</p>
@@ -225,10 +250,10 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
               {!nutrition.length && <p className="text-xs text-zinc-600 mb-3">Клиент не вёл дневник питания в этом периоде</p>}
               <p className="text-[11px] text-zinc-600 mb-3">Суммарно за {totalDays} дн. / цель × {totalDays}</p>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 justify-items-center">
-                <RingCard label="Калории" unit="ккал" actual={nutSum("calories")} goal={goals.calories ?? 0} periodDays={totalDays} color="#fb923c" />
+                <RingCard label="Калории" unit="ккал" actual={nutSum("calories")} goal={goals.calories ?? 0} periodDays={totalDays} color="#fb923c" limit />
                 <RingCard label="Белок" unit="г" actual={nutSum("protein")} goal={goals.protein ?? 0} periodDays={totalDays} color="#c6ff3d" />
-                <RingCard label="Углеводы" unit="г" actual={nutSum("carbs")} goal={goals.carbs ?? 0} periodDays={totalDays} color="#22d3ee" />
-                <RingCard label="Жиры" unit="г" actual={nutSum("fat")} goal={goals.fat ?? 0} periodDays={totalDays} color="#f472b6" />
+                <RingCard label="Углеводы" unit="г" actual={nutSum("carbs")} goal={goals.carbs ?? 0} periodDays={totalDays} color="#22d3ee" limit />
+                <RingCard label="Жиры" unit="г" actual={nutSum("fat")} goal={goals.fat ?? 0} periodDays={totalDays} color="#f472b6" limit />
               </div>
             </div>
           )}

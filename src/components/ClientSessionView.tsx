@@ -1,12 +1,12 @@
 import { AlertTriangle, Check, CheckCircle2, Minimize2, Play, Send, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
-import { parseNum, parseRest, today } from "../lib/format";
-import { buildMetrics } from "../lib/sessionUtils";
+import { parseRest, today } from "../lib/format";
+import { buildMetrics, factSets, itemRpe } from "../lib/sessionUtils";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { FlameRate, LastTimeBar, PREV_COLS, PrevCell, SupersetRounds, tonnageOf } from "./SessionParts";
+import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SupersetRounds, askUnmarked, doneSets, tonnageOf } from "./SessionParts";
 import { applyLastTime, type LastFact, type LastTime } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
 import { ask } from "../lib/dialog";
@@ -43,8 +43,8 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} кг`;
 
 
-type SetVal = { weight: string; reps: string };
-type ExMeta = { fires: Record<number, number>; note: string; done: boolean; setsDone?: Record<number, boolean> };
+type SetVal = { weight: string; reps: string; rpe?: number };
+type ExMeta = { note: string; done: boolean; setsDone?: Record<number, boolean> };
 
 function SessionTimer({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(Date.now());
@@ -80,7 +80,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       if (ex.detailed && ex.setRows?.length) init[ex.id] = ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }));
       else {
         const n = Math.max(1, Math.min(12, parseInt(ex.sets) || 3));
-        init[ex.id] = Array.from({ length: n }, () => ({ weight: ex.weight ? String(parseNum(ex.weight) ?? "") : "", reps: ex.reps || "" }));
+        init[ex.id] = Array.from({ length: n }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
       }
     });
     return init;
@@ -89,15 +89,14 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     const saved = readJson<Record<string, ExMeta> | null>(`${SK}-meta`, null);
     if (saved && typeof saved === "object") return saved;
     const m: Record<string, ExMeta> = {};
-    day.exercises.forEach((ex) => { m[ex.id] = { fires: {}, note: "", done: false, setsDone: {} }; });
+    day.exercises.forEach((ex) => { m[ex.id] = { note: "", done: false, setsDone: {} }; });
     return m;
   });
   const setVal = (exId: string, i: number, patch: Partial<SetVal>) => setVals((a) => ({ ...a, [exId]: a[exId].map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
   const setMetaFor = (exId: string, patch: Partial<ExMeta>) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], ...patch } }));
-  const setFire = (exId: string, idx: number, v: number) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], fires: { ...m[exId].fires, [idx]: v } } }));
   const toggleSetDone = (exId: string, setIdx: number, total: number) =>
     setMeta((m) => {
-      const cur = m[exId] || { fires: {}, note: "", done: false, setsDone: {} };
+      const cur = m[exId] || { note: "", done: false, setsDone: {} };
       const sd = { ...(cur.setsDone || {}), [setIdx]: !cur.setsDone?.[setIdx] };
       const allDone = Array.from({ length: total }, (_, i) => i).every((i) => sd[i]);
       return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
@@ -164,7 +163,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     }, 1500);
     return () => { if (progressTimer.current) clearTimeout(progressTimer.current); };
   }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
-  const totalTonnage = day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(vals[ex.id] || [], meta[ex.id]?.setsDone)), 0);
+  const totalTonnage = day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(doneSets(vals[ex.id] || [], meta[ex.id]))), 0);
   const isCircuit = day.method === "circuit";
   const maxRounds = isCircuit && day.exercises.length ? Math.max(1, ...day.exercises.map((ex) => (vals[ex.id] || []).length)) : 0;
   // Блокируем скролл страницы когда сессия открыта
@@ -181,20 +180,30 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   // Черновик (подходы и отметки) не стираем здесь: до успешной отправки отзыва он нужен,
   // если отправка не удалась или приложение закрыли на экране отзыва
-  const finish = () => {
-    const metrics = buildMetrics(day, vals);
+  // Повторный тап по «Завершить», пока открыт вопрос, ничего не делает
+  const finishing = useRef(false);
+  const finish = async () => {
+    if (finishing.current) return;
+    finishing.current = true;
+    // Есть заполненные, но не отмеченные подходы — спросить; закрыли окно — остаёмся в тренировке
+    const m = await askUnmarked(day, vals, meta, true).finally(() => { finishing.current = false; });
+    if (!m) return;
+    if (m !== meta) setMeta(m);
+    const done = day.exercises.filter((ex) => m[ex.id]?.done).length;
+    // Метрики — только по отмеченным подходам (неотмеченные — это план)
+    const metrics = buildMetrics(day, vals, m);
 
     const items = day.exercises.filter((ex) => ex.name).map((ex) => {
-      const f = meta[ex.id]?.fires || {};
-      const effort = Math.max(0, ...Object.values(f).map((x) => x || 0));
       const plannedSummary = exSummary(ex) + (ex.rest ? ` · отдых ${ex.rest}` : "");
-      const actualSets = (vals[ex.id] || []).map((r) => ({ weight: r.weight, reps: r.reps }));
+      // Все подходы по порядку с отметкой done — индексы совпадают с планом
+      const actualSets = factSets(vals[ex.id] || [], m[ex.id]);
       const plannedSets: Array<{weight: string; reps: string}> = ex.detailed && ex.setRows?.length
         ? ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }))
         : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
-      return { name: ex.name, effort, rpe: 0, note: meta[ex.id]?.note || "", actualSets, plannedSets, plannedSummary };
+      // effort (огоньки) больше не собираем: усилие — RPE в каждом подходе
+      return { name: ex.name, effort: 0, rpe: itemRpe(actualSets), note: m[ex.id]?.note || "", actualSets, plannedSets, plannedSummary };
     });
-    const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood: 0, wellbeing: 0, clientRating: 0, review: "", done: doneEx, total: day.exercises.length, fromClient: true, items };
+    const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood: 0, wellbeing: 0, clientRating: 0, review: "", done, total: day.exercises.length, fromClient: true, items };
     setDraft({ metrics, session });
     setStep("feedback");
   };
@@ -307,6 +316,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
               <span className="flex-1 min-w-0">Упражнение</span>
               <span className="w-14 text-center shrink-0">повт.</span>
               <span className="w-14 text-center shrink-0">вес, кг</span>
+              <span className="w-11 text-center shrink-0">RPE</span>
               <span className="w-10 shrink-0" />
             </div>
             <div className="divide-y divide-zinc-800">
@@ -314,7 +324,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                 const rows = vals[ex.id] || [];
                 if (r >= rows.length || !ex.name) return null;
                 const row = rows[r];
-                const md = meta[ex.id] || { fires: {}, note: "", done: false, setsDone: {} };
+                const md = meta[ex.id] || { note: "", done: false, setsDone: {} };
                 const isDone = md.setsDone?.[r] ?? false;
                 return (
                   <div key={ex.id} className="flex items-center gap-2 px-3 py-2">
@@ -325,6 +335,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                       <>
                         <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-10 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
                         <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-10 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
+                        <span className="w-11 shrink-0"><RpePick value={row.rpe} onChange={(v) => setVal(ex.id, r, { rpe: v })} label={`${ex.name}, круг ${r + 1}: RPE`} /></span>
                       </>
                     )}
                     <button onClick={() => tapSet(ex, r, rows.length)} aria-pressed={isDone} aria-label={isDone ? "Снять отметку" : "Отметить выполненным"}
@@ -340,16 +351,14 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
           if (block.group && block.items.length > 1) return (
             <SupersetRounds key={bi} title={`${supersetName(block.items.length)} ${block.group}`} color={GROUP_COLORS[block.group]}
               prev={prevByName} items={block.items} labels={block.items.map((_, k) => exLabel(day, block.startIdx + k))} vals={vals} meta={meta}
-              onSetVal={setVal} onTapSet={tapSet} onFire={setFire} onNote={(id, note) => setMetaFor(id, { note })} />
+              onSetVal={setVal} onTapSet={tapSet} onNote={(id, note) => setMetaFor(id, { note })} />
           );
           const cards = block.items.map((ex, k) => {
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
-            const n = rows.length;
             const prevSets = prevByName[ex.name.trim().toLowerCase()]?.sets;
-            const fireIdx = [n - 2, n - 1].filter((i) => i >= 0);
-            const md = meta[ex.id] || { fires: {}, note: "", done: false };
-            const tonnage = ex.kind === "functional" ? 0 : tonnageOf(rows, meta[ex.id]?.setsDone); // функциональное: вес тут не про подходы, тоннаж не считаем
+            const md = meta[ex.id] || { note: "", done: false };
+            const tonnage = ex.kind === "functional" ? 0 : tonnageOf(doneSets(rows, meta[ex.id])); // функциональное: вес тут не про подходы, тоннаж не считаем
             const isCurrent = ex.id === currentId;
             const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
             // Выполненное — строкой с фактическими подходами; тап раскрывает обратно
@@ -379,29 +388,24 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                 </div>
                 ) : (
                 <div className="space-y-1.5">
-                  <div className={`grid ${prevSets ? PREV_COLS : "grid-cols-[1.25rem_1fr_1fr_2.5rem]"} gap-1.5 text-[11px] text-zinc-500 text-center`}>
-                    <span>#</span>{prevSets && <span>было</span>}<span>Повторы</span><span>Вес, кг</span><span />
+                  <div className={`grid ${prevSets ? PREV_COLS : SET_COLS} gap-1.5 text-[11px] text-zinc-500 text-center`}>
+                    <span>#</span>{prevSets && <span>было</span>}<span>Повторы</span><span>Вес, кг</span><span>RPE</span><span />
                   </div>
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;
                     return (
                       <div key={i}>
-                        <div className={`grid ${prevSets ? PREV_COLS : "grid-cols-[1.25rem_1fr_1fr_2.5rem]"} gap-1.5 items-center`}>
+                        <div className={`grid ${prevSets ? PREV_COLS : SET_COLS} gap-1.5 items-center`}>
                           <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
 {prevSets && <PrevCell p={prevSets[i]} />}
                           <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                           <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                          <RpePick value={r.rpe} onChange={(v) => setVal(ex.id, i, { rpe: v })} label={`Подход ${i + 1}: RPE`} />
                           <button onClick={() => tapSet(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
                             className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                             <Check size={20} strokeWidth={2.5} />
                           </button>
                         </div>
-                        {fireIdx.includes(i) && (
-                          <div className="flex items-center gap-1.5 pl-7">
-                            <span className="text-xs text-zinc-500">Усилие</span>
-                            <FlameRate value={md.fires[i] || 0} onChange={(v) => setFire(ex.id, i, v)} />
-                          </div>
-                        )}
                       </div>
                     );
                   })}

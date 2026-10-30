@@ -2,6 +2,7 @@ import { CheckCircle2, ChevronDown, ChevronRight, Eye, Flame, X } from "lucide-r
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useState } from "react";
 import { fmtDate } from "../lib/format";
+import { fmtRpe, isFact, tonnageOf } from "../lib/sessionUtils";
 import { FeelingBadge } from "./FeelingScale";
 import type { Session } from "../types";
 
@@ -57,10 +58,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
           const maxRows = Math.max(item.plannedSets?.length ?? 0, item.actualSets?.length ?? 0);
 
           // Тоннаж по фактическим подходам
-          const tonnage = (item.actualSets ?? []).reduce((sum, r) => {
-            const w = parseFloat(r.weight); const rp = parseInt(r.reps);
-            return !isNaN(w) && !isNaN(rp) ? sum + w * rp : sum;
-          }, 0);
+          const tonnage = tonnageOf(item.actualSets ?? []);
 
           return (
             <div key={idx} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -72,16 +70,17 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                 {isOpen ? <ChevronDown size={16} className="text-zinc-400 shrink-0" /> : <ChevronRight size={16} className="text-zinc-400 shrink-0" />}
                 <span className="text-lime-400 font-semibold text-sm shrink-0">{idx + 1}</span>
                 <span className="flex-1 font-semibold text-sm min-w-0 truncate">{item.name || "—"}</span>
-                {/* Огонёчки */}
+                {/* Огонёчки — прежняя шкала усилия, у старых записей */}
                 {item.effort > 0 && (
-                  <span className="flex gap-0.5 shrink-0">
+                  <span className="flex items-center gap-0.5 shrink-0" title="Нагрузка (старая шкала)">
+                    <span className="sr-only">Нагрузка (старая шкала): {item.effort} из 5</span>
                     {Array.from({ length: item.effort }).map((_, k) => (
                       <Flame key={k} size={12} className="text-orange-400" fill="#fb923c" />
                     ))}
                   </span>
                 )}
                 {item.rpe > 0 && (
-                  <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-lg px-1.5 py-0.5 shrink-0">RPE {item.rpe}</span>
+                  <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-lg px-1.5 py-0.5 shrink-0">RPE {fmtRpe(item.rpe)}</span>
                 )}
                 {tonnage > 0 && (
                   <span className="text-[11px] text-zinc-500 shrink-0">
@@ -112,7 +111,10 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
 
                       {Array.from({ length: maxRows }).map((_, i) => {
                         const planned = item.plannedSets?.[i];
-                        const actual = item.actualSets?.[i];
+                        // Неотмеченный подход (done: false) — это план, а не факт: показываем «не отмечен»
+                        const raw = item.actualSets?.[i];
+                        const actual = raw && isFact(raw) ? raw : undefined;
+                        const skipped = raw?.done === false;
                         const changed =
                           planned && actual &&
                           (actual.weight !== planned.weight || actual.reps !== planned.reps) &&
@@ -145,12 +147,15 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                                 <span className={`text-sm font-medium ${changed ? "text-cyan-400" : "text-zinc-300"}`}>
                                   {actual.reps || "—"} × {actual.weight || "—"}
                                 </span>
+                              ) : skipped ? (
+                                <span className="text-zinc-600 text-xs">не отмечен</span>
                               ) : (
                                 <span className="text-zinc-700 text-sm">—</span>
                               )}
                             </div>
 
                             <span className="text-xs text-zinc-600 shrink-0">кг</span>
+                            {actual?.rpe ? <span className="text-xs text-cyan-400 shrink-0">RPE {fmtRpe(actual.rpe)}</span> : null}
                           </div>
                         );
                       })}

@@ -1,6 +1,7 @@
 import { BarChart3, HeartPulse, ListOrdered } from "lucide-react";
 import { useMemo, useState } from "react";
 import { fmtDate, parseNum } from "../lib/format";
+import { fmtRpe, isFact } from "../lib/sessionUtils";
 import type { Metric, Session } from "../types";
 import ModalShell from "./ModalShell";
 import TrendChart from "./TrendChart";
@@ -8,7 +9,7 @@ import TrendChart from "./TrendChart";
 type Entry = {
   date: string;
   dayName: string;
-  sets: { weight: string; reps: string }[];
+  sets: { weight: string; reps: string; rpe?: number }[];
   note: string;
   rpe: number;
   fromClient: boolean;
@@ -37,13 +38,14 @@ export default function ExerciseHistoryModal({
     for (const s of sessions) {
       const item = s.items?.find((i) => i.name.trim().toLowerCase() === key);
       if (!item) continue;
-      const sets = (item.actualSets?.length ? item.actualSets : item.plannedSets ?? [])
-        .filter((r) => (r.weight ?? "") !== "" || (r.reps ?? "") !== "");
+      // Факт — только отмеченные подходы; план вместо факта — лишь у старых записей без actualSets
+      const sets = item.actualSets?.length ? item.actualSets.filter(isFact)
+        : (item.plannedSets ?? []).filter((r) => (r.weight ?? "") !== "" || (r.reps ?? "") !== "");
       const m = metricByDate.get(s.date);
       list.push({
         date: s.date, dayName: s.dayName, sets, note: item.note || "", rpe: item.rpe || 0,
         fromClient: s.fromClient,
-        summary: sets.length || !m ? undefined
+        summary: sets.length ? undefined : item.actualSets?.length ? "Подходы не отмечены" : !m ? undefined
           : [m.sets && m.reps ? `${m.sets}×${m.reps}` : "", m.weight].filter(Boolean).join(" · "),
       });
     }
@@ -104,7 +106,7 @@ export default function ExerciseHistoryModal({
               <span className="text-sm font-semibold">{fmtDate(e.date)}</span>
               {e.dayName && <><span className="text-zinc-700">·</span><span className="text-xs text-zinc-500 truncate">{e.dayName}</span></>}
               {e.fromClient && <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
-              {e.rpe > 0 && <span className="ml-auto text-[11px] text-zinc-500 shrink-0">RPE {e.rpe}</span>}
+              {e.rpe > 0 && <span className="ml-auto text-[11px] text-zinc-500 shrink-0">RPE {fmtRpe(e.rpe)}</span>}
             </div>
             {e.sets.length > 0 ? (
               <div className="flex flex-wrap gap-1.5">
@@ -114,6 +116,7 @@ export default function ExerciseHistoryModal({
                     <span className="font-medium">{s.weight || "—"}</span>
                     <span className="text-xs text-zinc-500">×</span>
                     <span className="font-medium">{s.reps || "—"}</span>
+                    {s.rpe ? <span className="text-[11px] text-cyan-400">RPE {fmtRpe(s.rpe)}</span> : null}
                   </span>
                 ))}
               </div>

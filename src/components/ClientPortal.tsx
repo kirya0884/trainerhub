@@ -24,7 +24,7 @@ import MetricsView from "./MetricsView";
 import { addDays, fmtDate, today as todayFn } from "../lib/format";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
-import { lastFactsByName, lastTimeFor } from "../lib/sessionUtils";
+import { fmtRpe, isFact, lastFactsByName, lastTimeFor } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
 import { flushOutbox, isNetworkError } from "../lib/outbox";
@@ -497,7 +497,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                         {s.items && s.items.length > 0 && (
                           <div className="space-y-2">
                             {s.items.map((item, idx) => {
-                              const hasActual = item.actualSets && item.actualSets.some((r) => r.weight || r.reps);
+                              const facts = (item.actualSets ?? []).map((r, i) => ({ ...r, n: i + 1 })).filter(isFact); // неотмеченные не показываем
+                              const hasActual = facts.length > 0;
                               return (
                                 <div key={idx} className="bg-zinc-900 rounded-xl px-3 py-2 text-xs space-y-1">
                                   <p className="font-medium text-sm text-zinc-200">{item.name}</p>
@@ -505,11 +506,11 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                                     <p className="text-zinc-500">План: {item.plannedSummary}</p>
                                   )}
                                   {hasActual && (
-                                    <p className="text-zinc-300">Факт: {item.actualSets!.map((r, i) => `${i + 1}) ${r.weight || "—"}×${r.reps || "—"}`).join(" · ")}</p>
+                                    <p className="text-zinc-300">Факт: {facts.map((r) => `${r.n}) ${r.weight || "—"}×${r.reps || "—"}${r.rpe ? ` RPE ${fmtRpe(r.rpe)}` : ""}`).join(" · ")}</p>
                                   )}
                                   {item.effort > 0 && (
                                     <p className="text-zinc-500 flex items-center gap-1">
-                                      Нагрузка: {Array.from({ length: item.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400 inline" />)}
+                                      Нагрузка (старая шкала): {Array.from({ length: item.effort }).map((_, k) => <Flame key={k} size={11} className="text-orange-400 inline" />)}
                                     </p>
                                   )}
                                   {item.note && <p className="text-zinc-500 italic">{item.note}</p>}
@@ -555,7 +556,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           {/* Упражнения: веса по тренировкам и заметки тренера (раньше — в «Программе») */}
           {reportSub === "exercises" && (
             <div className="space-y-4">
-              {planHook.plan && <MetricsView days={planHook.plan.days} metrics={progressHook.metrics} addMetric={progressHook.addMetric} deleteMetric={progressHook.deleteMetric} />}
+              {planHook.plan && <MetricsView days={planHook.plan.days} metrics={progressHook.metrics} sessions={progressHook.sessions} addMetric={progressHook.addMetric} deleteMetric={progressHook.deleteMetric} />}
               {progressHook.progress.length > 0 && (
                 <div>
                   <p className="text-sm text-zinc-400 mb-2">Заметки тренера</p>

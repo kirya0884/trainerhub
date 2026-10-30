@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { today, addDays } from "./format";
+import { fetchEntries } from "./foodDiary";
 
 export interface ClientGoals {
   calories?: number;
@@ -27,7 +28,8 @@ export interface DayActivity {
 }
 
 export async function fetchClientGoals(clientId: string): Promise<ClientGoals> {
-  const { data } = await supabase.from("clients").select("goals").eq("id", clientId).single();
+  const { data, error } = await supabase.from("clients").select("goals").eq("id", clientId).single();
+  if (error) throw error;
   return (data?.goals as ClientGoals) ?? {};
 }
 
@@ -36,22 +38,28 @@ export async function saveClientGoals(clientId: string, goals: ClientGoals): Pro
   if (error) throw error;
 }
 
+// Итог по дням из дневника питания (food_entries); старый итог дня (nutrition_logs) —
+// только за дни без записей в дневнике, как в отчётах питания.
+// Не загрузился один источник — считаем по другому; не загрузились оба — ошибка.
 export async function fetchNutritionByDay(clientId: string, from: string, to: string): Promise<DayNutrition[]> {
-  const { data } = await supabase
-    .from("nutrition_logs")
-    .select("date,calories,protein,carbs,fat")
-    .eq("client_id", clientId)
-    .gte("date", from)
-    .lte("date", to)
-    .order("date");
+  const [entries, { data: legacy, error: legacyError }] = await Promise.all([
+    fetchEntries(clientId, from, to).catch((e) => { console.error("[goals] food_entries:", e); return null; }),
+    supabase.from("nutrition_logs").select("date,calories,protein,carbs,fat")
+      .eq("client_id", clientId).gte("date", from).lte("date", to),
+  ]);
+  if (legacyError) console.error("[goals] nutrition_logs:", legacyError);
+  if (!entries && legacyError) throw legacyError;
   const map: Record<string, DayNutrition> = {};
-  for (const r of data ?? []) {
-    if (!map[r.date]) map[r.date] = { date: r.date, calories: 0, protein: 0, carbs: 0, fat: 0 };
-    map[r.date].calories += Number(r.calories ?? 0);
-    map[r.date].protein += Number(r.protein ?? 0);
-    map[r.date].carbs += Number(r.carbs ?? 0);
-    map[r.date].fat += Number(r.fat ?? 0);
-  }
+  const add = (date: string, kcal: unknown, protein: unknown, carbs: unknown, fat: unknown) => {
+    if (!map[date]) map[date] = { date, calories: 0, protein: 0, carbs: 0, fat: 0 };
+    map[date].calories += Number(kcal ?? 0);
+    map[date].protein += Number(protein ?? 0);
+    map[date].carbs += Number(carbs ?? 0);
+    map[date].fat += Number(fat ?? 0);
+  };
+  for (const e of entries ?? []) add(e.date, e.kcal, e.protein, e.carbs, e.fat);
+  const fromDiary = new Set(Object.keys(map));
+  for (const r of legacy ?? []) if (!fromDiary.has(r.date)) add(r.date, r.calories, r.protein, r.carbs, r.fat);
   return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
 }
 

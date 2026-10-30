@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Calculator, ChevronDown, GlassWater, Minus, Plus, Target, UserCheck } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { MACRO_COLOR } from "./NutritionParts";
@@ -121,30 +121,49 @@ function GoalCalculator({ clientId, measurements, onTake }: { clientId: string; 
   const [age, setAge] = useState<string>(saved.age ?? "");
   const [activity, setActivity] = useState<Activity>(saved.activity ?? "mid");
   const [aim, setAim] = useState<Aim>(saved.aim ?? "lose");
-  const ready = api.num(weight) > 0 && api.num(height) > 0 && api.num(age) > 0;
-  const res = ready ? api.calcGoal({ sex, weight: api.num(weight), height: api.num(height), age: api.num(age), activity, aim }) : null;
+  const errorsId = useId();
+  const input = { weight: api.num(weight), height: api.num(height), age: api.num(age) };
+  const errors = api.calcInputErrors(input);
+  // Ошибку поля показываем после ухода из него (заполненное при открытии — сразу), чтобы она
+  // не мигала на каждой цифре. Расчёт скрыт при любой ошибке, даже ещё не показанной.
+  const [touched, setTouched] = useState({ weight: !!weight, height: !!height, age: !!age });
+  const shown = { weight: touched.weight ? errors.weight : undefined, height: touched.height ? errors.height : undefined, age: touched.age ? errors.age : undefined };
+  const errorList = [shown.weight, shown.height, shown.age].filter(Boolean);
+  const filled = input.weight > 0 && input.height > 0 && input.age > 0;
+  const ready = filled && !errors.weight && !errors.height && !errors.age;
+  const res = ready ? api.calcGoal({ sex, ...input, activity, aim }) : null;
   const take = () => {
     if (!res) return;
     try { localStorage.setItem(KEY, JSON.stringify({ sex, weight, height, age, activity, aim })); } catch { /* приватный режим */ }
-    onTake(res);
+    onTake({ kcal: res.kcal, protein: res.protein, fat: res.fat, carbs: res.carbs });
   };
-  const num = (label: string, v: string, set: (s: string) => void, hint?: string) => (
-    <label className="block rounded-xl bg-zinc-900 px-2.5 py-2">
-      <span className="block text-[11px] text-zinc-400 truncate">{label}</span>
-      <input value={v} onChange={(e) => set(e.target.value)} inputMode="decimal" placeholder="—" aria-label={label} className="w-full bg-transparent text-base font-bold outline-none placeholder:text-zinc-600" />
-      {hint && <span className="block text-[11px] text-zinc-500 truncate">{hint}</span>}
-    </label>
-  );
+  const num = (field: keyof typeof touched, label: string, v: string, set: (s: string) => void, hint?: string) => {
+    const error = shown[field];
+    return (
+      <label className={`block rounded-xl bg-zinc-900 px-2.5 py-2 ${error ? "ring-1 ring-red-400" : ""}`}>
+        <span className="block text-[11px] text-zinc-400 truncate">{label}</span>
+        <input value={v} onChange={(e) => set(e.target.value)} onBlur={() => setTouched((t) => ({ ...t, [field]: true }))}
+          inputMode="decimal" placeholder="—" aria-label={label} aria-invalid={!!error}
+          aria-describedby={error ? errorsId : undefined} className="w-full bg-transparent text-base font-bold outline-none placeholder:text-zinc-600" />
+        {hint && <span className="block text-[11px] text-zinc-500 truncate">{hint}</span>}
+      </label>
+    );
+  };
   return (
     <div className="px-3.5 pb-3.5 space-y-3">
       <div className="flex gap-1.5">
         {([["f", "Женщина"], ["m", "Мужчина"]] as const).map(([k, l]) => <button key={k} onClick={() => setSex(k)} aria-pressed={sex === k} className={chip(sex === k)}>{l}</button>)}
       </div>
       <div className="grid grid-cols-3 gap-1.5">
-        {num("Вес, кг", weight, setWeight, lastWeight ? `замер ${fmtDate(lastWeight.date)}` : undefined)}
-        {num("Рост, см", height, setHeight)}
-        {num("Возраст", age, setAge)}
+        {num("weight", "Вес, кг", weight, setWeight, lastWeight ? `замер ${fmtDate(lastWeight.date)}` : undefined)}
+        {num("height", "Рост, см", height, setHeight)}
+        {num("age", "Возраст", age, setAge)}
       </div>
+      {errorList.length > 0 && (
+        <div id={errorsId} role="alert">
+          {errorList.map((m) => <p key={m} className="text-[13px] text-red-400">{m}</p>)}
+        </div>
+      )}
       <div>
         <p className="text-[13px] font-semibold text-zinc-400 mb-1.5">Активность</p>
         <div className="flex gap-1.5 flex-wrap">{api.ACTIVITY.map(([k, l]) => <button key={k} onClick={() => setActivity(k)} aria-pressed={activity === k} className={chip(activity === k)}>{l}</button>)}</div>
@@ -163,12 +182,13 @@ function GoalCalculator({ clientId, measurements, onTake }: { clientId: string; 
               </div>
             ))}
           </div>
-          <p className="text-[12px] text-zinc-500">Формула Миффлина — Сан-Жеора. Похудение −15% калорий, набор +10%. Белок от веса тела, жиры 0,9 г на кг.</p>
+          {res.lowKcal && <p role="alert" className="text-[13px] text-amber-400">Калорий слишком мало — углеводов меньше 130 г. Проверьте данные.</p>}
+          <p className="text-[12px] text-zinc-500">Формула Миффлина — Сан-Жеора. Похудение −15% калорий, набор +10%. Белок и жиры считаются от веса, но не больше веса при ИМТ 25 — это оценка без учёта процента жира. Жиры — около 25% калорий, углеводы — остаток.</p>
           {/* Оговорка из пользовательского соглашения: расчёт справочный, не медицинская услуга */}
           <p className="text-[12px] text-zinc-500">Расчёт справочный и не является медицинской рекомендацией. При заболеваниях, беременности и особых состояниях цели по питанию подбирает врач.</p>
           <button onClick={take} className="w-full h-11 rounded-xl bg-zinc-100 text-zinc-950 text-sm font-bold hover:bg-white transition">Взять эти цифры</button>
         </>
-      ) : <p className="text-[13px] text-zinc-500">Укажите вес, рост и возраст.</p>}
+      ) : !errorList.length && !filled && <p className="text-[13px] text-zinc-500">Укажите вес, рост и возраст.</p>}
     </div>
   );
 }
