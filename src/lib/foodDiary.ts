@@ -60,13 +60,24 @@ async function fetchEntriesRaw(clientId: string, from: string, to: string): Prom
   return (data ?? []).map(toEntry);
 }
 
-export async function addEntry(clientId: string, e: Omit<FoodEntry, "id">): Promise<FoodEntry> {
-  const { data, error } = await supabase.from("food_entries").insert({
-    client_id: clientId, date: e.date, meal: e.meal, product_id: e.productId, recipe_id: e.recipeId,
-    name: e.name, grams: r2(e.grams), ...macrosRow(e),
-  }).select().single();
+/**
+ * Вставка с id, который задал телефон, и ON CONFLICT DO NOTHING: если прошлый ответ не дошёл
+ * (а запись в базе есть), повтор с тем же id не задвоит строку, а вернёт уже записанную.
+ */
+async function insertOnce(table: "food_entries" | "food_products", row: { id: string } & Record<string, unknown>) {
+  const { data, error } = await supabase.from(table).upsert(row, { onConflict: "id", ignoreDuplicates: true }).select();
   if (error) throw error;
-  return toEntry(data);
+  if (data?.length) return data[0];
+  const { data: was, error: e2 } = await supabase.from(table).select("*").eq("id", row.id).maybeSingle();
+  if (e2) throw e2;
+  return was ?? row; // уже удалили — отдаём то, что отправляли
+}
+
+export async function addEntry(clientId: string, e: Omit<FoodEntry, "id">, id: string = crypto.randomUUID()): Promise<FoodEntry> {
+  return toEntry(await insertOnce("food_entries", {
+    id, client_id: clientId, date: e.date, meal: e.meal, product_id: e.productId, recipe_id: e.recipeId,
+    name: e.name, grams: r2(e.grams), ...macrosRow(e),
+  }));
 }
 
 /** Новые граммы: КБЖУ пересчитываются пропорционально прежней записи */
@@ -79,12 +90,17 @@ export async function updateEntryGrams(e: FoodEntry, grams: number): Promise<Foo
 }
 
 /** Копия записей на другую дату; meal — в один приём, иначе каждая в свой */
-export async function copyEntries(clientId: string, list: FoodEntry[], date: string, meal?: Meal): Promise<FoodEntry[]> {
+// ids — id копий (по порядку list), заданные телефоном: повтор с ними не задвоит (ON CONFLICT DO NOTHING)
+export async function copyEntries(clientId: string, list: FoodEntry[], date: string, meal?: Meal, ids?: string[]): Promise<FoodEntry[]> {
   if (!list.length) return [];
-  const { data, error } = await supabase.from("food_entries").insert(list.map((e) => ({
+  const rows = list.map((e, i) => ({
+    ...(ids ? { id: ids[i] } : {}),
     client_id: clientId, date, meal: meal ?? e.meal, product_id: e.productId, recipe_id: e.recipeId,
     name: e.name, grams: r2(e.grams), ...macrosRow(e),
-  }))).select();
+  }));
+  const { data, error } = await (ids
+    ? supabase.from("food_entries").upsert(rows, { onConflict: "id", ignoreDuplicates: true })
+    : supabase.from("food_entries").insert(rows)).select();
   if (error) throw error;
   return (data ?? []).map(toEntry);
 }
@@ -120,7 +136,9 @@ async function fetchProductsRaw(clientId: string): Promise<FoodProduct[]> {
   return (data ?? []).map(toProduct);
 }
 
-export async function addProduct(clientId: string, p: { name: string; favorite?: boolean } & Macros): Promise<FoodProduct> {
+/** id — ключ от повторов (из очереди отправки): повтор с тем же id второй продукт не создаст */
+export async function addProduct(clientId: string, p: { name: string; favorite?: boolean } & Macros, id?: string): Promise<FoodProduct> {
+  if (id) return toProduct(await insertOnce("food_products", { id, client_id: clientId, name: p.name, ...macrosRow(p), ...(p.favorite ? { favorite: true } : {}) }));
   const { data, error } = await supabase.from("food_products").insert({ client_id: clientId, name: p.name, ...macrosRow(p), ...(p.favorite ? { favorite: true } : {}) }).select().single();
   if (error) throw error;
   return toProduct(data);
@@ -307,12 +325,18 @@ export const fetchGoals = (clientId: string) => cached(`goals:${clientId}`, () =
 export const fetchDay = (clientId: string, date: string) => cached(`day:${clientId}:${date}`, () => fetchDayRaw(clientId, date));
 
 type FoodJob = { clientId: string; entry: Omit<FoodEntry, "id" | "pending">; newProduct?: { name: string } & Macros; touch?: { productId?: string; recipeId?: string; grams: number } };
-type FoodJobState = { productId?: string; done?: boolean };
+// entryId / newProductId — ключи от повторов; у записей из очереди версии до 31.10 их нет (появятся при досылке)
+type FoodJobState = { productId?: string; done?: boolean; entryId?: string; newProductId?: string };
 
 async function runFoodJob(job: FoodJob, st: FoodJobState, save: (s: FoodJobState) => void): Promise<FoodEntry> {
+  // Ключи сохраняем ДО отправки: ответ не дошёл — повтор пойдёт с теми же id и не задвоит
+  const keys: FoodJobState = {};
+  if (!st.entryId) keys.entryId = crypto.randomUUID();
+  if (job.newProduct && !st.productId && !st.newProductId) keys.newProductId = crypto.randomUUID();
+  if (keys.entryId || keys.newProductId) { st = { ...st, ...keys }; save(st); }
   let productId = job.entry.productId ?? st.productId ?? null;
-  if (job.newProduct && !st.productId) { productId = (await addProduct(job.clientId, job.newProduct)).id; st = { ...st, productId }; save(st); }
-  const e = await addEntry(job.clientId, { ...job.entry, productId });
+  if (job.newProduct && !st.productId) { productId = (await addProduct(job.clientId, job.newProduct, st.newProductId)).id; st = { ...st, productId }; save(st); }
+  const e = await addEntry(job.clientId, { ...job.entry, productId }, st.entryId);
   save({ ...st, done: true });
   const pid = job.touch?.productId ?? (job.newProduct ? productId : null);
   if (pid) touchProduct(pid, job.touch?.grams ?? job.entry.grams).catch((err) => console.error("[food] touch:", err));
@@ -324,8 +348,9 @@ const sentIds = new Map<string, string>();
 registerHandler("food", async (item, save) => { if (!(item.state as FoodJobState).done) sentIds.set(item.id, (await runFoodJob(item.payload as FoodJob, item.state as FoodJobState, save)).id); });
 
 /** Добавить еду; без сети — в очередь, а в дневник вернётся запись с пометкой «ждёт отправки» */
-export async function addEntryOrQueue(job: FoodJob): Promise<FoodEntry> {
-  let st: FoodJobState = {};
+// entryId — уже выбранный id записи (копия, которая могла дойти в общем запросе)
+export async function addEntryOrQueue(job: FoodJob, entryId?: string): Promise<FoodEntry> {
+  let st: FoodJobState = entryId ? { entryId } : {};
   try { return await runFoodJob(job, st, (s) => { st = s; }); }
   catch (e) {
     if (!isNetworkError(e)) throw e;
@@ -455,10 +480,15 @@ export async function deleteEntriesOrQueue(clientId: string, list: FoodEntry[]) 
 
 /** Копия записей; без сети каждая копия встаёт в очередь как новая запись */
 export async function copyEntriesOrQueue(clientId: string, list: FoodEntry[], date: string, meal?: Meal): Promise<FoodEntry[]> {
-  try { return await copyEntries(clientId, list.filter((e) => !e.pending), date, meal).then(async (done) => [...done, ...await Promise.all(list.filter((e) => e.pending).map((e) => addEntryOrQueue({ clientId, entry: { ...strip(e), date, meal: meal ?? e.meal } })))]); }
-  catch (err) {
+  // id копий выбираем заранее: общий запрос мог дойти, а ответ — нет; очередь пойдёт с теми же id
+  const ids = list.map(() => crypto.randomUUID());
+  const one = (e: FoodEntry, i: number) => addEntryOrQueue({ clientId, entry: { ...strip(e), date, meal: meal ?? e.meal } }, ids[i]);
+  try {
+    const done = await copyEntries(clientId, list.filter((e) => !e.pending), date, meal, ids.filter((_, i) => !list[i].pending));
+    return [...done, ...await Promise.all(list.flatMap((e, i) => (e.pending ? [one(e, i)] : [])))];
+  } catch (err) {
     if (!isNetworkError(err)) throw err;
-    return Promise.all(list.map((e) => addEntryOrQueue({ clientId, entry: { ...strip(e), date, meal: meal ?? e.meal } })));
+    return Promise.all(list.map(one));
   }
 }
 const strip = (e: FoodEntry): Omit<FoodEntry, "id" | "pending"> => {

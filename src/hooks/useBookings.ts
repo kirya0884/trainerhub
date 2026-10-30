@@ -21,27 +21,31 @@ export function useBookings(trainerId: string) {
     if (trainerId) load();
   }, [trainerId]);
 
-  const addBooking = async (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => { await api.addBooking(trainerId, patch, clientIds); await load(); };
+  const addBooking = async (patch: Omit<Booking, "id" | "clientIds">, clientIds: string[]) => { const id = await api.addBooking(trainerId, patch, clientIds); await load(); return id; };
   const updateBooking = async (id: string, patch: Partial<Omit<Booking, "id" | "clientIds">>, clientIds?: string[]) => {
     await api.updateBooking(id, patch);
     if (clientIds) await api.setBookingClients(id, clientIds);
     await load();
   };
   const deleteBooking = async (id: string) => { await api.deleteBooking(id); await load(); };
-  const cancelOccurrence = async (b: Booking, date: string) => { await api.cancelOccurrence(b, date); await load(); };
-  const doneOccurrence = async (b: Booking, occDate: string) => { await api.setException(b, occDate, { status: "done" }); await load(); };
-  // «Не пришёл»: для серии — правка только этой даты, причина дописывается в заметку
-  const noShowOccurrence = async (b: Booking, occDate: string, note: string) => {
-    if (!b.recurring) await api.updateBooking(b.id, { status: "no-show", note });
-    else await api.setException(b, occDate, { status: "no-show", note });
-    await load();
+  // Статус занятия и списания — одной серверной транзакцией (api.markOccurrence).
+  // occDate — дата вхождения серии; у разовой записи не нужна. Календарь перечитываем
+  // и после ошибки: ответ мог не дойти, а отметка — пройти.
+  const markOccurrence = async (id: string, occDate: string | null, status: string, chargeClientIds: string[] = [], note?: string) => {
+    try { return await api.markOccurrence(id, occDate, status, chargeClientIds, note); }
+    finally { load(); }
   };
+  const occKey = (b: Booking, occDate: string) => (b.recurring ? occDate : null);
+  const cancelOccurrence = async (b: Booking, date: string) => { await markOccurrence(b.id, occKey(b, date), "cancelled"); };
+  const doneOccurrence = async (b: Booking, occDate: string) => { await markOccurrence(b.id, occKey(b, occDate), "done"); };
+  // «Не пришёл»: для серии — правка только этой даты, причина дописывается в заметку;
+  // chargeClientIds — кого списать (без уважительной причины)
+  const noShowOccurrence = (b: Booking, occDate: string, note: string, chargeClientIds: string[] = []) =>
+    markOccurrence(b.id, occKey(b, occDate), "no-show", chargeClientIds, note);
   // Перенос одного занятия (drag-and-drop в неделе): для разовой записи двигаем дату/время, для повторяющейся — точечная exception на эту дату.
   const rescheduleOccurrence = async (b: Booking, occDate: string, newDate: string, newTime?: string) => {
-    const patch: Partial<Booking> = { date: newDate, ...(newTime ? { time: newTime } : {}) };
-    if (!b.recurring) await api.updateBooking(b.id, patch);
-    else await api.setException(b, occDate, patch);
-    await load();
+    try { await api.moveOccurrence(b.id, occKey(b, occDate), newDate, newTime); }
+    finally { load(); }
   };
 
   // А4: обновление из другого окна — возврат к окну и события репликации
@@ -49,5 +53,5 @@ export function useBookings(trainerId: string) {
   // Завершённая тренировка отмечает запись «проведена» — календарь видит это сразу
   useEffect(() => (trainerId ? onWorkoutFinished(() => load()) : undefined), [trainerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return { bookings, loading, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, noShowOccurrence, rescheduleOccurrence, reload: load };
+  return { bookings, loading, addBooking, updateBooking, deleteBooking, markOccurrence, cancelOccurrence, doneOccurrence, noShowOccurrence, rescheduleOccurrence, reload: load };
 }

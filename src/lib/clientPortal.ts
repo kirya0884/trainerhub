@@ -4,7 +4,8 @@ import type { Booking } from "./bookings";
 import type { Metric, Session } from "../types";
 import { today, addDays } from "./format";
 import { enqueue, isNetworkError, pending, registerHandler } from "./outbox";
-import { fetchProgress } from "./progress";
+import { fetchProgress, logWorkout } from "./progress";
+import { fetchAll, fetchAllIn } from "./fetchAll";
 import { upgradeLime } from "./brand";
 
 export interface SelfClient {
@@ -40,9 +41,10 @@ export async function fetchSelfClient(authUserId: string): Promise<SelfClient | 
 }
 
 export async function fetchClientActivities(clientId: string): Promise<ClientActivity[]> {
-  const { data, error } = await supabase.from("client_activities").select("id,date,type,value,unit").eq("client_id", clientId).order("date", { ascending: false }).order("created_at", { ascending: false });
-  if (error) throw error;
-  return (data ?? []).map((r) => ({ id: r.id, date: r.date, type: r.type, value: r.value, unit: r.unit }));
+  // Страницами (п.27, лимит 1000 строк); id — для уникальности порядка между страницами
+  const data = await fetchAll<any>((from, to) => supabase.from("client_activities").select("id,date,type,value,unit").eq("client_id", clientId)
+    .order("date", { ascending: false }).order("created_at", { ascending: false }).order("id").range(from, to));
+  return data.map((r) => ({ id: r.id, date: r.date, type: r.type, value: r.value, unit: r.unit }));
 }
 
 export async function addClientActivity(clientId: string, a: Omit<ClientActivity, "id">): Promise<ClientActivity> {
@@ -82,13 +84,12 @@ export interface UpcomingBooking { date: string; time: string; duration: number 
 // Клиент может читать только bookings, в которых он участвует (см. миграцию 0003) — раскрываем повторы на лету и берём ближайшее занятие
 export async function fetchUpcomingBooking(clientId: string): Promise<UpcomingBooking | null> {
   // Ошибку не глотаем: «записей нет» вместо упавшего запроса попало бы в кэш для зала
-  const { data: links, error: e1 } = await supabase.from("booking_clients").select("booking_id").eq("client_id", clientId);
-  if (e1) throw e1;
-  const ids = (links ?? []).map((l) => l.booking_id);
+  // Страницами и частями .in() (п.27, лимит 1000 строк)
+  const links = await fetchAll<{ booking_id: string }>((from, to) => supabase.from("booking_clients").select("booking_id").eq("client_id", clientId).order("booking_id").range(from, to));
+  const ids = links.map((l) => l.booking_id);
   if (!ids.length) return null;
-  const { data, error: e2 } = await supabase.from("bookings").select("*").in("id", ids);
-  if (e2) throw e2;
-  const bookings: Booking[] = (data ?? []).map((b: any) => toBooking(b, clientId));
+  const data = await fetchAllIn<any>(ids, (chunk, from, to) => supabase.from("bookings").select("*").in("id", chunk).order("id").range(from, to));
+  const bookings: Booking[] = data.map((b: any) => toBooking(b, clientId));
   const todayStr = today();
   const occs = expandBookings(bookings, todayStr, addDays(todayStr, 60)).filter((o) => o.status !== "cancelled");
   occs.sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
@@ -111,22 +112,13 @@ export const finishClientSession = (clientId: string, booking?: { id: string; oc
     .then(({ error }) => { if (error) throw error; });
 
 // Клиенту разрешена запись только в plan_metrics / plan_sessions / plan_session_items (RLS client_inserts_own) —
-// без progress_notes, поэтому в отличие от lib/progress.logSession здесь без авто-заметки тренеру
-export async function logClientSession(planId: string, metricsIn: Omit<Metric, "id">[], session: Omit<Session, "id">) {
-  if (metricsIn.length) {
-    const { error } = await supabase.from("plan_metrics").insert(metricsIn.map((m) => ({ plan_id: planId, ...m })));
-    if (error) throw error;
-  }
-  const { data: sessRow, error: sessErr } = await supabase.from("plan_sessions").insert({
-    plan_id: planId, date: session.date, day_name: session.dayName, done: session.done, total: session.total, from_client: true,
-  }).select().single();
-  if (sessErr) throw sessErr;
-  if (session.items.length) {
-    const { error: itemsErr } = await supabase.from("plan_session_items").insert(
-      session.items.map((i) => ({ session_id: sessRow.id, name: i.name, effort: i.effort, rpe: i.rpe || 0, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null }))
-    );
-    if (itemsErr) throw itemsErr;
-  }
+// без progress_notes, поэтому в отличие от lib/progress.logSession здесь без авто-заметки тренеру.
+// Одной транзакцией (RPC log_workout); повтор с тем же sessionId дубля не создаёт.
+export async function logClientSession(sessionId: string, planId: string, metricsIn: Omit<Metric, "id">[], session: Omit<Session, "id">) {
+  await logWorkout(sessionId, planId,
+    { date: session.date, day_name: session.dayName, done: session.done, total: session.total, from_client: true },
+    session.items.map((i) => ({ name: i.name, effort: i.effort, rpe: i.rpe || 0, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null })),
+    metricsIn);
 }
 
 // Занятие в календаре тренера, которое закрывает эта тренировка клиента: отметку «проведена»
@@ -158,16 +150,22 @@ export type ClientFinishJob = {
   clientId: string; trainerId: string; planId: string; dayId: string; dayName: string;
   metrics: Omit<Metric, "id">[]; session: Omit<Session, "id">; offlineStart?: boolean;
 };
-type ClientFinishState = { started?: boolean; logged?: boolean; finished?: boolean };
+// sessionId — ключ от повторов записи (log_workout); у записей из очереди версии до 31.10 его нет
+type ClientFinishState = { started?: boolean; logged?: boolean; finished?: boolean; sessionId?: string };
 
 async function runClientFinish(job: ClientFinishJob, st: ClientFinishState, save: (s: ClientFinishState) => void, retry: boolean) {
   const put = (p: ClientFinishState) => { st = { ...st, ...p }; save(st); };
   if (job.offlineStart && !st.started) { await startSession(job.clientId, job.planId, job.dayId, job.dayName); put({ started: true }); }
   if (!st.logged) {
     const s = job.session;
-    const already = retry && (await fetchProgress(job.planId)).sessions.some((x) =>
+    // Без ключа — из очереди прежней версии: она могла записать тренировку, а ответ не дошёл.
+    // Тогда проверяем по истории, как раньше; с ключом повтор отсекает сервер.
+    const already = retry && !st.sessionId && (await fetchProgress(job.planId)).sessions.some((x) =>
       x.fromClient && x.date === s.date && x.dayName === s.dayName && x.done === s.done && x.total === s.total);
-    if (!already) await logClientSession(job.planId, job.metrics, s);
+    const sessionId = st.sessionId ?? crypto.randomUUID();
+    // Ключ сохраняем ДО отправки: оборвётся — повтор пойдёт с тем же
+    if (!st.sessionId) put({ sessionId });
+    if (!already) await logClientSession(sessionId, job.planId, job.metrics, s);
     put({ logged: true });
   }
   if (!st.finished) {

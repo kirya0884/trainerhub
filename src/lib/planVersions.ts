@@ -1,5 +1,5 @@
 import { supabase } from "./supabase";
-import { fetchPlan, addDay } from "./plans";
+import { fetchPlan } from "./plans";
 import type { Day } from "../types";
 
 export interface PlanVersion { id: string; label: string; createdAt: string; days: Day[] }
@@ -22,33 +22,56 @@ export async function deletePlanVersion(id: string) {
   if (error) throw error;
 }
 
-// Восстановление: текущие days/exercises/setRows полностью удаляются и пересоздаются из снапшота (cascade на FK).
+// Восстановление без момента, когда плана нет. Раньше сначала удалялись все дни, и обрыв связи
+// посередине оставлял план пустым. Теперь: вставляем дни, упражнения и подходы из снапшота
+// (новые id создаём здесь — всё уходит тремя запросами), и только потом одним запросом удаляем
+// старые дни (упражнения и подходы — каскадом). Не вышло — убираем вставленное, план прежний.
 export async function restorePlanVersion(planId: string, version: PlanVersion) {
-  const { error } = await supabase.from("plan_days").delete().eq("plan_id", planId);
-  if (error) throw error;
-  for (let i = 0; i < version.days.length; i++) {
-    const d = version.days[i];
-    const dayRow = await addDay(planId, d.name, i);
-    if (d.weekday != null) await supabase.from("plan_days").update({ weekday: d.weekday }).eq("id", dayRow.id);
-    if (!d.exercises.length) continue;
-    // Упражнения и подходы дня — двумя запросами, а не 3–4 на каждое упражнение. Значения — как
-    // раньше (вставка с пустыми полями + правка тем, что есть в снапшоте): чего в снапшоте нет,
-    // берёт значение по умолчанию (defaultToNull: false), а не null.
-    const { data: exRows, error: exErr } = await supabase.from("plan_exercises").insert(
-      d.exercises.map((e, j) => ({
-        day_id: dayRow.id, position: j, name: e.name ?? "", sets: e.sets ?? "", reps: e.reps ?? "", weight: e.weight ?? "", rest: e.rest ?? "",
+  const { data: old, error: oldErr } = await supabase.from("plan_days").select("id").eq("plan_id", planId);
+  if (oldErr) throw oldErr;
+  const oldIds = (old ?? []).map((d) => d.id as string);
+
+  const days: Record<string, any>[] = [];
+  const exercises: Record<string, any>[] = [];
+  const setRows: Record<string, any>[] = [];
+  version.days.forEach((d, i) => {
+    const dayId = crypto.randomUUID();
+    days.push({ id: dayId, plan_id: planId, name: d.name, position: i, ...(d.weekday != null ? { weekday: d.weekday } : {}) });
+    d.exercises.forEach((e, j) => {
+      const exId = crypto.randomUUID();
+      // Значения — как раньше: чего в снапшоте нет, берёт значение по умолчанию (defaultToNull: false), а не null
+      exercises.push({
+        id: exId, day_id: dayId, position: j, name: e.name ?? "", sets: e.sets ?? "", reps: e.reps ?? "", weight: e.weight ?? "", rest: e.rest ?? "",
         kind: "", pulse_zone: "", detailed: e.detailed ?? false,
         note: e.note, video: e.video, exercise_group: e.group, tempo: e.tempo, duration: e.duration, target: e.target,
-      })),
-      { defaultToNull: false },
-    ).select("id,position");
-    if (exErr) throw exErr;
-    // Подходы — к упражнению по его позиции (= индексу в снапшоте), не по порядку строк ответа
-    const rows = (exRows ?? []).flatMap((exRow) =>
-      (d.exercises[exRow.position]?.setRows ?? []).map((r, i) => ({ exercise_id: exRow.id, position: i, weight: r.weight, reps: r.reps })));
-    if (rows.length) {
-      const { error: srErr } = await supabase.from("plan_exercise_set_rows").insert(rows);
-      if (srErr) throw srErr;
+      });
+      (e.setRows ?? []).forEach((r, k) => setRows.push({ exercise_id: exId, position: k, weight: r.weight, reps: r.reps }));
+    });
+  });
+  const insert = async (table: string, rows: Record<string, any>[]) => {
+    if (!rows.length) return;
+    const { error } = await supabase.from(table).insert(rows, { defaultToNull: false });
+    if (error) throw error;
+  };
+
+  try {
+    await insert("plan_days", days);
+    await insert("plan_exercises", exercises);
+    await insert("plan_exercise_set_rows", setRows);
+    if (oldIds.length) {
+      const { error } = await supabase.from("plan_days").delete().in("id", oldIds);
+      if (error) throw error;
     }
+  } catch (e) {
+    // Убираем вставленное, только если старые дни точно на месте: удаление могло пройти,
+    // а ответ потеряться — тогда новые дни и есть план. Не удалось проверить — не трогаем:
+    // лишние дни лучше пустого плана.
+    const { data: still, error: chkErr } = oldIds.length
+      ? await supabase.from("plan_days").select("id").in("id", oldIds)
+      : { data: [] as { id: string }[], error: null };
+    if (!chkErr && (still ?? []).length === oldIds.length) {
+      await supabase.from("plan_days").delete().in("id", days.map((d) => d.id)).then(() => {}, () => {});
+    }
+    throw e;
   }
 }

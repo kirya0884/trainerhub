@@ -5,6 +5,8 @@
 //
 // Работаем нативным API, а не virtual:pwa-register — чтобы компонент не зависел
 // от модуля, который живёт в main.tsx.
+import { beforeReload } from "./unsavedGuard";
+
 export type UpdateResult = "updating" | "latest" | "unsupported" | "error";
 
 export async function checkForUpdate(): Promise<UpdateResult> {
@@ -19,6 +21,9 @@ export async function checkForUpdate(): Promise<UpdateResult> {
     const waiting = reg.waiting;
     if (!waiting) return "latest";
 
+    // Несохранённые правки плана пропали бы при перезагрузке — сначала дождаться или спросить
+    // Не дождались — «Не удалось», проверку можно повторить
+    if (!(await beforeReload())) return "error";
     waiting.postMessage({ type: "SKIP_WAITING" });
     navigator.serviceWorker.addEventListener("controllerchange", () => window.location.reload(), { once: true });
     // ponytail: страховка на случай, если controllerchange не придёт — на iOS бывает

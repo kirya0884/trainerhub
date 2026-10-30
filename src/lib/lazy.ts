@@ -1,4 +1,5 @@
 import { lazy, type ComponentType } from "react";
+import { whenSaved } from "./unsavedGuard";
 
 // Разделы грузятся по мере открытия: так первый запуск (особенно у клиента, которому
 // не нужен код тренера) скачивает в разы меньше.
@@ -16,7 +17,9 @@ export function lazyRetry<T extends ComponentType<any>>(factory: () => Promise<{
       .catch((e) => {
         let reloaded = false;
         try { reloaded = sessionStorage.getItem(KEY) === "1"; sessionStorage.setItem(KEY, "1"); } catch { /* приватный режим */ }
-        if (!reloaded) { location.reload(); return new Promise<{ default: T }>(() => {}); }
+        // Перезагрузка — когда очередь сохранений пуста (иначе пропадут правки плана), но не позже
+        // потолка whenSaved: без перезагрузки раздел так и висел бы на загрузке
+        if (!reloaded) { whenSaved().then(() => location.reload()); return new Promise<{ default: T }>(() => {}); }
         throw e;
       }),
   );

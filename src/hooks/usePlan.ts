@@ -4,6 +4,7 @@ import { notify } from "../lib/dialog";
 import { createSaveQueue, isTransient, withRetry, WAIT, type SaveStatus } from "../lib/saveQueue";
 import type { Day, Exercise, Mesocycle, Plan, SetRow } from "../types";
 import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
+import { trackUnsaved } from "../lib/unsavedGuard";
 
 // Сбой сети — «проверьте интернет»; отказ базы (права, связи) — про интернет не говорить
 const failMsg = (what: string, e: unknown) => isTransient(e)
@@ -48,7 +49,10 @@ export function usePlan(planId: string) {
   const mountedRef = useRef(true);
   useEffect(() => {
     mountedRef.current = true;
+    // Обновление приложения не перезагрузит страницу, пока очередь не дошлёт правки (и после ухода с экрана)
+    const untrack = trackUnsaved(q.active);
     return () => {
+      untrack();
       mountedRef.current = false;
       // Ушли с экрана (вкладки, системный «назад»): отложенное — сразу, а если что-то не ушло — сказать
       q.flushAll();

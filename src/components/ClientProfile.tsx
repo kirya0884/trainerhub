@@ -34,6 +34,8 @@ import { isNetworkError } from "../lib/outbox";
 
 // Отказ правки карточки из кэша — не чаще раза в 4 с (иначе сообщение на каждую букву)
 let lockedToastAt = 0;
+// Сообщение о несохранённой правке — тоже не чаще раза в 4 с
+let saveErrToastAt = 0;
 import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 import StartWorkoutModal from "./StartWorkoutModal";
@@ -66,6 +68,8 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const [showStart, setShowStart] = useState(false);
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   const [showReport, setShowReport] = useState(false);
+  // П19: правка не сохранилась и карточку не удалось перечитать — на экране не то, что в базе
+  const [unsaved, setUnsaved] = useState(false);
   const persist = useDebouncedPersist();
 
   useEffect(() => {
@@ -106,26 +110,45 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     if (Date.now() - lockedToastAt > 4000) { lockedToastAt = Date.now(); notify("Нет сети: карточка открыта с телефона, только для просмотра. Править можно, когда появится интернет."); }
     return true;
   };
+  // П19: запись не прошла — раньше на экране оставалось новое, в базе старое, без сообщения.
+  // Теперь: сообщение и карточка перечитывается из базы (экран = база); не перечиталась
+  // (нет сети) — плашка «не сохранено» с кнопкой «Обновить».
+  const reloadClient = () => api.fetchClient(clientId).then((v) => { setClient(v); setUnsaved(false); }).catch((e) => { console.error("[ClientProfile] перечитать карточку:", e); setUnsaved(true); });
+  const saveFailed = (e: unknown) => {
+    console.error("[ClientProfile] сохранение карточки:", e);
+    if (Date.now() - saveErrToastAt > 4000) {
+      saveErrToastAt = Date.now();
+      notify(isNetworkError(e) ? "Нет связи с сервером — изменение карточки не сохранилось." : "Не удалось сохранить изменение карточки. Показываю сохранённые данные.");
+    }
+    // Недосохранённый ввод отбрасываем, иначе он записался бы поверх перечитанной карточки
+    persist.cancel("client"); persist.cancel("health"); persist.cancel("membership");
+    reloadClient();
+  };
+  const save = (write: () => Promise<unknown>) => { write().catch(saveFailed); };
   // Текстовые поля — debounce per-field, чтобы не слать запрос на каждую букву. Чекбоксы/селекты — сразу.
   const patch = (p: Partial<ClientFull>, immediate = false) => {
     if (locked()) return;
     setClient((c) => (c ? { ...c, ...p } : c));
-    if (immediate) api.updateClient(clientId, p);
-    else persist("client", p, (pp) => api.updateClient(clientId, pp));
+    if (immediate) save(() => api.updateClient(clientId, p));
+    else persist("client", p, (pp) => save(() => api.updateClient(clientId, pp)));
   };
   const patchHealth = (p: Partial<ClientFull["health"]>) => {
     if (locked()) return;
     const merged = { ...client.health, ...p };
     setClient({ ...client, health: merged });
-    persist("health", { health: merged }, (pp) => api.updateClient(clientId, pp));
+    persist("health", { health: merged }, (pp) => save(() => api.updateClient(clientId, pp)));
   };
-  const patchMembership = (p: Partial<ClientFull["membership"]>, immediate = false) => {
+  // П18: абонемент больше не пишется целиком из экрана (затирал списание клиентом/календарём) —
+  // на сервер уходят только изменённые настройки, сервер сливает их с тем, что в базе.
+  // immediate — отправить сразу вместе с накопленным вводом (cancel потерял бы его).
+  const patchMembership = (p: paymentsApi.MembershipSettings, immediate = false) => {
     if (locked()) return;
-    const merged = { ...client.membership, ...p };
-    setClient({ ...client, membership: merged });
-    if (immediate) { persist.cancel("membership"); api.updateClient(clientId, { membership: merged }); }
-    else persist("membership", { membership: merged }, (pp) => api.updateClient(clientId, pp));
+    setClient((c) => (c ? { ...c, membership: { ...c.membership, ...p } } : c));
+    persist("membership", p, (pp) => save(() => paymentsApi.patchMembership(clientId, pp)));
+    if (immediate) persist.flush("membership");
   };
+  // Абонемент, который вернул сервер после оплаты/удаления/сплита, — только на экран
+  const setMembership = (m: ClientFull["membership"]) => setClient((c) => (c ? { ...c, membership: m } : c));
 
   const tgLink = client.telegram ? (client.telegram.startsWith("http") ? client.telegram : `https://t.me/${client.telegram.replace(/^@/, "")}`) : "";
   const waLink = client.whatsapp ? `https://wa.me/${client.whatsapp.replace(/\D/g, "")}` : "";
@@ -154,6 +177,13 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
           <CloudOff size={16} className="text-zinc-400 shrink-0 mt-0.5" />
           <span className="flex-1">Нет сети — карточка с телефона на {fmtSavedAt(cachedAt)}. Только просмотр; тренировку начать можно.</span>
           <button onClick={revalidate} className="shrink-0 text-lime-400 font-semibold hover:text-lime-300 transition">Обновить</button>
+        </div>
+      )}
+      {unsaved && (
+        <div role="alert" className="mb-3 flex items-start gap-2 bg-red-500/10 border border-red-500/30 rounded-2xl px-3 py-2.5 text-sm text-red-200">
+          <CloudOff size={16} className="text-red-300 shrink-0 mt-0.5" />
+          <span className="flex-1">Последнее изменение карточки не сохранилось — на экране может быть не то, что в базе.</span>
+          <button onClick={reloadClient} className="shrink-0 text-lime-400 font-semibold hover:text-lime-300 transition">Обновить</button>
         </div>
       )}
       {showReport && <ClientProgressPrintView clientId={clientId} planIds={(plans ?? []).map((p) => p.id)} clientName={client.name} trainerId={trainerId} onClose={() => setShowReport(false)} />}
@@ -285,8 +315,8 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       </div>
 
       {sub === "bookings" && <BookingsTab clientId={clientId} bookings={bookings ?? []} onOpenOccurrence={onOpenOccurrence} onBook={onBookClient ? () => onBookClient(clientId) : undefined} />}
-      {sub === "payments" && <MembershipTab client={client} patchMembership={patchMembership} clientId={clientId} trainerId={trainerId} />}
-      {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} patchMembership={patchMembership} trainerId={trainerId} />}
+      {sub === "payments" && <MembershipTab client={client} patchMembership={patchMembership} setMembership={setMembership} clientId={clientId} trainerId={trainerId} />}
+      {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} trainerId={trainerId} />}
       {sub === "reporting" && <ReportingTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
       {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} clientName={client.name} allPlans={allPlans ?? []} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
     </div>
@@ -352,7 +382,7 @@ function InviteBlock({ clientId, email, hasAccount, onFixEmail }: { clientId: st
 function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink }: {
   client: ClientFull; patch: (p: Partial<ClientFull>, immediate?: boolean) => void; patchHealth: (p: Partial<ClientFull["health"]>) => void;
   notes: ClientNote[]; setNotes: (n: ClientNote[]) => void; clientId: string; tgLink: string; waLink: string;
-  patchMembership: (p: Partial<ClientFull["membership"]>, immediate?: boolean) => void; trainerId: string;
+  trainerId: string;
 }) {
   const [noteText, setNoteText] = useState("");
   const addNote = async () => {
@@ -486,7 +516,7 @@ function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, 
   );
 }
 
-function MembershipTab({ client, patchMembership, clientId, trainerId }: { client: ClientFull; patchMembership: (p: Partial<ClientFull["membership"]>, immediate?: boolean) => void; clientId: string; trainerId: string }) {
+function MembershipTab({ client, patchMembership, setMembership, clientId, trainerId }: { client: ClientFull; patchMembership: (p: paymentsApi.MembershipSettings, immediate?: boolean) => void; setMembership: (m: ClientFull["membership"]) => void; clientId: string; trainerId: string }) {
   const m = client.membership;
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -512,12 +542,12 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   const linkPartner = async (partnerId: string) => {
     const partner = otherClients.find((c) => c.id === partnerId);
     if (!partner) return;
-    try { const merged = await api.linkSplitPartner(clientId, client.name, partnerId, partner.name, m); patchMembership(merged, true); }
+    try { setMembership(await paymentsApi.linkSplit(clientId, partnerId)); }
     catch (e) { console.error("[PaymentsTab] linkPartner:", e); notify("Не удалось привязать партнёра."); }
   };
   const unlinkPartner = async () => {
     if (!(await ask("Отвязать сплит-партнёра?", { ok: "Отвязать" }))) return;
-    try { const merged = await api.unlinkSplitPartner(clientId, m); patchMembership(merged, true); }
+    try { setMembership(await paymentsApi.unlinkSplit(clientId)); }
     catch (e) { console.error("[PaymentsTab] unlinkPartner:", e); notify("Не удалось отвязать партнёра."); }
   };
 
@@ -546,10 +576,22 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
   // второй платёж и второе начисление пакета.
   const payLock = useRef(false);
   const [paying, setPaying] = useState(false);
+  // П17: ключ от повторов. Живёт до успешной записи: если ответ потерялся и тренер жмёт
+  // «Оплачено» ещё раз, сервер узнает тот же id и второй платёж не создаст.
+  const payKey = useRef<string | null>(null);
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
     if (payLock.current) return;
     payLock.current = true; setPaying(true);
-    try { const merged = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus); patchMembership(merged, true); track("action", "payment", { status: payStatus, via: "profile" }); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+    if (!payKey.current) payKey.current = crypto.randomUUID();
+    try {
+      // Настройки пакета оплата берёт с экрана (p_package) — недосохранённый ввод не мешает
+      const res = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus, payKey.current);
+      payKey.current = null;
+      setMembership(res.membership);
+      if (res.duplicate) notify("Эта оплата уже была записана — повтор не создан.");
+      else track("action", "payment", { status: payStatus, via: "profile" });
+      api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
+    }
     catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); notify("Не удалось записать оплату."); }
     finally { payLock.current = false; setPaying(false); }
   };
@@ -573,17 +615,23 @@ function MembershipTab({ client, patchMembership, clientId, trainerId }: { clien
     try { await paymentsApi.updatePayment(p.id, { amount, note: r.note.trim() }); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] editPayment:", e); notify("Не удалось обновить платёж."); }
   };
+  const splitKeys = useRef(new Map<string, string[]>());
   const splitPayment = async (p: Payment) => {
     const r = await askInput("Разбить платёж", [{ key: "parts", label: "На сколько частей", value: "2", numeric: true }], { ok: "Разбить" });
     if (!r) return;
     const parts = Math.round(Number(r.parts));
     if (!parts || parts < 2) { notify("Нужно 2 части или больше."); return; }
-    try { await paymentsApi.splitPayment(clientId, p, parts); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+    if (parts > 50) { notify("Не больше 50 частей."); return; }
+    // Ключ от повторов: те же id частей до успеха — повтор после ошибки не разобьёт платёж ещё раз
+    const k = `${p.id}:${parts}`;
+    const ids = splitKeys.current.get(k) ?? Array.from({ length: parts - 1 }, () => crypto.randomUUID());
+    splitKeys.current.set(k, ids);
+    try { await paymentsApi.splitPayment(p.id, ids); splitKeys.current.delete(k); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] splitPayment:", e); notify("Не удалось разбить платёж."); }
   };
   const deletePayment = async (id: string) => {
     if (!(await ask("Удалить платёж из журнала? Если он добавлял тренировки в остаток, остаток тоже уменьшится обратно.", { danger: true, ok: "Удалить" }))) return;
-    try { const next = await paymentsApi.deletePayment(id, clientId, m); patchMembership(next, true); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+    try { setMembership(await paymentsApi.deletePayment(id, clientId)); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
     catch (e) { console.error("[PaymentsTab] deletePayment:", e); notify("Не удалось удалить платёж."); }
   };
 

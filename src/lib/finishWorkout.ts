@@ -9,14 +9,17 @@ import { notifyWorkoutFinished } from "./clientsBus";
 import type { Day, Metric, Session } from "../types";
 import { track } from "./events";
 
-// Записи тренировок, сохранённые в попытке, которая потом сорвалась (например, на
-// списании). Повтор «Завершить» не пишет запись второй раз — иначе в истории дубль.
-// Ключ снимается после полного успеха, так что вторая тренировка того же дня в тот
-// же день запишется как обычно.
-const loggedPending = new Set<string>();
+// Ключ от повторов записи (id сессии для log_workout) у попытки, которая сорвалась
+// (например, на списании). Повтор «Завершить» идёт с тем же id — сервер второй раз не
+// запишет. Снимается после полного успеха или когда завершение ушло в очередь (там свой
+// ключ в FinishState), так что вторая тренировка того же дня запишется как обычно.
+const pendingIds = new Map<string, string>();
+const logKeyOf = (o: { clientId: string; planId: string; day: Day; session: Omit<Session, "id"> }) =>
+  `${o.clientId}|${o.planId}|${o.day.id}|${o.session.date}`;
 
-/** Какие шаги уже сделаны — хранится в очереди отправки, чтобы повтор их не повторял */
-export interface FinishState { logged?: boolean; charge?: "skip" | "done" | { before: number } }
+/** Какие шаги уже сделаны — хранится в очереди отправки, чтобы повтор их не повторял.
+ *  sessionId — ключ от повторов записи; у записей из очереди версии до 31.10 его нет. */
+export interface FinishState { logged?: boolean; charge?: "skip" | "done" | { before: number }; sessionId?: string }
 
 /**
  * Д3: единственное место, где завершается проведённая тренировка.
@@ -48,14 +51,16 @@ export async function finishWorkout(opts: {
   const { trainerId, clientId, planId, day, metrics, note, session } = opts;
   const put = (patch: FinishState) => { st = { ...st, ...patch }; save(st); };
 
-  const logKey = `${clientId}|${planId}|${day.id}|${session.date}`;
-  if (!st.logged && !loggedPending.has(logKey)) {
-    // Повтор из очереди: прошлая попытка могла записать тренировку, а ответ не дошёл
-    // (связь оборвалась). Тогда запись уже в истории — второй раз не пишем.
-    const already = opts.retry && (await fetchProgress(planId)).sessions.some((s) =>
+  if (!st.logged) {
+    // Повтор из очереди прежней версии (без ключа): прошлая попытка могла записать
+    // тренировку, а ответ не дошёл. Тогда проверяем по истории, как раньше.
+    // С ключом повтор отсекает сервер (log_workout).
+    const already = opts.retry && !st.sessionId && (await fetchProgress(planId)).sessions.some((s) =>
       s.dayId === day.id && s.date === session.date && !s.fromClient && s.done === session.done && s.total === session.total);
-    if (!already) await logSession(planId, metrics, note, { ...session, dayId: day.id });
-    loggedPending.add(logKey);
+    const sessionId = st.sessionId ?? crypto.randomUUID();
+    // Ключ сохраняем ДО отправки: оборвётся — очередь или повтор «Завершить» пойдут с тем же
+    if (!st.sessionId) put({ sessionId });
+    if (!already) await logSession(planId, metrics, note, { ...session, dayId: day.id }, sessionId);
     put({ logged: true });
   }
 
@@ -120,7 +125,6 @@ export async function finishWorkout(opts: {
   // а гард выше не спишет настоящую тренировку в ту же дату.
   if (!isEmptyDay(day)) await markSessionDone(trainerId, clientId, day.name, session.date);
 
-  loggedPending.delete(logKey);
   notifyWorkoutFinished(planId);
   return { membership, charged };
 }
@@ -132,13 +136,17 @@ type FinishOpts = Parameters<typeof finishWorkout>[0];
  * шагами. Тренер закрывает тренировку как обычно; очередь дошлёт её сама.
  */
 export async function finishOrQueue(opts: FinishOpts): Promise<{ membership: Membership | null; charged: boolean; queued: boolean }> {
-  let st: FinishState = {};
+  const key = logKeyOf(opts);
+  const prevId = pendingIds.get(key);
+  let st: FinishState = prevId ? { sessionId: prevId } : {};
   try {
-    const r = await finishWorkout(opts, st, (s) => { st = s; });
+    const r = await finishWorkout(opts, st, (s) => { st = s; if (s.sessionId) pendingIds.set(key, s.sessionId); });
+    pendingIds.delete(key);
     track("action", "workout_finish", { queued: false, charged: r.charged });
     return { ...r, queued: false };
   } catch (e) {
     if (!isNetworkError(e)) throw e;
+    pendingIds.delete(key);
     await enqueue("finish", opts, st);
     track("action", "workout_finish", { queued: true });
     notify("Нет интернета — тренировка сохранена на телефоне и отправится сама, как только появится сеть.");

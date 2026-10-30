@@ -179,9 +179,9 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const [wellbeing, setWellbeing] = useState(0);
   const [review, setReview] = useState("");
 
+  // Черновик (подходы и отметки) не стираем здесь: до успешной отправки отзыва он нужен,
+  // если отправка не удалась или приложение закрыли на экране отзыва
   const finish = () => {
-    removeKey(`${SK}-vals`);
-    removeKey(`${SK}-meta`);
     const metrics = buildMetrics(day, vals);
 
     const items = day.exercises.filter((ex) => ex.name).map((ex) => {
@@ -204,6 +204,11 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     setSubmitting(true);
     try {
       await Promise.resolve(onFinish(draft.metrics, { ...draft.session, mood, wellbeing, clientRating: mood, review }));
+      // Отправлено или надёжно лежит в очереди досылки — черновик больше не нужен
+      removeKey(`${SK}-vals`);
+      removeKey(`${SK}-meta`);
+    } catch {
+      /* сообщение об ошибке показал onFinish; черновик остаётся — можно повторить */
     } finally {
       setSubmitting(false);
     }

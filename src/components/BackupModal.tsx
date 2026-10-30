@@ -31,16 +31,18 @@ export default function BackupModal({ trainerId, onClose }: { trainerId: string;
     setBusy(true);
     const reader = new FileReader();
     reader.onload = async () => {
+      let started = false; // импорт идёт пачками: после сбоя часть данных уже в базе
       try {
         const raw = JSON.parse(String(reader.result));
         setProgress({ done: 0, total: 0 });
-        const { skippedNutrition } = await importBackup(trainerId, raw, (done, total) => setProgress({ done, total }));
+        const { skippedNutrition } = await importBackup(trainerId, raw, (done, total) => { started = done > 0; setProgress({ done, total }); });
         track("action", "backup_import");
         setProgress(null);
         notify("Импорт завершён. Обновите страницу, чтобы увидеть новые данные."
           + (skippedNutrition ? `\n\nЗаписи дневников питания подопечных (${skippedNutrition}) не перенесены: их ведут сами подопечные, тренеру база писать в них не даёт. Они сохранены в файле копии.` : ""));
       } catch (err: any) {
-        notify("Не удалось импортировать файл: " + (err?.message || "неверный формат"));
+        notify("Не удалось импортировать файл: " + (err?.message || "неверный формат")
+          + (started ? "\n\nЧасть данных могла уже добавиться. Проверьте подопечных и планы, прежде чем импортировать файл ещё раз — иначе появятся дубли." : ""));
       } finally {
         setBusy(false);
         setProgress(null);

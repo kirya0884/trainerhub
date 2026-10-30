@@ -43,10 +43,18 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
   const base = next ? Number(next.type === "subscription" ? next.pricePerSession : next.packagePrice) || 0 : 0;
   const promo = next && data ? applyPromotion(base, data.promos, next.type === "subscription" ? "subscription" : "sessions") : null;
 
+  // Ключ от повторов (п. 17): тот же id, пока окно открыто, — повтор после «не удалось»
+  // не создаст второй платёж, если первый на самом деле дошёл до базы.
+  const [payKey] = useState(() => crypto.randomUUID());
   const pay = async (status: PayStatus) => {
     if (!next || busy) return;
     setBusy(true);
-    try { await markPaid(clientId, next, data!.promos, status); track("action", "renew", { status }); onDone(); onClose(); }
+    try {
+      const res = await markPaid(clientId, next, data!.promos, status, payKey);
+      if (res.duplicate) notify("Эта оплата уже была записана — повтор не создан.");
+      else track("action", "renew", { status });
+      onDone(); onClose();
+    }
     catch (e) { console.error("[RenewModal] оплата:", e); notify("Не удалось записать оплату."); }
     finally { setBusy(false); }
   };

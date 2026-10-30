@@ -10,6 +10,7 @@ import "@fontsource-variable/onest";
 import "@fontsource-variable/unbounded";
 import "./index.css";
 import { registerSW } from "virtual:pwa-register";
+import { beforeReload, hasUnsaved } from "./lib/unsavedGuard";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -28,6 +29,8 @@ const safeToReload = () => {
   try {
     if (Object.keys(localStorage).some((k) => k.startsWith("th-active-workout-v2-"))) return false;
   } catch { /* нет доступа к хранилищу — тогда судим только по окнам */ }
+  // Очередь сохранений плана живёт в памяти, досылка в полёте оборвалась бы — ждём
+  if (hasUnsaved()) return false;
   return !document.querySelector('[aria-modal="true"], [data-workout]');
 };
 const applyIfSafe = () => {
@@ -66,10 +69,19 @@ const updateSW = registerSW({
     label.textContent = "Обновить приложение";
     btn.append(dot, label);
 
-    btn.onclick = () => {
+    btn.onclick = async () => {
       btn.disabled = true;
       btn.classList.add("opacity-60");
       dot.remove();
+      label.textContent = hasUnsaved() ? "Сохраняем изменения..." : "Обновляем...";
+      if (!(await beforeReload())) {
+        // Не дождались сохранения — кнопку вернуть, обновиться можно позже
+        btn.disabled = false;
+        btn.classList.remove("opacity-60");
+        btn.prepend(dot);
+        label.textContent = "Обновить приложение";
+        return;
+      }
       label.textContent = "Обновляем...";
       updateSW(true);
     };

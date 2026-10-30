@@ -4,6 +4,7 @@ import { CLIENT_COLORS } from "../constants";
 import { today } from "./format";
 import { ask } from "./dialog";
 import { upgradeLime } from "./brand";
+import { fetchAll, fetchAllIn } from "./fetchAll";
 
 export interface ClientListItem {
   id: string;
@@ -86,8 +87,9 @@ export async function restoreClient(id: string) {
 export async function permanentlyDeleteClient(id: string) {
   // Какие записи календаря держались на этом подопечном — узнаём ДО удаления:
   // внешний ключ стоит с on delete cascade и снесёт связи вместе с клиентом.
-  const { data: links } = await supabase.from("booking_clients").select("booking_id").eq("client_id", id);
-  const touched = [...new Set((links ?? []).map((l: any) => l.booking_id as string))];
+  // п.27: больше 1000 связей отдаются страницами (иначе хвост остался бы пустыми записями)
+  const links = await fetchAll<{ booking_id: string }>((from, to) => supabase.from("booking_clients").select("booking_id").eq("client_id", id).order("booking_id").range(from, to));
+  const touched = [...new Set(links.map((l) => l.booking_id))];
 
   const { error } = await supabase.from("clients").delete().eq("id", id);
   if (error) throw error;
@@ -96,8 +98,9 @@ export async function permanentlyDeleteClient(id: string) {
   // при мягком удалении связи трогать нельзя, иначе восстановление из корзины
   // вернуло бы клиента без его тренировок. Окончательное удаление отката не имеет.
   if (!touched.length) return;
-  const { data: still } = await supabase.from("booking_clients").select("booking_id").in("booking_id", touched);
-  const alive = new Set((still ?? []).map((l: any) => l.booking_id as string));
+  // Ошибка чтения — исключение, а не «никого не осталось»: иначе удалили бы и групповые записи с другими подопечными
+  const still = await fetchAllIn<{ booking_id: string }>(touched, (chunk, from, to) => supabase.from("booking_clients").select("booking_id").in("booking_id", chunk).order("booking_id").order("client_id").range(from, to));
+  const alive = new Set(still.map((l) => l.booking_id));
   const empty = touched.filter((b) => !alive.has(b));
   if (empty.length) {
     const { error: delErr } = await supabase.from("bookings").delete().in("id", empty);
@@ -171,16 +174,16 @@ export async function fetchAllPlans(trainerId: string): Promise<PlanOverviewItem
   // Число дней и последняя тренировка — только для подписи в строке, поэтому ошибка
   // этих запросов не роняет список: строка просто останется без них.
   const ids = (data ?? []).map((p) => p.id);
-  const [{ data: days }, { data: sessions }] = ids.length
-    ? await Promise.all([
-        supabase.from("plan_days").select("plan_id,archived_at").in("plan_id", ids),
-        supabase.from("plan_sessions").select("plan_id,date").in("plan_id", ids).is("deleted_at", null),
-      ])
-    : [{ data: [] as any[] }, { data: [] as any[] }];
+  // п.27: строк больше 1000 — страницами, id планов в .in() — частями (fetchAllIn)
+  const noRows = (what: string) => (e: unknown) => { console.error(`[fetchAllPlans] ${what}:`, e); return []; };
+  const [days, sessions] = await Promise.all([
+    fetchAllIn<{ plan_id: string; archived_at: string | null }>(ids, (chunk, from, to) => supabase.from("plan_days").select("id,plan_id,archived_at").in("plan_id", chunk).order("id").range(from, to)).catch(noRows("дни")),
+    fetchAllIn<{ plan_id: string; date: string | null }>(ids, (chunk, from, to) => supabase.from("plan_sessions").select("id,plan_id,date").in("plan_id", chunk).is("deleted_at", null).order("id").range(from, to)).catch(noRows("тренировки")),
+  ]);
   const daysCount: Record<string, number> = {};
-  for (const d of days ?? []) if (!d.archived_at) daysCount[d.plan_id] = (daysCount[d.plan_id] ?? 0) + 1;
+  for (const d of days) if (!d.archived_at) daysCount[d.plan_id] = (daysCount[d.plan_id] ?? 0) + 1;
   const lastDate: Record<string, string> = {};
-  for (const s of sessions ?? []) if (s.date && (!lastDate[s.plan_id] || s.date > lastDate[s.plan_id])) lastDate[s.plan_id] = s.date;
+  for (const s of sessions) if (s.date && (!lastDate[s.plan_id] || s.date > lastDate[s.plan_id])) lastDate[s.plan_id] = s.date;
   return (data ?? []).map((p) => ({
     id: p.id, name: p.name, archived: p.archived, clientId: p.client_id,
     visibleToClient: p.visible_to_client !== false,
@@ -316,90 +319,43 @@ export async function hasSessionOnDate(clientId: string, date: string): Promise<
 }
 
 // Заработок по проведённым тренировкам (таблица session_charges): цена одной тренировки
-// текущего блока на момент списания. Пишется после списания; сбой записи не ломает
-// тренировку — остаток важнее строки в статистике.
+// текущего блока на момент списания. Пишет сервер в той же транзакции, что и списание.
 export type ChargeKind = "workout" | "no_show" | "refund";
-export const blockPrice = (m: Membership) => Number(String(m.remainingPrice ?? "").replace(",", ".")) || sessionPrice(m);
-export async function logCharge(clientId: string, amount: number, kind: ChargeKind, date?: string) {
-  const { error } = await supabase.from("session_charges").insert({ client_id: clientId, amount: Math.round(amount * 100) / 100, kind, ...(date ? { date } : {}) });
-  if (error) console.error("[logCharge]", error.message);
-}
 
+// Аудит 30.10, п.20: списание целиком на сервере (charge_session) — остаток, доп. блок,
+// остаток партнёру по сплиту и строка заработка одной транзакцией от СВЕЖЕГО абонемента.
+// Раньше это были 3–4 запроса: строка заработка терялась молча, а абонемент писался
+// целиком из переданной копии. Правила те же (подписка, пустой остаток, остаток ≤ 0 —
+// не списываем). Дата — местный день телефона, а не UTC сервера.
+// Сигнатура прежняя; membership нужен только чтобы не ходить на сервер, когда списывать нечего.
 export async function decrementMembershipRemaining(clientId: string, membership: Membership, charge: { kind?: ChargeKind; date?: string } = {}) {
   if (membership.type === "subscription" || membership.remaining === "" || membership.remaining == null) return membership;
-  const left = Number(membership.remaining);
-  if (Number.isNaN(left) || left <= 0) return membership;
-  const price = blockPrice(membership); // до списания: тренировка — из текущего блока
-  let next = { ...membership, remaining: String(left - 1) };
-  // ponytail: основной блок закончился — переносим "доп. блок" (другая цена) на его место
-  if (Number(next.remaining) <= 0 && Number(next.extraRemaining) > 0) {
-    next = { ...next, remaining: next.extraRemaining, remainingPrice: next.extraPricePerSession, remainingTotal: next.extraRemaining, extraRemaining: "", extraPricePerSession: "" };
-  }
-  await updateClient(clientId, { membership: next });
-  if (membership.split && membership.partnerClientId)
-    await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining, remainingPrice: next.remainingPrice, extraRemaining: next.extraRemaining, extraPricePerSession: next.extraPricePerSession });
-  await logCharge(clientId, price, charge.kind ?? "workout", charge.date);
-  return next;
+  const { data, error } = await supabase.rpc("charge_session", { p_client_id: clientId, p_kind: charge.kind ?? "workout", p_date: charge.date ?? today() });
+  if (error) throw error;
+  notifyClientsChanged();
+  return { ...emptyMembership, ...((data as { membership?: Membership } | null)?.membership || {}) } as Membership;
 }
 
-// Возврат 1 тренировки в остаток пакета — при отмене/удалении тренировки по уважительной причине (зеркало decrementMembershipRemaining).
-export async function incrementMembershipRemaining(clientId: string, membership: Membership, refund?: { date?: string }) {
-  // Подписка: разовые к ней не добавляются, оплата помесячная.
-  if (membership.type === "subscription") return membership;
-
-  // П5: раньше здесь был молчаливый выход при пустом остатке — а это как раз главный
-  // сценарий разовой тренировки: клиент пришёл без пакета. Кнопка не работала у 43
-  // подопечных из 60 и ничего об этом не сообщала. Теперь пустой остаток считаем нулём.
-  const raw = membership.remaining;
-  const base = raw === "" || raw == null ? 0 : Number(raw);
-  if (!Number.isFinite(base)) return membership;
-
-  // remainingTotal — знаменатель в «X из Y». При возврате тренировки по уважительной
-  // причине он меняться не должен, поэтому поднимаем его только когда пакета не было
-  // вовсе (иначе у клиента без абонемента показывалось бы «1 из 0»).
-  const totalRaw = membership.remainingTotal;
-  const totalWasEmpty = totalRaw === "" || totalRaw == null || Number(totalRaw) === 0;
-
-  const next: Membership = {
-    ...membership,
-    type: "sessions",
-    remaining: String(base + 1),
-    ...(totalWasEmpty ? { remainingTotal: String(base + 1) } : {}),
-  };
-  await updateClient(clientId, { membership: next });
-  if (membership.split && membership.partnerClientId) await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining });
-  // Возврат по уважительной причине снимает заработок того дня
-  if (refund) await logCharge(clientId, -blockPrice(membership), "refund", refund.date);
-  return next;
-}
-
-// Переносит указанные поля абонемента партнёру по сплиту, не трогая его собственные split/partnerName/partnerClientId.
-export async function syncMembershipToPartner(partnerId: string, fields: Partial<Membership>) {
-  const partner = await fetchClient(partnerId);
-  await updateClient(partnerId, { membership: { ...partner.membership, ...fields } });
-}
-
-// Связывает двух клиентов в сплит-пару: общий тип/остаток абонемента, оплата делится 50/50 (см. lib/payments.ts).
-export async function linkSplitPartner(selfId: string, selfName: string, partnerId: string, partnerName: string, membership: Membership) {
-  const selfNext: Membership = { ...membership, split: true, partnerClientId: partnerId, partnerName };
-  await updateClient(selfId, { membership: selfNext });
-  const partner = await fetchClient(partnerId);
-  await updateClient(partnerId, {
-    membership: { ...partner.membership, type: membership.type, total: membership.total, packagePrice: membership.packagePrice, pricePerSession: membership.pricePerSession, remaining: membership.remaining, remainingPrice: membership.remainingPrice, remainingTotal: membership.remainingTotal, extraRemaining: membership.extraRemaining, extraPricePerSession: membership.extraPricePerSession, paymentDate: membership.paymentDate, nextPaymentDate: membership.nextPaymentDate, split: true, partnerClientId: selfId, partnerName: selfName },
+// Возврат 1 тренировки в остаток пакета — при отмене/удалении тренировки по уважительной
+// причине (refund) или добавлении разовой (payment — оплаченная разовая: платёж 'single').
+// Аудит 30.10, пп.18, 20: всё на сервере (credit_session) одной транзакцией от свежего
+// абонемента: остаток, партнёру по сплиту — только remaining, строка возврата, платёж.
+// Раньше абонемент и партнёр писались целиком из копий экрана (затирали чужие списания),
+// а строка возврата и платёж шли отдельными запросами. Правила прежние: подписка — без
+// изменений; пустой остаток (разовая без пакета, П5) считается нулём; «X из Y» не меняется,
+// если Y уже был. payment.id — ключ от повторов: повтор с тем же id второй раз не добавит.
+export async function incrementMembershipRemaining(clientId: string, membership: Membership, refund?: { date?: string }, payment?: { id: string; date: string; amount: number }) {
+  if (membership.type === "subscription") return { membership, duplicate: false };
+  const { data, error } = await supabase.rpc("credit_session", {
+    p_client_id: clientId,
+    p_refund_date: refund ? refund.date ?? today() : null,
+    p_payment_id: payment?.id ?? null, p_payment_date: payment?.date ?? null, p_payment_amount: payment?.amount ?? null,
   });
-  return selfNext;
-}
-
-// Отвязывает сплит-пару (с обеих сторон, если партнёр всё ещё указывает на этого клиента).
-export async function unlinkSplitPartner(selfId: string, membership: Membership) {
-  const partnerId = membership.partnerClientId;
-  const selfNext: Membership = { ...membership, split: false, partnerClientId: "", partnerName: "" };
-  await updateClient(selfId, { membership: selfNext });
-  if (partnerId) {
-    const partner = await fetchClient(partnerId);
-    if (partner.membership.partnerClientId === selfId) await updateClient(partnerId, { membership: { ...partner.membership, split: false, partnerClientId: "", partnerName: "" } });
-  }
-  return selfNext;
+  if (error) throw error;
+  notifyClientsChanged();
+  const d = data as { membership?: Membership; duplicate?: boolean } | null;
+  // duplicate: платёж с этим id уже записан прошлой попыткой — второй +1 сервер не сделал
+  return { membership: { ...emptyMembership, ...(d?.membership || {}) } as Membership, duplicate: !!d?.duplicate };
 }
 
 export interface Measurement {
@@ -458,9 +414,9 @@ export async function deletePhoto(id: string) {
 export interface Payment { id: string; date: string; amount: number; type: string; note: string; promoApplied: string; payStatus: 'paid' | 'deferred' | 'installment' }
 
 export async function fetchPayments(clientId: string): Promise<Payment[]> {
-  const { data, error } = await supabase.from("client_payments").select("id,date,amount,type,note,promo_applied,pay_status").eq("client_id", clientId).order("date", { ascending: false });
-  if (error) throw error;
-  return (data ?? []).map((p) => ({ id: p.id, date: p.date, amount: Number(p.amount) || 0, type: p.type ?? "", note: p.note ?? "", promoApplied: p.promo_applied ?? "", payStatus: (p.pay_status as Payment["payStatus"]) || "paid" }));
+  // п.27: больше 1000 платежей — страницами; id — второй ключ сортировки, чтобы страницы не пересекались
+  const data = await fetchAll<any>((from, to) => supabase.from("client_payments").select("id,date,amount,type,note,promo_applied,pay_status").eq("client_id", clientId).order("date", { ascending: false }).order("id").range(from, to));
+  return data.map((p) => ({ id: p.id, date: p.date, amount: Number(p.amount) || 0, type: p.type ?? "", note: p.note ?? "", promoApplied: p.promo_applied ?? "", payStatus: (p.pay_status as Payment["payStatus"]) || "paid" }));
 }
 
 export interface ClientNote { id: string; date: string; text: string }

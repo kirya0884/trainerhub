@@ -8,7 +8,6 @@ import { useProgress } from "../hooks/useProgress";
 import { incrementMembershipRemaining, fetchClient, sessionPrice, combinedRemaining, confirmEmptyMembership, remainingOf, type Membership } from "../lib/clients";
 import { fmtDate, initials, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
-import * as paymentsApi from "../lib/payments";
 import * as templatesApi from "../lib/templates";
 import { onClientsChanged, onWorkoutFinished } from "../lib/clientsBus";
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
@@ -250,6 +249,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   const [showPlanMenu, setShowPlanMenu] = useState(false);
   const [historyFor, setHistoryFor] = useState<string | null>(null);
   const [addingSession, setAddingSession] = useState(false);
+  // Ключ от повторов платной разовой: id платежа живёт до успеха. Ответ потерялся — повторное
+  // нажатие уйдёт с тем же id, и сервер (credit_session) второй платёж и +1 не запишет.
+  const singlePaymentId = useRef<string | null>(null);
   const [clientName, setClientName] = useState("");
   const [clientColor, setClientColor] = useState("");
   // Шапка и меню дней/блоков: одно открытое меню за раз
@@ -314,9 +316,12 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
 
     setAddingSession(true);
     try {
-      const next = await incrementMembershipRemaining(clientId, membership);
-      if (paid) await paymentsApi.addPayment(clientId, { date: today(), amount, type: "single", note: "Разовая тренировка" }, 1);
+      // +1 и платёж — одна транзакция на сервере (credit_session): обрыв не оставит одно без другого
+      const payId = paid ? (singlePaymentId.current ??= crypto.randomUUID()) : null;
+      const { membership: next, duplicate } = await incrementMembershipRemaining(clientId, membership, undefined, payId ? { id: payId, date: today(), amount } : undefined);
+      if (paid) singlePaymentId.current = null;
       setMembership(next);
+      if (duplicate) notify("Тренировка из прошлой попытки уже была записана. Чтобы добавить ещё одну, нажмите снова.", "info");
     } catch (e: any) {
       notify(e.message || "Не удалось добавить тренировку");
     } finally {
@@ -329,7 +334,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     try {
       const delDate = sessions.find((s) => s.id === deletingSessionId)?.date;
       await deleteSession(deletingSessionId, reason);
-      if (reason === "Уважительная" && membership) setMembership(await incrementMembershipRemaining(clientId, membership, { date: delDate }));
+      if (reason === "Уважительная" && membership) setMembership((await incrementMembershipRemaining(clientId, membership, { date: delDate })).membership);
     } catch (e: any) {
       console.error("[PlanEditor] confirmDeleteSession:", e);
       notify("Не удалось удалить тренировку. Попробуй ещё раз.");

@@ -189,6 +189,9 @@ export function createSaveQueue(onChange: (s: SaveStatus) => void, onFatal: (key
     status,
     /** Есть неотправленное: правки в слотах (в т.ч. упавшие и придержанные) или запрос в полёте */
     pending: () => [...entities.values()].some((e) => e.slots.size > 0 || e.loop !== null),
+    /** Идёт работа: запрос или повтор в цикле, правка ждёт отправки, разовая операция. Упавшее после
+     *  всех повторов и придержанное — не в счёт: само не уйдёт, ждать его бесполезно (unsavedGuard) */
+    active: () => ops > 0 || [...entities.values()].some((e) => e.loop !== null || (e.slots.size > 0 && !e.failed && !e.hold)),
     drop,
     release,
     /** Разовая операция: учитывается в «Сохраняю…» */

@@ -1,23 +1,40 @@
 import { supabase } from "./supabase";
 import { cached } from "./offlineCache";
+import { fetchAll, fetchAllIn } from "./fetchAll";
 import type { Metric, ProgressNote, Session, SessionItem } from "../types";
 
 export interface ProgressData { progress: ProgressNote[]; metrics: Metric[]; sessions: Session[] }
+
+// Упражнения тренировок (п.27, лимит 1000 строк). Страницами (fetchAll) нельзя: у
+// plan_session_items нет столбца порядка, и сортировка по id для страниц перемешала бы
+// упражнения внутри тренировки. Поэтому без сортировки, частями по 50 тренировок; часть,
+// упёршаяся в 1000 строк, делится пополам — так ничего не обрезается молча.
+const ITEMS_CHUNK = 50, MAX_ROWS = 1000;
+async function itemsOf(ids: string[]): Promise<any[]> {
+  const { data, error } = await supabase.from("plan_session_items").select("*").in("session_id", ids);
+  if (error) throw error;
+  if ((data?.length ?? 0) >= MAX_ROWS && ids.length > 1) {
+    const h = ids.length >> 1;
+    return [...await itemsOf(ids.slice(0, h)), ...await itemsOf(ids.slice(h))];
+  }
+  return data ?? [];
+}
+async function fetchSessionItems(sessionIds: string[]): Promise<any[]> {
+  const out: any[] = [];
+  for (let i = 0; i < sessionIds.length; i += ITEMS_CHUNK) out.push(...await itemsOf(sessionIds.slice(i, i + ITEMS_CHUNK)));
+  return out;
+}
 
 // Ошибки не глотаем: пустая история вместо упавшего запроса попала бы в кэш для зала
 // и обманула бы проверки при завершении тренировки
 export async function fetchProgress(planId: string): Promise<ProgressData> {
   const { data: progress, error: e1 } = await supabase.from("plan_progress_notes").select("id,date,text").eq("plan_id", planId).order("date", { ascending: false });
   if (e1) throw e1;
-  const { data: metrics, error: e2 } = await supabase.from("plan_metrics").select("*").eq("plan_id", planId).order("date");
-  if (e2) throw e2;
+  // Метрик у плана копится больше 1000 (≈8 за тренировку) — страницами, по уникальному (date, id)
+  const metrics = await fetchAll<any>((from, to) => supabase.from("plan_metrics").select("*").eq("plan_id", planId).order("date").order("id").range(from, to));
   const { data: sessions, error: e3 } = await supabase.from("plan_sessions").select("*").eq("plan_id", planId).is("deleted_at", null).order("date", { ascending: false });
   if (e3) throw e3;
-  const sessIds = (sessions ?? []).map((s) => s.id);
-  const { data: items, error: e4 } = sessIds.length
-    ? await supabase.from("plan_session_items").select("*").in("session_id", sessIds)
-    : { data: [] as any[], error: null };
-  if (e4) throw e4;
+  const items = await fetchSessionItems((sessions ?? []).map((s) => s.id));
   const itemsBySession: Record<string, SessionItem[]> = {};
   for (const it of items ?? []) (itemsBySession[it.session_id] ??= []).push({ name: it.name, effort: it.effort ?? 0, rpe: it.rpe ?? 0, note: it.note ?? "", actualSets: it.actual_sets ?? undefined, plannedSets: it.planned_sets ?? undefined, plannedSummary: it.planned_summary ?? undefined });
 
@@ -41,8 +58,13 @@ export const fetchProgressCached = (planId: string) => cached(`progress:${planId
 // ponytail: без фото — печатный отчёт текстовый; замеры подтягивает вызывающий код через clients.fetchMeasurements
 export async function fetchClientSessionsSummary(planIds: string[]): Promise<{ sessions: Session[]; metrics: Metric[] }> {
   if (!planIds.length) return { sessions: [], metrics: [] };
-  const { data: sessions } = await supabase.from("plan_sessions").select("*").in("plan_id", planIds).is("deleted_at", null).order("date", { ascending: false });
-  const { data: metrics } = await supabase.from("plan_metrics").select("*").in("plan_id", planIds).order("date");
+  // Страницами по уникальному ключу (п.27); ошибки пробрасываем — раньше отчёт молча выходил пустым
+  const sessions = await fetchAllIn<any>(planIds, (ids, from, to) => supabase.from("plan_sessions").select("*").in("plan_id", ids).is("deleted_at", null)
+    .order("date", { ascending: false }).order("id").range(from, to));
+  const metrics = await fetchAllIn<any>(planIds, (ids, from, to) => supabase.from("plan_metrics").select("*").in("plan_id", ids).order("date").order("id").range(from, to));
+  // Части по планам склеены — общий порядок восстанавливаем
+  sessions.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  metrics.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
   return {
     sessions: (sessions ?? []).map((s) => ({
       id: s.id, date: s.date, dayName: s.day_name ?? "", dayId: s.day_id ?? null, mood: s.mood ?? 0, wellbeing: s.wellbeing ?? 0,
@@ -96,32 +118,36 @@ export async function permanentlyDeleteSession(id: string) {
   if (error) throw error;
 }
 
-// Фиксация факта тренировки: замеры + авто-запись в журнал + запись сессии (одной транзакцией на клиенте — три insert'а)
-export async function logSession(planId: string, metricsIn: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) {
-  let savedMetrics: Metric[] = [];
-  if (metricsIn.length) {
-    const { data, error } = await supabase.from("plan_metrics").insert(metricsIn.map((m) => ({ plan_id: planId, ...m }))).select();
-    if (error) throw error;
-    savedMetrics = (data ?? []).map((m) => ({ id: m.id, date: m.date, exercise: m.exercise, weight: m.weight ?? "", reps: m.reps ?? "", rest: m.rest ?? "", sets: m.sets ?? "" }));
-  }
+/**
+ * Тренировка (сессия, упражнения, метрики, заметка) одной транзакцией — RPC log_workout
+ * (миграция 20261031_stage2_workouts). sessionId задаёт телефон: повтор с тем же id
+ * (очередь отправки, вторая вкладка, ответ не дошёл) ничего не пишет — created: false.
+ */
+export async function logWorkout(sessionId: string, planId: string, session: Record<string, unknown>,
+  items: Record<string, unknown>[], metrics: Omit<Metric, "id">[], note = "") {
+  const { data, error } = await supabase.rpc("log_workout", {
+    p_session_id: sessionId, p_plan_id: planId, p_session: session, p_items: items, p_metrics: metrics, p_note: note,
+  });
+  if (error) throw error;
+  return data as { created: boolean; session_id: string; session?: any; metrics?: any[]; note?: any };
+}
 
-  const noteRow = note.trim()
-    ? (await supabase.from("plan_progress_notes").insert({ plan_id: planId, text: note }).select().single()).data
-    : null;
-
-  const { data: sessRow, error: sessErr } = await supabase.from("plan_sessions").insert({
-    plan_id: planId, date: session.date, day_name: session.dayName, day_id: session.dayId ?? null,
+// Фиксация факта тренировки: замеры + авто-запись в журнал + запись сессии — одной транзакцией на сервере
+export async function logSession(planId: string, metricsIn: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">, sessionId: string = crypto.randomUUID()) {
+  const res = await logWorkout(sessionId, planId, {
+    date: session.date, day_name: session.dayName, day_id: session.dayId ?? null,
     mood: session.mood || null, wellbeing: session.wellbeing || null, client_rating: session.clientRating || null,
     review: session.review, done: session.done, total: session.total, from_client: session.fromClient,
-  }).select().single();
-  if (sessErr) throw sessErr;
+  }, session.items.map((i) => ({ name: i.name, effort: i.effort, rpe: i.rpe, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null })),
+  metricsIn, note.trim() ? note : "");
 
-  if (session.items.length) {
-    const { error: itemsErr } = await supabase.from("plan_session_items").insert(
-      session.items.map((i) => ({ session_id: sessRow.id, name: i.name, effort: i.effort, rpe: i.rpe, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null }))
-    );
-    if (itemsErr) throw itemsErr;
-  }
+  // Повтор уже записанной (created: false): метрики и заметка ушли в прошлый раз, сессия — как отправляли
+  const savedMetrics: Metric[] = (res.metrics ?? []).map((m) => ({ id: m.id, date: m.date, exercise: m.exercise, weight: m.weight ?? "", reps: m.reps ?? "", rest: m.rest ?? "", sets: m.sets ?? "" }));
+  const noteRow = res.note ?? null;
+  const sessRow = res.session ?? {
+    id: sessionId, date: session.date, day_name: session.dayName, day_id: session.dayId ?? null, mood: session.mood, wellbeing: session.wellbeing,
+    client_rating: session.clientRating, review: session.review, done: session.done, total: session.total, from_client: session.fromClient,
+  };
 
   return {
     metrics: savedMetrics,

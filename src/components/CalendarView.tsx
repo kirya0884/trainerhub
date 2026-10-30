@@ -38,14 +38,15 @@ const HOURS = Array.from({ length: HOUR_END - HOUR_START + 1 }, (_, i) => HOUR_S
 const ROW_H = 48; // px за час
 
 export default function CalendarView({ trainerId, bookingsHook, clients, reloadClients, onOpenClient, onOpenClientPlans, openBooking, newBookingClientId, openOccurrence }: { trainerId: string; bookingsHook: ReturnType<typeof import("../hooks/useBookings").useBookings>; clients: ClientListItem[]; reloadClients: () => void; onOpenClient: (id: string) => void; onOpenClientPlans: (id: string) => void; openBooking?: boolean; newBookingClientId?: string; openOccurrence?: { id: string; occDate: string } }) {
-  const { bookings, addBooking, updateBooking, deleteBooking, cancelOccurrence, doneOccurrence, noShowOccurrence, rescheduleOccurrence } = bookingsHook;
+  const { bookings, addBooking, updateBooking, deleteBooking, markOccurrence, cancelOccurrence, noShowOccurrence, rescheduleOccurrence } = bookingsHook;
   // B12: запоминаем режим просмотра, но НЕ дату — вернувшись через час, ожидаешь
   // увидеть текущую неделю, а не ту, на которой ушёл.
   const [mode, setMode] = useState<Mode>(() => loadViewState<Mode>("calendar-mode", "week"));
   useEffect(() => { saveViewState("calendar-mode", mode); }, [mode]);
   const today = todayFn();
   const [anchor, setAnchor] = useState(today);
-  const [modal, setModal] = useState<{ booking?: Booking; date?: string; time?: string; occDate?: string; clientId?: string } | null>(null);
+  // createdId — запись, созданная этой формой, если отметка после создания сорвалась (повтор не создаёт вторую)
+  const [modal, setModal] = useState<{ booking?: Booking; date?: string; time?: string; occDate?: string; clientId?: string; createdId?: string } | null>(null);
   // B13: FAB просит сразу открыть форму новой записи на сегодня. Подопечного запоминаем
   // в самой форме: флаги из навигации App снимает сразу после открытия экрана.
   useEffect(() => { if (openBooking) setModal({ date: todayFn(), clientId: newBookingClientId }); }, [openBooking]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -59,8 +60,9 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   useEffect(() => {
     if (!pendingOcc || bookingsHook.loading) return;
     const { id, occDate } = pendingOcc;
-    const occ = expandBookings(bookings, occDate, occDate).find((o) => o.id === id && o.occDate === occDate);
-    if (occ) setQuickView(occ);
+    // Занятие серии могли перенести на другой день (п.24) — ищем шире и встаём на его дату
+    const occ = expandBookings(bookings, addDays(occDate, -366), addDays(occDate, 366)).find((o) => o.id === id && o.occDate === occDate);
+    if (occ) { setAnchor(occ.date); setQuickView(occ); }
     setPendingOcc(null);
   }, [pendingOcc, bookings, bookingsHook.loading]);
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
@@ -68,18 +70,17 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   const [delOcc, setDelOcc] = useState<Occurrence | null>(null);
   const [renew, setRenew] = useState<string | null>(null);
   const [remind, setRemind] = useState<{ id: string; date: string; time: string } | null>(null);
-  // Сначала статус записи (кнопка пропадает — второй раз не спишем), потом списание
+  // П.14 аудита: статус и списания всех подопечных — одна серверная транзакция. Раньше
+  // статус и каждое списание шли отдельными запросами: сбой на втором подопечном, повтор —
+  // и первый списывался ещё раз. Теперь либо прошло всё, либо ничего; повтор того же
+  // вызова (ответ не дошёл) сервер узнаёт по статусу и ключу списания и не списывает снова.
   const markNoShow = async (o: Occurrence, reasons: Record<string, NoShowReason>) => {
     const b = findBookingById(o.id);
     if (!b) return;
     const why = o.clientIds.map((id) => (o.clientIds.length > 1 ? `${clientName(id)} — ` : "") + reasons[id].toLowerCase()).join(", ");
     try {
-      await noShowOccurrence(b, o.occDate, [o.note, `Не пришёл: ${why}`].filter(Boolean).join(" · "));
-      for (const id of o.clientIds) {
-        if (reasons[id] === "Уважительная") continue;
-        const m = (await clientsApi.fetchClient(id)).membership;
-        if (m) await clientsApi.decrementMembershipRemaining(id, m, { kind: "no_show", date: o.date });
-      }
+      await noShowOccurrence(b, o.occDate, [o.note, `Не пришёл: ${why}`].filter(Boolean).join(" · "),
+        o.clientIds.filter((id) => reasons[id] !== "Уважительная"));
       reloadClients();
       track("action", "no_show", { clients: o.clientIds.length, excused: o.clientIds.filter((id) => reasons[id] === "Уважительная").length });
       setNoShow(null);
@@ -474,7 +475,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
             {quickView.note && <p className="text-sm text-zinc-400 bg-zinc-800/60 rounded-xl px-3 py-2.5 whitespace-pre-wrap">{quickView.note}</p>}
             <button onClick={() => { startGroup(quickView); setQuickView(null); }} className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98]"><Play size={18} /> Начать тренировку</button>
             <div className="flex gap-2">
-              <button onClick={() => { setModal({ booking: findBookingById(quickView.id), occDate: quickView.occDate }); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition"><Pencil size={15} /> Изменить</button>
+              <button onClick={() => { const base = findBookingById(quickView.id); setModal({ booking: base && { ...base, status: quickView.status }, occDate: quickView.occDate }); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition"><Pencil size={15} /> Изменить</button>
               {quickView.status === "scheduled" && (
                 <button onClick={() => { setNoShow(quickView); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-orange-500/15 text-orange-400 font-semibold rounded-xl text-sm transition"><UserX size={15} /> Не пришёл</button>
               )}
@@ -501,38 +502,36 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
           onClose={() => setModal(null)}
           onSave={async (patch, clientIds) => {
             try {
-              const wasAlreadyDone = modal.booking?.status === "done";
-              if (modal.booking) {
-                const base = findBookingById(modal.booking.id);
-                if (base?.recurring && modal.occDate && patch.status) {
-                  // Status change on recurring occurrence → exception, not base record
-                  const { status, ...basePatch } = patch;
-                  await doneOccurrence({ ...base, status }, modal.occDate);
-                  if (Object.keys(basePatch).length || clientIds) await updateBooking(modal.booking.id, basePatch, clientIds);
-                } else {
-                  await updateBooking(modal.booking.id, patch, clientIds);
+              // П.13 аудита. Поля записи — обычным обновлением, статус и списание — одной
+              // серверной транзакцией (markOccurrence). Раньше у занятия серии статус писался в
+              // exceptions, а следом updateBooking записывал exceptions из формы (снимок на момент
+              // открытия) и затирал его; «Не пришёл»/«Отменена» вообще писались как «Проведена»;
+              // а «уже проведена» смотрели по статусу серии — повторная отметка списывала снова.
+              // exceptions из формы больше не пишем: правки дат серии живут только на сервере.
+              const { status, exceptions: _formExceptions, ...fields } = patch;
+              // Новая запись создаётся «Запланирована», статус ставит markOccurrence. Если отметка
+              // сорвалась, повтор «Сохранить» обновит уже созданную запись, а не создаст вторую.
+              let id = modal.booking?.id ?? modal.createdId;
+              const prevStatus = modal.booking?.status ?? "scheduled"; // у серии — статус ЭТОГО занятия
+              if (id) await updateBooking(id, fields, clientIds);
+              else {
+                id = await addBooking({ ...fields, status: "scheduled", exceptions: {} }, clientIds);
+                const created = id;
+                setModal((m) => (m ? { ...m, createdId: created } : m));
+              }
+              if (status !== prevStatus) {
+                // Ключ вхождения — по тому, чем запись стала после сохранения: серия → дата этого
+                // занятия (у новой или только что ставшей серией — её первая дата), разовая → null
+                const occDate = !fields.recurring ? null : modal.booking?.recurring ? modal.occDate ?? null : fields.date;
+                // Автосписание — только при «Проведена». «Не пришёл» из формы не списывает (как
+                // раньше): со списанием и причиной — кнопка «Не пришёл» в карточке занятия.
+                // Гард П12 (у подопечного за этот день уже есть проведённая тренировка) — на сервере.
+                const res = await markOccurrence(id, occDate, status, status === "done" ? clientIds : []);
+                if (status === "done") {
+                  reloadClients();
+                  const skipped = res.skipped.filter((x) => x.reason === "session" || x.reason === "already").map((x) => clientName(x.client_id));
+                  if (skipped.length) notify(`Тренировка за этот день уже была отмечена — повторно не списываем: ${skipped.join(", ")}`);
                 }
-              } else await addBooking(patch, clientIds);
-              // Автосписание при ручной отметке «проведено».
-              // П12: раньше здесь не было никакой проверки, и остаток уходил дважды —
-              // например если клиент уже завершил тренировку сам в своём портале.
-              // Теперь перед списанием смотрим, нет ли уже проведённой тренировки за эту дату.
-              if (patch.status === "done" && !wasAlreadyDone && clientIds.length > 0) {
-                const occDate = modal.occDate || patch.date;
-                const skipped: string[] = [];
-                await Promise.all(clientIds.map(async (cid) => {
-                  const cf = await clientsApi.fetchClient(cid);
-                  if (cf.membership.type !== "sessions") return;
-                  // При ошибке проверки НЕ списываем: недосписать безопаснее, чем списать дважды —
-                  // недостачу тренер заметит, а лишнее списание всплывёт только жалобой клиента.
-                  let already = true;
-                  try { already = await clientsApi.hasSessionOnDate(cid, occDate); }
-                  catch (e) { console.error("[CalendarView] hasSessionOnDate:", e); }
-                  if (already) { skipped.push(clientName(cid)); return; }
-                  await clientsApi.decrementMembershipRemaining(cid, cf.membership, { kind: "workout", date: occDate });
-                }));
-                reloadClients();
-                if (skipped.length) notify(`Тренировка за этот день уже была отмечена — повторно не списываем: ${skipped.join(", ")}`);
               }
               setModal(null);
             } catch (e) { console.error("[CalendarView] onSave:", e); notify("Не удалось сохранить запись."); }

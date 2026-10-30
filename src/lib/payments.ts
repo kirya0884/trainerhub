@@ -1,7 +1,8 @@
 import { supabase } from "./supabase";
-import type { Membership, Payment } from "./clients";
-import { updateClient, syncMembershipToPartner, sessionPrice } from "./clients";
-import { today as todayFn, addMonths } from "./format";
+import type { Membership } from "./clients";
+import { emptyMembership } from "./clients";
+import { notifyClientsChanged } from "./clientsBus";
+import { today as todayFn } from "./format";
 
 // ===================== Шаблоны пакетов =====================
 export interface PackageTemplate { id: string; name: string; sessions: number; price: number; discount: number; split: boolean }
@@ -90,107 +91,74 @@ export async function updatePayment(id: string, p: Partial<{ date: string; amoun
   if (error) throw error;
 }
 
-async function deletePaymentRow(id: string) {
-  const { error } = await supabase.from("client_payments").delete().eq("id", id);
+// Аудит 2026-10-30, п. 17–18: оплата, разбивка и удаление платежа, правка абонемента —
+// серверные функции (миграция 20261031_stage2_payments.sql). Каждая — одна транзакция под
+// блокировкой карточки: обрыв не оставит «платёж без пакета», а остаток считается от того,
+// что в базе, а не от экрана (списание клиентом/календарём больше не откатывается).
+// Ключ от повторов — id платежа создаёт фронт: повтор с тем же id второй платёж не пишет.
+const fullMembership = (m: unknown): Membership => ({ ...emptyMembership, ...((m as Partial<Membership>) || {}) });
+
+// Удаление платежа из журнала — если он добавлял тренировки в остаток (sessions_delta), сервер
+// откатывает остаток (и партнёру по сплиту). Повтор, когда платежа уже нет, ничего не меняет.
+export async function deletePayment(id: string, clientId: string): Promise<Membership> {
+  const { data, error } = await supabase.rpc("delete_payment", { p_payment_id: id, p_client_id: clientId });
+  if (error) throw error;
+  notifyClientsChanged();
+  return fullMembership(data);
+}
+
+// Разбивает один платёж на N платежей той же датой (остаток округления — в последнюю часть).
+// Исходная строка становится частью 1; newIds — id частей 2..N (N = newIds.length + 1).
+// Повтор с теми же newIds ничего не делает — их надо хранить до успеха (см. ClientProfile).
+export async function splitPayment(paymentId: string, newIds: string[]) {
+  if (newIds.length < 1) return;
+  const { error } = await supabase.rpc("split_payment", { p_payment_id: paymentId, p_new_ids: newIds });
   if (error) throw error;
 }
 
-// Удаление платежа из журнала — если он добавлял тренировки в остаток (sessions_delta), откатываем остаток
-// назад, чтобы кол-во тренировок везде (карточка, план, портал клиента) оставалось верным.
-export async function deletePayment(id: string, clientId: string, membership: Membership): Promise<Membership> {
-  const { data: row } = await supabase.from("client_payments").select("sessions_delta").eq("id", id).single();
-  await deletePaymentRow(id);
-  const delta = Number(row?.sessions_delta) || 0;
-  if (!delta || membership.type === "subscription") return membership;
-  let next: Membership = {
-    ...membership,
-    remaining: String(Math.max(0, (Number(membership.remaining) || 0) - delta)),
-    remainingTotal: String(Math.max(0, (Number(membership.remainingTotal) || Number(membership.total) || 0) - delta)),
-  };
-  // If rollback zeroed remaining but extraRemaining pool still exists, promote it back
-  if (Number(next.remaining) <= 0 && Number(next.extraRemaining) > 0) {
-    next = { ...next, remaining: next.extraRemaining, remainingPrice: next.extraPricePerSession, remainingTotal: next.extraRemaining, extraRemaining: "", extraPricePerSession: "" };
-  }
-  await updateClient(clientId, { membership: next });
-  // split: откат синхронизируется в партнёра через syncMembershipToPartner.
-  // Платёж партнёра (note "сплит 50/50 (партнёр)") хранит sessions_delta=null — это осознанно:
-  // он финансовая запись, счётчик сессий принадлежит первичному клиенту.
-  // Для полного отката сплита удаляй платёж ПЕРВИЧНОГО клиента — он откатит обоих.
-  if (membership.split && membership.partnerClientId)
-    await syncMembershipToPartner(membership.partnerClientId, { remaining: next.remaining, remainingTotal: next.remainingTotal });
-  return next;
+// Правка НАСТРОЕК абонемента (тип, пакет, цена, дата след. платежа, заметка, сплит-флаг):
+// на сервере сливаются только переданные ключи. Остаток через неё не меняется.
+export type MembershipSettings = Partial<Pick<Membership, "type" | "total" | "packagePrice" | "pricePerSession" | "nextPaymentDate" | "note" | "split">>;
+export async function patchMembership(clientId: string, patch: MembershipSettings): Promise<Membership> {
+  const { data, error } = await supabase.rpc("patch_membership", { p_client_id: clientId, p_patch: patch });
+  if (error) throw error;
+  notifyClientsChanged();
+  return fullMembership(data);
 }
 
-// Разбивает один платёж на N платежей той же датой (остаток округления — в последнюю часть)
-export async function splitPayment(clientId: string, payment: Payment, parts: number) {
-  if (parts < 2) return;
-  // Читаем sessions_delta до удаления, чтобы правильно откатить баланс при удалении части.
-  const { data: orig } = await supabase.from("client_payments").select("sessions_delta").eq("id", payment.id).single();
-  const sessionsDelta = Number(orig?.sessions_delta) || 0;
-  await deletePaymentRow(payment.id);
-  const base = Math.floor(payment.amount / parts);
-  for (let i = 0; i < parts; i++) {
-    const amount = i === parts - 1 ? payment.amount - base * (parts - 1) : base;
-    // sessions_delta записывается только в первую часть; остальные — 0, чтобы не дублировать откат.
-    await addPayment(clientId, { date: payment.date, amount, type: payment.type, note: `${payment.note} (часть ${i + 1}/${parts})`.trim(), promoApplied: payment.promoApplied, payStatus: payment.payStatus }, i === 0 && sessionsDelta ? sessionsDelta : undefined);
-  }
+// Сплит-пара: общий тип/пакет/остаток, оплата 50/50. Обе стороны — одной транзакцией.
+export async function linkSplit(clientId: string, partnerId: string): Promise<Membership> {
+  const { data, error } = await supabase.rpc("link_split_partner", { p_client_id: clientId, p_partner_id: partnerId });
+  if (error) throw error;
+  notifyClientsChanged();
+  return fullMembership(data);
+}
+export async function unlinkSplit(clientId: string): Promise<Membership> {
+  const { data, error } = await supabase.rpc("unlink_split_partner", { p_client_id: clientId });
+  if (error) throw error;
+  notifyClientsChanged();
+  return fullMembership(data);
 }
 
-// Отметка «оплачено»: запись в журнал + обновление абонемента (остаток/дата следующего платежа).
-// Если включён сплит с привязанным партнёром — сумма делится 50/50, платёж пишется обоим, остаток/даты зеркалятся.
-export async function markPaid(clientId: string, membership: Membership, promotions: Promotion[], payStatus: PayStatus = 'paid') {
-  const today = todayFn();
+// Отметка «оплачено»: платёж в журнал + пополнение абонемента (остаток/дата следующего платежа) —
+// на сервере, см. record_payment. Сплит с привязанным партнёром — сумма 50/50, остаток зеркалится.
+// membership — то, что видит тренер: из него берутся дата, сумма (с акцией) и настройки пакета
+// (выбранный шаблон мог ещё не сохраниться). Остаток сервер считает от текущего в базе.
+// paymentId — ключ от повторов: при повторе после ошибки передавать тот же.
+// duplicate = true — этот платёж уже был записан раньше, второй не создан.
+export async function markPaid(clientId: string, membership: Membership, promotions: Promotion[], payStatus: PayStatus = 'paid', paymentId: string = crypto.randomUUID()): Promise<{ membership: Membership; duplicate: boolean }> {
   // Используем дату, которую тренер указал в форме; если не указана — сегодня
-  const payDate = membership.paymentDate && membership.paymentDate.length === 10 ? membership.paymentDate : today;
-  const isSplit = membership.split && !!membership.partnerClientId;
+  const payDate = membership.paymentDate && membership.paymentDate.length === 10 ? membership.paymentDate : todayFn();
   const type = membership.type === "subscription" ? "subscription" : "sessions";
   const base = Number(membership.type === "subscription" ? membership.pricePerSession : membership.packagePrice) || 0;
   const { amount, label } = applyPromotion(base, promotions, type);
-  // ponytail: если оформляем новый пакет, а старый остаток ещё не израсходован — сравниваем цену/тренировку.
-  // Совпадает (или старая цена неизвестна — старые записи без remainingPrice) → суммируем в один блок.
-  // Отличается → старый остаток уходит во "доп. блок" (см. Membership.extraRemaining), чтобы не терять тренировки.
-  let dateFields: Partial<Membership>;
-  if (membership.type === "subscription") {
-    dateFields = { nextPaymentDate: addMonths(payDate, 1) };
-  } else {
-    const newPrice = sessionPrice(membership);
-    const newTotal = Number(membership.total) || 0;
-    const oldRemaining = Number(membership.remaining) || 0;
-    const oldPrice = Number(membership.remainingPrice) || 0;
-    // remainingTotal — денонимнатор для "X из Y" в UI; копит сумму слитых пакетов отдельно от total
-    // (total — это размер последнего ОФОРМЛЯЕМОГО пакета, нужен для расчёта цены/тренировку выше).
-    const oldRemainingTotal = Number(membership.remainingTotal) || Number(membership.total) || 0;
-    if (oldRemaining <= 0) {
-      dateFields = { remaining: membership.total, remainingPrice: String(newPrice), remainingTotal: membership.total };
-    } else if (oldPrice === 0 || Math.round(oldPrice) === Math.round(newPrice)) {
-      dateFields = { remaining: String(oldRemaining + newTotal), remainingPrice: String(newPrice), remainingTotal: String(oldRemainingTotal + newTotal) };
-    } else {
-      const extraRemaining = Number(membership.extraRemaining) || 0;
-      const extraPrice = Number(membership.extraPricePerSession) || 0;
-      const sameAsExtra = extraRemaining > 0 && Math.round(extraPrice) === Math.round(oldPrice);
-      dateFields = {
-        remaining: membership.total, remainingPrice: String(newPrice), remainingTotal: membership.total,
-        extraRemaining: String(sameAsExtra ? extraRemaining + oldRemaining : oldRemaining),
-        extraPricePerSession: String(oldPrice),
-      };
-    }
-  }
-  const merged: Membership = { ...membership, paymentDate: payDate, ...dateFields };
-  // Во всех трёх веток выше новые тренировки пакета попадают в "remaining" — значит откат при
-  // удалении платежа (deletePayment) всегда должен вычитать ровно membership.total из текущего остатка.
-  const sessionsDelta = membership.type === "subscription" ? undefined : Number(membership.total) || 0;
-
-  if (isSplit) {
-    const half = Math.round(amount / 2);
-    await addPayment(clientId, { date: payDate, amount: half, type, note: "сплит 50/50", promoApplied: label, payStatus }, sessionsDelta);
-    await addPayment(membership.partnerClientId, { date: payDate, amount: amount - half, type, note: "сплит 50/50 (партнёр)", promoApplied: label, payStatus }, undefined);
-    await updateClient(clientId, { membership: merged });
-    await syncMembershipToPartner(membership.partnerClientId, { paymentDate: merged.paymentDate, ...dateFields });
-  } else {
-    await addPayment(clientId, { date: payDate, amount, type, note: "", promoApplied: label, payStatus }, sessionsDelta);
-    await updateClient(clientId, { membership: merged });
-  }
-  return merged;
+  const { data, error } = await supabase.rpc("record_payment", {
+    p_payment_id: paymentId, p_client_id: clientId, p_date: payDate, p_amount: amount, p_pay_status: payStatus, p_promo: label,
+    p_package: { type: membership.type, total: membership.total, packagePrice: membership.packagePrice, pricePerSession: membership.pricePerSession, split: !!membership.split },
+  });
+  if (error) throw error;
+  notifyClientsChanged();
+  return { membership: fullMembership(data?.membership), duplicate: !!data?.duplicate };
 }
 
 // Конвертирует deferred/installment → paid (клиент погасил долг).
