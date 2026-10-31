@@ -10,22 +10,23 @@ export function useProgress(planId: string) {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [deletedSessions, setDeletedSessions] = useState<DeletedSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false); // история не загрузилась — экран покажет «Не удалось загрузить» вместо «пока нет»
   const mountedRef = useRef(true);
   useEffect(() => { return () => { mountedRef.current = false; }; }, []);
 
   const load = () => !planId ? Promise.resolve() : Promise.all([api.fetchProgressCached(planId), api.fetchDeletedSessions(planId).catch(() => [])]).then(([d, del]) => {
     if (!mountedRef.current) return;
-    setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setLoading(false);
-  }).catch((e) => { if (!mountedRef.current) return; console.error("[useProgress] load:", e); setLoading(false); });
+    setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setError(false); setLoading(false);
+  }).catch((e) => { if (!mountedRef.current) return; console.error("[useProgress] load:", e); setError(true); setLoading(false); });
 
   useEffect(() => {
-    if (!planId) { setProgress([]); setMetrics([]); setSessions([]); setDeletedSessions([]); setLoading(false); return; }
+    if (!planId) { setProgress([]); setMetrics([]); setSessions([]); setDeletedSessions([]); setError(false); setLoading(false); return; }
     let alive = true;
-    setLoading(true);
+    setLoading(true); setError(false);
     Promise.all([api.fetchProgressCached(planId), api.fetchDeletedSessions(planId).catch(() => [])]).then(([d, del]) => {
       if (!alive) return;
       setProgress(d.progress); setMetrics(d.metrics); setSessions(d.sessions); setDeletedSessions(del); setLoading(false);
-    }).catch((e) => { if (!alive) return; console.error("[useProgress] init:", e); setLoading(false); });
+    }).catch((e) => { if (!alive) return; console.error("[useProgress] init:", e); setError(true); setLoading(false); });
     return () => { alive = false; };
   }, [planId]);
   // Вернулась сеть — история могла быть с телефона
@@ -76,5 +77,5 @@ export function useProgress(planId: string) {
     } catch (e) { console.error("[useProgress] logSession:", e); throw e; }
   };
 
-  return { progress, metrics, sessions, deletedSessions, loading, reloadProgress: load, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession, reload: load };
+  return { progress, metrics, sessions, deletedSessions, loading, error, reloadProgress: load, addProgress, updateProgress, deleteProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview, logSession, reload: load };
 }

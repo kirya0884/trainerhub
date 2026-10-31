@@ -92,7 +92,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
   const startEdit = () => { if (picked) { fillForm(picked); setEditing(true); } };
   const back = () => { if (editing) { setEditing(false); return; } setPicked(null); setPickedRecipe(null); setCreating(false); };
 
-  const run = async (f: () => Promise<void>, msg = "Не удалось сохранить. Проверьте интернет.") => {
+  const run = async (f: () => Promise<void>, msg = "Не удалось сохранить. Проверь интернет.") => {
     if (busy) return;
     setBusy(true);
     try { await f(); } catch (e) { console.error("[FoodAddSheet]", e); notify(msg); } finally { setBusy(false); }
@@ -136,7 +136,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
     if (entry.pending) notify("Нет интернета — запись сохранена на телефоне и отправится сама, когда появится сеть.", "info");
     onAdded(entry);
     onClose();
-  }, "Не удалось добавить. Проверьте интернет и попробуйте ещё раз.");
+  }, "Не удалось добавить. Проверь интернет и попробуй ещё раз.");
 
   if (catalog) {
     // Каталог мог поменять продукты и рецепты — по возвращении список перечитываем
@@ -212,10 +212,10 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
               : <button onClick={startNew} className="w-full flex items-center gap-2 h-10 px-1 text-sm font-semibold text-lime-400"><Plus size={18} /> {term ? `Новый продукт «${q.trim()}»` : "Новый продукт"}</button>}
             {products === null || recipes === null ? <SkeletonRows rows={3} /> : shown.length === 0 ? (
               <p className="text-sm text-zinc-500 px-1">
-                {list === "recipes" && !recipes.length ? "Рецептов пока нет. Соберите блюдо из своих продуктов — КБЖУ посчитаются по весу готового."
-                  : !products.length && !recipes.length ? "Здесь появятся продукты, которые вы добавите. Начните с «Новый продукт» — КБЖУ на 100 г есть на упаковке."
-                  : list === "fav" && !term ? "В избранном пусто — отметьте продукт или рецепт звёздочкой."
-                  : list === "recent" && !term ? "Недавних пока нет — откройте «Все»." : "Ничего не нашлось"}
+                {list === "recipes" && !recipes.length ? "Рецептов пока нет. Собери блюдо из своих продуктов — КБЖУ посчитаются по весу готового."
+                  : !products.length && !recipes.length ? "Здесь появятся продукты, которые ты добавишь. Начни с «Новый продукт» — КБЖУ на 100 г есть на упаковке."
+                  : list === "fav" && !term ? "В избранном пусто — отметь продукт или рецепт звёздочкой."
+                  : list === "recent" && !term ? "Недавних пока нет — открой «Все»." : "Ничего не нашлось"}
               </p>
             ) : (
               <div className="divide-y divide-zinc-800">
@@ -251,7 +251,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
               <Per100 label="Углеводы" value={c} onChange={setC} color={MACRO_COLOR.carbs} />
               <Per100 label="Ккал" value={kcal} onChange={setKcal} color={MACRO_COLOR.kcal} placeholder={autoKcal ? api.fmtN(autoKcal, 0) : "авто"} />
             </div>
-            <p className="text-[13px] text-zinc-500 px-0.5">Ккал считаются сами: Б×4 + Ж×9 + У×4. Если на упаковке другое число — впишите его.</p>
+            <p className="text-[13px] text-zinc-500 px-0.5">Ккал считаются сами: Б×4 + Ж×9 + У×4. Если на упаковке другое число — впиши его.</p>
             {editing && <p className="text-[13px] text-zinc-500 px-0.5">Уже записанное в дневник не изменится.</p>}
             {creating && <p className="text-[13px] font-semibold text-zinc-400 px-0.5 pt-1">Съедено</p>}
           </>

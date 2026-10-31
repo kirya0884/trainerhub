@@ -4,7 +4,9 @@ import ModalShell from "./ModalShell";
 import * as api from "../lib/payments";
 import type { Promotion } from "../lib/payments";
 import { SkeletonRows } from "./Skeleton";
-import { notify } from "../lib/dialog";
+import { ask, notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
+import LoadError from "./LoadError";
 
 const APPLIES = [["sessions", "Пакет тренировок"], ["subscription", "Подписка"]] as const;
 
@@ -15,7 +17,13 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
   const [value, setValue] = useState("");
   const [appliesTo, setAppliesTo] = useState<string>("sessions");
 
-  const load = () => api.fetchPromotions(clientId).then(setPromos).catch((e) => console.error("[PromotionsModal] load:", e));
+  const [failed, setFailed] = useState(false);
+  const load = () => { setFailed(false); return api.fetchPromotions(clientId).then(setPromos).catch((e) => { console.error("[PromotionsModal] load:", e); setFailed(true); }); };
+  const remove = async (p: Promotion) => {
+    if (!(await ask(`Удалить акцию${p.label ? ` «${p.label}»` : ""}?`, { ok: "Удалить", danger: true }))) return;
+    try { await api.deletePromotion(p.id); load(); }
+    catch (e) { console.error("[PromotionsModal] delete:", e); notify(humanError(e, "Не удалось удалить"), "error"); }
+  };
   useEffect(() => { load(); }, [clientId]);
 
   const submit = async () => {
@@ -47,13 +55,13 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
         </div>
 
         <div className="space-y-1.5">
-          {promos === null && <SkeletonRows rows={2} />}
+          {promos === null && (failed ? <LoadError onRetry={load} /> : <SkeletonRows rows={2} />)}
           {promos?.length === 0 && <p className="text-zinc-600 text-xs">Акций пока нет</p>}
           {promos?.map((p) => (
             <div key={p.id} className={`flex items-center gap-2 rounded-xl px-3 py-2 ${p.active ? "bg-orange-500/10" : "bg-zinc-800/30 opacity-60"}`}>
               <button onClick={() => api.togglePromotion(p.id, !p.active).then(load).catch((e) => console.error("[PromotionsModal] toggle:", e))} className={`text-xs font-medium px-2 py-1 rounded-lg shrink-0 ${p.active ? "bg-orange-400 text-zinc-950" : "bg-zinc-700 text-zinc-400"}`}>{p.active ? "Активна" : "Выкл"}</button>
               <span className="flex-1 truncate">{p.label || (p.type === "percent" ? `${p.value}%` : `${p.value}₽`)} <span className="text-zinc-500">· {APPLIES.find((a) => a[0] === p.appliesTo)?.[1]}</span></span>
-              <button onClick={() => api.deletePromotion(p.id).then(load).catch((e) => console.error("[PromotionsModal] delete:", e))} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
+              <button onClick={() => remove(p)} aria-label="Удалить акцию" className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
             </div>
           ))}
         </div>

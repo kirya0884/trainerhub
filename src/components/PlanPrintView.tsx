@@ -12,7 +12,7 @@ export default function PlanPrintView({ plan, trainerId, clientName, onClose }: 
       <div className="print-area max-w-2xl mx-auto bg-white text-zinc-900 p-6 my-4 rounded-xl">
         <PrintBrandHeader brand={brand} date={new Date().toLocaleDateString("ru-RU")} />
         <h1 className="text-xl font-bold mb-1">{plan.name}</h1>
-        <p className="text-sm text-zinc-600 mb-4">Подопечный: {clientName}</p>
+        <p className="text-sm text-zinc-600 mb-4">Клиент: {clientName}</p>
         {plan.note && <p className="text-sm text-zinc-700 bg-zinc-100 rounded-lg p-2 mb-4">{plan.note}</p>}
 
         {plan.days.map((day) => (

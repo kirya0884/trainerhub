@@ -23,7 +23,7 @@ export function subscribe(l: (s: State) => void) {
 }
 
 /** Похоже на ошибку — красный значок; остальное — нейтрально */
-const looksLikeError = (t: string) => /не удалось|ошибк|не получилось|проверьте интернет/i.test(t);
+const looksLikeError = (t: string) => /не удалось|ошибк|не получилось|проверьте интернет|проверь интернет|нет интернета/i.test(t);
 
 /** Возвращает id сообщения — чтобы закрыть его раньше (dismiss) */
 export function notify(text: string, kind?: Toast["kind"], action?: ToastAction) {
@@ -31,7 +31,7 @@ export function notify(text: string, kind?: Toast["kind"], action?: ToastAction)
   state = { ...state, toasts: [...state.toasts.slice(-2), t] };
   emit();
   // Длинный текст висит дольше: ~4 с плюс время на чтение; с кнопкой — не меньше 5 с
-  setTimeout(() => dismiss(t.id), Math.max(action ? 5000 : 0, Math.min(12000, 3500 + text.length * 40)));
+  setTimeout(() => dismiss(t.id), Math.max(action ? 8000 : 0, Math.min(12000, 3500 + text.length * 40)));
   return t.id;
 }
 

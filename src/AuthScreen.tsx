@@ -2,25 +2,12 @@ import { useState } from "react";
 import { supabase } from "./lib/supabase";
 import { DocLink } from "./components/LegalLink";
 import { markSignupConsent } from "./lib/consents";
-import { isNetworkError } from "./lib/outbox";
+import { humanError } from "./lib/errors";
 import { ArrowLeft, Dumbbell, User } from "lucide-react";
 import RepsMark from "./components/RepsMark";
 
 // Тренер — email+пароль (open signup, role:"trainer" в metadata создаёт строку в trainers через триггер).
 // Клиент — пароль выдаёт тренер (логин/пароль приходят на почту); ссылка на почту (magic-link) — запасной вариант.
-function localizeError(msg: string): string {
-  if (/invalid login credentials/i.test(msg)) return "Неверный email или пароль";
-  if (/email not confirmed/i.test(msg)) return "Email не подтверждён — проверь почту и перейди по ссылке из письма.";
-  if (/user already registered/i.test(msg)) return "Аккаунт с таким email уже существует — войдите.";
-  if (/password should be/i.test(msg)) return "Пароль слишком короткий (минимум 6 символов)";
-  if (/for security purposes/i.test(msg)) return "Слишком много попыток — подожди немного и попробуй снова";
-  if (/rate limit/i.test(msg)) return "Слишком много запросов — подожди минуту";
-  // Вход по ссылке без созданного аккаунта (shouldCreateUser: false)
-  if (/signups not allowed for otp/i.test(msg)) return "Для этой почты нет доступа. Попросите тренера отправить приглашение";
-  if (isNetworkError(msg)) return "Нет интернета. Проверьте подключение";
-  return msg;
-}
-
 export default function AuthScreen() {
   const [mode, setMode] = useState<"trainer" | "client">("trainer");
   const [email, setEmail] = useState("");
@@ -40,7 +27,7 @@ export default function AuthScreen() {
     e.preventDefault();
     setBusy(true); resetMsg();
     const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo: window.location.origin });
-    if (error) { setMsg(localizeError(error.message)); setMsgIsError(true); }
+    if (error) { setMsg(humanError(error, "Не удалось отправить ссылку. Попробуй ещё раз")); setMsgIsError(true); }
     else setMsg("Ссылка для сброса пароля отправлена — проверь почту.");
     setBusy(false);
   };
@@ -65,7 +52,7 @@ export default function AuthScreen() {
     } else {
       ({ error } = await supabase.auth.signInWithPassword({ email, password }));
     }
-    if (error) { setMsg(localizeError(error.message)); setMsgIsError(true); }
+    if (error) { setMsg(humanError(error, isSignup && mode === "trainer" ? "Не удалось зарегистрироваться. Попробуй ещё раз" : "Не удалось войти. Попробуй ещё раз")); setMsgIsError(true); }
     setBusy(false);
   };
 
@@ -74,7 +61,7 @@ export default function AuthScreen() {
   const title = forgotPw ? "Сброс пароля" : mode === "trainer" && isSignup ? "Регистрация в Reps" : "Вход в Reps";
   const subtitle = forgotPw
     ? "Пришлём ссылку для сброса пароля на почту"
-    : mode === "client" ? "Для подопечных: логин и пароль выдаёт тренер" : "Клиенты, планы и оплаты в одном месте";
+    : mode === "client" ? "Для клиентов: логин и пароль выдаёт тренер" : "Клиенты, планы и оплаты в одном месте";
   const inputCls = "w-full h-12 bg-zinc-900 border border-zinc-800 rounded-xl px-4 outline-none focus:border-lime-400/60 focus:ring-2 focus:ring-lime-400/30 placeholder:text-zinc-600 transition";
   const RoleCard = ({ value, icon: Icon, label, hint }: { value: "trainer" | "client"; icon: typeof Dumbbell; label: string; hint: string }) => {
     const on = mode === value;
@@ -112,7 +99,7 @@ export default function AuthScreen() {
         ) : (
           <>
             <div className="grid grid-cols-2 gap-2.5 mt-7">
-              <RoleCard value="trainer" icon={Dumbbell} label="Я тренер" hint="Веду подопечных" />
+              <RoleCard value="trainer" icon={Dumbbell} label="Я тренер" hint="Веду клиентов" />
               <RoleCard value="client" icon={User} label="Я клиент" hint="Тренируюсь у тренера" />
             </div>
 

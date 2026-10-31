@@ -31,6 +31,8 @@ import GoalsDashboard from "./GoalsDashboard";
 import * as portalApi from "../lib/clientPortal";
 import { cached, fmtSavedAt, onRevalidate, releaseStale, revalidate, staleAtOf } from "../lib/offlineCache";
 import { isNetworkError } from "../lib/outbox";
+import { humanError } from "../lib/errors";
+import LoadError from "./LoadError";
 
 // Отказ правки карточки из кэша — не чаще раза в 4 с (иначе сообщение на каждую букву)
 let lockedToastAt = 0;
@@ -44,6 +46,8 @@ import { checkEmail } from "../lib/emailCheck";
 import { track } from "../lib/events";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans";
+/** Разделы карточки, которые грузятся отдельно (флаги ошибки загрузки) */
+type Part = "client" | "plans" | "measurements" | "photos" | "notes";
 
 // Порядок задан владельцем: обзор — отчёты — записи — планы. Оплаты открываются карточкой абонемента.
 const TABS: { k: Sub; label: string; icon: typeof Users }[] = [
@@ -71,9 +75,13 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   // П19: правка не сохранилась и карточку не удалось перечитать — на экране не то, что в базе
   const [unsaved, setUnsaved] = useState(false);
   const persist = useDebouncedPersist();
+  // Аудит п. 41: раздел не загрузился — «Не удалось загрузить» с повтором, а не «пока нет»
+  const [failed, setFailed] = useState<Partial<Record<Part, boolean>>>({});
+  const retry = useRef<(p: Part) => void>(() => {});
 
   useEffect(() => {
     let alive = true;
+    setFailed({});
     // Карточка и планы без сети — последние сохранённые, чтобы начать тренировку в зале
     // Без сети замеры, фото, заметки не грузятся — это ожидаемо: одно предупреждение, а не шквал ошибок
     let warned = false;
@@ -81,14 +89,26 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       if (!isNetworkError(e)) { console.error(`[ClientProfile] ${what}:`, e); return; }
       if (!warned) { warned = true; console.warn("[ClientProfile] нет сети — часть карточки не загружена"); }
     };
-    const loadClient = () => cached(`client:${clientId}`, () => api.fetchClient(clientId))
-      .then((v) => { if (alive) { setClient(v); setCachedAt(staleAtOf(`client:${clientId}`)); } }).catch(fail("карточка"));
-    const loadPlans = () => cached(`cplans:${clientId}`, () => api.fetchClientPlans(clientId)).then((v) => { if (alive) setPlans(v); }).catch(fail("планы"));
+    // Загрузка раздела: успех снимает флаг ошибки, сбой — ставит
+    const part = <T,>(p: Part, what: string, load: () => Promise<T>, set: (v: T) => void) => () => load()
+      .then((v) => { if (alive) { set(v); setFailed((f) => ({ ...f, [p]: false })); } })
+      .catch((e) => { fail(what)(e); if (alive) setFailed((f) => ({ ...f, [p]: true })); });
+    const loadClient = part("client", "карточка", () => cached(`client:${clientId}`, () => api.fetchClient(clientId)),
+      (v) => { setClient(v); setCachedAt(staleAtOf(`client:${clientId}`)); });
+    const loadPlans = part("plans", "планы", () => cached(`cplans:${clientId}`, () => api.fetchClientPlans(clientId)), setPlans);
+    const loaders: Record<Part, () => void> = {
+      client: loadClient,
+      plans: loadPlans,
+      measurements: part("measurements", "замеры", () => api.fetchMeasurements(clientId), setMeasurements),
+      photos: part("photos", "фото", () => api.fetchPhotos(clientId), setPhotos),
+      notes: part("notes", "заметки", () => api.fetchNotes(clientId), setNotes),
+    };
+    retry.current = (p) => loaders[p]();
     loadClient();
-    api.fetchMeasurements(clientId).then((v) => { if (alive) setMeasurements(v); }).catch(fail("замеры"));
+    loaders.measurements();
     nutritionApi.fetchNutritionLogs(clientId).then((v) => { if (alive) setNutritionLogs(v); }).catch(fail("питание"));
-    api.fetchPhotos(clientId).then((v) => { if (alive) setPhotos(v); }).catch(fail("фото"));
-    api.fetchNotes(clientId).then((v) => { if (alive) setNotes(v); }).catch(fail("заметки"));
+    loaders.photos();
+    loaders.notes();
     loadPlans();
     portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch(fail("активность"));
     // Завершённая тренировка списала занятие — подтягиваем только абонемент. Не onClientsChanged:
@@ -102,7 +122,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     return () => { alive = false; off(); offOnline(); releaseStale(`client:${clientId}`); releaseStale(`cplans:${clientId}`); };
   }, [clientId]);
 
-  if (!client) return <div className="p-4"><ScreenSkeleton avatar /></div>;
+  if (!client) return <div className="p-4">{failed.client ? <LoadError onRetry={() => retry.current("client")} /> : <ScreenSkeleton avatar />}</div>;
   const activePlans = (plans ?? []).filter((p) => !p.archived);
 
   const locked = () => {
@@ -190,7 +210,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
 
       {/* Шапка: назад, закрепить, меню действий (отчёт, удаление) */}
       <div className="flex items-center justify-between -mx-2 -mt-1">
-        <button onClick={onBack} aria-label="К подопечным" title="К подопечным" className="w-11 h-11 flex items-center justify-center rounded-xl text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 transition"><ArrowLeft size={22} /></button>
+        <button onClick={onBack} aria-label="К клиентам" title="К клиентам" className="w-11 h-11 flex items-center justify-center rounded-xl text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 transition"><ArrowLeft size={22} /></button>
         <div className="flex items-center">
           {onTogglePinned && (
             <button onClick={onTogglePinned} aria-label={pinned ? "Открепить" : "Закрепить"} title={pinned ? "Открепить" : "Закрепить"} aria-pressed={!!pinned}
@@ -211,7 +231,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
                   </button>
                   <div className="my-1 border-t border-zinc-800" />
                   <button onClick={() => { setShowSubSettings(false); deleteClient(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition">
-                    <Trash2 size={15} className="shrink-0" /> Удалить подопечного
+                    <Trash2 size={15} className="shrink-0" /> Удалить клиента
                   </button>
                 </div>
               </>
@@ -228,7 +248,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
             ? <img src={client.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover" />
             : <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-bold text-zinc-950" style={{ background: client.color }}>{client.name.charAt(0).toUpperCase()}</div>}
           <span className="absolute -bottom-0.5 -right-0.5 w-8 h-8 rounded-full bg-zinc-800 border-2 border-zinc-950 flex items-center justify-center text-zinc-200 group-hover:bg-zinc-700 transition"><Camera size={15} /></span>
-          <input type="file" accept="image/*" aria-label="Сменить фото подопечного" className="hidden" onChange={async (e) => {
+          <input type="file" accept="image/*" aria-label="Сменить фото клиента" className="hidden" onChange={async (e) => {
             const f = e.target.files?.[0]; e.target.value = "";
             if (!f) return;
             try { patch({ avatarUrl: await fileToThumb(f, 320) }, true); }
@@ -236,7 +256,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
           }} />
         </label>
         {editingName ? (
-          <input autoFocus value={client.name} onChange={(e) => patch({ name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={(e) => e.key === "Enter" && setEditingName(false)} aria-label="Имя подопечного"
+          <input autoFocus value={client.name} onChange={(e) => patch({ name: e.target.value })} onBlur={() => setEditingName(false)} onKeyDown={(e) => e.key === "Enter" && setEditingName(false)} aria-label="Имя клиента"
             className="mt-3 w-full max-w-xs h-11 bg-zinc-900 border border-zinc-700 rounded-xl text-center font-bold outline-none focus:border-lime-400/60 px-3" />
         ) : (
           <button onClick={() => setEditingName(true)} title="Изменить имя" className="mt-3 group flex items-center gap-1.5 max-w-full px-2 rounded-lg">
@@ -273,7 +293,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
           <span className={`block text-sm truncate ${overdue ? "text-red-400" : "text-zinc-500"}`}>
             {!isSessions
               ? client.membership.nextPaymentDate ? `${overdue ? "Просрочена с" : "Следующая оплата"} ${fmtDate(client.membership.nextPaymentDate)}` : "Дата оплаты не указана"
-              : client.membership.packagePrice ? `Пакет за ${Number(client.membership.packagePrice).toLocaleString("ru-RU")} ₽` : "Нажмите, чтобы оформить"}
+              : client.membership.packagePrice ? `Пакет за ${Number(client.membership.packagePrice).toLocaleString("ru-RU")} ₽` : "Нажми, чтобы оформить"}
           </span>
         </span>
         <span className={`shrink-0 h-9 px-3 rounded-xl text-sm font-semibold flex items-center ${outOfStock || lowStock || overdue ? "bg-orange-400/15 text-orange-300" : "bg-zinc-800 text-zinc-300"}`}>
@@ -316,9 +336,9 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
 
       {sub === "bookings" && <BookingsTab clientId={clientId} bookings={bookings ?? []} onOpenOccurrence={onOpenOccurrence} onBook={onBookClient ? () => onBookClient(clientId) : undefined} />}
       {sub === "payments" && <MembershipTab client={client} patchMembership={patchMembership} setMembership={setMembership} clientId={clientId} trainerId={trainerId} />}
-      {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} trainerId={trainerId} />}
-      {sub === "reporting" && <ReportingTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
-      {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} clientName={client.name} allPlans={allPlans ?? []} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
+      {sub === "overview" && <OverviewTab client={client} patch={patch} patchHealth={patchHealth} notes={notes} notesFailed={!!failed.notes} onRetry={() => retry.current("notes")} clientId={clientId} setNotes={setNotes} tgLink={tgLink} waLink={waLink} trainerId={trainerId} />}
+      {sub === "reporting" && <ReportingTab clientId={clientId} failed={failed} onRetry={(p) => retry.current(p)} measurements={measurements} setMeasurements={setMeasurements} nutritionLogs={nutritionLogs} photos={photos} setPhotos={setPhotos} activities={activities} setActivities={setActivities} />}
+      {sub === "plans" && <PlansTab trainerId={trainerId} clientId={clientId} failed={!!failed.plans} onRetry={() => retry.current("plans")} clientName={client.name} allPlans={allPlans ?? []} plans={plans} setPlans={setPlans} onOpenPlan={onOpenPlan} />}
     </div>
   );
 }
@@ -333,10 +353,10 @@ function InviteBlock({ clientId, email, hasAccount, onFixEmail }: { clientId: st
   // Письмо не дошло — пароль пришёл в ответе один раз: показываем его тренеру, чтобы передал сам.
   const showCreds = async (res: api.InviteResult, resend: boolean) => {
     const creds = `Логин: ${res.email}\nПароль: ${res.password}\nВход: ${window.location.origin} → «Я клиент»`;
-    const copy = await ask(`${resend ? "Пароль обновлён" : "Аккаунт создан"}, но письмо не дошло.\nПричина: ${res.warning}\n\n${creds}\n\nПароль показан один раз — скопируйте и передайте клиенту сами (например, в мессенджере).`, { ok: "Скопировать", cancel: "Закрыть" });
+    const copy = await ask(`${resend ? "Пароль обновлён" : "Аккаунт создан"}, но письмо не дошло.\nПричина: ${res.warning}\n\n${creds}\n\nПароль показан один раз — скопируй и передай клиенту (например, в мессенджере).`, { ok: "Скопировать", cancel: "Закрыть" });
     if (!copy) return;
     try { await navigator.clipboard.writeText(creds); notify("Логин и пароль скопированы"); }
-    catch { await askInput("Скопируйте вручную", [{ key: "creds", label: "Логин и пароль", value: creds }], { ok: "Готово" }); }
+    catch { await askInput("Скопируй вручную", [{ key: "creds", label: "Логин и пароль", value: creds }], { ok: "Готово" }); }
   };
 
   const invite = async (resend: boolean) => {
@@ -351,8 +371,8 @@ function InviteBlock({ clientId, email, hasAccount, onFixEmail }: { clientId: st
         setMsg(`Письмо не дошло: ${res.warning}`);
         await showCreds(res, resend);
       } else setMsg(`Логин и пароль отправлены на ${email}. Если письма нет — пусть клиент проверит «Спам».`);
-    } catch (e: any) {
-      setMsg(e.message || "Не удалось отправить доступ");
+    } catch (e) {
+      setMsg(humanError(e, "Не удалось отправить доступ. Попробуй ещё раз"));
     } finally { setBusy(false); }
   };
 
@@ -379,9 +399,9 @@ function InviteBlock({ clientId, email, hasAccount, onFixEmail }: { clientId: st
   );
 }
 
-function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tgLink, waLink }: {
+function OverviewTab({ client, patch, patchHealth, notes, notesFailed, onRetry, setNotes, clientId, tgLink, waLink }: {
   client: ClientFull; patch: (p: Partial<ClientFull>, immediate?: boolean) => void; patchHealth: (p: Partial<ClientFull["health"]>) => void;
-  notes: ClientNote[]; setNotes: (n: ClientNote[]) => void; clientId: string; tgLink: string; waLink: string;
+  notes: ClientNote[]; notesFailed: boolean; onRetry: () => void; setNotes: (n: ClientNote[]) => void; clientId: string; tgLink: string; waLink: string;
   trainerId: string;
 }) {
   const [noteText, setNoteText] = useState("");
@@ -394,8 +414,9 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
     } catch (e) { console.error("[ClientProfile] addNote:", e); }
   };
   const deleteNote = async (id: string) => {
+    if (!(await ask("Удалить заметку?", { ok: "Удалить", danger: true }))) return;
     try { await api.deleteNote(id); setNotes(notes.filter((n) => n.id !== id)); }
-    catch (e) { console.error("[ClientProfile] deleteNote:", e); }
+    catch (e) { console.error("[ClientProfile] deleteNote:", e); notify(humanError(e, "Не удалось удалить"), "error"); }
   };
 
   return (
@@ -441,7 +462,7 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
         </div>
         <label className="text-xs text-zinc-500 block">Email для входа в портал клиента<input type="email" value={client.email} onChange={(e) => patch({ email: e.target.value.trim() })} placeholder="client@mail.com" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" /></label>
         <InviteBlock clientId={clientId} email={client.email} hasAccount={client.hasAccount} onFixEmail={(email) => patch({ email })} />
-        <p className="text-[11px] text-zinc-600 -mt-1">{client.hasAccount ? "Доступ уже выдан. Если письмо не пришло и клиент ещё не входил — вышлите доступ заново (будет новый пароль)." : "Сгенерируем логин/пароль и отправим клиенту на почту."}</p>
+        <p className="text-[11px] text-zinc-600 -mt-1">{client.hasAccount ? "Доступ уже выдан. Если письмо не пришло и клиент ещё не входил — вышли доступ заново (будет новый пароль)." : "Сгенерируем логин/пароль и отправим клиенту на почту."}</p>
         <div className="flex flex-wrap gap-2">
           {client.phone && <a href={`tel:${client.phone}`} className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm transition"><Phone size={14} /> Позвонить</a>}
           {tgLink && <a href={tgLink} target="_blank" rel="noreferrer" className="flex items-center gap-1.5 bg-sky-500/15 text-sky-300 hover:bg-sky-500/25 rounded-lg px-3 py-1.5 text-sm transition"><Send size={14} /> Telegram</a>}
@@ -464,12 +485,12 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
           <button onClick={addNote} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 text-sm transition">Добавить</button>
         </div>
         <div className="space-y-1.5 max-h-64 overflow-y-auto">
-          {notes.length === 0 && <p className="text-xs text-zinc-600">Заметок пока нет</p>}
+          {notesFailed ? <LoadError onRetry={onRetry} /> : notes.length === 0 && <p className="text-xs text-zinc-600">Заметок пока нет</p>}
           {notes.map((n) => (
             <div key={n.id} className="flex items-start gap-2 bg-zinc-800/40 rounded-xl px-3 py-2 text-sm">
               <span className="text-zinc-500 text-xs shrink-0 w-20">{fmtDate(n.date)}</span>
               <span className="flex-1 text-zinc-200">{n.text}</span>
-              <button onClick={() => deleteNote(n.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
+              <button onClick={() => deleteNote(n.id)} aria-label="Удалить заметку" className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
             </div>
           ))}
         </div>
@@ -478,9 +499,10 @@ function OverviewTab({ client, patch, patchHealth, notes, setNotes, clientId, tg
   );
 }
 
-function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, photos, setPhotos, activities, setActivities, measureTick }: {
+function ReportingTab({ clientId, failed, onRetry, measurements, setMeasurements, nutritionLogs, photos, setPhotos, activities, setActivities, measureTick }: {
   measureTick?: number;
   clientId: string;
+  failed: Partial<Record<Part, boolean>>; onRetry: (p: Part) => void;
   measurements: Measurement[]; setMeasurements: (m: Measurement[]) => void;
   nutritionLogs: NutritionLog[];
   photos: Photo[]; setPhotos: (p: Photo[]) => void;
@@ -507,10 +529,10 @@ function ReportingTab({ clientId, measurements, setMeasurements, nutritionLogs, 
           </button>
         ))}
       </div>
-      {reportSub === "body" && <BodyTab clientId={clientId} measurements={measurements} setMeasurements={setMeasurements} openForm={!!measureTick} />}
+      {reportSub === "body" && <BodyTab clientId={clientId} loadFailed={!!failed.measurements} onRetry={() => onRetry("measurements")} measurements={measurements} setMeasurements={setMeasurements} openForm={!!measureTick} />}
       {reportSub === "nutrition" && <NutritionDiary clientId={clientId} legacyLogs={nutritionLogs} measurements={measurements} asTrainer />}
       {reportSub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly />}
-      {reportSub === "photos" && <PhotosTab clientId={clientId} photos={photos} setPhotos={setPhotos} />}
+      {reportSub === "photos" && <PhotosTab clientId={clientId} photos={photos} setPhotos={setPhotos} loadFailed={!!failed.photos} onRetry={() => onRetry("photos")} />}
       {reportSub === "goals" && <GoalsDashboard clientId={clientId} />}
     </div>
   );
@@ -521,6 +543,7 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentsFailed, setPaymentsFailed] = useState(false);
   const [showPromotions, setShowPromotions] = useState(false);
   const [receipt, setReceipt] = useState<Payment | null>(null);
   const [otherClients, setOtherClients] = useState<api.ClientListItem[]>([]);
@@ -531,10 +554,12 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
   const [showPkg, setShowPkg] = useState(false);
   const [payMenu, setPayMenu] = useState<string | null>(null);
 
+  const loadPayments = () => api.fetchPayments(clientId).then((v) => { setPayments(v); setPaymentsFailed(false); })
+    .catch((e) => { console.error("[PaymentsTab] fetchPayments:", e); setPaymentsFailed(true); });
   const load = () => {
     paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[PaymentsTab] fetchTemplates:", e));
     paymentsApi.fetchPromotions(clientId).then(setPromotions).catch((e) => console.error("[ClientProfile] акции:", e));
-    api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
+    loadPayments();
     api.fetchClients(trainerId).then((cs) => setOtherClients(cs.filter((c) => c.id !== clientId))).catch((e) => console.error("[ClientProfile] список подопечных:", e));
   };
   useEffect(load, [clientId, trainerId]);
@@ -583,24 +608,42 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
     if (payLock.current) return;
     payLock.current = true; setPaying(true);
     if (!payKey.current) payKey.current = crypto.randomUUID();
+    const id = payKey.current;
     try {
       // Настройки пакета оплата берёт с экрана (p_package) — недосохранённый ввод не мешает
-      const res = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus, payKey.current);
+      const res = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus, id);
       payKey.current = null;
       setMembership(res.membership);
       if (res.duplicate) notify("Эта оплата уже была записана — повтор не создан.");
-      else track("action", "payment", { status: payStatus, via: "profile" });
+      else {
+        track("action", "payment", { status: payStatus, via: "profile" });
+        // Аудит п. 40: без подтверждения (частое действие), но с отменой — удаляем этот же платёж.
+        // Сплит и подписку отменой не откатить: delete_payment не трогает строку партнёра и дату подписки.
+        const text = payStatus === "paid" ? "Оплата записана" : payStatus === "deferred" ? "Записано: оплата позже" : "Записано: оплата частями";
+        const canUndo = m.type !== "subscription" && !m.split;
+        notify(text, "info", canUndo ? { label: "Отменить", run: () => undoPayment(id) } : undefined);
+      }
       api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
     }
     catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); notify("Не удалось записать оплату."); }
     finally { payLock.current = false; setPaying(false); }
   };
+  // Отмена только что записанной оплаты — как «Удалить платёж»: сервер вернёт остаток
+  const undoPayment = async (id: string) => {
+    try { setMembership(await paymentsApi.deletePayment(id, clientId)); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+    catch (e) { console.error("[PaymentsTab] undoPayment:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }
+  };
   const paidLock = useRef(new Set<string>());
   const [markingIds, setMarkingIds] = useState<string[]>([]);
-  const doMarkPaymentPaid = async (id: string) => {
+  const doMarkPaymentPaid = async (id: string, prev: paymentsApi.PayStatus) => {
     if (paidLock.current.has(id)) return;
     paidLock.current.add(id); setMarkingIds((l) => [...l, id]);
-    try { await paymentsApi.markPaymentPaid(id); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+    const reload = () => api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
+    try {
+      await paymentsApi.markPaymentPaid(id); reload();
+      // Новый платёж здесь не создаётся — отмена возвращает прежний статус («позже»/«частями»)
+      notify("Оплата записана", "info", { label: "Отменить", run: () => { paymentsApi.markPaymentPaid(id, prev).then(reload).catch((e) => { console.error("[PaymentsTab] undo markPaymentPaid:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }); } });
+    }
     catch (e) { console.error("[PaymentsTab] markPaymentPaid:", e); notify("Не удалось обновить платёж."); }
     finally { paidLock.current.delete(id); setMarkingIds((l) => l.filter((x) => x !== id)); }
   };
@@ -657,7 +700,7 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
           <span className="block text-[13px] text-zinc-400 truncate">
             {isSub
               ? m.nextPaymentDate ? `Следующий платёж ${fmtDate(m.nextPaymentDate)}` : "Дата платежа не указана"
-              : [perSession ? `${rub(perSession)} за тренировку` : "Нажмите, чтобы указать количество и цену", m.split ? (m.partnerName ? `сплит с ${m.partnerName}` : "сплит") : ""].filter(Boolean).join(" · ")}
+              : [perSession ? `${rub(perSession)} за тренировку` : "Нажми, чтобы указать количество и цену", m.split ? (m.partnerName ? `сплит с ${m.partnerName}` : "сплит") : ""].filter(Boolean).join(" · ")}
           </span>
         </span>
         <Settings2 size={19} className="text-zinc-500 shrink-0" />
@@ -697,7 +740,7 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
           <DateField label="Дата оплаты" value={payDate} onChange={(e) => setPayDate(e.target.value || today())} />
           <button onClick={() => doMarkPaid("paid")} disabled={!basePrice || paying}
             className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
-            <Check size={18} strokeWidth={2.75} /> {paying ? "Сохраняю…" : basePrice ? `Оплачено · ${rub(payAmount)}` : "Укажите цену пакета"}
+            <Check size={18} strokeWidth={2.75} /> {paying ? "Сохраняю…" : basePrice ? `Оплачено · ${rub(payAmount)}` : "Укажи цену пакета"}
           </button>
           {preview && preview.amount !== basePrice && <p className="text-[13px] text-orange-300 text-center -mt-1">{preview.label}: вместо {rub(basePrice)}</p>}
           <div className="grid grid-cols-2 gap-2">
@@ -715,7 +758,7 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
           <h3 className="text-[17px] font-bold">Журнал платежей</h3>
           <button onClick={() => setShowHistory(true)} className="h-8 px-2 rounded-lg text-[13px] font-semibold text-zinc-400 hover:text-zinc-100 transition">Даты тренировок</button>
         </div>
-        {payments.length === 0 ? (
+        {paymentsFailed ? <LoadError onRetry={loadPayments} /> : payments.length === 0 ? (
           <p className="text-sm text-zinc-500 px-0.5">Платежей пока нет</p>
         ) : (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
@@ -730,7 +773,7 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
                   <p className="text-[13px] text-zinc-400 truncate">{[fmtDate(p.date), p.type === "subscription" ? "подписка" : "пакет", p.promoApplied, p.note].filter(Boolean).join(" · ")}</p>
                 </div>
                 {p.payStatus !== "paid" && (
-                  <button onClick={() => doMarkPaymentPaid(p.id)} disabled={markingIds.includes(p.id)} title="Отметить оплаченным" className="h-9 px-2.5 rounded-lg text-[13px] font-semibold text-lime-400 hover:bg-lime-400/10 transition shrink-0 disabled:opacity-50">{markingIds.includes(p.id) ? "Сохраняю…" : "Оплачен"}</button>
+                  <button onClick={() => doMarkPaymentPaid(p.id, p.payStatus)} disabled={markingIds.includes(p.id)} title="Отметить оплаченным" className="h-9 px-2.5 rounded-lg text-[13px] font-semibold text-lime-400 hover:bg-lime-400/10 transition shrink-0 disabled:opacity-50">{markingIds.includes(p.id) ? "Сохраняю…" : "Оплачен"}</button>
                 )}
                 <button onClick={() => setPayMenu(payMenu === p.id ? null : p.id)} aria-label="Действия с платежом" aria-expanded={payMenu === p.id}
                   className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition"><MoreHorizontal size={19} /></button>
@@ -861,7 +904,7 @@ function BookingsTab({ clientId, bookings, onOpenOccurrence, onBook }: {
   );
 }
 
-function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: Photo[]; setPhotos: (p: Photo[]) => void }) {
+function PhotosTab({ clientId, photos, setPhotos, loadFailed, onRetry }: { clientId: string; photos: Photo[]; setPhotos: (p: Photo[]) => void; loadFailed: boolean; onRetry: () => void }) {
   const [photoUrl, setPhotoUrl] = useState("");
   const sorted = [...photos].sort((a, b) => (a.date < b.date ? -1 : 1));
 
@@ -874,7 +917,11 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
     e.target.value = "";
   };
   const addByUrl = async () => { const u = photoUrl.trim(); if (!u) return; try { await api.addPhoto(clientId, u); setPhotoUrl(""); reload(); } catch (e) { console.error("[PhotosTab] addByUrl:", e); notify("Не удалось добавить фото."); } };
-  const remove = async (id: string) => { try { await api.deletePhoto(id); setPhotos(photos.filter((p) => p.id !== id)); } catch (e) { console.error("[PhotosTab] remove:", e); } };
+  const remove = async (id: string) => {
+    if (!(await ask("Удалить фото?", { ok: "Удалить", danger: true }))) return;
+    try { await api.deletePhoto(id); setPhotos(photos.filter((p) => p.id !== id)); }
+    catch (e) { console.error("[PhotosTab] remove:", e); notify(humanError(e, "Не удалось удалить"), "error"); }
+  };
 
   return (
     <div className="space-y-4">
@@ -897,13 +944,13 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
         </div>
       )}
 
-      {sorted.length === 0 ? <p className="text-sm text-zinc-600 text-center py-8">Фото пока нет. Загрузи снимок «до», чтобы потом сравнить прогресс.</p> : (
+      {loadFailed ? <LoadError onRetry={onRetry} /> : sorted.length === 0 ? <p className="text-sm text-zinc-600 text-center py-8">Фото пока нет. Загрузи снимок «до», чтобы потом сравнить прогресс.</p> : (
         <div className="grid grid-cols-3 gap-2">
           {[...sorted].reverse().map((p) => (
             <div key={p.id} className="relative group">
               <img src={p.url} alt="" className="w-full h-32 object-cover rounded-xl bg-zinc-800" />
               <div className="absolute bottom-1 left-1 right-1 text-[11px] text-white bg-black/50 rounded-lg px-1 py-0.5 text-center">{fmtDate(p.date)}</div>
-              <button onClick={() => remove(p.id)} className="absolute top-1 right-1 p-1.5 rounded-lg bg-black/50 text-white hover:bg-red-500 transition"><X size={13} /></button>
+              <button onClick={() => remove(p.id)} aria-label="Удалить фото" className="absolute top-1 right-1 p-1.5 rounded-lg bg-black/50 text-white hover:bg-red-500 transition"><X size={13} /></button>
             </div>
           ))}
         </div>
@@ -912,7 +959,7 @@ function PhotosTab({ clientId, photos, setPhotos }: { clientId: string; photos: 
   );
 }
 
-function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, onOpenPlan }: { trainerId: string; clientId: string; clientName: string; allPlans: PlanOverviewItem[]; plans: PlanListItem[] | null; setPlans: (p: PlanListItem[]) => void; onOpenPlan: (id: string) => void }) {
+function PlansTab({ trainerId, clientId, failed, onRetry, clientName, allPlans, plans, setPlans, onOpenPlan }: { trainerId: string; clientId: string; failed: boolean; onRetry: () => void; clientName: string; allPlans: PlanOverviewItem[]; plans: PlanListItem[] | null; setPlans: (p: PlanListItem[]) => void; onOpenPlan: (id: string) => void }) {
   const [name, setName] = useState("");
   const [showCatalog, setShowCatalog] = useState(false);
   const createPlan = async () => {
@@ -964,7 +1011,7 @@ function PlansTab({ trainerId, clientId, clientName, allPlans, plans, setPlans, 
         />
       )}
 
-      {plans === null ? (
+      {plans === null && failed ? <LoadError onRetry={onRetry} /> : plans === null ? (
         <SkeletonRows />
       ) : (
         <div className="space-y-2">

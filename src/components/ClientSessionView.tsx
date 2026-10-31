@@ -1,7 +1,7 @@
 import { AlertTriangle, Check, CheckCircle2, Minimize2, Play, Send, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
-import { parseRest, today } from "../lib/format";
+import { fmtSet, parseRest, today } from "../lib/format";
 import { buildMetrics, factSets, itemRpe } from "../lib/sessionUtils";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
@@ -22,7 +22,7 @@ const exLabel = (day: Day, idx: number) => {
 };
 const exSummary = (e: Day["exercises"][number]) => {
   if (e.kind === "functional") return [e.duration, e.weight, e.pulseZone ? `пульс ${e.pulseZone}` : ""].filter(Boolean).join(" · ") || "функциональное";
-  if (e.detailed && e.setRows?.length) return e.setRows.map((s, i) => `${i + 1}) ${s.weight || "—"}×${s.reps || "—"}`).join(", ");
+  if (e.detailed && e.setRows?.length) return e.setRows.map((s, i) => `${i + 1}) ${fmtSet(s.weight, s.reps)}`).join(", ");
   const parts: string[] = [];
   if (e.sets || e.reps) parts.push(`${e.sets || "?"}×${e.reps || "?"}`);
   if (e.weight) parts.push(e.weight);
@@ -238,12 +238,12 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         {draftFailed && (
           <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-            <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывайте экран, пока не завершите тренировку.</span>
+            <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывай экран, пока не завершишь тренировку.</span>
           </div>
         )}
         <div className="border-b border-zinc-800 bg-zinc-900 px-4 py-3 flex items-center justify-between shrink-0">
           <h2 className="font-bold">Как прошла тренировка?</h2>
-          <button onClick={() => setStep("training")} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={20} /></button>
+          <button onClick={() => setStep("training")} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400" title="Закрыть" aria-label="Закрыть"><X size={20} /></button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-6 max-w-md w-full mx-auto space-y-5">
           <div>
@@ -286,7 +286,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       {draftFailed && (
         <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
-          <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывайте экран, пока не завершите тренировку.</span>
+          <span>Черновик не сохраняется — в хранилище браузера нет места. Не закрывай экран, пока не завершишь тренировку.</span>
         </div>
       )}
       {/* Ш3 для клиента: таймер, «N из M упр.» и полоса прогресса, как у тренера */}
@@ -314,10 +314,10 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             <div className="px-3 py-1.5 text-xs font-bold bg-zinc-800/80 text-lime-400">Круг {r + 1} из {maxRounds}</div>
             <div className="flex items-center gap-2 px-3 py-1 text-xs text-zinc-500 border-b border-zinc-800">
               <span className="flex-1 min-w-0">Упражнение</span>
-              <span className="w-14 text-center shrink-0">повт.</span>
               <span className="w-14 text-center shrink-0">вес, кг</span>
+              <span className="w-14 text-center shrink-0">повт.</span>
               <span className="w-11 text-center shrink-0">RPE</span>
-              <span className="w-10 shrink-0" />
+              <span className="w-12 shrink-0" />
             </div>
             <div className="divide-y divide-zinc-800">
               {day.exercises.map((ex) => {
@@ -333,13 +333,13 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                       <span className="text-xs text-zinc-400 shrink-0 text-right">{[ex.duration && `⏱ ${ex.duration}`, ex.weight, ex.pulseZone && `пульс ${ex.pulseZone}`].filter(Boolean).join(" · ") || "функц."}</span>
                     ) : (
                       <>
-                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="text" placeholder="повт" className="h-10 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
-                        <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-10 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
+                        <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-12 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
+                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className="h-12 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
                         <span className="w-11 shrink-0"><RpePick value={row.rpe} onChange={(v) => setVal(ex.id, r, { rpe: v })} label={`${ex.name}, круг ${r + 1}: RPE`} /></span>
                       </>
                     )}
                     <button onClick={() => tapSet(ex, r, rows.length)} aria-pressed={isDone} aria-label={isDone ? "Снять отметку" : "Отметить выполненным"}
-                      className={`w-10 h-10 shrink-0 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                      className={`w-12 h-12 shrink-0 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                       <Check size={20} strokeWidth={2.5} />
                     </button>
                   </div>
@@ -363,7 +363,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
             // Выполненное — строкой с фактическими подходами; тап раскрывает обратно
             if (md.done && !openDone[ex.id]) {
-              const fact = rows.filter((r) => r.weight || r.reps).map((r) => `${r.reps || "—"}×${r.weight || "—"}`).join(", ");
+              const fact = rows.filter((r) => r.weight || r.reps).map((r) => fmtSet(r.weight, r.reps)).join(", ");
               return (
                 <button key={ex.id} data-exid={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} !py-2 w-full flex items-center gap-2.5 text-left`}>
                   <CheckCircle2 size={18} className="text-lime-400 shrink-0" />
@@ -377,7 +377,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             }
             return (
               <div key={ex.id} data-exid={ex.id} className={shell}>
-                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-2.5 h-8 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
+                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
                 {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-lime-400" /> отдых между подходами: {ex.rest}</p>}
                 {ex.kind === "functional" ? (
                 <div className="text-sm text-zinc-300 flex flex-wrap items-center gap-x-4 gap-y-1">
@@ -389,7 +389,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                 ) : (
                 <div className="space-y-1.5">
                   <div className={`grid ${prevSets ? PREV_COLS : SET_COLS} gap-1.5 text-[11px] text-zinc-500 text-center`}>
-                    <span>#</span>{prevSets && <span>было</span>}<span>Повторы</span><span>Вес, кг</span><span>RPE</span><span />
+                    <span>#</span>{prevSets && <span>было</span>}<span>Вес, кг</span><span>Повторы</span><span>RPE</span><span />
                   </div>
                   {rows.map((r, i) => {
                     const isDone = md.setsDone?.[i] ?? false;
@@ -398,11 +398,11 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
                         <div className={`grid ${prevSets ? PREV_COLS : SET_COLS} gap-1.5 items-center`}>
                           <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
 {prevSets && <PrevCell p={prevSets[i]} />}
-                          <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="text" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
-                          <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                          <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                          <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                           <RpePick value={r.rpe} onChange={(v) => setVal(ex.id, i, { rpe: v })} label={`Подход ${i + 1}: RPE`} />
                           <button onClick={() => tapSet(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
-                            className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                            className={`h-12 w-12 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                             <Check size={20} strokeWidth={2.5} />
                           </button>
                         </div>

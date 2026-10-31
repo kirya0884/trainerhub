@@ -6,12 +6,15 @@ import { fmtDate, today } from "../lib/format";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import { ask, askInput } from "../lib/dialog";
+import { humanError } from "../lib/errors";
+import LoadError from "./LoadError";
 
 export default function PlanVersionsModal({ planId, onClose, onRestored }: { planId: string; onClose: () => void; onRestored: () => void }) {
   const [versions, setVersions] = useState<PlanVersion[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const load = () => { setError(""); versionsApi.fetchPlanVersions(planId).then(setVersions).catch((e) => setError(e.message || "Не удалось загрузить версии")); };
+  const [loadFailed, setLoadFailed] = useState(false);
+  const load = () => { setError(""); setLoadFailed(false); versionsApi.fetchPlanVersions(planId).then(setVersions).catch((e) => { console.error("[PlanVersionsModal] load:", e); setLoadFailed(true); }); };
   useEffect(load, [planId]);
 
   const save = async () => {
@@ -20,14 +23,17 @@ export default function PlanVersionsModal({ planId, onClose, onRestored }: { pla
     if (!r) return;
     const label = r.label.trim();
     setBusy(true);
-    try { await versionsApi.snapshotPlan(planId, label); load(); } catch (e: any) { setError(e.message || "Не удалось сохранить версию"); } finally { setBusy(false); }
+    try { await versionsApi.snapshotPlan(planId, label); load(); } catch (e) { setError(humanError(e, "Не удалось сохранить версию")); } finally { setBusy(false); }
   };
   const restore = async (v: PlanVersion) => {
     if (!(await ask(`Откатить план к версии «${v.label || fmtDate(v.createdAt.slice(0, 10))}»? Текущее содержимое дней будет заменено (саму версию можно сохранить перед откатом).`, { ok: "Откатить" }))) return;
     setBusy(true);
-    try { await versionsApi.restorePlanVersion(planId, v); onRestored(); } catch (e: any) { setError(e.message || "Не удалось восстановить версию"); } finally { setBusy(false); }
+    try { await versionsApi.restorePlanVersion(planId, v); onRestored(); } catch (e) { setError(humanError(e, "Не удалось восстановить версию")); } finally { setBusy(false); }
   };
-  const remove = async (id: string) => { try { await versionsApi.deletePlanVersion(id); load(); } catch (e: any) { setError(e.message || "Не удалось удалить версию"); } };
+  const remove = async (v: PlanVersion) => {
+    if (!(await ask(`Удалить версию «${v.label || fmtDate(v.createdAt.slice(0, 10))}»?`, { ok: "Удалить", danger: true }))) return;
+    try { await versionsApi.deletePlanVersion(v.id); load(); } catch (e) { setError(humanError(e, "Не удалось удалить версию")); }
+  };
 
   return (
     <ModalShell title="История версий плана" icon={<History size={17} className="text-lime-400" />} onClose={onClose}
@@ -38,13 +44,13 @@ export default function PlanVersionsModal({ planId, onClose, onRestored }: { pla
       )}>
       <div className="p-3 overflow-y-auto flex-1 min-h-0 space-y-1.5">
         {error && <p className="text-sm text-red-400 bg-red-500/10 rounded-xl px-3 py-2">{error}</p>}
-        {versions === null && !error && <SkeletonRows />}
-        {versions?.length === 0 && <p className="text-sm text-zinc-600 text-center py-6">Версий пока нет. Сохраните текущее состояние плана, чтобы можно было к нему вернуться.</p>}
+        {versions === null && (loadFailed ? <LoadError onRetry={load} /> : <SkeletonRows />)}
+        {versions?.length === 0 && <p className="text-sm text-zinc-600 text-center py-6">Версий пока нет. Сохрани текущее состояние плана, чтобы можно было к нему вернуться.</p>}
         {versions?.map((v) => (
           <div key={v.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-xl px-3 py-2.5">
             <div className="flex-1 min-w-0"><p className="text-sm font-medium truncate">{v.label || "Без названия"}</p><p className="text-[11px] text-zinc-500">{fmtDate(v.createdAt.slice(0, 10))} · {v.days.length} дн.</p></div>
             <button onClick={() => restore(v)} disabled={busy} className="p-1.5 rounded-lg bg-cyan-400/15 text-cyan-400 hover:bg-cyan-400/25 transition shrink-0" title="Откатить к этой версии"><RotateCcw size={15} /></button>
-            <button onClick={() => remove(v.id)} disabled={busy} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить версию"><Trash2 size={15} /></button>
+            <button onClick={() => remove(v)} disabled={busy} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить версию"><Trash2 size={15} /></button>
           </div>
         ))}
       </div>

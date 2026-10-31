@@ -44,7 +44,7 @@ export default function ConsentGate({ role, onDone }: { role: Role; onDone: () =
       onDone();
     } catch (e) {
       console.error("[ConsentGate]", e);
-      setErr("Не удалось сохранить. Проверьте интернет и попробуйте ещё раз.");
+      setErr("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
       setBusy(false);
     }
   };
@@ -58,13 +58,13 @@ export default function ConsentGate({ role, onDone }: { role: Role; onDone: () =
         <h1 className="text-2xl font-extrabold tracking-tight">{isClient ? "Перед входом в кабинет" : "Документы обновились"}</h1>
         <p className="text-sm text-zinc-400 leading-relaxed">
           {isClient
-            ? "Тренер ведёт вашу программу и прогресс в Reps. Чтобы мы могли хранить эти данные, нужно ваше согласие."
-            : "Чтобы продолжить работу, подтвердите условия сервиса. Это нужно один раз для текущей редакции документов."}
+            ? "Тренер ведёт твою программу и прогресс в Reps. Чтобы мы могли хранить эти данные, нужно твоё согласие."
+            : "Чтобы продолжить работу, подтверди условия сервиса. Это нужно один раз для текущей редакции документов."}
         </p>
 
         {isClient && (
           <div className="space-y-2">
-            <p className="text-sm font-semibold">Ваш возраст</p>
+            <p className="text-sm font-semibold">Твой возраст</p>
             <AgeOpt v="adult" age={age} pick={pickAge} label="Мне есть 18 лет" />
             <AgeOpt v="teen" age={age} pick={pickAge} label="Мне от 14 до 18 лет" />
             <AgeOpt v="child" age={age} pick={pickAge} label="Мне меньше 14 лет — заполняет родитель" />

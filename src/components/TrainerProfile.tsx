@@ -12,6 +12,7 @@ import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, dele
 import { checkForUpdate } from "../lib/swUpdate";
 import { ScreenSkeleton } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 
 const SECTIONS = {
   personal: "Личные данные", packages: "Шаблоны пакетов", rules: "Правила для клиентов",
@@ -42,7 +43,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
     } catch (e) {
       console.error(`[TrainerProfile] save ${key}:`, e);
       setSaveState((p) => ({ ...p, [key]: undefined }));
-      notify("Не удалось сохранить. Проверьте соединение и попробуйте ещё раз.");
+      notify("Не удалось сохранить. Проверь соединение и попробуй ещё раз.");
     }
   };
   const saveLabel = (key: SaveKey, idle: string) => saveState[key] === "saving" ? "Сохранение..." : saveState[key] === "saved" ? "✓ Сохранено" : idle;
@@ -114,7 +115,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         </div>
         <div className="grid sm:grid-cols-2 gap-2">
           <label className="text-xs text-zinc-500">Имя
-            <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Введите имя" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+            <input value={profile.name} onChange={(e) => setProfile({ ...profile, name: e.target.value })} placeholder="Введи имя" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
           </label>
           <label className="text-xs text-zinc-500">Специализация
             <input value={profile.specialization} onChange={(e) => setProfile({ ...profile, specialization: e.target.value })} placeholder="Например, силовой тренинг" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
@@ -198,7 +199,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           )}
           {section === "rules" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-        <p className="text-xs text-zinc-500">Эти правила видят все ваши подопечные в личном кабинете</p>
+        <p className="text-xs text-zinc-500">Эти правила видят все твои клиенты в личном кабинете</p>
         <textarea
           value={profile.trainingRules}
           onChange={(e) => setProfile({ ...profile, trainingRules: e.target.value })}
@@ -230,7 +231,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
               if (newPw !== newPw2) { setPwMsg("Пароли не совпадают"); return; }
               setPwBusy(true); setPwMsg("");
               const { error } = await supabase.auth.updateUser({ password: newPw });
-              if (error) setPwMsg(error.message);
+              if (error) setPwMsg(humanError(error, "Не удалось сменить пароль. Попробуй ещё раз"));
               else { setPwMsg("Пароль изменён"); setNewPw(""); setNewPw2(""); }
               setPwBusy(false);
             }}
@@ -253,35 +254,46 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           )}
           {section === "packages" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
-        <p className="text-xs text-zinc-500">Создайте шаблоны один раз — применяйте в карточке подопечного одним кликом</p>
+        <p className="text-xs text-zinc-500">Создай шаблоны один раз — применяй в карточке клиента одним кликом</p>
         {templates.map((t) => {
           const draft = editingTpl[t.id] ?? t;
-          const setDraft = (p: Partial<PackageTemplate>) => setEditingTpl((prev) => ({ ...prev, [t.id]: { ...draft, ...p } }));
-          const save = async () => {
-            await updatePackageTemplate(t.id, draft);
-            setTemplates((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...draft } : x)));
-            setEditingTpl((prev) => { const n = { ...prev }; delete n[t.id]; return n; });
+          const setDraft = (p: Partial<PackageTemplate>) => setEditingTpl((prev) => ({ ...prev, [t.id]: { ...(prev[t.id] ?? t), ...p } }));
+          // Изменение передаём явно: раньше setDraft + setTimeout(save) сохранял старый draft
+          // из замыкания и откатывал экран к прежним цифрам
+          const save = async (p: Partial<PackageTemplate> = {}) => {
+            const next = { ...draft, ...p };
+            setDraft(p);
+            try {
+              await updatePackageTemplate(t.id, next);
+              setTemplates((prev) => prev.map((x) => (x.id === t.id ? { ...x, ...next } : x)));
+              setEditingTpl((prev) => { const n = { ...prev }; delete n[t.id]; return n; });
+            } catch (e) { console.error("[TrainerProfile] updateTemplate:", e); notify(humanError(e, "Не удалось сохранить шаблон"), "error"); }
+          };
+          const remove = async () => {
+            if (!(await ask(`Удалить шаблон «${t.name}»?`, { ok: "Удалить", danger: true }))) return;
+            try { await deletePackageTemplate(t.id); setTemplates((p) => p.filter((x) => x.id !== t.id)); }
+            catch (e) { console.error("[TrainerProfile] deleteTemplate:", e); notify(humanError(e, "Не удалось удалить"), "error"); }
           };
           return (
             <div key={t.id} className="bg-zinc-800/60 rounded-lg p-3 space-y-2">
               <div className="flex items-center gap-2">
-                <input value={draft.name} onChange={(e) => setDraft({ name: e.target.value })} onBlur={save} className="flex-1 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" placeholder="Название" />
-                <button onClick={() => deletePackageTemplate(t.id).then(() => setTemplates((p) => p.filter((x) => x.id !== t.id))).catch((e) => console.error("[TrainerProfile] deleteTemplate:", e))} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
+                <input value={draft.name} onChange={(e) => setDraft({ name: e.target.value })} onBlur={() => save()} className="flex-1 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" placeholder="Название" />
+                <button onClick={remove} aria-label="Удалить шаблон" className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0" title="Удалить"><Trash2 size={14} /></button>
               </div>
               <div className="grid grid-cols-3 gap-2">
                 <label className="text-xs text-zinc-500">Тренировок
-                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.sessions ?? String(draft.sessions || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: e.target.value}}))} onBlur={() => { const v = Math.max(1, parseInt(rawTpl[t.id]?.sessions ?? "") || draft.sessions); setDraft({ sessions: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.sessions ?? String(draft.sessions || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: e.target.value}}))} onBlur={() => { const v = Math.max(1, parseInt(rawTpl[t.id]?.sessions ?? "") || draft.sessions); setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: undefined as any}})); save({ sessions: v }); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Цена пакета ₽
-                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.price ?? String(draft.price || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: e.target.value}}))} onBlur={() => { const v = parseInt(rawTpl[t.id]?.price ?? "") || 0; setDraft({ price: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.price ?? String(draft.price || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: e.target.value}}))} onBlur={() => { const v = parseInt(rawTpl[t.id]?.price ?? "") || 0; setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: undefined as any}})); save({ price: v }); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Скидка %
-                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.discount ?? String(draft.discount || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: e.target.value}}))} onBlur={() => { const v = Math.min(100, Math.max(0, parseInt(rawTpl[t.id]?.discount ?? "") || 0)); setDraft({ discount: v }); setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: undefined as any}})); setTimeout(save, 0); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.discount ?? String(draft.discount || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: e.target.value}}))} onBlur={() => { const v = Math.min(100, Math.max(0, parseInt(rawTpl[t.id]?.discount ?? "") || 0)); setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: undefined as any}})); save({ discount: v }); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
               </div>
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 text-xs text-zinc-400 cursor-pointer">
-                  <input type="checkbox" checked={draft.split} onChange={(e) => { setDraft({ split: e.target.checked }); setTimeout(save, 0); }} className="accent-cyan-400" />
+                  <input type="checkbox" checked={draft.split} onChange={(e) => save({ split: e.target.checked })} className="accent-cyan-400" />
                   Сплит на двоих
                 </label>
                 {draft.discount > 0 && draft.price > 0 && (
@@ -293,7 +305,8 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         })}
         <button
           onClick={async () => {
-            await savePackageTemplate(trainerId, { name: "Новый пакет", sessions: 8, price: 0, discount: 0, split: false });
+            try { await savePackageTemplate(trainerId, { name: "Новый пакет", sessions: 8, price: 0, discount: 0, split: false }); }
+            catch (e) { console.error("[TrainerProfile] addTemplate:", e); notify(humanError(e, "Не удалось создать шаблон"), "error"); return; }
             fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[TrainerProfile] fetchTemplates:", e));
           }}
           className="w-full flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl py-2 text-sm transition"
@@ -311,7 +324,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
               ? <img src={profile.avatarUrl} alt="" className="w-16 h-16 rounded-full object-cover shrink-0" />
               : <div className="w-16 h-16 rounded-full bg-zinc-800 shrink-0 flex items-center justify-center text-2xl font-bold text-lime-400">{(profile.name || email)[0]?.toUpperCase()}</div>}
             <div className="min-w-0 flex-1">
-              <p className="text-[22px] font-extrabold tracking-tight truncate">{profile.name || "Ваше имя"}</p>
+              <p className="text-[22px] font-extrabold tracking-tight truncate">{profile.name || "Твоё имя"}</p>
               <p className="text-sm text-zinc-400 truncate">{profile.specialization || email}</p>
             </div>
             <button onClick={() => setSection("personal")} aria-label="Изменить личные данные" title="Изменить" className="w-11 h-11 shrink-0 flex items-center justify-center rounded-xl text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition"><Pencil size={19} /></button>

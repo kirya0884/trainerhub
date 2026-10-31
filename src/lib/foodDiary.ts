@@ -291,7 +291,7 @@ export const AIMS: [Aim, string][] = [["lose", "Похудение"], ["keep", "
 export function calcInputErrors(p: { weight: number; height: number; age: number }) {
   const e: { weight?: string; height?: string; age?: string } = {};
   if (p.weight && (p.weight < 30 || p.weight > 300)) e.weight = "Вес — от 30 до 300 кг.";
-  if (p.height >= 1.2 && p.height <= 2.3) e.height = "Похоже, рост в метрах — введите в сантиметрах, например 180.";
+  if (p.height >= 1.2 && p.height <= 2.3) e.height = "Похоже, рост в метрах — введи в сантиметрах, например 180.";
   else if (p.height && (p.height < 120 || p.height > 230)) e.height = "Рост — от 120 до 230 см.";
   if (p.age && p.age < 16) e.age = "Калькулятор рассчитан на взрослых — с 16 лет. Для подростков цели подбирает врач.";
   else if (p.age > 90) e.age = "Возраст — от 16 до 90 лет.";
@@ -404,7 +404,7 @@ const scaleEntry = (e: FoodEntry, grams: number): FoodEntry => {
   const k = e.grams > 0 ? grams / e.grams : 0;
   return { ...e, grams, kcal: e.kcal * k, protein: e.protein * k, fat: e.fat * k, carbs: e.carbs * k };
 };
-const BUSY = "Как раз отправляем — попробуйте через пару секунд.";
+const BUSY = "Как раз отправляем — попробуй через пару секунд.";
 
 /** Ждущие отправки правки и удаления поверх загруженного дня */
 export function applyPendingOps(clientId: string, date: string, list: FoodEntry[]): FoodEntry[] {

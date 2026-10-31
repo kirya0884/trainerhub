@@ -67,9 +67,9 @@ export default function PinGate({ id, hasPin: known, onUnlock, children }: { id:
       }
       setErr("Неверный PIN");
     } catch (e) {
-      if (e instanceof PinLockedError) setErr("Слишком много попыток. Попробуйте через 5 минут");
+      if (e instanceof PinLockedError) setErr("Слишком много попыток. Попробуй через 5 минут");
       else if (isNetworkError(e)) setErr("Нет интернета — PIN проверяется на сервере");
-      else { console.error("[PinGate] проверка PIN:", e); setErr("Не удалось проверить PIN, попробуйте ещё раз"); }
+      else { console.error("[PinGate] проверка PIN:", e); setErr("Не удалось проверить PIN, попробуй ещё раз"); }
     } finally {
       setBusy(false);
     }
@@ -80,7 +80,7 @@ export default function PinGate({ id, hasPin: known, onUnlock, children }: { id:
     <div className="min-h-screen bg-zinc-950 flex items-center justify-center px-4">
       <form onSubmit={submit} className="w-full max-w-xs space-y-3 text-center">
         <Lock size={28} className="text-lime-400 mx-auto" />
-        <p className="text-zinc-400 text-sm">Введите PIN-код</p>
+        <p className="text-zinc-400 text-sm">Введи PIN-код</p>
         <input
           autoFocus type="text" inputMode="numeric" value={pin}
           onChange={(e) => { setPin(e.target.value.replace(/\D/g, "").slice(0, 8)); setErr(""); }}

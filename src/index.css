@@ -49,6 +49,16 @@ html.light-theme {
   --line-800: 226 226 220; --line-900: 226 226 220; --line-950: 226 226 220;
 }
 
+/* Аудит п. 44: текст статусов (оранжевый, бирюзовый, янтарный, жёлтый, голубой, красный) —
+   светлые оттенки 300/400 на белом читаются на 1.5–2.8:1. В светлой теме — тёмные, не ниже 4.5:1
+   и на белом, и на фоне страницы. Только цвет текста: точки и полоски (bg-*) не трогаем. */
+html.light-theme .text-orange-300, html.light-theme .text-orange-400 { color: #b13a0a; }
+html.light-theme .text-cyan-300, html.light-theme .text-cyan-400 { color: #0e7490; }
+html.light-theme .text-amber-300, html.light-theme .text-amber-400 { color: #b45309; }
+html.light-theme .text-yellow-300, html.light-theme .text-yellow-400 { color: #a16207; }
+html.light-theme .text-sky-300, html.light-theme .text-sky-400 { color: #0369a1; }
+html.light-theme .text-red-400 { color: #c9302c; }
+
 /* Печатные формы всегда белые — текст в них всегда тёмный, в любой теме */
 .print-area {
   --accent-ink: 42%;

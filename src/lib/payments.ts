@@ -162,7 +162,8 @@ export async function markPaid(clientId: string, membership: Membership, promoti
 }
 
 // Конвертирует deferred/installment → paid (клиент погасил долг).
-export async function markPaymentPaid(id: string) {
-  const { error } = await supabase.from("client_payments").update({ pay_status: 'paid' }).eq("id", id);
+// status — для «Отменить»: вернуть платежу прежний статус.
+export async function markPaymentPaid(id: string, status: PayStatus = 'paid') {
+  const { error } = await supabase.from("client_payments").update({ pay_status: status }).eq("id", id);
   if (error) throw error;
 }

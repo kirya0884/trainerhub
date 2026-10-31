@@ -6,6 +6,7 @@ import { parseNum, today } from "../lib/format";
 import { tonnageOf } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
 import NumField from "./NumField";
+import { ask } from "../lib/dialog";
 
 export default function MetricsView({ days, metrics, sessions, addMetric, deleteMetric }: {
   days: Day[]; metrics: Metric[]; sessions: Session[]; addMetric: (m: Omit<Metric, "id">) => void; deleteMetric: (id: string) => void;
@@ -73,9 +74,9 @@ export default function MetricsView({ days, metrics, sessions, addMetric, delete
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <NumField label="Вес кг" value={form.weight} onChange={(e) => setForm({ ...form, weight: e.target.value })} placeholder="65" />
-            <NumField label="Повторы" value={form.reps} onChange={(e) => setForm({ ...form, reps: e.target.value })} placeholder="8" />
-            <NumField label="Отдых с" value={form.rest} onChange={(e) => setForm({ ...form, rest: e.target.value })} placeholder="120" />
-            <NumField label="Подходы" value={form.sets} onChange={(e) => setForm({ ...form, sets: e.target.value })} placeholder="4" />
+            <NumField label="Повторы" value={form.reps} onChange={(e) => setForm({ ...form, reps: e.target.value })} placeholder="8" inputMode="numeric" />
+            <NumField label="Отдых с" value={form.rest} onChange={(e) => setForm({ ...form, rest: e.target.value })} placeholder="120" inputMode="numeric" />
+            <NumField label="Подходы" value={form.sets} onChange={(e) => setForm({ ...form, sets: e.target.value })} placeholder="4" inputMode="numeric" />
           </div>
           <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm transition" style={{ background: "var(--accent)" }}>Сохранить замер</button>
         </div>
@@ -100,7 +101,7 @@ export default function MetricsView({ days, metrics, sessions, addMetric, delete
                   {e.sets !== "" && <span>{e.sets} подх.</span>}
                   {e.rest !== "" && <span>отдых {e.rest} с</span>}
                 </span>
-                <button onClick={() => deleteMetric(e.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
+                <button onClick={async () => { if (await ask("Удалить запись?", { ok: "Удалить", danger: true })) deleteMetric(e.id); }} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
               </div>
             ))}
           </div>

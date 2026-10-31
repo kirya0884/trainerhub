@@ -36,7 +36,7 @@ export default function ClientProgressPrintView({ clientId, planIds, clientName,
           <span className="text-sm text-zinc-500">{new Date().toLocaleDateString("ru-RU")}</span>
         </div>
         <h1 className="text-xl font-bold mb-1">Отчёт по прогрессу</h1>
-        <p className="text-sm text-zinc-600 mb-4">Подопечный: {clientName}</p>
+        <p className="text-sm text-zinc-600 mb-4">Клиент: {clientName}</p>
 
         <div className="flex gap-4 mb-4 text-sm">
           <div className="bg-zinc-100 rounded-xl px-3 py-2"><span className="text-zinc-500">Тренировок проведено: </span><span className="font-semibold">{sessions.length}</span></div>

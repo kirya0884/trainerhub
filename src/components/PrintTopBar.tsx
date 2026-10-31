@@ -14,11 +14,11 @@ export function PrintTopBar({ title, onClose }: { title: string; onClose: () => 
   return (
     <div className="no-print sticky top-0 bg-zinc-900 border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
       <p className="font-semibold text-sm">{title}</p>
-      <div className="flex gap-2">
+      <div className="flex items-center gap-2">
         <button onClick={() => window.print()} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-lime-300 transition">
           <Printer size={15} /> Печать / PDF
         </button>
-        <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400"><X size={18} /></button>
+        <button onClick={onClose} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400" title="Закрыть" aria-label="Закрыть"><X size={20} /></button>
       </div>
     </div>
   );

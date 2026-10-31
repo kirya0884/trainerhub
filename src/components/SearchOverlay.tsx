@@ -39,8 +39,8 @@ export default function SearchOverlay({ clients, plans, onOpenClient, onOpenPlan
               ref={inputRef}
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Подопечный или план..."
-              aria-label="Поиск по подопечным и планам"
+              placeholder="Клиент или план..."
+              aria-label="Поиск по клиентам и планам"
               className="flex-1 min-w-0 bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
             />
             {q && <button onClick={() => setQ("")} aria-label="Очистить" className="p-1 text-zinc-600 hover:text-zinc-300 transition shrink-0"><X size={14} /></button>}
@@ -49,12 +49,12 @@ export default function SearchOverlay({ clients, plans, onOpenClient, onOpenPlan
         </div>
 
         <div className="flex-1 overflow-y-auto mt-3 space-y-4 min-h-0">
-          {!term && <p className="text-sm text-zinc-600 text-center py-10">Начните вводить имя подопечного или название плана</p>}
+          {!term && <p className="text-sm text-zinc-600 text-center py-10">Начни вводить имя клиента или название плана</p>}
           {nothing && <p className="text-sm text-zinc-600 text-center py-10">Ничего не найдено</p>}
 
           {foundClients.length > 0 && (
             <div>
-              <p className="text-[15px] font-bold mb-2 flex items-center gap-1.5"><Users size={15} className="text-zinc-400" /> Подопечные</p>
+              <p className="text-[15px] font-bold mb-2 flex items-center gap-1.5"><Users size={15} className="text-zinc-400" /> Клиенты</p>
               <div className="space-y-1.5">
                 {foundClients.map((c) => (
                   <button key={c.id} onClick={() => { onOpenClient(c.id); onClose(); }} className="w-full flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-left hover:border-zinc-700 transition">

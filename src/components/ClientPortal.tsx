@@ -21,15 +21,17 @@ import { useSharedListSync } from "../hooks/useSharedListSync";
 import { GROUP_COLORS } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
 import MetricsView from "./MetricsView";
-import { addDays, fmtDate, today as todayFn } from "../lib/format";
+import { addDays, fmtDate, fmtSet, today as todayFn } from "../lib/format";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
-import { fmtRpe, isFact, lastFactsByName, lastTimeFor } from "../lib/sessionUtils";
+import { fmtRpe, isFact, lastFactsByName, lastTimeFor, nextDayOf } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
 import { flushOutbox, isNetworkError } from "../lib/outbox";
 import { cached, patchCache, signOutAndForget } from "../lib/offlineCache";
 import { setAnalyticsContext, track } from "../lib/events";
+import { humanError } from "../lib/errors";
+import LoadError from "./LoadError";
 
 type Tab = "profile" | "program" | "nutrition" | "reporting";
 type ProgramSub = "active" | "completed";
@@ -45,6 +47,9 @@ const TAB_DEFS: Record<Tab, { label: string; icon: typeof User }> = {
 
 const SUB_BTN = "px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0";
 
+// Текст и иконки акцентом: в светлой теме затемняем, как lime-текст (ACCENT_INK в tailwind.config)
+const ACCENT_TEXT = "color-mix(in srgb, var(--accent) var(--accent-ink), black)";
+
 export default function ClientPortal({ client }: { client: portalApi.SelfClient }) {
   const [tab, setTab] = useState<Tab>("profile");
   useEffect(() => { setAnalyticsContext({ actor: "client", trainerId: client.trainerId, clientId: client.id }); return () => setAnalyticsContext(null); }, [client.id, client.trainerId]);
@@ -59,6 +64,9 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLog[]>([]);
   const [activities, setActivities] = useState<ClientActivity[]>([]);
+  // Аудит п. 41: раздел не загрузился — «Не удалось загрузить» с повтором, а не «пока нет»
+  const [failed, setFailed] = useState<Partial<Record<"upcoming" | "payments" | "measurements", boolean>>>({});
+  const mark = (k: keyof typeof failed, v: boolean) => setFailed((f) => (!!f[k] === v ? f : { ...f, [k]: v }));
   // П9: у подопечного не было индикатора непрочитанных — он не узнавал, что тренер написал.
   // Тренировка, завершённая без сети, ещё «идёт» на сервере — но для клиента она закончена
   const [activeSession, setActiveSession] = useState(() => (portalApi.hasPendingClientFinish(client.id) ? null : client.activeSession));
@@ -87,7 +95,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   // Ближайшая запись и план без сети — последние сохранённые: кабинет открывается в зале
   const refresh = (notifyOnLoad = false) => {
     cached("upcoming", () => portalApi.fetchUpcomingBooking(client.id)).then((ub) => {
-      setUpcoming(ub);
+      setUpcoming(ub); mark("upcoming", false);
       if (notifyOnLoad && ub) {
         const todayStr = todayFn();
         if (ub.date === todayStr && ub.time) {
@@ -97,10 +105,10 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           if (diffMin >= 110 && diffMin <= 130) notifyUpcomingBooking("client", client.id, todayStr, ub.time);
         }
       }
-    }).catch((e) => console.error("[ClientPortal] fetchUpcoming:", e));
+    }).catch((e) => { console.error("[ClientPortal] fetchUpcoming:", e); mark("upcoming", true); });
     cached(`cplans:${client.id}`, () => clientsApi.fetchClientPlans(client.id)).then(setPlans).catch((e) => console.error("[ClientPortal] fetchPlans:", e));
-    clientsApi.fetchPayments(client.id).then(setPayments).catch((e) => console.error("[ClientPortal] fetchPayments:", e));
-    clientsApi.fetchMeasurements(client.id).then(setMeasurements).catch((e) => console.error("[ClientPortal] fetchMeasurements:", e));
+    clientsApi.fetchPayments(client.id).then((v) => { setPayments(v); mark("payments", false); }).catch((e) => { console.error("[ClientPortal] fetchPayments:", e); mark("payments", true); });
+    clientsApi.fetchMeasurements(client.id).then((v) => { setMeasurements(v); mark("measurements", false); }).catch((e) => { console.error("[ClientPortal] fetchMeasurements:", e); mark("measurements", true); });
     nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
     portalApi.fetchClientActivities(client.id).then(setActivities).catch((e) => console.error("[ClientPortal] fetchActivities:", e));
   };
@@ -153,6 +161,19 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const currentPlan = plans?.find((p) => !p.archived && p.visibleToClient !== false) || null;
   const planHook = usePlan(currentPlan?.id || "");
   const progressHook = useProgress(currentPlan?.id || "");
+  // Тренировка дошла из очереди (lib/outbox) — перечитываем историю «Пройденные»
+  // Досланная из очереди тренировка — перечитать историю (еда и прочее в очереди её не меняют)
+  const reloadProgress = progressHook.reload;
+  const reloadRef = useRef(reloadProgress);
+  reloadRef.current = reloadProgress;
+  useEffect(() => {
+    const on = (e: Event) => {
+      if ((e as CustomEvent<{ kind?: string }>).detail?.kind !== "clientFinish") return;
+      reloadRef.current().catch((err) => console.error("[ClientPortal] reload после досылки:", err));
+    };
+    window.addEventListener("outbox:flushed", on);
+    return () => window.removeEventListener("outbox:flushed", on);
+  }, []);
 
   const startDay = async (dayId: string, dayName: string) => {
     if (!currentPlan) return;
@@ -182,7 +203,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   const hiddenMeso = (id?: string | null) => { const x = id ? mesoList.find((mm) => mm.id === id) : undefined; return !!x && (x.visibleToClient === false || !!x.archivedAt); };
   const portalDays = (planHook.plan?.days ?? []).filter((d) => d.visibleToClient !== false && !hiddenMeso(d.mesocycleId));
   // Следующая тренировка на главной — первый ещё не пройденный день
-  const nextDay = progressHook.loading ? null : portalDays.find((d) => !lastDone.has(d.name)) ?? null;
+  // Тот же «следующий день», что у тренера в «Начать тренировку» (аудит п. 45)
+  const nextDay = progressHook.loading ? null : nextDayOf(portalDays, progressHook.sessions);
   const lastWeight = [...measurements].filter((x) => Number(String(x.weight).replace(",", ".")) > 0).sort((a, b) => (a.date < b.date ? -1 : 1)).pop();
 
   const m = client.membership;
@@ -212,7 +234,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             return (
               <button key={k} onClick={() => { setTab(k); window.scrollTo(0, 0); }} aria-current={on ? "page" : undefined}
                 className={`flex flex-col items-center justify-center gap-1 text-[11px] font-semibold transition ${on ? "text-zinc-100" : "text-zinc-500 hover:text-zinc-300"}`}>
-                <t.icon size={22} style={on ? { color: "var(--accent)" } : undefined} />
+                <t.icon size={22} style={on ? { color: ACCENT_TEXT } : undefined} />
                 {t.label}
               </button>
             );
@@ -226,7 +248,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           {(brand.logoUrl || brand.brand) && (
             <div className="flex items-center gap-2 pt-1">
               {brand.logoUrl && <img src={brand.logoUrl} alt="" className="w-7 h-7 rounded-lg object-cover" />}
-              <p className="font-bold text-sm" style={{ color: "var(--accent)" }}>{brand.brand}</p>
+              <p className="font-bold text-sm" style={{ color: ACCENT_TEXT }}>{brand.brand}</p>
             </div>
           )}
           <div className="flex items-center gap-3">
@@ -250,7 +272,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                 <p className="font-display text-5xl font-extrabold tracking-tight leading-none">{upcoming.time || "—"}</p>
                 <p className="text-base font-semibold text-zinc-300 pb-0.5">{upcoming.date === todayFn() ? "Сегодня" : upcoming.date === addDays(todayFn(), 1) ? "Завтра" : fmtDate(upcoming.date)}</p>
               </div>
-            ) : <p className="text-lg font-semibold text-zinc-300 mt-2">Пока нет записей</p>}
+            ) : failed.upcoming ? <LoadError onRetry={() => refresh()} /> : <p className="text-lg font-semibold text-zinc-300 mt-2">Пока нет записей</p>}
             {nextDay ? (
               <button onClick={() => startDay(nextDay.id, nextDay.name)} className="relative mt-4 w-full h-12 rounded-2xl text-zinc-950 font-bold flex items-center justify-center gap-2 hover:opacity-90 transition active:scale-[0.98] px-3" style={{ background: "var(--accent)" }}>
                 <Play size={18} className="shrink-0" /> <span className="truncate">{nextDay.name}</span>
@@ -287,17 +309,17 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             </div>
           )}
 
-          {payments.length > 0 && (
+          {(payments.length > 0 || failed.payments) && (
             <div>
               <h3 className="text-[17px] font-bold mt-2 mb-2 px-0.5">Оплаты</h3>
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
+              {failed.payments && payments.length === 0 ? <LoadError onRetry={() => refresh()} /> : <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
                 {payments.slice(0, 3).map((p) => (
                   <div key={p.id} className="flex items-center justify-between px-4 h-12 text-sm">
                     <span className="text-zinc-400">{fmtDate(p.date)}</span>
                     <span className="font-semibold">{p.amount.toLocaleString("ru-RU")} ₽</span>
                   </div>
                 ))}
-              </div>
+              </div>}
             </div>
           )}
         </div>
@@ -364,7 +386,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                         {!(ex.detailed && ex.setRows?.length) && summary && <span className="shrink-0 text-sm font-semibold text-zinc-400 whitespace-nowrap">{summary}</span>}
                       </div>
                       {ex.detailed && ex.setRows?.length ? (
-                        <p className="text-[13px] text-zinc-400 pl-[2.375rem] mt-0.5">{ex.setRows.map((sr, i) => `${i + 1}) ${sr.weight || "—"} × ${sr.reps || "—"}`).join(" · ")}</p>
+                        <p className="text-[13px] text-zinc-400 pl-[2.375rem] mt-0.5">{ex.setRows.map((sr, i) => `${i + 1}) ${fmtSet(sr.weight, sr.reps)}`).join(" · ")}</p>
                       ) : null}
                       {(ex.rest || ex.note) && <p className="text-[13px] text-zinc-500 pl-[2.375rem] mt-0.5">{[ex.rest && `отдых ${ex.rest}`, ex.note].filter(Boolean).join(" · ")}</p>}
                     </div>
@@ -404,7 +426,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                       <div className="flex items-center gap-2 pl-4 pr-2 py-2">
                         <button onClick={() => toggleDay(day.id)} aria-expanded={dayOpen} className="flex-1 min-w-0 text-left py-1">
                           <span className="block font-bold truncate">{day.name}</span>
-                          <span className="block text-[13px] text-zinc-400 truncate">{meta}{done && <span style={{ color: "var(--accent)" }}> · пройдена {fmtDate(done, true)}</span>}</span>
+                          <span className="block text-[13px] text-zinc-400 truncate">{meta}{done && <span style={{ color: ACCENT_TEXT }}> · пройдена {fmtDate(done, true)}</span>}</span>
                         </button>
                         {done ? (
                           <button onClick={async () => { if (await ask(`«${day.name}» уже пройдена ${fmtDate(done, true)}. Пройти ещё раз?`, { ok: "Пройти" })) startDay(day.id, day.name); }}
@@ -414,7 +436,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                           </button>
                         ) : (
                           <button onClick={() => startDay(day.id, day.name)} aria-label={`Начать: ${day.name}`} title="Начать тренировку"
-                            className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center hover:opacity-90 transition" style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 16%, transparent)" }}>
+                            className="w-10 h-10 shrink-0 rounded-xl flex items-center justify-center hover:opacity-90 transition" style={{ color: ACCENT_TEXT, background: "color-mix(in srgb, var(--accent) 16%, transparent)" }}>
                             <Play size={18} />
                           </button>
                         )}
@@ -431,7 +453,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                     {todayDay && (
                       <div className="border rounded-xl p-3 flex items-center gap-3" style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 8%, transparent)" }}>
                         <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold mb-0.5" style={{ color: "var(--accent)" }}>Сегодня</p>
+                          <p className="text-xs font-semibold mb-0.5" style={{ color: ACCENT_TEXT }}>Сегодня</p>
                           <p className="font-semibold text-zinc-100 truncate">{todayDay.name}</p>
                           <p className="text-xs text-zinc-500 mt-0.5">{todayDay.exercises.length} упр.</p>
                         </div>
@@ -471,7 +493,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
           {/* Пройденные — session history */}
           {programSub === "completed" && (
             <div className="space-y-2">
-              {sortedSessions.length === 0 && <p className="text-sm text-zinc-600 text-center py-8">Проведённых тренировок пока нет</p>}
+              {sortedSessions.length === 0 && (progressHook.error ? <LoadError onRetry={() => { reloadProgress(); }} /> : <p className="text-sm text-zinc-600 text-center py-8">Проведённых тренировок пока нет</p>)}
               {sortedSessions.map((s) => {
                 const isOpen = openDetails === s.id;
                 return (
@@ -483,8 +505,8 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {s.wellbeing ? <FeelingBadge kind="wellbeing" value={s.wellbeing} withLabel={false} /> : null}
-                        {!!s.clientRating && <span style={{ color: "var(--accent)" }} className="text-xs font-semibold">{s.clientRating}/5</span>}
-                        <CheckCircle2 size={15} style={{ color: "var(--accent)" }} />
+                        {!!s.clientRating && <span style={{ color: ACCENT_TEXT }} className="text-xs font-semibold">{s.clientRating}/5</span>}
+                        <CheckCircle2 size={15} style={{ color: ACCENT_TEXT }} />
                       </div>
                     </button>
                     {isOpen && (
@@ -492,7 +514,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                         <div className="flex gap-4 text-sm flex-wrap">
                           {s.wellbeing ? <span className="text-zinc-400">Самочувствие <FeelingBadge kind="wellbeing" value={s.wellbeing} /></span> : null}
                           {s.mood ? <span className="text-zinc-400">Настроение <FeelingBadge kind="mood" value={s.mood} /></span> : null}
-                          {!!s.clientRating && <span className="text-zinc-400">Оценка <span style={{ color: "var(--accent)" }} className="font-semibold">{s.clientRating}/5</span></span>}
+                          {!!s.clientRating && <span className="text-zinc-400">Оценка <span style={{ color: ACCENT_TEXT }} className="font-semibold">{s.clientRating}/5</span></span>}
                         </div>
                         {s.items && s.items.length > 0 && (
                           <div className="space-y-2">
@@ -506,7 +528,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                                     <p className="text-zinc-500">План: {item.plannedSummary}</p>
                                   )}
                                   {hasActual && (
-                                    <p className="text-zinc-300">Факт: {facts.map((r) => `${r.n}) ${r.weight || "—"}×${r.reps || "—"}${r.rpe ? ` RPE ${fmtRpe(r.rpe)}` : ""}`).join(" · ")}</p>
+                                    <p className="text-zinc-300">Факт: {facts.map((r) => `${r.n}) ${fmtSet(r.weight, r.reps)}${r.rpe ? ` RPE ${fmtRpe(r.rpe)}` : ""}`).join(" · ")}</p>
                                   )}
                                   {item.effort > 0 && (
                                     <p className="text-zinc-500 flex items-center gap-1">
@@ -519,7 +541,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
                             })}
                           </div>
                         )}
-                        {s.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} style={{ color: "var(--accent)" }} className="shrink-0 mt-0.5" /> {s.review}</div>}
+                        {s.review && <div className="text-sm text-zinc-300 bg-zinc-900/60 rounded-lg p-2 flex gap-1.5"><MessageSquare size={14} style={{ color: ACCENT_TEXT }} className="shrink-0 mt-0.5" /> {s.review}</div>}
                       </div>
                     )}
                   </div>
@@ -572,7 +594,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               {!planHook.plan && <p className="text-sm text-zinc-600 text-center py-8">Нет активного плана</p>}
             </div>
           )}
-          {reportSub === "body" && <BodyTab clientId={client.id} measurements={measurements} setMeasurements={setMeasurements} />}
+          {reportSub === "body" && <BodyTab clientId={client.id} measurements={measurements} setMeasurements={setMeasurements} loadFailed={!!failed.measurements} onRetry={() => refresh()} />}
           {reportSub === "activity" && <ActivityTab clientId={client.id} activities={activities} setActivities={setActivities} accent={profile.accentColor} />}
         </div>
       )}
@@ -603,7 +625,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
               setSessionMinimized(false);
             } catch (e) {
               console.error("[ClientPortal] finish session:", e);
-              notify("Не удалось сохранить тренировку. Проверь соединение и попробуй ещё раз.");
+              notify(humanError(e, "Не удалось сохранить тренировку. Попробуй ещё раз"), "error");
               throw e;
             }
           }}

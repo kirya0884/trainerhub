@@ -1,7 +1,7 @@
 import { CheckCircle2, ChevronDown, ChevronRight, Eye, Flame, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useState } from "react";
-import { fmtDate } from "../lib/format";
+import { fmtDate, fmtSet } from "../lib/format";
 import { fmtRpe, isFact, tonnageOf } from "../lib/sessionUtils";
 import { FeelingBadge } from "./FeelingScale";
 import type { Session } from "../types";
@@ -39,7 +39,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
             )}
           </div>
         </div>
-        <button onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0">
+        <button onClick={onClose} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400 shrink-0" title="Закрыть" aria-label="Закрыть">
           <X size={20} />
         </button>
       </div>
@@ -132,7 +132,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                             <div className="w-16 text-center shrink-0">
                               {planned ? (
                                 <span className={`text-sm ${changed ? "line-through text-zinc-600" : "text-zinc-300"}`}>
-                                  {planned.reps || "—"} × {planned.weight || "—"}
+                                  {fmtSet(planned.weight, planned.reps)}
                                 </span>
                               ) : (
                                 <span className="text-zinc-700 text-sm">—</span>
@@ -145,7 +145,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                             <div className="w-16 text-center shrink-0">
                               {actual ? (
                                 <span className={`text-sm font-medium ${changed ? "text-cyan-400" : "text-zinc-300"}`}>
-                                  {actual.reps || "—"} × {actual.weight || "—"}
+                                  {fmtSet(actual.weight, actual.reps)}
                                 </span>
                               ) : skipped ? (
                                 <span className="text-zinc-600 text-xs">не отмечен</span>

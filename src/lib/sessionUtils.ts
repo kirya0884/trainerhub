@@ -93,6 +93,17 @@ export const isEmptyDay = (day: Day) => !day.exercises.some((ex) => ex.name);
 export const isRepeatOf = (sessions: Session[], day: Day, date: string) =>
   sessions.some((s) => !s.fromClient && s.date === date && (s.dayId ? s.dayId === day.id : s.dayName === day.name));
 
+/** Следующий день плана: после дня последней проведённой тренировки (по id дня, у старых
+ *  записей — по названию); после последнего дня — снова первый. Тренировок по этим дням
+ *  не было — первый день. Нет дней — null. */
+export function nextDayOf(days: Day[], sessions: Pick<Session, "date" | "dayId" | "dayName">[]): Day | null {
+  if (!days.length) return null;
+  const idxOf = (s: Pick<Session, "dayId" | "dayName">) => days.findIndex((d) => (s.dayId ? s.dayId === d.id : s.dayName === d.name));
+  // Сортировка устойчивая: в один день побеждает пришедшая первой (запрос — свежие сверху)
+  const last = [...sessions].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)).find((s) => idxOf(s) >= 0);
+  return days[last ? (idxOf(last) + 1) % days.length : 0];
+}
+
 // ── «Как в прошлый раз» ──
 // Последнее проведение этого дня (в том же плане): по id дня, а у старых записей без
 // него — по названию. Фактические подходы каждого упражнения — по названию упражнения.

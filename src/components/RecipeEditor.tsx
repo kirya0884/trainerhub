@@ -55,13 +55,13 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
     track(recipe ? "action" : "create", recipe ? "recipe_edit" : "recipe", { items: items.length });
     return id;
   };
-  const save = () => run(async () => { if (canSave) onSaved(await persist()); }, "Не удалось сохранить рецепт. Проверьте интернет.");
+  const save = () => run(async () => { if (canSave) onSaved(await persist()); }, "Не удалось сохранить рецепт. Проверь интернет.");
   // С несохранёнными правками в дневник ушла бы старая версия — сначала сохраняем
   const addToDiary = () => run(async () => {
     if (!recipe || !onAddToDiary) return;
     if (dirty) await persist();
     onAddToDiary(dirty ? { ...recipe, ...kept } : recipe);
-  }, "Не удалось сохранить рецепт. Проверьте интернет.");
+  }, "Не удалось сохранить рецепт. Проверь интернет.");
   const remove = async () => {
     if (!recipe || !(await ask(`Удалить рецепт «${recipe.name}»? Записи в дневнике останутся.`, { danger: true, ok: "Удалить" }))) return;
     run(async () => { await api.deleteRecipe(recipe.id); onDeleted(recipe.id); }, "Не удалось удалить рецепт.");
@@ -118,7 +118,7 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
             <input value={servings} onChange={(e) => setServings(e.target.value)} inputMode="numeric" className="w-full bg-transparent text-lg font-extrabold outline-none" />
           </label>
         </div>
-        <p className="text-[13px] text-zinc-500 px-0.5">Взвесьте готовое блюдо: рис и крупы впитывают воду, мясо её теряет. Без веса считаем по сумме сырых продуктов.</p>
+        <p className="text-[13px] text-zinc-500 px-0.5">Взвесь готовое блюдо: рис и крупы впитывают воду, мясо её теряет. Без веса считаем по сумме сырых продуктов.</p>
 
         {raw > 0 && (
           <div className="grid grid-cols-2 gap-2">
@@ -188,7 +188,7 @@ function IngredientPicker({ clientId, products, onPick, onProductAdded, onBack, 
         ) : (
           <>
             <button onClick={() => setCreating(true)} className="w-full flex items-center gap-2 h-10 px-1 text-sm font-semibold text-lime-400"><Plus size={18} /> {term ? `Новый продукт «${q.trim()}»` : "Новый продукт"}</button>
-            {shown.length === 0 ? <p className="text-sm text-zinc-500 px-1">{products.length ? "Ничего не нашлось" : "Своих продуктов пока нет — создайте первый."}</p> : (
+            {shown.length === 0 ? <p className="text-sm text-zinc-500 px-1">{products.length ? "Ничего не нашлось" : "Своих продуктов пока нет — создай первый."}</p> : (
               <div className="divide-y divide-zinc-800">
                 {shown.map((x) => (
                   <button key={x.id} onClick={() => onPick(x)} className="w-full text-left py-2.5 px-1 hover:bg-zinc-800/50 rounded-lg transition">

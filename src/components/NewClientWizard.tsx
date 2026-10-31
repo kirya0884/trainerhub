@@ -53,7 +53,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
       onCreated(c.id);
     } catch (e) {
       console.error("[NewClientWizard] сохранение:", e);
-      notify("Не удалось добавить подопечного. Проверьте интернет и попробуйте ещё раз.");
+      notify("Не удалось добавить клиента. Проверь интернет и попробуй ещё раз.");
       setBusy(false);
     }
   };
@@ -70,7 +70,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
           <button onClick={() => setStep(2)} disabled={busy} aria-label="Назад" className="w-12 h-12 shrink-0 flex items-center justify-center bg-zinc-800 rounded-xl text-zinc-300 hover:bg-zinc-700 transition"><ChevronLeft size={20} /></button>
           <div className="flex-1 space-y-2">
             <button onClick={() => save("paid")} disabled={busy} className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition disabled:opacity-40">
-              {busy ? "Сохраняю…" : tpl ? `Добавить · оплачено ${rub(tplPrice(tpl))}` : "Добавить подопечного"}
+              {busy ? "Сохраняю…" : tpl ? `Добавить · оплачено ${rub(tplPrice(tpl))}` : "Добавить клиента"}
             </button>
             {tpl && <button onClick={() => save("deferred")} disabled={busy} className="w-full h-11 bg-zinc-800 rounded-xl text-sm font-semibold text-zinc-200 hover:bg-zinc-700 transition disabled:opacity-40">Добавить, оплата позже</button>}
           </div>
@@ -80,7 +80,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
   );
 
   return (
-    <ModalShell title="Новый подопечный" icon={<UserPlus size={16} className="text-lime-400" />} onClose={onClose} footer={footer}>
+    <ModalShell title="Новый клиент" icon={<UserPlus size={16} className="text-lime-400" />} onClose={onClose} footer={footer}>
       <div className="p-4 space-y-4">
         <div>
           <div className="flex gap-1.5">
@@ -91,7 +91,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
 
         {step === 0 && (
           <>
-            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && canNext && setStep(1)} placeholder="Имя подопечного" className={field} />
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && canNext && setStep(1)} placeholder="Имя клиента" className={field} />
             <div>
               <p className="text-sm text-zinc-400 mb-2">Цель</p>
               <div className="flex flex-wrap gap-2">{GOALS.map((g) => <button key={g} onClick={() => setGoal(g)} aria-pressed={goal === g} className={chip(goal === g)}>{g}</button>)}</div>
@@ -115,7 +115,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
 
         {step === 2 && (
           <>
-            <p className="text-sm text-zinc-400">Будет видно в профиле подопечного.</p>
+            <p className="text-sm text-zinc-400">Будет видно в профиле клиента.</p>
             <textarea autoFocus value={injuries} onChange={(e) => setInjuries(e.target.value)} rows={2} placeholder="Травмы" className={`${field} h-auto py-2.5 resize-none`} />
             <textarea value={restrictions} onChange={(e) => setRestrictions(e.target.value)} rows={2} placeholder="Ограничения и противопоказания" className={`${field} h-auto py-2.5 resize-none`} />
           </>

@@ -73,7 +73,7 @@ export default function PlanCreateModal({ trainerId, clientId, clientName, allPl
       <div className="p-4 space-y-3 overflow-y-auto">
         {source === "menu" && (
           <>
-            <p className="text-xs text-zinc-500">Для подопечного: {clientName}</p>
+            <p className="text-xs text-zinc-500">Для клиента: {clientName}</p>
             <Card
               icon={<Sparkles size={18} className="text-lime-400" />}
               title="Из готовой программы"
@@ -83,7 +83,7 @@ export default function PlanCreateModal({ trainerId, clientId, clientName, allPl
             <Card
               icon={<Copy size={18} className="text-cyan-400" />}
               title="Копия существующего плана"
-              note="Взять план любого подопечного вместе с блоками и упражнениями"
+              note="Взять план любого клиента вместе с блоками и упражнениями"
               onClick={() => setSource("copy")}
             />
             {hasTemplates && onOpenTemplates && (
@@ -105,7 +105,7 @@ export default function PlanCreateModal({ trainerId, clientId, clientName, allPl
                 autoFocus
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
-                placeholder="План или подопечный..."
+                placeholder="План или клиент..."
                 className="flex-1 min-w-0 bg-transparent text-sm text-zinc-100 outline-none placeholder:text-zinc-600"
               />
             </div>

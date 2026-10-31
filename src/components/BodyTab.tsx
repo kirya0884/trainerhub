@@ -6,13 +6,15 @@ import { today } from "../lib/format";
 import * as api from "../lib/clients";
 import type { Measurement } from "../lib/clients";
 import NumField from "./NumField";
-import { notify } from "../lib/dialog";
+import { ask, notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
+import LoadError from "./LoadError";
 
 export const emptyMeasurement = (): Omit<Measurement, "id"> => ({
   date: today(), note: "", weight: "", neck: "", shoulders: "", chest: "", waist: "", glutes: "", thigh: "", biceps: "", bodyfat: "", muscleMass: "",
 });
 
-export default function BodyTab({ clientId, measurements, setMeasurements, openForm }: { clientId: string; measurements: Measurement[]; setMeasurements: (m: Measurement[]) => void; openForm?: boolean }) {
+export default function BodyTab({ clientId, measurements, setMeasurements, openForm, loadFailed, onRetry }: { clientId: string; measurements: Measurement[]; setMeasurements: (m: Measurement[]) => void; openForm?: boolean; loadFailed?: boolean; onRetry?: () => void }) {
   const [showForm, setShowForm] = useState(!!openForm);
   // B03: быстрое действие из шапки карточки просит сразу раскрыть форму
   useEffect(() => { if (openForm) setShowForm(true); }, [openForm]);
@@ -47,8 +49,9 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
     } catch (e) { console.error("[BodyTab] submit:", e); notify("Не удалось сохранить замер."); }
   };
   const remove = async (id: string) => {
+    if (!(await ask("Удалить замер?", { ok: "Удалить", danger: true }))) return;
     try { await api.deleteMeasurement(id); setMeasurements(measurements.filter((m) => m.id !== id)); }
-    catch (e) { console.error("[BodyTab] remove:", e); }
+    catch (e) { console.error("[BodyTab] remove:", e); notify(humanError(e, "Не удалось удалить"), "error"); }
   };
 
   const bm = BODY_METRICS.find((x) => x.key === bodyMetric)!;
@@ -92,7 +95,8 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
         <TrendChart data={series} color={bm.color} height={220} formatter={(v) => `${v} ${bm.unit}`} emptyText={`Нет данных по «${bm.label}». Добавь замер кнопкой выше.`} />
       </div>
 
-      {measurements.length === 0 && !showForm && (
+      {loadFailed && onRetry && <LoadError onRetry={onRetry} />}
+      {measurements.length === 0 && !showForm && !loadFailed && (
         <div className="text-center py-8 text-zinc-600">
           <p className="text-sm">Замеров пока нет.</p>
           <button onClick={() => setShowForm(true)} className="mt-2 text-sm font-medium underline underline-offset-2" style={{ color: "var(--accent)" }}>Добавить первый замер</button>
@@ -107,7 +111,7 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
                 {BODY_METRICS.filter((m) => (e as any)[m.key] !== "" && (e as any)[m.key] != null).map((m) => <span key={m.key}>{m.label.toLowerCase()} {(e as any)[m.key]}{m.unit === "%" ? "%" : ""}</span>)}
                 {e.note && <span className="text-zinc-500">· {e.note}</span>}
               </span>
-              <button onClick={() => remove(e.id)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
+              <button onClick={() => remove(e.id)} aria-label="Удалить замер" className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
             </div>
           ))}
         </div>

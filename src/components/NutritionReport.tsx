@@ -100,7 +100,7 @@ export default function NutritionReport({ clientId, goal, legacyLogs, measuremen
             <div className="flex justify-between items-baseline"><b>Калории</b>{goal && <span className="text-[13px] text-zinc-400">цель {api.fmtN(goal.kcal, 0)}</span>}</div>
             <KcalBars days={days} byDay={byDay} goal={goal?.kcal ?? 0} period={period} sel={sel}
               onTap={(d) => (sel === d ? onOpenDay(d) : setSel(d))} />
-            <p className="text-[12px] text-zinc-500 mt-2">Нажмите на столбик — БЖУ дня, ещё раз — открыть день.</p>
+            <p className="text-[12px] text-zinc-500 mt-2">Нажми на столбик — БЖУ дня, ещё раз — открыть день.</p>
           </div>
           {logged.length === 0 ? (
             <p className="text-sm text-zinc-500 px-1">За этот период записей нет.</p>
@@ -273,7 +273,7 @@ function WeightKcal({ byDay, measurements, end }: { byDay: Map<string, Macros>; 
       <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[13px] text-zinc-400">
         <span className="inline-flex items-center gap-1.5"><i className="w-2 h-2 rounded-full" style={{ background: MACRO_COLOR.kcal }} />Средние ккал за неделю</span>
         <span className="inline-flex items-center gap-1.5"><i className="w-2 h-2 rounded-full" style={{ background: MACRO_COLOR.protein }} />
-          {weights.length >= 2 ? `Вес · ${delta! > 0 ? "+" : delta! < 0 ? "−" : ""}${api.fmtN(Math.abs(delta!))} кг` : "Вес — добавьте замеры"}</span>
+          {weights.length >= 2 ? `Вес · ${delta! > 0 ? "+" : delta! < 0 ? "−" : ""}${api.fmtN(Math.abs(delta!))} кг` : "Вес — добавь замеры"}</span>
       </div>
     </div>
   );

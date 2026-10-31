@@ -62,7 +62,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
   const saveLock = useRef(false);
   const [saving, setSaving] = useState(false);
   const save = async () => {
-    if (!clientIds.length) { notify("Выбери хотя бы одного подопечного"); return; }
+    if (!clientIds.length) { notify("Выбери хотя бы одного клиента"); return; }
     if (saveLock.current) return;
     saveLock.current = true; setSaving(true);
     try { await onSave({
@@ -96,7 +96,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
           {clients.length > 8 && (
             <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 h-10 mb-2">
               <Search size={15} className="text-zinc-500 shrink-0" />
-              <input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder="Найти подопечного" className="flex-1 min-w-0 bg-transparent outline-none" />
+              <input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder="Найти клиента" className="flex-1 min-w-0 bg-transparent outline-none" />
             </div>
           )}
           <div className="flex gap-2 overflow-x-auto -mx-4 px-4 pb-1">
@@ -111,7 +111,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
                 </button>
               );
             })}
-            {clients.length === 0 && <p className="text-sm text-zinc-500">Нет подопечных</p>}
+            {clients.length === 0 && <p className="text-sm text-zinc-500">Нет клиентов</p>}
           </div>
           {clientIds.length === 2 && <p className="text-[13px] text-zinc-500 mt-1.5">Двое — сплит: по записи начнётся совместная тренировка</p>}
         </div>
@@ -210,7 +210,7 @@ export default function BookingModal({ clients, booking, defaultDate, defaultTim
           <button onClick={onDelete} title="Удалить запись" aria-label="Удалить запись" className="w-12 h-12 shrink-0 flex items-center justify-center rounded-xl bg-zinc-800 hover:bg-red-500/15 text-zinc-400 hover:text-red-400 transition"><Trash2 size={18} /></button>
         )}
         <button onClick={save} disabled={!clientIds.length || saving} className="flex-1 h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
-          {saving ? "Сохраняю…" : booking ? "Сохранить" : clientIds.length ? `Записать · ${wd(date)} ${time}` : "Выберите подопечного"}
+          {saving ? "Сохраняю…" : booking ? "Сохранить" : clientIds.length ? `Записать · ${wd(date)} ${time}` : "Выбери клиента"}
         </button>
       </div>
     </ModalShell>

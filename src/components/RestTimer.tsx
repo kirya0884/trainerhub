@@ -73,8 +73,8 @@ export function RestBar({ timer }: { timer: RestTimer }) {
           ? <div className="leading-tight"><p className="text-xs opacity-70">Отдых</p><p className="font-mono text-lg font-bold">{fmtClock(left)}</p></div>
           : <p className="font-bold">Отдых окончен</p>}
         <div className="ml-auto flex gap-1.5">
-          {left > 0 && <button onClick={() => timer.addSeconds(30)} className="h-9 px-3 rounded-xl bg-black/10 font-semibold text-sm">+30 с</button>}
-          <button onClick={timer.skip} className="h-9 px-3 rounded-xl bg-black/10 font-semibold text-sm">{left > 0 ? "Пропустить" : "Закрыть"}</button>
+          {left > 0 && <button onClick={() => timer.addSeconds(30)} className="h-11 px-3 rounded-xl bg-black/10 font-semibold text-sm">+30 с</button>}
+          <button onClick={timer.skip} className="h-11 px-3 rounded-xl bg-black/10 font-semibold text-sm">{left > 0 ? "Пропустить" : "Закрыть"}</button>
         </div>
       </div>
     </div>

@@ -154,7 +154,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
       setGoals(parsed);
     } catch (e) {
       console.error("[GoalsDashboard] сохранение целей:", e);
-      notify("Не удалось сохранить цели. Проверьте интернет и попробуйте ещё раз.");
+      notify("Не удалось сохранить цели. Проверь интернет и попробуй ещё раз.");
     } finally { setSaving(false); }
   };
 
@@ -182,7 +182,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
         <button onClick={() => setGoalsOpen((v) => !v)} className="w-full flex items-center justify-between gap-2 px-4 py-3 hover:bg-zinc-800/30 transition">
           <span className="flex items-center gap-2 font-semibold text-sm">
-            <Target size={15} className="text-lime-400" /> Цели для подопечного
+            <Target size={15} className="text-lime-400" /> Цели для клиента
           </span>
           {goalsOpen ? <ChevronDown size={16} className="text-zinc-500" /> : <ChevronRight size={16} className="text-zinc-500" />}
         </button>
@@ -207,7 +207,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
                 ))}
               </div>
             </div>
-            {goalsFailed && <p role="alert" className="text-xs text-red-400">Не удалось загрузить текущие цели — сохранить нельзя, чтобы не затереть их. Обновите экран.</p>}
+            {goalsFailed && <p role="alert" className="text-xs text-red-400">Не удалось загрузить текущие цели — сохранить нельзя, чтобы не затереть их. Обнови экран.</p>}
             <button onClick={handleSave} disabled={saving || goalsFailed} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl px-4 py-2 text-sm hover:bg-lime-300 transition disabled:opacity-50">
               <Save size={14} /> {saving ? "Сохранение…" : "Сохранить цели"}
             </button>
@@ -228,7 +228,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
         <span className="text-xs text-zinc-600 hidden sm:inline">{fmtDate(rangeFrom)} — {fmtDate(rangeTo)}</span>
       </div>
 
-      {dataFailed && !goalsFailed && <p role="alert" className="text-xs text-red-400">Часть данных за период не загрузилась — проценты могут быть неполными. Обновите экран.</p>}
+      {dataFailed && !goalsFailed && <p role="alert" className="text-xs text-red-400">Часть данных за период не загрузилась — проценты могут быть неполными. Обнови экран.</p>}
 
       {/* Compliance */}
       {goalsFailed ? (
@@ -240,7 +240,7 @@ export default function GoalsDashboard({ clientId }: { clientId: string }) {
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 text-center space-y-2">
           <Target size={28} className="mx-auto text-zinc-700" />
           <p className="text-zinc-400 text-sm">Цели не заданы</p>
-          <p className="text-zinc-600 text-xs">Нажми «Цели для подопечного» выше, чтобы задать нормы</p>
+          <p className="text-zinc-600 text-xs">Нажми «Цели для клиента» выше, чтобы задать нормы</p>
         </div>
       ) : (
         <div className="space-y-3">

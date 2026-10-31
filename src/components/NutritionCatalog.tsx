@@ -89,7 +89,7 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
   };
   const toggleFav = (p: FoodProduct) => {
     patchProduct({ ...p, favorite: !p.favorite });
-    api.updateProduct(p.id, { favorite: !p.favorite }).catch((e) => { console.error("[NutritionCatalog] избранное:", e); patchProduct(p); notify("Не удалось сохранить. Проверьте интернет."); });
+    api.updateProduct(p.id, { favorite: !p.favorite }).catch((e) => { console.error("[NutritionCatalog] избранное:", e); patchProduct(p); notify("Не удалось сохранить. Проверь интернет."); });
   };
   const inRecipes = (p: FoodProduct) => (recipes ?? []).filter((r) => r.items.some((i) => i.productId === p.id)).map((r) => r.name);
   const remove = async (p: FoodProduct) => {
@@ -101,7 +101,7 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
       setProducts((l) => (l ?? []).filter((x) => x.id !== p.id));
       setCard(null);
       setGone(p.name);
-    } catch (e) { console.error("[NutritionCatalog] удаление:", e); notify("Не удалось удалить продукт. Проверьте интернет."); }
+    } catch (e) { console.error("[NutritionCatalog] удаление:", e); notify("Не удалось удалить продукт. Проверь интернет."); }
   };
   const addToDiary = (x: Item) => { setCard(null); setRecipeEdit(null); if (onPick) onPick(x); else setAdding(x); };
   const startNew = () => (tab === "recipes" ? setRecipeEdit("new") : setForm({ product: null, name: q.trim() }));
@@ -164,16 +164,16 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
       );
     } else if (term) {
       body = tab === "products"
-        ? empty(<SearchX size={28} />, `«${q.trim()}» нет в ваших продуктах`, "Создайте его — название уже подставим.", [`Создать «${q.trim()}»`, startNew])
-        : empty(<SearchX size={28} />, `«${q.trim()}» нет в ваших рецептах`, "Соберите его из своих продуктов.", ["Новый рецепт", startNew]);
+        ? empty(<SearchX size={28} />, `«${q.trim()}» нет в твоих продуктах`, "Создай его — название уже подставим.", [`Создать «${q.trim()}»`, startNew])
+        : empty(<SearchX size={28} />, `«${q.trim()}» нет в твоих рецептах`, "Собери его из своих продуктов.", ["Новый рецепт", startNew]);
     } else if (tab === "recipes") {
-      body = empty(<ChefHat size={28} />, "", "Рецептов пока нет. Соберите блюдо из своих продуктов — КБЖУ посчитаются по весу готового.", ["Новый рецепт", startNew]);
+      body = empty(<ChefHat size={28} />, "", "Рецептов пока нет. Собери блюдо из своих продуктов — КБЖУ посчитаются по весу готового.", ["Новый рецепт", startNew]);
     } else if (!products.length) {
-      body = empty(<Plus size={28} />, "", "Здесь появятся ваши продукты. КБЖУ на 100 г есть на упаковке.", ["Новый продукт", startNew]);
+      body = empty(<Plus size={28} />, "", "Здесь появятся твои продукты. КБЖУ на 100 г есть на упаковке.", ["Новый продукт", startNew]);
     } else {
       body = empty(filter === "fav" ? <Star size={28} /> : <History size={28} />, "", filter === "fav"
-        ? "В избранном пусто — отметьте продукт звёздочкой в его карточке."
-        : "Недавних пока нет — здесь появится то, что вы записывали в дневник.");
+        ? "В избранном пусто — отметь продукт звёздочкой в его карточке."
+        : "Недавних пока нет — здесь появится то, что ты запишешь в дневник.");
     }
   }
 
@@ -216,7 +216,7 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
           {failed && (
             <div className="mt-3 flex items-center gap-3 rounded-2xl bg-zinc-900 border border-zinc-800 py-2 pl-3.5 pr-2" role="alert">
               <WifiOff size={22} className={`${WARN} shrink-0`} />
-              <p className="flex-1 text-sm">Не удалось загрузить продукты. Проверьте интернет.</p>
+              <p className="flex-1 text-sm">Не удалось загрузить продукты. Проверь интернет.</p>
               <button onClick={load} className="h-11 px-3.5 rounded-xl bg-zinc-800 text-sm font-semibold hover:bg-zinc-700 transition">Повторить</button>
             </div>
           )}
@@ -306,13 +306,13 @@ function ProductForm({ clientId, product, initialName, onSaved, onClose }: {
   const close = async () => { if (!dirty || busy || (await ask("Выйти без сохранения?", { ok: "Выйти", cancel: "Остаться" }))) onClose(); };
   const save = async () => {
     if (busy || !name.trim()) return;
-    if (api.num(p) + api.num(f) + api.num(c) > 100) { setErr("Белков, жиров и углеводов больше 100 г — проверьте цифры."); return; }
+    if (api.num(p) + api.num(f) + api.num(c) > 100) { setErr("Белков, жиров и углеводов больше 100 г — проверь цифры."); return; }
     setErr(""); setBusy(true);
     const m = { name: name.trim(), kcal: kcal.trim() ? api.num(kcal) : auto, protein: api.num(p), fat: api.num(f), carbs: api.num(c) };
     try {
       if (product) { await api.updateProduct(product.id, m); onSaved({ ...product, ...m }); return; }
       onSaved(await api.addProduct(clientId, { ...m, favorite: fav }));
-    } catch (e) { console.error("[ProductForm]", e); notify("Не удалось сохранить. Проверьте интернет."); setBusy(false); }
+    } catch (e) { console.error("[ProductForm]", e); notify("Не удалось сохранить. Проверь интернет."); setBusy(false); }
   };
 
   const footer = (
@@ -334,7 +334,7 @@ function ProductForm({ clientId, product, initialName, onSaved, onClose }: {
           <Per100 label="Углеводы" value={c} onChange={setC} color={MACRO_COLOR.carbs} />
           <Per100 label={kcal.trim() ? "Ккал" : "Ккал · авто"} value={kcal} onChange={setKcal} color={MACRO_COLOR.kcal} placeholder={auto ? api.fmtN(auto, 0) : "авто"} />
         </div>
-        <p className="text-[13px] text-zinc-500 px-0.5 leading-snug">Ккал считаем сами: белки × 4 + жиры × 9 + углеводы × 4. Если на упаковке другое число — впишите его.</p>
+        <p className="text-[13px] text-zinc-500 px-0.5 leading-snug">Ккал считаем сами: белки × 4 + жиры × 9 + углеводы × 4. Если на упаковке другое число — впиши его.</p>
         {product && <p className="text-[13px] text-zinc-500 px-0.5">Уже записанное в дневник не изменится.</p>}
         {!product && (
           <button role="switch" aria-checked={fav} onClick={() => setFav(!fav)} className="w-full min-h-[44px] flex items-center gap-2.5 text-left text-[15px]">

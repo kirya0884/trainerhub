@@ -11,7 +11,7 @@ import { useEffect, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { parseRest } from "../lib/format";
+import { fmtSet, parseRest } from "../lib/format";
 import { combinedRemaining } from "../lib/clients";
 import type { Day, Exercise } from "../types";
 import RemainingBadge from "./RemainingBadge";
@@ -27,7 +27,7 @@ const exLabel = (day: Day, idx: number) => {
 };
 const exSummary = (e: Exercise) => {
   if (e.kind === "functional") return [e.duration, e.weight, e.pulseZone ? `пульс ${e.pulseZone}` : ""].filter(Boolean).join(" · ") || "функциональное";
-  if (e.detailed && e.setRows?.length) return e.setRows.map((s, i) => `${i + 1}) ${s.weight || "—"}×${s.reps || "—"}`).join(", ");
+  if (e.detailed && e.setRows?.length) return e.setRows.map((s, i) => `${i + 1}) ${fmtSet(s.weight, s.reps)}`).join(", ");
   let base = `${e.sets}×${e.reps}`;
   if (e.weight) base += ` · ${e.weight}`;
   return base;
@@ -131,7 +131,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                   const tonnage = ex.kind === "functional" ? 0 : tonnageOf(doneSets(rows, meta[ex.id])); // функциональное: вес тут не про подходы, тоннаж не считаем
                   const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : ex.id === currentId ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
                   if (md.done && !openDone[ex.id]) {
-                    const fact = rows.filter((r) => r.weight || r.reps).map((r) => `${r.weight || "—"}×${r.reps || "—"}`).join(", ");
+                    const fact = rows.filter((r) => r.weight || r.reps).map((r) => fmtSet(r.weight, r.reps)).join(", ");
                     return (
                       <button key={ex.id} data-exid={ex.id} onClick={() => setOpenDone((o) => ({ ...o, [ex.id]: true }))} className={`${shell} !py-2 w-full flex items-center gap-2.5 text-left`}>
                         <CheckCircle2 size={18} className="text-lime-400 shrink-0" />
@@ -152,7 +152,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                           {md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}
                         </div>
                         <button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }}
-                          className={`shrink-0 text-xs px-2.5 h-8 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button>
+                          className={`shrink-0 text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button>
                       </div>
                       {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-cyan-400" /> отдых между подходами: {ex.rest}</p>}
                       {ex.kind === "functional" ? (
@@ -174,11 +174,11 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                                 <div className={`grid ${prevSets ? PREV_COLS : SET_COLS} gap-1.5 items-center`}>
                                   <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
 {prevSets && <PrevCell p={prevSets[i]} />}
-                                  <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
-                                  <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className={`h-10 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                                  <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                                  <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <RpePick value={r.rpe} onChange={(v) => setVal(ex.id, i, { rpe: v })} trainer label={`Подход ${i + 1}: RPE`} />
                                   <button onClick={() => tap(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
-                                    className={`h-10 w-10 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                                    className={`h-12 w-12 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                                     <Check size={20} strokeWidth={2.5} />
                                   </button>
                                 </div>
@@ -264,7 +264,7 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0"><Users size={18} className="text-lime-400 shrink-0" /><h2 className="font-bold truncate">Совместная тренировка</h2></div>
           <div className="flex items-center gap-1 -mr-2 shrink-0">
-            {onAddClient && clients.length < 4 && <button onClick={() => setShowAdd(true)} aria-label="Добавить подопечного в тренировку" title="Добавить подопечного" className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><UserPlus size={20} /></button>}
+            {onAddClient && clients.length < 4 && <button onClick={() => setShowAdd(true)} aria-label="Добавить клиента в тренировку" title="Добавить клиента" className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><UserPlus size={20} /></button>}
             <button onClick={() => setMinimized(true)} aria-label="Свернуть" title="Свернуть" className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><Minimize2 size={20} /></button>
             <button onClick={exit} aria-label={allDone ? "Закрыть" : "Прервать тренировку"} title={allDone ? "Закрыть" : "Прервать"} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400"><X size={22} /></button>
           </div>
@@ -337,7 +337,7 @@ function SetRowsFor({ name, color, ex, slot, startRest }: {
         <span className="w-1.5 h-4 rounded-full shrink-0" style={{ background: color }} />
         <span className="text-sm font-semibold text-zinc-200 min-w-0 truncate">{name}</span>
         <button onClick={() => slot.setMetaFor(ex.id, { done: !md.done })}
-          className={`ml-auto shrink-0 flex items-center gap-1 rounded-lg px-2.5 h-8 text-xs font-medium transition ${
+          className={`ml-auto shrink-0 flex items-center gap-1 rounded-lg px-3 h-11 text-xs font-medium transition ${
             md.done ? "bg-lime-400/15 text-lime-400" : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"}`}>
           {md.done ? <><CheckCircle2 size={14} /> сделано</> : "Готово"}
         </button>
@@ -353,14 +353,14 @@ function SetRowsFor({ name, color, ex, slot, startRest }: {
             return (
               <div key={i} className="flex flex-col gap-1 shrink-0 w-16">
                 <div className="h-4 flex items-center justify-center text-[11px] text-zinc-500">{i + 1}</div>
-                {prevSets && <div className="h-4 -mt-1 flex items-center justify-center text-[10px] text-zinc-500 truncate" title="В прошлый раз">{prevSets[i] && prevSets[i].dir !== "skip" ? `${prevSets[i].weight || "—"}×${prevSets[i].reps || "—"}` : "—"}</div>}
+                {prevSets && <div className="h-4 -mt-1 flex items-center justify-center text-[10px] text-zinc-500 truncate" title="В прошлый раз">{prevSets[i] && prevSets[i].dir !== "skip" ? fmtSet(prevSets[i].weight, prevSets[i].reps) : "—"}</div>}
                 <input value={r.weight} onChange={(e) => slot.setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг"
-                  className={`h-10 w-full bg-zinc-800 rounded-xl text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                  className={`h-12 w-full bg-zinc-800 rounded-xl text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                 <input value={r.reps} onChange={(e) => slot.setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт"
-                  className={`h-10 w-full bg-zinc-800 rounded-xl text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                  className={`h-12 w-full bg-zinc-800 rounded-xl text-center font-semibold outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                 <RpePick value={r.rpe} onChange={(v) => slot.setVal(ex.id, i, { rpe: v })} trainer label={`${name}, подход ${i + 1}: RPE`} />
                 <button onClick={() => tapSet(slot, ex, i, rows.length, startRest)} aria-pressed={isDone} aria-label={`${name}: ${isDone ? "снять отметку с подхода" : "подход выполнен"} ${i + 1}`}
-                  className={`h-9 rounded-lg flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                  className={`h-12 rounded-lg flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
                   <Check size={18} strokeWidth={2.5} />
                 </button>
               </div>
@@ -437,7 +437,7 @@ function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest, date,
       ))}
 
       {!bothReady ? (
-        <p className="text-zinc-500 text-sm text-center py-10">Выберите план и день у обоих подопечных.</p>
+        <p className="text-zinc-500 text-sm text-center py-10">Выбери план и день у обоих клиентов.</p>
       ) : merged.length === 0 ? (
         <p className="text-zinc-500 text-sm text-center py-10">В выбранных днях нет упражнений.</p>
       ) : (

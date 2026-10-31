@@ -46,7 +46,7 @@ export function notifyLowBalance(clientId: string, remaining: number) {
   const key = `trainerhub-lowbal-${clientId}-${today()}`;
   if (localStorage.getItem(key)) return;
   localStorage.setItem(key, "1");
-  new Notification("Reps — Осталось мало тренировок", { body: `У вас осталось ${remaining} тренировк${remaining === 1 ? "а" : "и"} в пакете` });
+  new Notification("Reps — Осталось мало тренировок", { body: `У тебя осталось ${remaining} тренировк${remaining === 1 ? "а" : "и"} в пакете` });
 }
 
 // Клиенту: скоро продление подписки (≤2 дня)

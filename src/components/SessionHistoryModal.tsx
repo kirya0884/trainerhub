@@ -4,16 +4,19 @@ import * as bookingsApi from "../lib/bookings";
 import { fmtDate } from "../lib/format";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
+import LoadError from "./LoadError";
 
 export default function SessionHistoryModal({ trainerId, clientId, onClose }: { trainerId: string; clientId: string; onClose: () => void }) {
   const [sessions, setSessions] = useState<{ date: string; time: string }[] | null>(null);
 
-  useEffect(() => { bookingsApi.fetchClientDoneSessions(trainerId, clientId).then(setSessions).catch((e) => console.error("[SessionHistoryModal]:", e)); }, [trainerId, clientId]);
+  const [failed, setFailed] = useState(false);
+  const load = () => { setFailed(false); bookingsApi.fetchClientDoneSessions(trainerId, clientId).then(setSessions).catch((e) => { console.error("[SessionHistoryModal]:", e); setFailed(true); }); };
+  useEffect(load, [trainerId, clientId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <ModalShell title="История тренировок" icon={<CalendarCheck size={16} className="text-lime-400" />} onClose={onClose}>
       <div className="p-4 overflow-y-auto space-y-1.5">
-        {sessions === null && <SkeletonRows />}
+        {sessions === null && (failed ? <LoadError onRetry={load} /> : <SkeletonRows />)}
         {sessions?.length === 0 && <p className="text-sm text-zinc-600">Проведённых тренировок пока нет</p>}
         {sessions?.map((s, i) => (
           <div key={i} className="flex items-center justify-between bg-zinc-800/50 rounded-xl px-3 py-2 text-sm">

@@ -38,7 +38,7 @@ export default function MeTab({ trainerId, trainerName, action, onOpenPlan }: {
     let alive = true;
     ensureSelfClient(trainerId, trainerName)
       .then((id) => { if (!alive) return; setSelfId(id); fetchMeasurements(id).then((m) => alive && setMeasurements(m)).catch((e) => console.error("[MeTab] замеры:", e)); })
-      .catch((e) => { console.error("[MeTab]", e); if (alive) setError("Не удалось открыть раздел. Проверьте интернет и попробуйте ещё раз."); });
+      .catch((e) => { console.error("[MeTab]", e); if (alive) setError("Не удалось открыть раздел. Проверь интернет и попробуй ещё раз."); });
     return () => { alive = false; };
   }, [trainerId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -113,14 +113,14 @@ function Workouts({ trainerId, selfId, name, onOpenPlan }: { trainerId: string; 
                 </div>
               ))}
             </div>
-          ) : <p className="text-sm text-zinc-500 px-1">В плане пока нет дней — откройте его и добавьте тренировки.</p>}
+          ) : <p className="text-sm text-zinc-500 px-1">В плане пока нет дней — открой его и добавь тренировки.</p>}
         </>
       )}
 
       {!plan && plans.length === 0 && (
         <div className={`${card} p-4`}>
           <p className="font-bold">Свой план тренировок</p>
-          <p className="text-sm text-zinc-400 mt-1">Соберите его так же, как для подопечного: дни, упражнения, подходы. Проводите тренировки здесь же — с «Как в прошлый раз» и таймером отдыха.</p>
+          <p className="text-sm text-zinc-400 mt-1">Собери его так же, как для клиента: дни, упражнения, подходы. Проводи тренировки здесь же — с «Как в прошлый раз» и таймером отдыха.</p>
         </div>
       )}
 

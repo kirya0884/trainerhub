@@ -49,8 +49,8 @@ export default function RemindModal({ clientId, name, date, time, onClose }: { c
           {canShare && <button onClick={() => { track("action", "remind", { channel: "share" }); navigator.share({ text }).catch(() => {}); }} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}><Share2 size={16} /> Другое</button>}
           <button onClick={copy} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}><Copy size={16} /> {copied ? "Скопировано" : "Копировать"}</button>
         </div>
-        {tg && <p className="text-[13px] text-zinc-500">Telegram: текст скопируется — вставьте его в чат.</p>}
-        {contacts && !wa && !tg && !sms && <p className="text-[13px] text-zinc-500">В профиле нет телефона и мессенджеров — добавьте их, чтобы отправлять в один тап.</p>}
+        {tg && <p className="text-[13px] text-zinc-500">Telegram: текст скопируется — вставь его в чат.</p>}
+        {contacts && !wa && !tg && !sms && <p className="text-[13px] text-zinc-500">В профиле нет телефона и мессенджеров — добавь их, чтобы отправлять в один тап.</p>}
       </div>
     </ModalShell>
   );

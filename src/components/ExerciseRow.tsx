@@ -5,6 +5,7 @@ import type { LastFact } from "../lib/sessionUtils";
 import NumField from "./NumField";
 import { ask } from "../lib/dialog";
 import { toEmbedUrl } from "../lib/videoEmbed";
+import { fmtSet } from "../lib/format";
 
 // Черновик текстового поля: ввод меняет своё состояние синхронно. Раньше поле обновлялось через
 // startTransition, React до применения перехода откатывал его к старому значению — на Android-клавиатурах
@@ -31,7 +32,7 @@ type DraftProps = { value: string; onValue: (v: string) => void };
 function DraftInput({ value, onValue, ...rest }: DraftProps & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "onFocus" | "onBlur">) {
   return <input {...rest} {...useDraft(value, onValue).props} />;
 }
-function DraftNum({ value, onValue, ...rest }: DraftProps & { label: string; placeholder?: string }) {
+function DraftNum({ value, onValue, ...rest }: DraftProps & { label: string; placeholder?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"] }) {
   return <NumField {...rest} {...useDraft(value, onValue).props} />;
 }
 function ExerciseRow({
@@ -124,7 +125,7 @@ function ExerciseRow({
             <input autoFocus={!readOnly} value={name.props.value} onChange={(e) => { name.set(e.target.value); setAcOpen(true); }} onFocus={() => { name.props.onFocus(); setAcOpen(true); }}
               onBlur={() => { name.props.onBlur(); setTimeout(() => { setAcOpen(false); if (ex.name.trim()) setEditingName(false); }, 150); }}
               onKeyDown={(e) => { if (e.key === "Enter" && ex.name.trim()) { setAcOpen(false); setEditingName(false); } }}
-              placeholder="Название упражнения" aria-label="Название упражнения" className="w-full h-9 bg-zinc-800 rounded-xl px-2.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
+              placeholder="Название упражнения" aria-label="Название упражнения" className="w-full h-11 bg-zinc-800 rounded-xl px-2.5 text-sm font-medium outline-none focus:ring-1 focus:ring-lime-400/40" />
             {acOpen && q && !exactExists && (
               <div className="absolute z-30 left-0 right-0 top-full mt-1 bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl overflow-hidden max-h-52 overflow-y-auto">
                 {matches.map((n) => (<button key={n} onMouseDown={(e) => { e.preventDefault(); name.set(n); setAcOpen(false); }} className="w-full text-left text-sm px-3 py-2 hover:bg-zinc-800 text-zinc-200 transition">{n}</button>))}
@@ -167,33 +168,34 @@ function ExerciseRow({
         )}
         {ex.kind === "functional" ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
-            <DraftNum label="Время выполнения" value={ex.duration} onValue={(v) => update({ duration: v })} placeholder="40 с / 2 мин" />
+            <DraftNum label="Время выполнения" value={ex.duration} onValue={(v) => update({ duration: v })} placeholder="40 с / 2 мин" inputMode="text" />
             <DraftNum label="Вес отягощения" value={ex.weight} onValue={(v) => update({ weight: v })} placeholder="16 кг" />
             <DraftNum label="Отдых" value={ex.rest} onValue={(v) => update({ rest: v })} placeholder="30 с" />
-            <DraftNum label="Пульсовая зона" value={ex.pulseZone} onValue={(v) => update({ pulseZone: v })} placeholder="Z2 120-140" />
+            <DraftNum label="Пульсовая зона" value={ex.pulseZone} onValue={(v) => update({ pulseZone: v })} placeholder="Z2 120-140" inputMode="text" />
           </div>
         ) : ex.detailed ? (
           <div className="pl-6 space-y-1.5">
             {ex.setRows.map((s, i) => (
               <div key={s.id} className="flex items-center gap-2">
                 <span className="text-xs text-zinc-400 w-5 text-center shrink-0 font-medium">{i + 1}</span>
-                <DraftInput value={s.weight} inputMode="decimal" onValue={(v) => updateSetRow(s.id, { weight: v })} placeholder="вес" className="h-9 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                <DraftInput value={s.weight} inputMode="decimal" onValue={(v) => updateSetRow(s.id, { weight: v })} placeholder="вес" className="h-11 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
                 <span className="text-xs text-zinc-500">×</span>
-                <DraftInput value={s.reps} inputMode="numeric" onValue={(v) => updateSetRow(s.id, { reps: v })} placeholder="повт" className="h-9 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                <DraftInput value={s.reps} inputMode="text" onValue={(v) => updateSetRow(s.id, { reps: v })} placeholder="повт" className="h-11 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
                 <button onClick={() => removeSetRow(s.id)} className="ml-auto p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition" title="Удалить подход"><X size={13} /></button>
               </div>
             ))}
             <div className="flex items-center gap-3 mt-0.5">
               <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-lime-400 transition"><Plus size={13} /> подход</button>
               <span className="text-xs text-zinc-500 ml-auto">Отдых</span>
-              <DraftInput value={ex.rest} inputMode="decimal" onValue={(v) => update({ rest: v })} placeholder="90 с" className="w-16 bg-zinc-800 rounded-lg px-1.5 py-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
+              <DraftInput value={ex.rest} inputMode="decimal" onValue={(v) => update({ rest: v })} placeholder="90 с" className="h-11 w-16 bg-zinc-800 rounded-lg px-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pl-6">
-            <DraftNum label="Подходы" value={ex.sets} onValue={(v) => update({ sets: v })} placeholder="4" />
-            <DraftNum label="Повторы" value={ex.reps} onValue={(v) => update({ reps: v })} placeholder="8-12" />
+            <DraftNum label="Подходы" value={ex.sets} onValue={(v) => update({ sets: v })} placeholder="4" inputMode="numeric" />
             <DraftNum label="Вес" value={ex.weight} onValue={(v) => update({ weight: v })} placeholder="60 кг" />
+            {/* Повторы в плане бывают диапазоном и «max» — текстовая клавиатура */}
+            <DraftNum label="Повторы" value={ex.reps} onValue={(v) => update({ reps: v })} placeholder="8-12" inputMode="text" />
             <DraftNum label="Отдых" value={ex.rest} onValue={(v) => update({ rest: v })} placeholder="90 с" />
           </div>
         )}
@@ -201,14 +203,14 @@ function ExerciseRow({
         {/* П10: строка факта стала входом в историю — свободного места в шапке строки нет */}
         {/* План/факт: подходы последней тренировки; отличия от плана того дня — стрелкой */}
         {lastFact && (
-          <button onClick={() => onOpenHistory?.(ex.name)} type="button" title="Факт последней тренировки — нажмите для всей истории"
+          <button onClick={() => onOpenHistory?.(ex.name)} type="button" title="Факт последней тренировки — нажми для всей истории"
             className="pl-6 flex items-start gap-1.5 text-[12px] w-full text-left hover:opacity-80 transition">
             <span className="text-zinc-500 shrink-0">Факт {lastFact.date.slice(8)}.{lastFact.date.slice(5, 7)}{lastFact.fromClient ? " · клиент сам" : ""}:</span>
             <span className="flex flex-wrap gap-x-2 gap-y-0.5 min-w-0">
               {lastFact.sets.map((s, i) => (
                 s.dir === "skip" ? <span key={i} className="text-zinc-600" title="Подход не отмечен">—</span> :
                 <span key={i} className={`inline-flex items-center whitespace-nowrap ${s.dir === "up" ? "text-lime-400" : s.dir === "down" ? "text-orange-400" : s.dir === "extra" ? "text-cyan-400" : "text-zinc-400"}`}>
-                  {s.weight || "—"}×{s.reps || "—"}
+                  {fmtSet(s.weight, s.reps)}
                   {s.dir === "up" && <ArrowUp size={11} aria-label="больше плана" />}
                   {s.dir === "down" && <ArrowDown size={11} aria-label="меньше плана" />}
                   {s.dir === "extra" && <Plus size={11} aria-label="сверх плана" />}

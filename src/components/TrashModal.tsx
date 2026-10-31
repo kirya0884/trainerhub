@@ -37,7 +37,7 @@ export default function TrashModal({ trainerId, onClose }: { trainerId: string; 
 
         {clients.length > 0 && (
           <div>
-            <p className="text-zinc-400 mb-2">Удалённые подопечные</p>
+            <p className="text-zinc-400 mb-2">Удалённые клиенты</p>
             <div className="space-y-1.5">
               {clients.map((c) => (
                 <div key={c.id} className="flex items-center gap-2 bg-zinc-800/60 rounded-xl px-3 py-2">

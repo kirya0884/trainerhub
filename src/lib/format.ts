@@ -58,3 +58,5 @@ export const plural = (n: number, [one, few, many]: [string, string, string]) =>
   const m10 = n % 10, m100 = n % 100;
   return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
 };
+/** Подход везде пишем «вес×повторы»: «60×8»; без веса — только повторы: «8 повт.»; пусто — «—». */
+export const fmtSet = (weight?: string, reps?: string) => (weight ? `${weight}×${reps || "—"}` : reps ? `${reps} повт.` : "—");

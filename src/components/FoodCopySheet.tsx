@@ -27,7 +27,7 @@ export default function FoodCopySheet({ list, meal, title, from, onCopy, onClose
     if (busy || !to) return;
     setBusy(true);
     try { await onCopy(to, toMeal); }
-    catch (e) { console.error("[FoodCopySheet]", e); notify("Не удалось скопировать. Проверьте интернет."); setBusy(false); }
+    catch (e) { console.error("[FoodCopySheet]", e); notify("Не удалось скопировать. Проверь интернет."); setBusy(false); }
   };
 
   return (

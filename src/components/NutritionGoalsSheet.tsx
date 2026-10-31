@@ -64,8 +64,8 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose,
         <div>
           <p className="font-bold mb-1">{asTrainer ? "Цель от тренера" : goals.trainer ? "Своя цель" : "Моя цель"}</p>
           <p className="text-[13px] text-zinc-400 mb-3">
-            {asTrainer ? "Клиент увидит её как главную — своя у него действует, только пока вашей нет. " : ""}
-            Укажите граммы белков, жиров и углеводов — калории посчитаются сами. Можно вписать свои ккал.
+            {asTrainer ? "Клиент увидит её как главную — своя у него действует, только пока твоей нет. " : ""}
+            Укажи граммы белков, жиров и углеводов — калории посчитаются сами. Можно вписать свои ккал.
           </p>
           <div className="grid grid-cols-4 gap-1.5">
             <Field label="Белки, г" value={p} onChange={setP} color={MACRO_COLOR.protein} />
@@ -101,7 +101,7 @@ export default function NutritionGoalsSheet({ clientId, goals, onSaved, onClose,
           <div className="rounded-2xl bg-zinc-800/60 p-3.5">
             <b>Цель, которую указал клиент</b>
             <GoalRow g={other} />
-            <p className="text-[13px] text-zinc-400 mt-2">{goals.trainer ? "Сейчас не действует — главная ваша." : "Действует, пока вы не зададите свою."}</p>
+            <p className="text-[13px] text-zinc-400 mt-2">{goals.trainer ? "Сейчас не действует — главная твоя." : "Действует, пока ты не задашь свою."}</p>
           </div>
         )}
       </div>
@@ -182,13 +182,13 @@ function GoalCalculator({ clientId, measurements, onTake }: { clientId: string; 
               </div>
             ))}
           </div>
-          {res.lowKcal && <p role="alert" className="text-[13px] text-amber-400">Калорий слишком мало — углеводов меньше 130 г. Проверьте данные.</p>}
+          {res.lowKcal && <p role="alert" className="text-[13px] text-amber-400">Калорий слишком мало — углеводов меньше 130 г. Проверь данные.</p>}
           <p className="text-[12px] text-zinc-500">Формула Миффлина — Сан-Жеора. Похудение −15% калорий, набор +10%. Белок и жиры считаются от веса, но не больше веса при ИМТ 25 — это оценка без учёта процента жира. Жиры — около 25% калорий, углеводы — остаток.</p>
           {/* Оговорка из пользовательского соглашения: расчёт справочный, не медицинская услуга */}
           <p className="text-[12px] text-zinc-500">Расчёт справочный и не является медицинской рекомендацией. При заболеваниях, беременности и особых состояниях цели по питанию подбирает врач.</p>
           <button onClick={take} className="w-full h-11 rounded-xl bg-zinc-100 text-zinc-950 text-sm font-bold hover:bg-white transition">Взять эти цифры</button>
         </>
-      ) : !errorList.length && !filled && <p className="text-[13px] text-zinc-500">Укажите вес, рост и возраст.</p>}
+      ) : !errorList.length && !filled && <p className="text-[13px] text-zinc-500">Укажи вес, рост и возраст.</p>}
     </div>
   );
 }

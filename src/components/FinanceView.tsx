@@ -12,6 +12,7 @@ import { markPaymentPaid } from "../lib/payments";
 import { addDays, addMonths, plural, toDateStr, today as todayFn } from "../lib/format";
 import { chartColors } from "../lib/themeColor";
 import { notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 import { SkeletonRows } from "./Skeleton";
 import RenewModal from "./RenewModal";
 
@@ -66,7 +67,7 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
   const [hide, setHide] = useState(() => { try { return localStorage.getItem(HIDE_KEY) === "1"; } catch { return false; } });
   const [q, setQ] = useState("");
   const [renew, setRenew] = useState<DashboardClient | null>(null);
-  const load = () => fetchDashboardData(trainerId).then(setData).catch((e: Error) => setError(e.message));
+  const load = () => fetchDashboardData(trainerId).then((d) => { setData(d); setError(""); }).catch((e) => { console.error("[FinanceView] load:", e); setError(humanError(e, "Не удалось загрузить финансы")); });
   useEffect(() => { load(); }, [trainerId]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleHide = () => setHide((v) => { try { localStorage.setItem(HIDE_KEY, v ? "0" : "1"); } catch { /* приватный режим */ } return !v; });
 
@@ -98,7 +99,12 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
     return { byId, cur: calc(cur), prev: calc(prev) };
   }, [data, bookings, cur.from, cur.to, prev.from, prev.to, t]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error) return <Shell onBack={onBack}><p className="text-sm text-red-400">Не удалось загрузить: {error}</p></Shell>;
+  if (error) return (
+    <Shell onBack={onBack}>
+      <p role="alert" className="text-sm text-red-400">{error}</p>
+      <button onClick={() => { setError(""); load(); }} className="mt-2 h-10 px-4 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-semibold text-zinc-100 transition">Повторить</button>
+    </Shell>
+  );
   if (!data || !stats) return <Shell onBack={onBack}><SkeletonRows rows={5} /></Shell>;
 
   const { clients, payments } = data;
@@ -136,8 +142,12 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
   const cc = chartColors();
 
   const settle = async (pay: DashboardPayment) => {
-    try { await markPaymentPaid(pay.id); await load(); }
-    catch (e) { console.error("[FinanceView] markPaymentPaid:", e); notify("Не удалось отметить оплату."); }
+    try {
+      await markPaymentPaid(pay.id); await load();
+      // Новый платёж не создаётся — «Отменить» возвращает прежний статус («позже»/«частями»)
+      notify("Оплата записана", "info", { label: "Отменить", run: () => { markPaymentPaid(pay.id, pay.payStatus).then(load).catch((e) => { console.error("[FinanceView] undo markPaymentPaid:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }); } });
+    }
+    catch (e) { console.error("[FinanceView] markPaymentPaid:", e); notify(humanError(e, "Не удалось отметить оплату"), "error"); }
   };
 
   return (

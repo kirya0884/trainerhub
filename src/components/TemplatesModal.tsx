@@ -3,7 +3,9 @@ import { ClipboardList, FileStack, Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import * as api from "../lib/templates";
 import type { DayTemplate, PlanTemplate } from "../lib/templates";
-import { notify } from "../lib/dialog";
+import { ask, notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
+import LoadError from "./LoadError";
 
 // Применить шаблон плана/дня к текущему плану, либо сохранить текущие дни как новый шаблон.
 export default function TemplatesModal({ trainerId, currentDays, onApplyPlan, onApplyDay, onClose }: {
@@ -16,7 +18,17 @@ export default function TemplatesModal({ trainerId, currentDays, onApplyPlan, on
   const [name, setName] = useState("");
   const [saveDayId, setSaveDayId] = useState(currentDays[0]?.id || "");
 
-  const load = () => { api.fetchPlanTemplates(trainerId).then(setPlanTpls).catch((e) => console.error("[TemplatesModal] fetchPlanTpls:", e)); api.fetchDayTemplates(trainerId).then(setDayTpls).catch((e) => console.error("[TemplatesModal] fetchDayTpls:", e)); };
+  const [failed, setFailed] = useState(false);
+  const load = () => {
+    setFailed(false);
+    api.fetchPlanTemplates(trainerId).then(setPlanTpls).catch((e) => { console.error("[TemplatesModal] fetchPlanTpls:", e); setFailed(true); });
+    api.fetchDayTemplates(trainerId).then(setDayTpls).catch((e) => { console.error("[TemplatesModal] fetchDayTpls:", e); setFailed(true); });
+  };
+  const remove = async (kind: "plan" | "day", id: string) => {
+    if (!(await ask(kind === "plan" ? "Удалить шаблон плана?" : "Удалить шаблон дня?", { ok: "Удалить", danger: true }))) return;
+    try { await (kind === "plan" ? api.deletePlanTemplate(id) : api.deleteDayTemplate(id)); load(); }
+    catch (e) { console.error("[TemplatesModal] delete:", e); notify(humanError(e, "Не удалось удалить"), "error"); }
+  };
   useEffect(() => { load(); }, [trainerId]);
 
   const saveAsTemplate = async () => {
@@ -59,7 +71,7 @@ export default function TemplatesModal({ trainerId, currentDays, onApplyPlan, on
               <div className="min-w-0"><p className="text-sm font-medium truncate">{t.name}</p><p className="text-xs text-zinc-500">{t.days.length} дней</p></div>
               <div className="flex gap-1.5 shrink-0">
                 <button onClick={() => onApplyPlan(t.days)} className="flex items-center gap-1 bg-zinc-800 hover:bg-lime-400/20 hover:text-lime-400 text-zinc-300 rounded-lg px-2.5 py-1.5 text-xs transition"><ClipboardList size={13} /> Применить</button>
-                <button onClick={() => api.deletePlanTemplate(t.id).then(load).catch((e) => console.error("[TemplatesModal] delete:", e))} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><Trash2 size={14} /></button>
+                <button onClick={() => remove("plan", t.id)} aria-label="Удалить шаблон" className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><Trash2 size={14} /></button>
               </div>
             </div>
           ))}
@@ -68,10 +80,11 @@ export default function TemplatesModal({ trainerId, currentDays, onApplyPlan, on
               <div className="min-w-0"><p className="text-sm font-medium truncate">{t.name}</p><p className="text-xs text-zinc-500">{t.day.exercises?.length ?? 0} упр.</p></div>
               <div className="flex gap-1.5 shrink-0">
                 <button onClick={() => onApplyDay(t.day)} className="flex items-center gap-1 bg-zinc-800 hover:bg-lime-400/20 hover:text-lime-400 text-zinc-300 rounded-lg px-2.5 py-1.5 text-xs transition"><ClipboardList size={13} /> Применить</button>
-                <button onClick={() => api.deleteDayTemplate(t.id).then(load).catch((e) => console.error("[TemplatesModal] delete:", e))} className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><Trash2 size={14} /></button>
+                <button onClick={() => remove("day", t.id)} aria-label="Удалить шаблон" className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition"><Trash2 size={14} /></button>
               </div>
             </div>
           ))}
+          {failed && (tab === "plan" ? !planTpls : !dayTpls) && <LoadError onRetry={load} />}
           {tab === "plan" && planTpls?.length === 0 && <p className="text-sm text-zinc-600 text-center py-6">Шаблонов планов пока нет</p>}
           {tab === "day" && dayTpls?.length === 0 && <p className="text-sm text-zinc-600 text-center py-6">Шаблонов дней пока нет</p>}
         </div>

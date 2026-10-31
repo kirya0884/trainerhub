@@ -149,7 +149,7 @@ export async function finishOrQueue(opts: FinishOpts): Promise<{ membership: Mem
     pendingIds.delete(key);
     await enqueue("finish", opts, st);
     track("action", "workout_finish", { queued: true });
-    notify("Нет интернета — тренировка сохранена на телефоне и отправится сама, как только появится сеть.");
+    notify("Нет интернета — тренировка сохранена на телефоне и отправится сама, как только появится сеть.", "info");
     return { membership: opts.membership ?? null, charged: false, queued: true };
   }
 }

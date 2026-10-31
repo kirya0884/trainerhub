@@ -144,7 +144,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
                 <p className="text-sm text-zinc-400">Для кого план?</p>
                 <div className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 h-11">
                   <Search size={16} className="text-zinc-500 shrink-0" />
-                  <input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder="Подопечный..." className="flex-1 min-w-0 bg-transparent outline-none" />
+                  <input value={clientQuery} onChange={(e) => setClientQuery(e.target.value)} placeholder="Клиент..." className="flex-1 min-w-0 bg-transparent outline-none" />
                 </div>
                 <div className="space-y-1.5">
                   {clientOptions.length === 0 && <p className="text-sm text-zinc-500 text-center py-6">Никого не найдено</p>}
@@ -159,7 +159,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
               </>
             ) : (
               <>
-                <button onClick={() => setNewClientId("")} className="inline-flex items-center gap-2 h-9 pl-1 pr-3 rounded-full bg-zinc-800 text-sm font-semibold hover:bg-zinc-700 transition" title="Сменить подопечного">
+                <button onClick={() => setNewClientId("")} className="inline-flex items-center gap-2 h-9 pl-1 pr-3 rounded-full bg-zinc-800 text-sm font-semibold hover:bg-zinc-700 transition" title="Сменить клиента">
                   <span className="w-7 h-7 rounded-full flex items-center justify-center text-[11px] font-bold text-zinc-950" style={{ background: wizardClient.color }}>{initials(wizardClient.name)}</span>
                   {wizardClient.name}
                 </button>
@@ -182,7 +182,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
 
       <div className="flex items-center gap-2.5 bg-zinc-900 border border-zinc-800 rounded-xl px-3.5 h-11">
         <Search size={17} className="text-zinc-500 shrink-0" />
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по плану или подопечному" className="flex-1 min-w-0 bg-transparent outline-none" />
+        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Поиск по плану или клиенту" className="flex-1 min-w-0 bg-transparent outline-none" />
       </div>
 
       <div className="flex gap-2">
@@ -195,7 +195,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
       {plans === null ? (
         <SkeletonRows rows={4} />
       ) : filtered.length === 0 ? (
-        <p className="text-zinc-500 text-sm text-center py-10">{q ? "Ничего не найдено" : showArchive ? "В архиве пусто" : "Планов пока нет. Создайте первый кнопкой «Новый план»."}</p>
+        <p className="text-zinc-500 text-sm text-center py-10">{q ? "Ничего не найдено" : showArchive ? "В архиве пусто" : "Планов пока нет. Создай первый кнопкой «Новый план»."}</p>
       ) : (
         <>
           {recent.length > 0 && (

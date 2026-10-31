@@ -29,14 +29,14 @@ export default function ClientPickModal({ candidates, multi = false, max = 3, ti
         <div className="p-3 border-t border-zinc-800 shrink-0">
           <button onClick={() => picked.length && onPick(picked)} disabled={!picked.length}
             className="w-full h-12 rounded-xl bg-lime-400 text-zinc-950 font-bold disabled:opacity-40 active:scale-[0.98] transition">
-            {picked.length ? `Начать вместе · ${picked.length + 1} чел.` : `Отметьте до ${max} подопечных`}
+            {picked.length ? `Начать вместе · ${picked.length + 1} чел.` : `Отметь до ${max} клиентов`}
           </button>
         </div>
       ) : undefined}>
       <div className="p-3 space-y-2">
         <label className="flex items-center gap-2 bg-zinc-800 rounded-xl px-3 h-11">
           <Search size={16} className="text-zinc-500 shrink-0" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск подопечного" className="flex-1 min-w-0 bg-transparent outline-none" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Поиск клиента" className="flex-1 min-w-0 bg-transparent outline-none" />
         </label>
         {!candidates && <SkeletonRows rows={3} />}
         {candidates && list.length === 0 && <p className="text-sm text-zinc-500 text-center py-4">Никого не найдено</p>}

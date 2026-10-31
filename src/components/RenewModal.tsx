@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import { fetchClient, type Membership } from "../lib/clients";
-import { applyPromotion, fetchPackageTemplates, fetchPromotions, markPaid, type PackageTemplate, type PayStatus, type Promotion } from "../lib/payments";
+import { applyPromotion, deletePayment, fetchPackageTemplates, fetchPromotions, markPaid, type PackageTemplate, type PayStatus, type Promotion } from "../lib/payments";
 import { notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 import { track } from "../lib/events";
 
 const rub = (n: number) => `${n.toLocaleString("ru-RU")} ₽`;
@@ -52,7 +53,14 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
     try {
       const res = await markPaid(clientId, next, data!.promos, status, payKey);
       if (res.duplicate) notify("Эта оплата уже была записана — повтор не создан.");
-      else track("action", "renew", { status });
+      else {
+        track("action", "renew", { status });
+        // Аудит п. 40: отмена удаляет этот же платёж (как «Удалить платёж»), остаток вернёт сервер.
+        // Не для сплита, подписки и смены пакета: delete_payment не откатит строку партнёра, дату и настройки пакета.
+        const text = status === "paid" ? "Оплата записана" : status === "deferred" ? "Записано: оплата позже" : "Записано: оплата частями";
+        const canUndo = next.type !== "subscription" && !next.split && !m!.split && chosen.key === "cur";
+        notify(text, "info", canUndo ? { label: "Отменить", run: () => { deletePayment(payKey, clientId).then(onDone).catch((e) => { console.error("[RenewModal] отмена оплаты:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }); } } : undefined);
+      }
       onDone(); onClose();
     }
     catch (e) { console.error("[RenewModal] оплата:", e); notify("Не удалось записать оплату."); }
@@ -63,7 +71,7 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
     <ModalShell title={`Продлить — ${name}`} icon={<RefreshCw size={16} className="text-lime-400" />} onClose={onClose}>
       <div className="p-4 space-y-3">
         {!data ? <SkeletonRows rows={2} /> : options.length === 0 ? (
-          <p className="text-sm text-zinc-400">Пакет не настроен и шаблонов нет. Укажите пакет в профиле подопечного, во вкладке «Оплаты».</p>
+          <p className="text-sm text-zinc-400">Пакет не настроен и шаблонов нет. Укажи пакет в профиле клиента, во вкладке «Оплаты».</p>
         ) : (
           <>
             <div className="space-y-2">

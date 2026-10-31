@@ -22,7 +22,7 @@ export default function ModalShell({ title, icon, onClose, children, footer, wid
         style={kb ? { maxHeight: kb.height - 12 } : undefined}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
           <h3 id={titleId} className="font-semibold flex items-center gap-1.5">{icon} {title}</h3>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400" title="Закрыть" aria-label="Закрыть"><X size={18} /></button>
+          <button onClick={onClose} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400" title="Закрыть" aria-label="Закрыть"><X size={20} /></button>
         </div>
         <div className="overflow-y-auto flex-1 min-h-0">{children}</div>{footer}
       </div>

@@ -466,7 +466,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                     {quickView.status === "scheduled" && quickView.date >= today && (
                       <button onClick={() => { setRemind({ id, date: quickView.date, time: quickView.time }); setQuickView(null); }} aria-label="Напомнить о тренировке" title="Напомнить" className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100 transition shrink-0"><Bell size={17} /></button>
                     )}
-                    <button onClick={() => { onOpenClientPlans(id); setQuickView(null); }} aria-label="Планы подопечного" title="Планы" className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100 transition shrink-0"><ClipboardList size={17} /></button>
+                    <button onClick={() => { onOpenClientPlans(id); setQuickView(null); }} aria-label="Планы клиента" title="Планы" className="w-9 h-9 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-700 hover:text-zinc-100 transition shrink-0"><ClipboardList size={17} /></button>
                     <button onClick={() => { onOpenClient(id); setQuickView(null); }} className="h-9 px-3 rounded-lg text-[13px] font-semibold bg-zinc-900 text-zinc-100 hover:bg-zinc-700 transition shrink-0">Профиль</button>
                   </div>
                 );

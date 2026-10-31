@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { cleanupStorage, readJson, writeJson } from "./lib/storage";
 import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, UserRound, Plus, X, Pin, Search, Apple, Play, Ruler } from "lucide-react";
 import { supabase } from "./lib/supabase";
+import { humanError } from "./lib/errors";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
 import { useLegalRoute } from "./components/LegalLink";
@@ -62,7 +63,7 @@ type View = { kind: "dashboard" } | { kind: "clients"; newForm?: boolean } | { k
 type TabKind = "dashboard" | "plans" | "clients" | "calendar" | "me" | "trainerProfile";
 const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
   dashboard: { label: "Главная", icon: Home },
-  clients: { label: "Подопечные", icon: Users },
+  clients: { label: "Клиенты", icon: Users },
   plans: { label: "Планы", icon: ClipboardList },
   calendar: { label: "Календарь", icon: CalendarDays },
   me: { label: "Я", icon: UserRound },
@@ -117,7 +118,7 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
     if (pw !== pw2) { setMsg("Пароли не совпадают"); return; }
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password: pw });
-    if (error) { setMsg(error.message); setBusy(false); return; }
+    if (error) { setMsg(humanError(error, "Не удалось сменить пароль. Попробуй ещё раз")); setBusy(false); return; }
     setMsg("Пароль изменён!");
     setTimeout(onDone, 1200);
     setBusy(false);
@@ -488,7 +489,7 @@ export default function App() {
           <p className="text-sm text-zinc-500">
             {accessError === "offline"
               ? "Чтобы открыть приложение, нужна сеть. После этого оно будет открываться и без неё."
-              : "Сервер не ответил как нужно. Попробуйте ещё раз через минуту."}
+              : "Сервер не ответил как нужно. Попробуй ещё раз через минуту."}
           </p>
           <div className="flex gap-2 justify-center pt-1">
             <button onClick={() => checkAccess(session.user.id)} className="bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-lime-300 transition">Повторить</button>
@@ -519,7 +520,7 @@ export default function App() {
         <div className="max-w-sm text-center space-y-3">
           <p className="text-lg font-semibold">Нет доступа к аккаунту</p>
           <p className="text-sm text-zinc-500">
-            Вход выполнен ({session.user.email}), но карточка подопечного не найдена. Проверьте у тренера, что в вашей карточке указан именно этот email для входа.
+            Вход выполнен ({session.user.email}), но карточка клиента не найдена. Уточни у тренера, что в твоей карточке указан именно этот email для входа.
           </p>
           <div className="flex gap-2 justify-center pt-1">
             <button onClick={() => checkAccess(session.user.id)} className="bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3 py-2 text-sm hover:bg-lime-300 transition">Повторить</button>
@@ -621,7 +622,7 @@ export default function App() {
           <button
             onClick={() => setShowSearch(true)}
             aria-label="Поиск"
-            title="Поиск по подопечным и планам"
+            title="Поиск по клиентам и планам"
             className="ml-auto shrink-0 p-2 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
           >
             <Search size={18} />
@@ -732,7 +733,7 @@ export default function App() {
                   </>
                 )}
                 <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "client"); go({ kind: "clients", newForm: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
-                  <Users size={16} className="text-lime-400 shrink-0" /> Новый подопечный
+                  <Users size={16} className="text-lime-400 shrink-0" /> Новый клиент
                 </button>
                 <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "plan"); go({ kind: "plans", newPlan: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <ClipboardList size={16} className="text-lime-400 shrink-0" /> Новый план

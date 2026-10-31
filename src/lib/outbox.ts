@@ -18,6 +18,7 @@
 import { supabase } from "./supabase";
 import { track } from "./events";
 import { freeCacheSpace } from "./storage";
+import { notify } from "./dialog";
 
 export type OutboxKind = "finish" | "clientFinish" | "food" | "foodOp" | "product";
 export interface OutboxItem<P = any, S = any> {
@@ -213,10 +214,18 @@ export async function flushOutbox() {
         setBusy(item.id, { tab: tabId, until: Date.now() + BUSY_MS });
         inflight++;
         const done = h({ ...item, attempts: item.attempts + 1 }, save).then(
-          () => { write(read().filter((x) => x.id !== item.id)); track("action", "offline_sent", { kind: item.kind }); return "ok" as const; },
+          () => {
+            write(read().filter((x) => x.id !== item.id)); track("action", "offline_sent", { kind: item.kind });
+            // Аудит п. 46: клиент должен знать, что тренировка дошла; экраны перечитывают историю
+            if (item.kind === "clientFinish") notify("Тренировка отправлена тренеру", "info");
+            window.dispatchEvent(new CustomEvent("outbox:flushed", { detail: { kind: item.kind } }));
+            return "ok" as const;
+          },
           (e) => {
             if (isNetworkError(e)) { setBusy(item.id, undefined); return "net" as const; }
             console.error("[outbox]", item.kind, e);
+            // Сбой не из-за сети — говорим один раз на запись (у неё ещё не было ошибки), а не на каждый повтор
+            if (!item.error) notify(`${item.kind === "finish" || item.kind === "clientFinish" ? "Тренировка" : "Запись"} не отправилась. Нажми значок внизу слева, чтобы повторить`, "error");
             write(read().map((x) => (x.id === item.id ? { ...x, busy: undefined, attempts: x.attempts + 1, error: String((e as any)?.message ?? e) } : x)));
             return "err" as const;
           },

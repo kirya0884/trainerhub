@@ -3,6 +3,8 @@ import { Plus, Trash2, Activity } from "lucide-react";
 import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
 import { fmtDate, today } from "../lib/format";
+import { ask, notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 
 const ACTIVITY_PRESETS = ["Прогулка", "Бег", "Велосипед", "Плавание", "Йога", "Растяжка", "Другое"];
 const UNIT_PRESETS: Record<string, string> = { "Прогулка": "шагов", "Бег": "км", "Велосипед": "км", "Плавание": "м", "Йога": "мин", "Растяжка": "мин" };
@@ -38,8 +40,9 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
   };
 
   const remove = async (id: string) => {
+    if (!(await ask("Удалить активность?", { ok: "Удалить", danger: true }))) return;
     try { await portalApi.deleteClientActivity(id); setActivities((prev) => prev.filter((a) => a.id !== id)); }
-    catch (e) { console.error("[ActivityTab] remove:", e); }
+    catch (e) { console.error("[ActivityTab] remove:", e); notify(humanError(e, "Не удалось удалить"), "error"); }
   };
 
   // Группируем по дате
@@ -89,7 +92,7 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
                 <span className="text-sm text-zinc-400 ml-2">{a.value}{a.unit ? ` ${a.unit}` : ""}</span>
               </div>
               {!readOnly && (
-                <button onClick={() => remove(a.id)} className="text-zinc-600 hover:text-red-400 transition p-1"><Trash2 size={14} /></button>
+                <button onClick={() => remove(a.id)} aria-label="Удалить активность" className="text-zinc-600 hover:text-red-400 transition p-1"><Trash2 size={14} /></button>
               )}
             </div>
           ))}

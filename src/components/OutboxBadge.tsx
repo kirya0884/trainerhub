@@ -3,6 +3,7 @@ import { CloudOff, RefreshCw, TriangleAlert } from "lucide-react";
 import { flushOutbox, isFlushing, localUid, orphans, pending, removeOrphans, startOutbox, subscribeOutbox } from "../lib/outbox";
 import { supabase } from "../lib/supabase";
 import { ask, notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 import { fmtSavedAt, getStaleAt, revalidate, subscribeStale } from "../lib/offlineCache";
 
 // Значок слева внизу над панелью: нет сети и/или есть неотправленное. Нажатие — отправить
@@ -49,7 +50,7 @@ export default function OutboxBadge() {
       return;
     }
     if (!left.length) notify("Всё отправлено.", "info");
-    else if (left.some((i) => i.error)) notify(`Не удалось отправить (${left.length}): ${left.find((i) => i.error)?.error}. Данные сохранены на телефоне — попробуем ещё раз позже.`);
+    else if (left.some((i) => i.error)) notify(`Не удалось отправить (${left.length}): ${humanError(left.find((i) => i.error)?.error, "ошибка на сервере")}. Данные сохранены на телефоне — попробуем ещё раз позже.`, "error");
   };
   const label = `не отправлено: ${mine.length}${foreign ? ` · с другого входа: ${foreign}` : ""}`;
 

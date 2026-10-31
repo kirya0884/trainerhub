@@ -40,7 +40,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
 
   // Ш4в: скелетон по форме будущего списка вместо голого «Загрузка...»
   if (!clients) return (
-    <div className="space-y-3 animate-pulse" role="status" aria-label="Загрузка подопечных">
+    <div className="space-y-3 animate-pulse" role="status" aria-label="Загрузка клиентов">
       <div className="h-8 w-44 bg-zinc-800 rounded-lg" />
       <div className="h-11 bg-zinc-900 border border-zinc-800 rounded-xl" />
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
@@ -141,7 +141,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-4">
-        <h2 className="text-2xl font-extrabold tracking-tight">Подопечные <span className="text-zinc-500 font-bold">{clients.filter((c) => c.status !== "archived").length}</span></h2>
+        <h2 className="text-2xl font-extrabold tracking-tight">Клиенты <span className="text-zinc-500 font-bold">{clients.filter((c) => c.status !== "archived").length}</span></h2>
         {!showArchive && <button onClick={() => setShowForm((v) => !v)} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl px-3.5 h-10 hover:bg-lime-300 transition text-sm"><Plus size={16} /> Добавить</button>}
       </div>
       <div className="relative mb-3">
@@ -164,10 +164,10 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
         </Suspense>
       )}
       {showArchive && (
-        <p className="text-sm text-zinc-500 mb-3 flex items-center gap-1.5"><Archive size={14} /> Архив: эти подопечные скрыты из основного списка</p>
+        <p className="text-sm text-zinc-500 mb-3 flex items-center gap-1.5"><Archive size={14} /> Архив: эти клиенты скрыты из основного списка</p>
       )}
       {clients.filter((c) => c.status !== "archived").length === 0 && !showArchive && (
-        <p className="text-zinc-500 text-sm text-center py-8">Добавь первого подопечного, чтобы привязывать к нему планы</p>
+        <p className="text-zinc-500 text-sm text-center py-8">Добавь первого клиента, чтобы привязывать к нему планы</p>
       )}
       {shownGroups.length === 0 && (search.trim() || fmtFilter || showArchive) && (
         <p className="text-zinc-500 text-sm text-center py-8">{showArchive ? "В архиве пусто" : "Никого не нашлось"}</p>

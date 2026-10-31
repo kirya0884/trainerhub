@@ -30,6 +30,7 @@ import TemplatesModal from "./TemplatesModal";
 import DayTemplateLibrary from "./DayTemplateLibrary";
 import { ScreenSkeleton } from "./Skeleton";
 import { ask, askInput, notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 
 const exLabel = (day: Day, idx: number) => {
   const ex = day.exercises[idx];
@@ -302,7 +303,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     // П5: раньше при неподходящем абонементе кнопка молча ничего не делала —
     // тренер не понимал, сломалось или он что-то не так делает.
     if (membership.type === "subscription") {
-      notify("У подопечного подписка — разовые тренировки к ней не добавляются, оплата помесячная.");
+      notify("У клиента подписка — разовые тренировки к ней не добавляются, оплата помесячная.");
       return;
     }
 
@@ -323,9 +324,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       const { membership: next, duplicate } = await incrementMembershipRemaining(clientId, membership, undefined, payId ? { id: payId, date: today(), amount } : undefined);
       if (paid) singlePaymentId.current = null;
       setMembership(next);
-      if (duplicate) notify("Тренировка из прошлой попытки уже была записана. Чтобы добавить ещё одну, нажмите снова.", "info");
-    } catch (e: any) {
-      notify(e.message || "Не удалось добавить тренировку");
+      if (duplicate) notify("Тренировка из прошлой попытки уже была записана. Чтобы добавить ещё одну, нажми снова.", "info");
+    } catch (e) {
+      notify(humanError(e, "Не удалось добавить тренировку"));
     } finally {
       setAddingSession(false);
     }
@@ -552,7 +553,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                 </div>
               </div>
             )}
-            <p className="text-zinc-600 text-xs">Изменить можно во вкладке «Абонемент» в карточке подопечного.</p>
+            <p className="text-zinc-600 text-xs">Изменить можно во вкладке «Абонемент» в карточке клиента.</p>
           </div>
         </ModalShell>
       )}
@@ -769,7 +770,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
             onKeyDown={(e) => { if (e.key === "Enter" && newDayName.trim()) handleCreateDay(); if (e.key === "Escape") setNewDayName(null); }}
             placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
           <button onClick={handleCreateDay} disabled={!newDayName.trim() || addBusy} className="px-3 py-2 text-sm rounded-xl bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Добавляю…" : "Создать"}</button>
-          <button onClick={() => setNewDayName(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
+          <button onClick={() => setNewDayName(null)} className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-500 transition" title="Отмена" aria-label="Отмена"><X size={20} /></button>
         </div>
       ) : (
         <div className="flex gap-2">
@@ -784,7 +785,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
             onKeyDown={(e) => { if (e.key === "Enter" && pasteInput.trim()) handlePasteDay(); if (e.key === "Escape") setPasteInput(null); }}
             placeholder="Название дня" className="flex-1 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-cyan-400/40" />
           <button onClick={handlePasteDay} disabled={!pasteInput.trim() || addBusy} className="px-3 py-2 text-sm rounded-xl bg-lime-400 text-zinc-950 font-semibold hover:bg-lime-300 transition disabled:opacity-40 whitespace-nowrap">{addBusy ? "Вставляю…" : "Вставить"}</button>
-          <button onClick={() => setPasteInput(null)} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-500 transition"><X size={16} /></button>
+          <button onClick={() => setPasteInput(null)} className="w-11 h-11 shrink-0 inline-flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-500 transition" title="Отмена" aria-label="Отмена"><X size={20} /></button>
         </div>
       ) : (
         dayClipboard && <button onClick={() => setPasteInput(dayClipboard.name)} className="w-full flex items-center justify-center gap-1.5 bg-zinc-900 border border-cyan-400/30 hover:border-cyan-400/60 rounded-xl py-2.5 text-sm font-medium text-cyan-400 transition"><ClipboardPaste size={15} /> Вставить: {dayClipboard.name}</button>

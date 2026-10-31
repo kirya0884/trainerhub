@@ -98,13 +98,13 @@ export async function signOutAndForget(opts?: { scope?: "global" | "local" | "ot
   forgetUser(uid);
   const { error } = navigator.onLine ? await supabase.auth.signOut(opts) : { error: new Error("Failed to fetch (offline)") };
   if (!error) return;
-  if (!isNetworkError(error)) { console.error("[signOut]", error); notify("Не удалось выйти. Попробуйте ещё раз."); return; }
+  if (!isNetworkError(error)) { console.error("[signOut]", error); notify("Не удалось выйти. Попробуй ещё раз."); return; }
   // Без сети: убираем вход на телефоне. _removeSession — внутренний метод supabase-js, он же
   // сообщает приложению о выходе (SIGNED_OUT); если его нет — стираем сессию и перезапускаемся.
   const auth = supabase.auth as unknown as { _removeSession?: () => Promise<void>; storageKey: string };
   if (typeof auth._removeSession === "function") await auth._removeSession();
   else { removeKey(auth.storageKey); location.reload(); }
-  if (opts?.scope === "global") notify("Без интернета вы вышли только на этом телефоне. Чтобы выйти на всех устройствах, войдите и повторите, когда появится сеть.");
+  if (opts?.scope === "global") notify("Без интернета выход сработал только на этом телефоне. Чтобы выйти на всех устройствах, войди и повтори, когда появится сеть.");
 }
 
 export function peekCache<T>(name: string): Entry<T> | null {

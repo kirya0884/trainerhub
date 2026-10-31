@@ -110,7 +110,7 @@ export default function DayTemplateLibrary({
         {editing ? (
           <div className="space-y-4">
             <div className="flex items-center gap-2">
-              <button onClick={() => setEditing(null)} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 transition"><X size={16} /></button>
+              <button onClick={() => setEditing(null)} className="w-11 h-11 inline-flex items-center justify-center rounded-lg hover:bg-zinc-800 text-zinc-400 transition" title="Закрыть" aria-label="Закрыть редактор шаблона"><X size={20} /></button>
               <span className="text-sm text-zinc-400">{editing.id ? "Редактирование шаблона" : "Новый шаблон"}</span>
             </div>
             <input
@@ -122,7 +122,7 @@ export default function DayTemplateLibrary({
             />
             <div className="space-y-2">
               <div className="hidden sm:grid grid-cols-[1fr_2.5rem_3.5rem_3.5rem_3.5rem_1.5rem] gap-1.5 px-2 text-xs text-zinc-500">
-                <span>Упражнение</span><span className="text-center">×</span><span className="text-center">Повт.</span><span className="text-center">Кг</span><span className="text-center">Отд.</span><span />
+                <span>Упражнение</span><span className="text-center">×</span><span className="text-center">Кг</span><span className="text-center">Повт.</span><span className="text-center">Отд.</span><span />
               </div>
               {editing.exercises.map((ex, i) => (
                 <div key={ex.tempId} className="flex items-center gap-1.5 bg-zinc-800/50 rounded-lg p-2">
@@ -130,13 +130,13 @@ export default function DayTemplateLibrary({
                   <input value={ex.name} onChange={(e) => updateEx(ex.tempId, { name: e.target.value })}
                     placeholder="Упражнение" className="flex-1 min-w-0 bg-zinc-900 rounded-xl px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
                   <input value={ex.sets} onChange={(e) => updateEx(ex.tempId, { sets: e.target.value })}
-                    placeholder="×" className="w-10 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
-                  <input value={ex.reps} onChange={(e) => updateEx(ex.tempId, { reps: e.target.value })}
-                    placeholder="пов." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                    inputMode="numeric" placeholder="×" className="w-10 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
                   <input value={ex.weight} onChange={(e) => updateEx(ex.tempId, { weight: e.target.value })}
-                    placeholder="кг" className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                    inputMode="decimal" placeholder="кг" className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                  <input value={ex.reps} onChange={(e) => updateEx(ex.tempId, { reps: e.target.value })}
+                    inputMode="text" placeholder="пов." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
                   <input value={ex.rest} onChange={(e) => updateEx(ex.tempId, { rest: e.target.value })}
-                    placeholder="отд." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                    inputMode="decimal" placeholder="отд." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
                   <button onClick={() => removeEx(ex.tempId)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
                 </div>
               ))}

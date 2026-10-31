@@ -13,7 +13,7 @@ export default function ReceiptPrintView({ payment, trainerId, clientName, onClo
         <PrintBrandHeader brand={brand} />
         <h1 className="text-lg font-bold mb-3">Квитанция об оплате</h1>
         <div className="space-y-1.5 text-sm">
-          <p><span className="text-zinc-500">Подопечный:</span> {clientName}</p>
+          <p><span className="text-zinc-500">Клиент:</span> {clientName}</p>
           <p><span className="text-zinc-500">Дата:</span> {new Date(payment.date).toLocaleDateString("ru-RU")}</p>
           <p><span className="text-zinc-500">Тип:</span> {payment.type === "subscription" ? "Подписка" : "Пакет тренировок"}</p>
           {payment.note && <p><span className="text-zinc-500">Примечание:</span> {payment.note}</p>}

@@ -113,7 +113,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
     if (busy) return;
     setBusy(true);
     try { const added = await api.copyEntriesOrQueue(clientId, prev.filter((e) => e.meal === meal), date); setEntries((l) => [...(l ?? []), ...added]); }
-    catch (e) { console.error("[NutritionDiary] как вчера:", e); notify("Не удалось скопировать. Проверьте интернет."); }
+    catch (e) { console.error("[NutritionDiary] как вчера:", e); notify("Не удалось скопировать. Проверь интернет."); }
     finally { setBusy(false); }
   };
 
@@ -199,7 +199,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
     // Ждавшая отправки запись могла уже уйти на сервер под новым id — перечитываем день
     if (failed.length || list.some((e) => e.pending)) setSentTick((t) => t + 1);
     const msg = [
-      failed.length ? `Не удалось вернуть: ${records(failed.length)}. Перенесите вручную.` : "",
+      failed.length ? `Не удалось вернуть: ${records(failed.length)}. Перенеси вручную.` : "",
       missed ? `Уже удалены из дневника: ${records(missed)}.` : "",
     ].filter(Boolean).join("\n");
     if (msg) notify(msg, failed.length ? "error" : "info");
@@ -232,7 +232,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       notify(`Удалено: ${records(list.length)}`);
     } catch (e) {
       console.error("[NutritionDiary] удаление:", e);
-      notify("Не удалось удалить. Проверьте интернет.");
+      notify("Не удалось удалить. Проверь интернет.");
       setSentTick((t) => t + 1);
     } finally { setBusy(false); }
   };
@@ -288,7 +288,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
         setDay((d) => ({ ...d, waterCups: n }));
         track("action", "water", { cups: n });
         try { await api.setWaterOrQueue(clientId, date, n); }
-        catch (e) { console.error("[NutritionDiary] вода:", e); setDay((d) => ({ ...d, waterCups: was })); notify("Не удалось сохранить воду. Проверьте интернет."); }
+        catch (e) { console.error("[NutritionDiary] вода:", e); setDay((d) => ({ ...d, waterCups: was })); notify("Не удалось сохранить воду. Проверь интернет."); }
       }} />
 
       {asTrainer
@@ -564,7 +564,7 @@ function EntrySheet({ clientId, entry, onSaved, onDeleted, onClose }: { clientId
   const g = api.num(grams);
   const k = entry.grams > 0 ? g / entry.grams : 0;
   const preview = { kcal: entry.kcal * k, protein: entry.protein * k, fat: entry.fat * k, carbs: entry.carbs * k };
-  const run = async (f: () => Promise<void>) => { if (busy) return; setBusy(true); try { await f(); } catch (e) { console.error("[EntrySheet]", e); notify("Не удалось сохранить. Проверьте интернет."); } finally { setBusy(false); } };
+  const run = async (f: () => Promise<void>) => { if (busy) return; setBusy(true); try { await f(); } catch (e) { console.error("[EntrySheet]", e); notify("Не удалось сохранить. Проверь интернет."); } finally { setBusy(false); } };
 
   return (
     <ModalShell title={entry.name} onClose={onClose}>
@@ -572,7 +572,7 @@ function EntrySheet({ clientId, entry, onSaved, onDeleted, onClose }: { clientId
         <GramsInput value={grams} onChange={setGrams} />
         <MacroTiles m={preview} />
         <div>
-          <p className="flex justify-between gap-2 text-[13px] font-semibold text-zinc-400 mt-1 mb-3 px-0.5">Приём пищи <span className="font-medium text-zinc-500">нажмите, чтобы перенести</span></p>
+          <p className="flex justify-between gap-2 text-[13px] font-semibold text-zinc-400 mt-1 mb-3 px-0.5">Приём пищи <span className="font-medium text-zinc-500">нажми, чтобы перенести</span></p>
           <div role="radiogroup" aria-label="Приём пищи" className="grid grid-cols-4 gap-1.5">
             {api.MEALS.map(({ key, label }) => {
               const Icon = MEAL_ICON[key];
@@ -594,7 +594,7 @@ function EntrySheet({ clientId, entry, onSaved, onDeleted, onClose }: { clientId
           onSaved(next, meal !== entry.meal ? entry.meal : undefined);
         })}
           className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition disabled:opacity-40">{meal !== entry.meal ? `Сохранить · в «${mealLabel(meal)}»` : "Сохранить"}</button>
-        <button onClick={() => run(async () => { await api.deleteEntryOrQueue(clientId, entry); onDeleted(entry.id); })} disabled={busy}
+        <button onClick={async () => { if (await ask("Удалить запись из дневника?", { ok: "Удалить", danger: true })) run(async () => { await api.deleteEntryOrQueue(clientId, entry); onDeleted(entry.id); }); }} disabled={busy}
           className="w-full h-11 flex items-center justify-center gap-1.5 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition"><Trash2 size={16} /> Удалить из дневника</button>
       </div>
     </ModalShell>
@@ -638,7 +638,7 @@ function MoveSheet({ title, list, entries, onMove, onClose }: { title: string; l
     if (!to || busy) return;
     setBusy(true);
     try { await onMove(to); }
-    catch (e) { console.error("[MoveSheet]", e); notify(e instanceof Error && e.message === api.MOVE_PARTIAL ? e.message : "Не удалось перенести. Проверьте интернет."); setBusy(false); }
+    catch (e) { console.error("[MoveSheet]", e); notify(e instanceof Error && e.message === api.MOVE_PARTIAL ? e.message : "Не удалось перенести. Проверь интернет."); setBusy(false); }
   };
   const names = list.slice(0, 3).map((e) => e.name).join(", ") + (list.length > 3 ? ` и ещё ${list.length - 3}` : "");
   return (
@@ -668,7 +668,7 @@ function MoveSheet({ title, list, entries, onMove, onClose }: { title: string; l
         </div>
         <button onClick={go} disabled={!to || busy}
           className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition disabled:opacity-40">
-          {busy ? "Переношу…" : to ? `Перенести в «${mealLabel(to)}»` : "Выберите приём пищи"}
+          {busy ? "Переношу…" : to ? `Перенести в «${mealLabel(to)}»` : "Выбери приём пищи"}
         </button>
       </div>
     </ModalShell>

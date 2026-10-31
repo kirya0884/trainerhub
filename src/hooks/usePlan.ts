@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as api from "../lib/plans";
 import { notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 import { createSaveQueue, isTransient, withRetry, WAIT, type SaveStatus } from "../lib/saveQueue";
 import type { Day, Exercise, Mesocycle, Plan, SetRow } from "../types";
 import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
@@ -8,8 +9,8 @@ import { trackUnsaved } from "../lib/unsavedGuard";
 
 // Сбой сети — «проверьте интернет»; отказ базы (права, связи) — про интернет не говорить
 const failMsg = (what: string, e: unknown) => isTransient(e)
-  ? `Не удалось ${what}. Проверьте интернет и попробуйте ещё раз.`
-  : `Не удалось ${what}: сервер отклонил действие. Обновите план и попробуйте ещё раз.`;
+  ? `Не удалось ${what}. Проверь интернет и попробуй ещё раз.`
+  : `Не удалось ${what}: сервер отклонил действие. Обнови план и попробуй ещё раз.`;
 
 export function usePlan(planId: string) {
   const [plan, setPlan] = useState<Plan | null>(null);
@@ -27,7 +28,7 @@ export function usePlan(planId: string) {
       fatalToastAt.current = Date.now();
       notify((e as any)?.code === "42501"
         ? "Нет прав на это изменение — оно не сохранено. Загружаю план заново."
-        : "Не удалось сохранить изменение: сервер его не принял. Загружаю план заново — проверьте последние правки.");
+        : "Не удалось сохранить изменение: сервер его не принял. Загружаю план заново — проверь последние правки.");
     }
     if (reloadPending.current) return;
     reloadPending.current = true;
@@ -56,7 +57,7 @@ export function usePlan(planId: string) {
       mountedRef.current = false;
       // Ушли с экрана (вкладки, системный «назад»): отложенное — сразу, а если что-то не ушло — сказать
       q.flushAll();
-      if (q.pending()) notify("Есть несохранённые изменения плана. Досылаю их в фоне — откройте план позже и проверьте.");
+      if (q.pending()) notify("Есть несохранённые изменения плана. Досылаю их в фоне — открой план позже и проверь.");
     };
   }, [q]);
 
@@ -91,7 +92,7 @@ export function usePlan(planId: string) {
   const load = () =>
     api.fetchPlanCached(planId)
       .then((p) => { if (!mountedRef.current) return; got(p); })
-      .catch((e) => { if (!mountedRef.current) return; setError(e.message); setLoading(false); });
+      .catch((e) => { if (!mountedRef.current) return; console.error("[usePlan] load:", e); setError(humanError(e, "Не удалось загрузить план")); setLoading(false); });
 
   useEffect(() => {
     if (!planId) { setPlan(null); setLoading(false); return; }
@@ -99,7 +100,7 @@ export function usePlan(planId: string) {
     setLoading(true);
     api.fetchPlanCached(planId)
       .then((p) => { if (alive) got(p); })
-      .catch((e) => { if (alive) { setError(e.message); setLoading(false); } });
+      .catch((e) => { if (alive) { console.error("[usePlan] load:", e); setError(humanError(e, "Не удалось загрузить план")); setLoading(false); } });
     return () => { alive = false; };
   }, [planId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -340,7 +341,7 @@ export function usePlan(planId: string) {
       saveMesoOrder(next);
     } catch (e) {
       console.error("[usePlan] addMesocycle:", e);
-      notify("Не удалось добавить блок. Проверьте интернет и попробуйте ещё раз.");
+      notify("Не удалось добавить блок. Проверь интернет и попробуй ещё раз.");
     }
   };
 

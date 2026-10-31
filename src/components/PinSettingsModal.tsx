@@ -19,9 +19,9 @@ export default function PinSettingsModal({ onClose, onChanged }: { onClose: () =
 
   const failText = (e: unknown, action: string) => {
     console.error(`[PinSettingsModal] ${action}:`, e);
-    if (isNetworkError(e)) return "Нет интернета — PIN хранится на сервере, попробуйте, когда появится сеть";
+    if (isNetworkError(e)) return "Нет интернета — PIN хранится на сервере, попробуй, когда появится сеть";
     if (/4–8 цифр/.test((e as { message?: string })?.message ?? "")) return "PIN должен состоять из 4–8 цифр";
-    return `Не удалось ${action}, попробуйте ещё раз`;
+    return `Не удалось ${action}, попробуй ещё раз`;
   };
 
   const save = async () => {
@@ -55,7 +55,7 @@ export default function PinSettingsModal({ onClose, onChanged }: { onClose: () =
           className="w-full bg-zinc-800 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-lime-400/40"
         />
         <input
-          type="text" inputMode="numeric" placeholder="Повторите PIN" value={confirm}
+          type="text" inputMode="numeric" placeholder="Повтори PIN" value={confirm}
           onChange={(e) => { setConfirm(e.target.value.replace(/\D/g, "").slice(0, 8)); setErr(""); }}
           className="w-full bg-zinc-800 rounded-xl px-3 py-2 outline-none focus:ring-1 focus:ring-lime-400/40"
         />

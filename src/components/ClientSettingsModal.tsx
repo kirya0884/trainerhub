@@ -67,7 +67,7 @@ export default function ClientSettingsModal({ clientId, initial, onClose, onSave
         {/* Основные */}
         <div className="grid grid-cols-1 gap-2">
           <label className="block text-xs text-zinc-500">Имя
-            <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Ваше имя" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
+            <input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} placeholder="Твоё имя" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties} />
           </label>
           <label className="block text-xs text-zinc-500">Цель
             <select value={form.goal} onChange={(e) => setForm((p) => ({ ...p, goal: e.target.value }))} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accent } as React.CSSProperties}>

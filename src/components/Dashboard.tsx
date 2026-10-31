@@ -14,6 +14,7 @@ import { today, addDays, plural } from "../lib/format";
 import RemainingBadge from "./RemainingBadge";
 import { remainingOf } from "../lib/clients";
 import { notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 
 // Без сети главная открывается с последними сохранёнными данными. Храним оплаты и списания
 // за последний год (неоплаченные — все): за годы работы история не влезла бы в бюджет кэша.
@@ -54,7 +55,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
 
   useEffect(() => {
     requestNotifyPermission();
-    fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message));
+    fetchDashboardData(trainerId).then(setData).catch((e) => { console.error("[Dashboard] load:", e); setLoadError(humanError(e, "Не удалось загрузить данные")); });
     // Списания и продления меняют «Требует внимания» и карточку финансов; вернулась сеть — перечитываем
     const reload = () => { fetchDashboardData(trainerId).then(setData).catch(console.error); };
     const off = onClientsChanged(reload), offOnline = onRevalidate(() => { if (staleAtOf("dashboard") !== null) reload(); });
@@ -113,9 +114,9 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
     <div className="space-y-5 max-w-2xl" role="status" aria-label={loadError ? "Ошибка загрузки" : "Загрузка дашборда"}>
       {loadError ? (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-center space-y-3">
-          <p className="text-sm text-red-400">Ошибка загрузки: {loadError}</p>
+          <p className="text-sm text-red-400">{loadError}</p>
           <button
-            onClick={() => { setLoadError(null); fetchDashboardData(trainerId).then(setData).catch((e: Error) => setLoadError(e.message)); }}
+            onClick={() => { setLoadError(null); fetchDashboardData(trainerId).then(setData).catch((e) => { console.error("[Dashboard] load:", e); setLoadError(humanError(e, "Не удалось загрузить данные")); }); }}
             className="text-sm font-medium text-lime-400 border border-lime-400 rounded-lg px-4 py-1.5 hover:bg-lime-400/10 transition"
           >Повторить</button>
         </div>
@@ -226,7 +227,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
                 }
               } catch (e) {
                 console.error("[Dashboard] push:", e);
-                notify("Не удалось изменить уведомления. Попробуйте ещё раз.");
+                notify("Не удалось изменить уведомления. Попробуй ещё раз.");
               } finally {
                 setPushLoading(false);
               }
@@ -381,7 +382,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
 
       {/* Clients */}
       <div>
-        <SectionTitle>Подопечные</SectionTitle>
+        <SectionTitle>Клиенты</SectionTitle>
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-lime-400">
             <p className="text-2xl font-bold text-zinc-50">{activeClients.length}<span className="text-sm font-normal text-zinc-600">/{clients.length}</span></p>
