@@ -59,6 +59,7 @@ function AskDialog({ ask }: { ask: Ask }) {
                 <span className="block text-[13px] font-semibold text-zinc-400 mb-1 px-0.5">{f.label}</span>
                 <input autoFocus={i === 0} value={values[f.key] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [f.key]: e.target.value }))}
                   onFocus={(e) => e.target.select()} placeholder={f.placeholder} inputMode={f.numeric ? "decimal" : undefined}
+                  type={f.password ? "password" : undefined} autoComplete={f.password ? "current-password" : undefined}
                   className="w-full h-12 px-3.5 rounded-xl bg-zinc-800 text-base outline-none focus:ring-2 focus:ring-lime-400/50" />
               </label>
             ))}

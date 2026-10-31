@@ -10,7 +10,7 @@ import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SupersetRounds, WorkoutDatePick, askUnmarked, confirmFinish, resolveWorkoutDate, tonnageOf } from "./SessionParts";
-import { applyLastTime, buildMetrics, doneSets, factSets, itemRpe, lastFactsByName, lastTimeFor, type LastFact, type LastTime } from "../lib/sessionUtils";
+import { applyLastTime, buildMetrics, doneSets, exKey, factSets, itemRpe, lastFactsByName, lastTimeFor, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgressCached } from "../lib/progress";
 import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
 import { fmtDate, fmtSet, parseRest, today } from "../lib/format";
@@ -306,7 +306,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
           const cards = block.items.map((ex, k) => {
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
-            const prevSets = prevByName[ex.name.trim().toLowerCase()]?.sets;
+            const prevSets = prevByName[exKey(ex.name)]?.sets;
             const md = meta[ex.id] || { done: false, note: "" };
             const tonnage = ex.kind === "functional" ? 0 : tonnageOf(doneSets(rows, meta[ex.id])); // функциональное: вес тут не про подходы, тоннаж не считаем
             const isCurrent = ex.id === currentId;

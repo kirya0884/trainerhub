@@ -30,20 +30,24 @@ const readHash = (): Page => {
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
-  const [admin, setAdmin] = useState<boolean | undefined>(undefined);
+  // undefined — проверяем; mfa — после пароля нужен код 2FA (п. 57)
+  const [access, setAccess] = useState<"none" | "mfa" | "ok" | undefined>(undefined);
+  // После ввода кода вход тот же (user.id не меняется) — проверку перезапускаем вручную
+  const [recheck, setRecheck] = useState(0);
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
     const { data } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => data.subscription.unsubscribe();
   }, []);
   useEffect(() => {
-    setAdmin(undefined);
-    if (session) api.isAdmin().then(setAdmin).catch(() => setAdmin(false));
-  }, [session?.user.id]); // eslint-disable-line react-hooks/exhaustive-deps
+    setAccess(undefined);
+    if (session) api.adminAccess().then(setAccess).catch(() => setAccess("none"));
+  }, [session?.user.id, recheck]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (session === undefined || (session && admin === undefined)) return <Splash />;
+  if (session === undefined || (session && access === undefined)) return <Splash />;
   if (!session) return <Login />;
-  if (!admin) return <NoAccess email={session.user.email ?? ""} />;
+  if (access === "none") return <NoAccess email={session.user.email ?? ""} />;
+  if (access === "mfa") return <Mfa onDone={() => setRecheck((n) => n + 1)} />;
   return <Shell email={session.user.email ?? ""} />;
 }
 
@@ -161,6 +165,80 @@ function Login() {
         <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" autoComplete="current-password" placeholder="Пароль" required className="w-full h-12 px-3.5 rounded-xl bg-surface2 border border-line outline-none focus:ring-2 focus:ring-accent/50" />
         {error && <p className="text-sm text-bad">{error}</p>}
         <button disabled={busy} className="w-full h-12 rounded-xl bg-accent text-onaccent font-bold disabled:opacity-50">{busy ? "Входим…" : "Войти"}</button>
+      </form>
+    </div>
+  );
+}
+
+// Второй шаг входа: код из приложения-аутентификатора (TOTP). Фактора ещё нет — подключаем:
+// QR и секрет текстом, первый код подтверждает подключение и сразу поднимает вход до aal2.
+function Mfa({ onDone }: { onDone: () => void }) {
+  const [factorId, setFactorId] = useState("");
+  const [setup, setSetup] = useState<{ qr: string; secret: string } | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    setLoadError("");
+    (async () => {
+      const { data, error } = await supabase.auth.mfa.listFactors();
+      if (error) throw error;
+      const verified = data.totp[0];
+      if (verified) { if (alive) setFactorId(verified.id); return; }
+      // Брошенное подключение (закрыли вкладку до кода) — убираем, иначе новое может не создаться
+      for (const f of data.all) if (f.factor_type === "totp" && f.status === "unverified") await supabase.auth.mfa.unenroll({ factorId: f.id });
+      if (!alive) return;
+      const { data: en, error: enErr } = await supabase.auth.mfa.enroll({ factorType: "totp", issuer: "Reps админ" });
+      if (enErr) throw enErr;
+      if (alive) { setFactorId(en.id); setSetup({ qr: en.totp.qr_code, secret: en.totp.secret }); }
+    })().catch((e) => { console.error("[admin] mfa:", e); if (alive) setLoadError(e?.message || "Не удалось подготовить вход"); });
+    return () => { alive = false; };
+  }, [attempt]);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(code)) { setError("Нужно 6 цифр"); return; }
+    setBusy(true); setError("");
+    const { error } = await supabase.auth.mfa.challengeAndVerify({ factorId, code });
+    setBusy(false);
+    if (error) { setError(/invalid|code/i.test(error.message) ? "Неверный код. Проверь, что время на телефоне точное, и введи новый код." : error.message); setCode(""); return; }
+    onDone();
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4">
+      <form onSubmit={submit} className="w-full max-w-sm bg-surface border border-line rounded-3xl p-6 space-y-4">
+        <div className="flex items-center gap-2.5">
+          <span className="w-10 h-10 rounded-xl bg-accent text-onaccent flex items-center justify-center font-extrabold text-lg">R</span>
+          <div><b className="text-lg">Двухфакторный вход</b><div className="text-[13px] text-ink3">{setup ? "Подключи приложение-аутентификатор" : "Код из приложения-аутентификатора"}</div></div>
+        </div>
+        {loadError ? (
+          <div role="alert" className="space-y-3">
+            <p className="text-sm text-bad">{loadError}</p>
+            <button type="button" onClick={() => setAttempt((n) => n + 1)} className="h-11 px-5 rounded-xl bg-surface2 font-semibold">Повторить</button>
+          </div>
+        ) : !factorId ? (
+          <p className="text-sm text-ink3" aria-busy="true">Готовим вход…</p>
+        ) : (
+          <>
+            {setup && (
+              <div className="space-y-2">
+                <p className="text-sm text-ink2">Отсканируй QR в Google Authenticator, 1Password или похожем приложении и введи код из него.</p>
+                <img src={setup.qr} alt="QR-код для приложения-аутентификатора" className="w-48 h-48 mx-auto rounded-xl bg-white p-2" />
+                <p className="text-[13px] text-ink3">Не сканируется — введи ключ вручную:</p>
+                <code className="block text-sm break-all select-all bg-surface2 border border-line rounded-xl px-3 py-2">{setup.secret}</code>
+              </div>
+            )}
+            <input value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" autoComplete="one-time-code" autoFocus
+              placeholder="6 цифр" aria-label="Код из приложения" required className="w-full h-12 px-3.5 rounded-xl bg-surface2 border border-line outline-none focus:ring-2 focus:ring-accent/50 tracking-[0.3em] text-center text-lg" />
+            {error && <p role="alert" className="text-sm text-bad">{error}</p>}
+            <button disabled={busy || code.length !== 6} className="w-full h-12 rounded-xl bg-accent text-onaccent font-bold disabled:opacity-50">{busy ? "Проверяем…" : "Подтвердить"}</button>
+          </>
+        )}
+        <button type="button" onClick={() => supabase.auth.signOut()} className="w-full text-sm text-ink3 hover:text-ink">Выйти</button>
       </form>
     </div>
   );

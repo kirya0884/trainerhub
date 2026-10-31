@@ -12,6 +12,7 @@ import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { fmtSet, parseRest } from "../lib/format";
+import { exKey } from "../lib/sessionUtils";
 import { combinedRemaining } from "../lib/clients";
 import type { Day, Exercise } from "../types";
 import RemainingBadge from "./RemainingBadge";
@@ -126,7 +127,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                 const cards = block.items.map((ex, k) => {
                   const idx = block.startIdx + k;
                   const rows = vals[ex.id] || [];
-                  const prevSets = prevByName[ex.name.trim().toLowerCase()]?.sets;
+                  const prevSets = prevByName[exKey(ex.name)]?.sets;
                   const md = meta[ex.id] || { done: false, note: "", setsDone: {} };
                   const tonnage = ex.kind === "functional" ? 0 : tonnageOf(doneSets(rows, meta[ex.id])); // функциональное: вес тут не про подходы, тоннаж не считаем
                   const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : ex.id === currentId ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
@@ -329,7 +330,7 @@ function SetRowsFor({ name, color, ex, slot, startRest }: {
     );
   }
   const rows = slot.vals[ex.id] || [];
-  const prevSets = slot.prevByName[ex.name.trim().toLowerCase()]?.sets;
+  const prevSets = slot.prevByName[exKey(ex.name)]?.sets;
   const md = slot.meta[ex.id] || { done: false, note: "", setsDone: {} };
   return (
     <div className="py-2">
@@ -405,16 +406,15 @@ function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest, date,
 
   // Объединение по названию: порядок по дню первой, недостающие у второй — в конец.
   const merged = (() => {
-    const key = (n: string) => n.trim().toLowerCase();
     const out: { title: string; exA?: Exercise; exB?: Exercise }[] = [];
     const seen = new Set<string>();
     for (const ex of sa.day?.exercises ?? []) {
       if (!ex.name.trim()) continue;
-      seen.add(key(ex.name));
-      out.push({ title: ex.name, exA: ex, exB: sb.day?.exercises.find((x) => key(x.name) === key(ex.name)) });
+      seen.add(exKey(ex.name));
+      out.push({ title: ex.name, exA: ex, exB: sb.day?.exercises.find((x) => exKey(x.name) === exKey(ex.name)) });
     }
     for (const ex of sb.day?.exercises ?? []) {
-      if (!ex.name.trim() || seen.has(key(ex.name))) continue;
+      if (!ex.name.trim() || seen.has(exKey(ex.name))) continue;
       out.push({ title: ex.name, exA: undefined, exB: ex });
     }
     return out;

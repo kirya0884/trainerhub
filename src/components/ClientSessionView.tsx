@@ -7,7 +7,7 @@ import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SupersetRounds, askUnmarked, doneSets, tonnageOf } from "./SessionParts";
-import { applyLastTime, type LastFact, type LastTime } from "../lib/sessionUtils";
+import { applyLastTime, exKey, type LastFact, type LastTime } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
 import { ask } from "../lib/dialog";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
@@ -356,7 +356,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
           const cards = block.items.map((ex, k) => {
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
-            const prevSets = prevByName[ex.name.trim().toLowerCase()]?.sets;
+            const prevSets = prevByName[exKey(ex.name)]?.sets;
             const md = meta[ex.id] || { note: "", done: false };
             const tonnage = ex.kind === "functional" ? 0 : tonnageOf(doneSets(rows, meta[ex.id])); // функциональное: вес тут не про подходы, тоннаж не считаем
             const isCurrent = ex.id === currentId;

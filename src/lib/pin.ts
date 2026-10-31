@@ -7,9 +7,8 @@ import { patchCache } from "./offlineCache";
 // Проверка только онлайн: без сети PIN-экран не открывается (миграция 20261030_stage1_security).
 
 // Задан ли PIN — сразу и в кэш для зала: без сети следующий запуск должен знать, что PIN есть
-type Access = { trainer: boolean; hasPin?: boolean; self?: { hasPin?: boolean } | null };
-const rememberPin = (hasPin: boolean) =>
-  patchCache<Access>("access", (a) => (a.trainer ? { ...a, hasPin } : a.self ? { ...a, self: { ...a.self, hasPin } } : a));
+// PIN — на вход, а не на карточку: и у тренера, и у клиента (с любым числом карточек) лежит сверху
+const rememberPin = (hasPin: boolean) => patchCache<{ hasPin?: boolean }>("access", (a) => ({ ...a, hasPin }));
 
 /** 5 неверных PIN подряд — сервер блокирует проверку на 5 минут */
 export class PinLockedError extends Error {}

@@ -99,6 +99,7 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
             </div>
           ) : <p className="text-sm text-zinc-600">Для своего упражнения методичка не задана.</p>}
           {detail.notes && <p className="text-xs text-amber-400 bg-amber-400/10 rounded-xl px-3 py-2">⚠ {detail.notes}</p>}
+          <p className="text-xs text-zinc-500">Это не медицинская рекомендация. При боли или проблемах со здоровьем — сначала к врачу.</p>
           <button onClick={() => { onPick(detail.name); setDetail(null); }} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition flex items-center justify-center gap-1.5"><Plus size={16} /> Добавить в день</button>
         </div>
       ) : (

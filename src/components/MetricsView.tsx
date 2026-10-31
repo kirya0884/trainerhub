@@ -3,7 +3,7 @@ import { useState } from "react";
 import TrendChart from "./TrendChart";
 import { EXERCISE_METRICS } from "../constants";
 import { parseNum, today } from "../lib/format";
-import { tonnageOf } from "../lib/sessionUtils";
+import { exKey, tonnageOf } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
 import NumField from "./NumField";
 import { ask } from "../lib/dialog";
@@ -11,21 +11,24 @@ import { ask } from "../lib/dialog";
 export default function MetricsView({ days, metrics, sessions, addMetric, deleteMetric }: {
   days: Day[]; metrics: Metric[]; sessions: Session[]; addMetric: (m: Omit<Metric, "id">) => void; deleteMetric: (id: string) => void;
 }) {
-  const exercises = [...new Set(days.flatMap((d) => d.exercises.map((e) => e.name).filter(Boolean)))];
+  // Одно упражнение с разным написанием (ё/е, регистр, пробелы) — один пункт, первое написание
+  const byKey = new Map<string, string>();
+  for (const d of days) for (const e of d.exercises) if (e.name && !byKey.has(exKey(e.name))) byKey.set(exKey(e.name), e.name);
+  const exercises = [...byKey.values()];
   const [sel, setSel] = useState(exercises[0] || "");
   const [metric, setMetric] = useState<string>("weight");
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ date: today(), exercise: exercises[0] || "", weight: "", reps: "", rest: "", sets: "" });
 
   const curExercise = exercises.includes(sel) ? sel : (exercises[0] || "");
+  const curKey = exKey(curExercise);
   const m = EXERCISE_METRICS.find((x) => x.key === metric)!;
   // Тоннаж — по фактическим подходам тренировок, тем же tonnageOf, что в тренировке и журнале
   // (раньше: макс. вес × повторы × подходы). Из ручного замера — только за даты без тренировки.
   const sessionTonnage = new Map<string, number>();
   if (metric === "tonnage") {
-    const key = curExercise.trim().toLowerCase();
     for (const s of sessions) for (const it of s.items ?? []) {
-      if (it.name.trim().toLowerCase() !== key || !it.actualSets?.length) continue;
+      if (exKey(it.name) !== curKey || !it.actualSets?.length) continue;
       const t = tonnageOf(it.actualSets); // неотмеченные подходы (done: false) tonnageOf пропускает
       // Только t > 0: тренировка с нулевым тоннажем не должна закрывать ручной замер за эту дату
       if (t > 0) sessionTonnage.set(s.date, (sessionTonnage.get(s.date) ?? 0) + t);
@@ -33,7 +36,7 @@ export default function MetricsView({ days, metrics, sessions, addMetric, delete
   }
   const series = [
     ...[...sessionTonnage].map(([date, t]) => ({ date, value: Math.round(t) as number | null })),
-    ...metrics.filter((x) => x.exercise === curExercise && !sessionTonnage.has(x.date)),
+    ...metrics.filter((x) => exKey(x.exercise) === curKey && !sessionTonnage.has(x.date)),
   ]
     .sort((a, b) => (a.date < b.date ? -1 : 1))
     .map((x) => {
@@ -49,7 +52,7 @@ export default function MetricsView({ days, metrics, sessions, addMetric, delete
       return { date: x.date.slice(5), value };
     })
     .filter((d) => d.value != null);
-  const entries = metrics.filter((x) => x.exercise === curExercise).sort((a, b) => (a.date < b.date ? 1 : -1));
+  const entries = metrics.filter((x) => exKey(x.exercise) === curKey).sort((a, b) => (a.date < b.date ? 1 : -1));
 
   const submit = () => {
     if (!form.exercise) return;

@@ -32,4 +32,18 @@ function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit): Promise
     .finally(() => clearTimeout(timer));
 }
 
+// Вход по ссылке (п. 56): приглашение тренера или «Забыли пароль» — #access_token=…&type=recovery.
+// Запоминаем до createClient: supabase разбирает и стирает адрес асинхронно и шлёт PASSWORD_RECOVERY
+// через setTimeout — App может подписаться позже и пропустить событие, тогда клиент попал бы
+// в кабинет без пароля. error — ссылка устарела или уже использована.
+const authHash = typeof location !== "undefined" ? location.hash : "";
+// invite — ссылка тренера ведёт на само приложение: #/invite?token_hash=…&type=recovery. Прямую ссылку
+// Supabase «съедают» превью мессенджеров (открывают её раньше клиента), а здесь вход только по кнопке.
+const inviteMatch = authHash.match(/^#\/invite\?(.*)$/);
+export const authLinkFromUrl = {
+  recovery: /[#&]access_token=/.test(authHash) && /[#&]type=(recovery|invite)(&|$)/.test(authHash),
+  error: /[#&]error_code=/.test(authHash),
+  invite: inviteMatch ? new URLSearchParams(inviteMatch[1]).get("token_hash") ?? "" : "",
+};
+
 export const supabase = createClient(url, anonKey, { global: { fetch: fetchWithTimeout } });

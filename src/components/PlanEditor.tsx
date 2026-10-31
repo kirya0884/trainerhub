@@ -17,7 +17,7 @@ import type { Day, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import ExerciseRow from "./ExerciseRow";
 import ExerciseHistoryModal from "./ExerciseHistoryModal";
-import { fmtRpe, isFact, lastFactsByName } from "../lib/sessionUtils";
+import { exKey as nameKey, fmtRpe, isFact, lastFactsByName } from "../lib/sessionUtils";
 import { useDragSort } from "../hooks/useDragSort";
 import LibraryModal from "./LibraryModal";
 import MetricsView from "./MetricsView";
@@ -67,7 +67,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   }, "dsday");
   const { metrics, sessions, deletedSessions, reloadProgress, addMetric, deleteMetric, deleteSession, restoreSession, purgeSession, updateSessionReview } = useProgress(planId);
   // Последний задокументированный результат по каждому упражнению (metrics отсортированы ascending — берём последнее)
-  const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [m.exercise.toLowerCase(), m])), [metrics]);
+  const lastMetrics = useMemo(() => Object.fromEntries(metrics.map((m) => [nameKey(m.exercise), m])), [metrics]);
   // План/факт: подходы последней тренировки по каждому упражнению и отличия от плана того дня
   const lastFacts = useMemo(() => lastFactsByName(sessions), [sessions]);
   // П10: сколько тренировок в истории по каждому названию. Наружу уходит число —
@@ -76,13 +76,13 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     const c: Record<string, number> = {};
     const seen = new Set<string>();
     for (const s of sessions) for (const i of s.items ?? []) {
-      const k = i.name.trim().toLowerCase();
+      const k = nameKey(i.name);
       if (!k || seen.has(k + s.date)) continue;
       seen.add(k + s.date);
       c[k] = (c[k] ?? 0) + 1;
     }
     for (const m of metrics) {
-      const k = m.exercise.trim().toLowerCase();
+      const k = nameKey(m.exercise);
       if (!k || seen.has(k + m.date)) continue;
       seen.add(k + m.date);
       c[k] = (c[k] ?? 0) + 1;
@@ -131,8 +131,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   const copySessionAsDay = (s: Session) => {
     // Полное копирование: факт (actualSets) > план сессии (plannedSets) > упражнение из текущего плана.
     // rest/tempo/видео и пр. подтягиваем из одноимённого упражнения плана — в сессии они не хранятся.
-    const planDay = plan?.days.find((d) => d.name === s.dayName);
-    const planExByName = (name: string) => planDay?.exercises.find((e) => e.name === name);
+    // Сессия без названия дня не должна совпасть с днём без названия
+    const planDay = s.dayName ? plan?.days.find((d) => nameKey(d.name) === nameKey(s.dayName)) : undefined;
+    const planExByName = (name: string) => planDay?.exercises.find((e) => nameKey(e.name) === nameKey(name));
     const hasAnySets = s.items?.some((i) => i.actualSets?.length || i.plannedSets?.length);
     if (hasAnySets) {
       const exercises: Day["exercises"] = (s.items ?? []).map((item) => {
@@ -376,8 +377,8 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
               onMoveUp={() => reorderExercises(day.id, ei, ei - 1)} onMoveDown={() => reorderExercises(day.id, ei, ei + 1)}
               cycleGroup={() => cycleGroup(day.id, ex.id, ex.group)}
               update={(patch) => { updateExercise(day.id, ex.id, patch); }} remove={() => deleteExercise(day.id, ex.id)}
-              lastMetric={lastMetrics[ex.name.toLowerCase()]} lastFact={lastFacts[ex.name.trim().toLowerCase()]}
-              historyCount={historyCounts[ex.name.trim().toLowerCase()] ?? 0} onOpenHistory={openExHistory} />
+              lastMetric={lastMetrics[nameKey(ex.name)]} lastFact={lastFacts[nameKey(ex.name)]}
+              historyCount={historyCounts[nameKey(ex.name)] ?? 0} onOpenHistory={openExHistory} />
           );
         });
         if (block.group && block.items.length > 1) {

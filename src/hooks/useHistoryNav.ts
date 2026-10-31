@@ -32,7 +32,11 @@ export function useHistoryNav<T>(initial: T, toUrl?: (v: T) => string, fromUrl?:
   const url = useCallback((v: T) => (toUrl ? toUrl(v) : location.hash || "#/"), [toUrl]);
 
   useEffect(() => {
-    history.replaceState({ ...(history.state ?? {}), [KEY]: ref.current }, "", url(ref.current));
+    // Вход по ссылке (#access_token=… / #error_code=…) адрес не трогаем — его разбирает и стирает
+    // supabase; приглашение #/invite?token_hash=… стирает App после входа. Затёртый раньше адрес —
+    // и вход по ссылке не состоится (в том числе после перезагрузки до нажатия «Продолжить»)
+    const authLink = /[#&](access_token|error_code)=/.test(location.hash) || location.hash.startsWith("#/invite?");
+    history.replaceState({ ...(history.state ?? {}), [KEY]: ref.current }, "", authLink ? undefined : url(ref.current));
 
     const onPop = (e: PopStateEvent) => {
       const v = (e.state as Record<string, unknown> | null)?.[KEY];

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User } from "lucide-react";
+import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User, Users } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ModalShell from "./ModalShell";
 import { LegalList } from "./LegalDoc";
@@ -28,7 +28,7 @@ import { fmtRpe, isFact, lastFactsByName, lastTimeFor, nextDayOf } from "../lib/
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
 import { flushOutbox, isNetworkError } from "../lib/outbox";
-import { cached, patchCache, signOutAndForget } from "../lib/offlineCache";
+import { cached, signOutAndForget } from "../lib/offlineCache";
 import { setAnalyticsContext, track } from "../lib/events";
 import { humanError } from "../lib/errors";
 import LoadError from "./LoadError";
@@ -50,7 +50,8 @@ const SUB_BTN = "px-3 py-1.5 rounded-lg text-sm font-medium transition shrink-0"
 // Текст и иконки акцентом: в светлой теме затемняем, как lime-текст (ACCENT_INK в tailwind.config)
 const ACCENT_TEXT = "color-mix(in srgb, var(--accent) var(--accent-ink), black)";
 
-export default function ClientPortal({ client }: { client: portalApi.SelfClient }) {
+// onSwitchTrainer — есть, если у входа несколько карточек у разных тренеров (п. 60)
+export default function ClientPortal({ client, onSwitchTrainer }: { client: portalApi.SelfClient; onSwitchTrainer?: () => void }) {
   const [tab, setTab] = useState<Tab>("profile");
   useEffect(() => { setAnalyticsContext({ actor: "client", trainerId: client.trainerId, clientId: client.id }); return () => setAnalyticsContext(null); }, [client.id, client.trainerId]);
   useEffect(() => { track("view", tab); }, [tab]);
@@ -88,13 +89,13 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
   useEffect(() => { activeSessionRef.current = activeSession; }, [activeSession]);
   // Текущая тренировка — и в кэш для зала: без сети не должна открыться уже законченная
   useEffect(() => {
-    patchCache<{ trainer: boolean; self?: portalApi.SelfClient | null }>("access", (a) => (a.self ? { ...a, self: { ...a.self, activeSession } } : a));
+    portalApi.patchCachedSelves((list) => list.map((c) => (c.id === client.id ? { ...c, activeSession } : c)));
   }, [activeSession]);
 
   // #6 merged notify check into first fetch
   // Ближайшая запись и план без сети — последние сохранённые: кабинет открывается в зале
   const refresh = (notifyOnLoad = false) => {
-    cached("upcoming", () => portalApi.fetchUpcomingBooking(client.id)).then((ub) => {
+    cached(`upcoming:${client.id}`, () => portalApi.fetchUpcomingBooking(client.id)).then((ub) => {
       setUpcoming(ub); mark("upcoming", false);
       if (notifyOnLoad && ub) {
         const todayStr = todayFn();
@@ -219,6 +220,7 @@ export default function ClientPortal({ client }: { client: portalApi.SelfClient 
             <button onClick={() => { setShowNav(false); setShowSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Settings size={18} className="text-zinc-400" /> <span className="font-medium">Мои данные и здоровье</span></button>
             <button onClick={() => { setShowNav(false); setShowPinSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Lock size={18} className="text-zinc-400" /> <span className="font-medium">PIN-код на вход</span></button>
             <button onClick={() => { setShowNav(false); setShowDocs(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><ScrollText size={18} className="text-zinc-400" /> <span className="font-medium">Документы</span></button>
+            {onSwitchTrainer && <button onClick={() => { setShowNav(false); onSwitchTrainer(); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Users size={18} className="text-zinc-400" /> <span className="font-medium">Сменить тренера</span></button>}
             <button onClick={() => signOutAndForget()} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-red-400"><LogOut size={18} /> <span className="font-medium">Выйти</span></button>
             <button onClick={() => { setShowNav(false); deleteMyAccount("client"); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-zinc-500"><Trash2 size={18} /> <span className="font-medium">Удалить аккаунт</span></button>
           </div>

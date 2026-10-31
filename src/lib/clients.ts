@@ -258,10 +258,14 @@ export async function fetchClient(clientId: string): Promise<ClientFull> {
   };
 }
 
-// Тренер выдаёт клиенту доступ: Edge Function сама генерирует пароль и шлёт письмо (см. functions/register-client).
-// resend — новый пароль и повторное письмо клиенту, который ещё ни разу не входил.
-// emailFailed — письмо не ушло: функция один раз возвращает логин и пароль, чтобы тренер передал их сам.
-export type InviteResult = { ok?: boolean; warning?: string; error?: string; emailFailed?: boolean; email?: string; password?: string };
+// Тренер выдаёт клиенту доступ (п. 56): Edge Function создаёт вход без пароля и возвращает
+// одноразовую ссылку — тренер пересылает её клиенту, по ней клиент сам задаёт пароль
+// (в приложении это PASSWORD_RECOVERY → PasswordResetScreen). Пароля в ответе нет.
+// Ссылка ведёт на само приложение (#/invite?token_hash=…, см. App InviteScreen).
+// status: invited — вход создан (со ссылкой), linked — повтор после сбоя (ссылка, если клиент ещё
+// не входил), already — доступ уже выдан (без ссылки). Почта занята чужим входом — 409 с текстом;
+// 426 — устаревшая версия приложения. emailSent — ссылка ушла и на почту. resend — новая ссылка.
+export type InviteResult = { ok?: boolean; status?: "invited" | "linked" | "already"; link?: string; emailSent?: boolean };
 export async function inviteClient(clientId: string, resend = false): Promise<InviteResult> {
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch(
@@ -273,10 +277,10 @@ export async function inviteClient(clientId: string, resend = false): Promise<In
         "Authorization": `Bearer ${session?.access_token}`,
         "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ clientId, resend }),
+      body: JSON.stringify({ clientId, redirectTo: window.location.origin, resend }),
     }
   );
-  const data = await res.json();
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
   return data;
 }

@@ -14,13 +14,10 @@ export const REQUIRED: Record<Role, ConsentKind[]> = {
 const PENDING_KEY = "reps-consent-pending";
 export const markSignupConsent = () => { try { localStorage.setItem(PENDING_KEY, LEGAL_VERSION); } catch { /* приватный режим */ } };
 
+// Запись — через RPC record_consents (п. 56): время, ip и браузер сервер ставит сам, клиенту
+// подделать их нельзя. meta — только то, что знает экран: возраст (ConsentGate) или source: "signup".
 export async function recordConsents(kinds: ConsentKind[], meta: Record<string, unknown> = {}) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("Нет входа");
-  const ua = typeof navigator !== "undefined" ? navigator.userAgent.slice(0, 200) : "";
-  const { error } = await supabase.from("user_consents").insert(
-    kinds.map((kind) => ({ user_id: user.id, kind, version: LEGAL_VERSION, meta: { ...meta, ua } })),
-  );
+  const { error } = await supabase.rpc("record_consents", { p_kinds: kinds, p_version: LEGAL_VERSION, p_meta: meta });
   if (error) throw error;
 }
 

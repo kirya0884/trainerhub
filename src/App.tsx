@@ -1,7 +1,8 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { cleanupStorage, readJson, writeJson } from "./lib/storage";
 import { Home, Users, CalendarDays, Sparkles, ClipboardList, User, UserRound, Plus, X, Pin, Search, Apple, Play, Ruler } from "lucide-react";
-import { supabase } from "./lib/supabase";
+import { authLinkFromUrl, supabase } from "./lib/supabase";
+import { notify } from "./lib/dialog";
 import { humanError } from "./lib/errors";
 import type { Session } from "@supabase/supabase-js";
 import AuthScreen from "./AuthScreen";
@@ -21,7 +22,8 @@ import PinGate from "./components/PinGate";
 import * as portalApi from "./lib/clientPortal";
 import * as trainerApi from "./lib/trainer";
 import SplashScreen from "./components/SplashScreen";
-import type { SelfClient } from "./lib/clientPortal";
+import type { AccessCache, SelfClient } from "./lib/clientPortal";
+import TrainerPickScreen from "./components/TrainerPickScreen";
 import type { Sub } from "./components/ClientProfile";
 import { clearSlotDrafts, writeSlotDraft } from "./lib/slotDrafts";
 import type { PickClient } from "./components/ClientPickModal";
@@ -35,7 +37,7 @@ import { lazyRetry } from "./lib/lazy";
 import { ScreenSkeleton } from "./components/Skeleton";
 import { setAnalyticsContext } from "./lib/events";
 import RepsMark from "./components/RepsMark";
-import { cached, onRevalidate, patchCache, peekCache, setCacheOwner, signOutAndForget, staleAtOf } from "./lib/offlineCache";
+import { cached, onRevalidate, peekCache, setCacheOwner, signOutAndForget, staleAtOf } from "./lib/offlineCache";
 import { isNetworkError } from "./lib/outbox";
 
 // Разделы и окна грузятся при первом открытии (см. lib/lazy) — главная и список
@@ -72,12 +74,10 @@ const TAB_DEFS: Record<TabKind, { label: string; icon: typeof Users }> = {
 const DEFAULT_TAB_ORDER: TabKind[] = ["dashboard", "clients", "plans", "calendar", "me", "trainerProfile"];
 const RECENT_KEY = "trainerhub-recent-clients-v1";
 const PINNED_KEY = "trainerhub-pinned-clients-v1";
-// Кэш проверки доступа версии до 30.10 хранил хэш PIN (pin / self.pinHash) — по нему узнаём, был ли PIN задан
-type LegacySelf = SelfClient & { pinHash?: string | null };
+// Задан ли PIN по сохранённой проверке доступа (форматы прежних версий — см. cachedAccessPin)
 const cachedHasPin = (): boolean => {
-  const a = peekCache<{ trainer: boolean; hasPin?: boolean; pin?: string | null; self?: LegacySelf | null }>("access")?.data;
-  if (!a) return false;
-  return a.trainer ? a.hasPin ?? !!a.pin : a.self?.hasPin ?? !!a.self?.pinHash;
+  const a = peekCache<AccessCache>("access")?.data;
+  return a ? portalApi.cachedAccessPin(a) : false;
 };
 const RECENT_MAX = 8;
 // B10: недавние и закреплённые подопечные — личная настройка устройства,
@@ -106,6 +106,55 @@ const loadHiddenTabs = (): TabKind[] => {
   return [];
 };
 
+// Вошёл по ссылке-приглашению, а пароль ещё не задал: флаг на телефоне по uid — перезагрузка
+// или закрытие приложения экран пароля не обходят. Снимается после сохранения пароля.
+const pwKey = (uid: string) => `reps-must-set-password-${uid}`;
+const mustSetPassword = (uid: string) => { try { return localStorage.getItem(pwKey(uid)) === "1"; } catch { return false; } };
+const setMustSetPassword = (uid: string, on: boolean) => { try { if (on) localStorage.setItem(pwKey(uid), "1"); else localStorage.removeItem(pwKey(uid)); } catch { /* приватный режим */ } };
+// Приглашение обработано (или битое) — убираем токен из адреса, чтобы не открыть его снова
+const clearInviteUrl = () => history.replaceState(history.state, "", "#/");
+
+/** Ссылка тренера #/invite?token_hash=… — вход только по кнопке: превью мессенджера ссылку не «потратит» */
+function InviteScreen({ tokenHash, onVerified, onCancel }: { tokenHash: string; onVerified: () => void; onCancel: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const go = async () => {
+    setBusy(true);
+    const { data, error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+    setBusy(false);
+    if (error || !data.user) {
+      console.warn("[App] verifyOtp:", error);
+      // Без сети ссылка ещё жива — даём повторить, а не пугаем «устарела»
+      if (error && isNetworkError(error)) { notify("Нет интернета. Проверь подключение и попробуй ещё раз"); return; }
+      clearInviteUrl(); setFailed(true); return;
+    }
+    setMustSetPassword(data.user.id, true);
+    clearInviteUrl();
+    onVerified();
+  };
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex items-center justify-center px-4">
+      <div className="w-full max-w-sm space-y-4 text-center">
+        <div className="flex justify-center"><RepsMark size={56} /></div>
+        <h1 className="text-2xl font-extrabold tracking-tight">Вход в Reps</h1>
+        {failed ? (
+          <>
+            <p role="alert" className="text-sm text-zinc-400">Ссылка устарела — попроси тренера выслать новую.</p>
+            <button onClick={onCancel} className="w-full bg-zinc-800 text-zinc-100 font-semibold rounded-xl py-2.5">Ко входу</button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-zinc-400">Нажми «Продолжить», чтобы задать свой пароль.</p>
+            <button onClick={go} disabled={busy} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 disabled:opacity-50">
+              {busy ? "Проверяем ссылку..." : "Продолжить"}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PasswordResetScreen({ onDone }: { onDone: () => void }) {
   const [pw, setPw] = useState("");
   const [pw2, setPw2] = useState("");
@@ -117,9 +166,10 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
     if (pw.length < 6) { setMsg("Минимум 6 символов"); return; }
     if (pw !== pw2) { setMsg("Пароли не совпадают"); return; }
     setBusy(true);
-    const { error } = await supabase.auth.updateUser({ password: pw });
+    const { data, error } = await supabase.auth.updateUser({ password: pw });
     if (error) { setMsg(humanError(error, "Не удалось сменить пароль. Попробуй ещё раз")); setBusy(false); return; }
-    setMsg("Пароль изменён!");
+    setMustSetPassword(data.user.id, false);
+    setMsg("Пароль сохранён — входим");
     setTimeout(onDone, 1200);
     setBusy(false);
   };
@@ -129,12 +179,12 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
       <div className="w-full max-w-sm space-y-4">
         <div className="flex justify-center"><RepsMark size={56} /></div>
         <h1 className="text-2xl font-extrabold tracking-tight text-center">reps</h1>
-        <p className="text-sm text-zinc-400 text-center">Придумай новый пароль</p>
+        <p className="text-sm text-zinc-400 text-center">Придумай пароль для входа. Дальше будешь входить по почте и этому паролю.</p>
         <form onSubmit={submit} className="space-y-3">
-          <input type="password" required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Новый пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <input type="password" required value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Повтори пароль" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="password" required value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Пароль" autoComplete="new-password" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
+          <input type="password" required value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Повтори пароль" autoComplete="new-password" className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
           <button disabled={busy} type="submit" className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 disabled:opacity-50">
-            {busy ? "Сохранение..." : "Сохранить новый пароль"}
+            {busy ? "Сохранение..." : "Сохранить пароль"}
           </button>
         </form>
         {msg && <p className="text-xs text-center text-cyan-400">{msg}</p>}
@@ -222,11 +272,16 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients, cli
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRecovery, setIsRecovery] = useState(false);
+  // Пришли по ссылке-приглашению или «Забыли пароль» — сначала задать пароль (до согласия и PIN)
+  const [isRecovery, setIsRecovery] = useState(authLinkFromUrl.recovery);
+  // Токен из ссылки-приглашения тренера (#/invite) — пока не нажали «Продолжить»
+  const [inviteToken, setInviteToken] = useState(authLinkFromUrl.invite);
   // Н1: экран живёт в history — работают свайп, кнопка «назад» Android и браузера
   // А3: разовая уборка хранилища при старте — брошенные черновики тренировок копились
   // без ограничения и были причиной переполнения квоты, из-за которого запись молча падала.
   useEffect(() => { cleanupStorage(); }, []);
+  // Ссылка для входа уже использована или устарела — supabase молча открывает экран входа, объясняем
+  useEffect(() => { if (authLinkFromUrl.error) notify("Ссылка для входа устарела или уже использована. Попроси тренера выслать новую — или войди с паролем, если уже задал его.", "error"); }, []);
   // Документы по адресу #/legal/… открываются всем, в том числе без входа (ссылка для магазинов и сайта)
   const [legalSlug, closeLegal] = useLegalRoute();
   const { view, push: setView, replace: replaceView, back: goBack } = useHistoryNav<View>(
@@ -244,7 +299,12 @@ export default function App() {
     const { newForm: _f, newBooking: _b, newBookingClientId: _c, newPlan: _p, openOccurrence: _o, meAction: _m, ...rest } = v;
     replaceView(rest as View);
   }, [view, replaceView]);
-  const [selfClient, setSelfClient] = useState<SelfClient | null | undefined>(undefined);
+  // П. 60: все карточки этого входа (у разных тренеров). undefined — ещё не знаем, [] — нет (или вход тренера)
+  const [selfClients, setSelfClients] = useState<SelfClient[] | undefined>(undefined);
+  // Чья карточка открыта, если их несколько: выбор запоминается на телефоне (lib/clientPortal)
+  const [pickedCard, setPickedCard] = useState("");
+  const selfClient = selfClients === undefined ? undefined
+    : (selfClients.length === 1 ? selfClients[0] : selfClients.find((c) => c.id === pickedCard)) ?? null;
   // Экран согласия: undefined — ещё проверяем журнал, true — нужно подтвердить документы
   const [consentGate, setConsentGate] = useState<boolean | undefined>(undefined);
   const [isTrainer, setIsTrainer] = useState<boolean | undefined>(undefined);
@@ -335,6 +395,8 @@ export default function App() {
     const slow = setTimeout(() => { if (stored()?.user) { apply(stored()); setLoading(false); } }, 4000);
     supabase.auth.getSession().then(({ data, error }) => {
       clearTimeout(slow);
+      // Ссылка не дала входа (токен отклонён) — после обычного входа экран пароля не нужен
+      if (!data.session) setIsRecovery(false);
       apply(data.session ?? (error && isNetworkError(error) && stored()?.user ? stored() : null));
       setLoading(false);
     });
@@ -362,7 +424,7 @@ export default function App() {
     let trainerConsent: Promise<boolean> = Promise.resolve(false);
     try {
       // pin — хэш из кэша старой версии (до 30.10): по нему только узнаём, был ли PIN задан
-      const access = await cached<{ trainer: boolean; hasPin?: boolean; pin?: string | null; self?: SelfClient | null }>("access", async () => {
+      const access = await cached<AccessCache>("access", async () => {
         // Тренера проверяем первым — если аккаунт тренерский, карточка клиента с тем же входом не перехватит вход.
         // Задан ли PIN и журнал согласий читаем параллельно — при старте на два ожидания меньше.
         const trainerQ = Promise.resolve(supabase.from("trainers").select("id").eq("id", uid).maybeSingle());
@@ -374,14 +436,19 @@ export default function App() {
         const { data: trainerRow, error: trainerErr } = await trainerQ;
         if (trainerErr) throw trainerErr;
         if (trainerRow) return { trainer: true, hasPin: await pinQ };
-        const self = await portalApi.fetchSelfClient(uid);
-        return { trainer: false, self: self && { ...self, hasPin: await pinQ } };
+        const selves = await portalApi.fetchSelfClients(uid);
+        return { trainer: false, hasPin: await pinQ, selves };
       });
       // Из сохранённого — согласие не спрашиваем (без сети needsConsent тоже не блокирует вход)
       const gate = await trainerConsent;
       if (req !== accessReq.current) return;
-      if (access.trainer) { setTrainerPin(access.hasPin ?? !!access.pin); setConsentGate(gate); setIsTrainer(true); setSelfClient(null); }
-      else { setSelfClient(access.self ?? null); setIsTrainer(false); }
+      if (access.trainer) { setTrainerPin(portalApi.cachedAccessPin(access)); setConsentGate(gate); setIsTrainer(true); setSelfClients([]); }
+      else {
+        const hasPin = portalApi.cachedAccessPin(access);
+        setPickedCard(portalApi.loadPickedCard(uid));
+        setSelfClients(portalApi.cachedSelves(access).map((c) => ({ ...c, hasPin })));
+        setIsTrainer(false);
+      }
     } catch (e) {
       if (req !== accessReq.current) return;
       console.error("[App] checkAccess:", e);
@@ -389,7 +456,7 @@ export default function App() {
     }
   };
   useEffect(() => {
-    if (!session) { accessReq.current++; setAccessError(""); setSelfClient(undefined); setIsTrainer(undefined); setTrainerPin(undefined); setPinPassedId(""); return; }
+    if (!session) { accessReq.current++; setAccessError(""); setSelfClients(undefined); setPickedCard(""); setIsTrainer(undefined); setTrainerPin(undefined); setPinPassedId(""); return; }
     checkAccess(session.user.id);
   }, [session]);
   // Роль и PIN были взяты с телефона — перечитываем вместе с остальным (lib/offlineCache onRevalidate)
@@ -411,10 +478,11 @@ export default function App() {
   const reloadSelfClient = () => {
     if (!session) return;
     // PIN здесь не перечитываем (срабатывает на каждое изменение во время тренировки) — оставляем известный
-    portalApi.fetchSelfClient(session.user.id).then((self) => {
-      setSelfClient((prev) => (self && prev ? { ...self, hasPin: prev.hasPin } : self));
+    // Перечитываем все карточки: тренер мог удалить свою — тогда откроется выбор или «нет доступа»
+    portalApi.fetchSelfClients(session.user.id).then((list) => {
+      setSelfClients((prev) => list.map((c) => ({ ...c, hasPin: prev?.[0]?.hasPin })));
       // И в кэш для зала — иначе без сети открылась бы давно закончившаяся «текущая» тренировка
-      patchCache<{ trainer: boolean; self?: SelfClient | null }>("access", (a) => (a.trainer ? a : { ...a, self: self && { ...self, hasPin: a.self?.hasPin } }));
+      portalApi.patchCachedSelves(() => list);
     }).catch((e) => console.error("[App] reloadSelfClient:", e));
   };
   const selfClientId = isTrainer === false ? selfClient?.id : undefined;
@@ -427,7 +495,7 @@ export default function App() {
     return () => clearInterval(id);
   }, [session, isTrainer]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const consentRole = isTrainer ? "trainer" : selfClient ? "client" : null;
+  const consentRole = isTrainer ? "trainer" : selfClients?.length ? "client" : null;
   useEffect(() => {
     if (!session || !consentRole) { setConsentGate(undefined); return; }
     // Тренеру согласие проверяет checkAccess — параллельно с запросом trainers
@@ -477,9 +545,10 @@ export default function App() {
 
   if (legalSlug) return <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><LegalPage slug={legalSlug} onClose={closeLegal} /></Suspense>;
   if (loading) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
+  if (inviteToken) return <InviteScreen tokenHash={inviteToken} onVerified={() => { setInviteToken(""); setIsRecovery(true); }} onCancel={() => setInviteToken("")} />;
   if (!session) return <AuthScreen />;
 
-  if (isRecovery) return <PasswordResetScreen onDone={() => setIsRecovery(false)} />;
+  if (isRecovery || mustSetPassword(session.user.id)) return <PasswordResetScreen onDone={() => setIsRecovery(false)} />;
   // Вместо вечной заставки: без сети и без сохранённого входа — объясняем; прочая ошибка — повтор
   if (accessError) {
     return (
@@ -503,13 +572,20 @@ export default function App() {
   if (selfClient === undefined || isTrainer === undefined || (consentRole && consentGate === undefined)) return (<>{splash && <SplashScreen onDone={() => setSplash(false)} ready={false} />}<div className="min-h-screen bg-zinc-950" /></>);
   if (consentRole && consentGate) return <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}><ConsentGate role={consentRole} onDone={() => setConsentGate(false)} /></Suspense>;
 
-  if (selfClient) {
+  if (!isTrainer && selfClients?.length) {
+    const uid = session.user.id;
+    const pick = (id: string) => { portalApi.savePickedCard(uid, id); setPickedCard(id); };
     return (
-      // PIN клиента — из проверки доступа (и из кэша без сети); старый кэш без него — PinGate спросит сеть
-      <PinGate id={selfClient.id} hasPin={selfClient.hasPin ?? !!(selfClient as LegacySelf).pinHash}>
-        <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6">
-          <Suspense fallback={<ScreenSkeleton />}><ClientPortal client={selfClient} /></Suspense>
-        </div>
+      // PIN — на вход, а не на карточку: из проверки доступа (и из кэша без сети); неизвестен — PinGate спросит сеть.
+      // Выбор тренера — за PIN-экраном: на общем телефоне чужой не увидит, у кого ты занимаешься
+      <PinGate id={uid} hasPin={selfClients[0].hasPin}>
+        {selfClient ? (
+          <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6">
+            <Suspense fallback={<ScreenSkeleton />}>
+              <ClientPortal key={selfClient.id} client={selfClient} onSwitchTrainer={selfClients.length > 1 ? () => pick("") : undefined} />
+            </Suspense>
+          </div>
+        ) : <TrainerPickScreen cards={selfClients} onPick={pick} />}
       </PinGate>
     );
   }

@@ -1,7 +1,7 @@
 import { Check, History, Layers } from "lucide-react";
 import { addDays, fmtDate, fmtSet, today } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
-import { RPE_SCALE, doneSets, fmtRpe, isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
+import { RPE_SCALE, doneSets, exKey, fmtRpe, isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
 import { ask, choose } from "../lib/dialog";
 import { pending } from "../lib/outbox";
@@ -188,12 +188,13 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
               const row = rows[r];
               const md = meta[ex.id];
               const isDone = md?.setsDone?.[r] ?? false;
+              const was = prev[exKey(ex.name)]?.sets[r];
               return (
                 <div key={ex.id}>
                   <div className={`grid ${SUPERSET_COLS} gap-1.5 items-center`}>
                     <span className={`col-span-4 sm:col-span-1 min-w-0 truncate text-sm font-medium ${isDone ? "text-zinc-500" : ""}`}>
                       <span className="font-bold mr-1" style={{ color }}>{labels[items.indexOf(ex)]}</span>{ex.name}
-                      {prev[ex.name.trim().toLowerCase()]?.sets[r] && prev[ex.name.trim().toLowerCase()]!.sets[r].dir !== "skip" && <span className="block text-[11px] text-zinc-500 font-normal">было {fmtSet(prev[ex.name.trim().toLowerCase()]!.sets[r].weight, prev[ex.name.trim().toLowerCase()]!.sets[r].reps)}</span>}
+                      {was && was.dir !== "skip" && <span className="block text-[11px] text-zinc-500 font-normal">было {fmtSet(was.weight, was.reps)}</span>}
                     </span>
                     {ex.kind === "functional" ? (
                       <span className="col-span-3 text-xs text-zinc-400 text-center truncate">{[ex.duration, ex.weight].filter(Boolean).join(" · ") || "функц."}</span>

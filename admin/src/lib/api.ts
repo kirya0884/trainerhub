@@ -24,6 +24,17 @@ async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
 const base = (r: Range) => ({ p_from: r.from, p_to: r.to, p_tz: r.tz, p_ex: r.ex });
 
 export const isAdmin = () => rpc<boolean>("is_admin", {});
+/** В списке админов — без учёта второго шага входа (is_admin и admin_* требуют aal2) */
+export const isAdminMember = () => rpc<boolean>("is_admin_member", {});
+
+/** Доступ к панели (п. 57): none — не админ, mfa — нужен код из приложения-аутентификатора, ok — открываем */
+export async function adminAccess(): Promise<"none" | "mfa" | "ok"> {
+  if (!(await isAdminMember())) return "none";
+  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  if (error) throw error;
+  if (data.currentLevel !== "aal2") return "mfa";
+  return (await isAdmin()) ? "ok" : "none";
+}
 export const kpis = (r: Range) => rpc<{ cur: Kpis; prev: Kpis }>("admin_kpis", base(r));
 export const series = (r: Range) => rpc<SeriesRow[]>("admin_series", { ...base(r), p_grain: r.grain });
 export const active = (r: Range) => rpc<ActiveRow[]>("admin_active", base(r));

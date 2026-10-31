@@ -7,6 +7,7 @@ import { enqueue, isNetworkError, pending, registerHandler } from "./outbox";
 import { fetchProgress, logWorkout } from "./progress";
 import { fetchAll, fetchAllIn } from "./fetchAll";
 import { upgradeLime } from "./brand";
+import { patchCache } from "./offlineCache";
 
 export interface SelfClient {
   id: string; trainerId: string; name: string; color: string; goal: string;
@@ -24,20 +25,47 @@ export interface ClientActivity {
 }
 
 // hasPin здесь не заполняется: App узнаёт его один раз при проверке доступа (has_my_pin),
-// а перечитывание карточки по realtime во время тренировки PIN не трогает
-export async function fetchSelfClient(authUserId: string): Promise<SelfClient | null> {
+// а перечитывание карточки по realtime во время тренировки PIN не трогает.
+// П. 60: у одного входа может быть несколько карточек — у разных тренеров. Удалённые
+// тренером (в корзине) доступа не дают. Порядок — по дате создания, чтобы список выбора не прыгал.
+export async function fetchSelfClients(authUserId: string): Promise<SelfClient[]> {
   const { data, error } = await supabase
     .from("clients").select("id,trainer_id,name,color,goal,phone,telegram,whatsapp,avatar_url,accent_color,health,membership,active_session")
-    .eq("auth_user_id", authUserId).maybeSingle();
+    .eq("auth_user_id", authUserId).is("deleted_at", null).order("created_at").order("id");
   if (error) throw error;
-  if (!data) return null;
-  return {
+  return (data ?? []).map((data) => ({
     id: data.id, trainerId: data.trainer_id, name: data.name, color: upgradeLime(data.color), goal: data.goal ?? "",
     phone: data.phone ?? "", telegram: data.telegram ?? "", whatsapp: data.whatsapp ?? "", avatarUrl: data.avatar_url ?? "",
     accentColor: upgradeLime(data.accent_color) || "#22d3ee",
     health: { injuries: "", restrictions: "", notes: "", ...(data.health || {}) },
     membership: data.membership || {}, activeSession: data.active_session || null,
-  };
+  }));
+}
+
+/** Кэш проверки доступа (offlineCache "access"). У клиента — все карточки (selves);
+ *  self — кэш версии до п. 60 (одна карточка), читаем его, пока не перезапишется. */
+export type AccessCache = { trainer: boolean; hasPin?: boolean; pin?: string | null; selves?: SelfClient[]; self?: (SelfClient & { pinHash?: string | null }) | null };
+export const cachedSelves = (a: AccessCache): SelfClient[] => a.selves ?? (a.self ? [a.self] : []);
+/** PIN входа из кэша: сверху, в кэше до п. 60 — в карточке, до 30.10 — по хэшу */
+export const cachedAccessPin = (a: AccessCache): boolean => a.hasPin ?? (a.trainer ? !!a.pin : a.self?.hasPin ?? !!a.self?.pinHash);
+/** Поправить карточки в кэше доступа (кэш до п. 60 заодно переводится на selves) */
+export const patchCachedSelves = (f: (s: SelfClient[]) => SelfClient[]) =>
+  patchCache<AccessCache>("access", (a) => (a.trainer ? a : { trainer: false, hasPin: cachedAccessPin(a), selves: f(cachedSelves(a)) }));
+
+/** Выбранный тренер (карточка) на этом телефоне — когда карточек несколько. Ключ по входу. */
+const pickKey = (uid: string) => `reps-client-card-${uid}`;
+export function loadPickedCard(uid: string): string {
+  try { return localStorage.getItem(pickKey(uid)) ?? ""; } catch { return ""; }
+}
+export function savePickedCard(uid: string, clientId: string) {
+  try { if (clientId) localStorage.setItem(pickKey(uid), clientId); else localStorage.removeItem(pickKey(uid)); } catch { /* приватный режим */ }
+}
+
+/** Имена тренеров для экрана выбора: имя из профиля, иначе бренд. Кого не прочитали — нет в ответе. */
+export async function fetchTrainerNames(trainerIds: string[]): Promise<Record<string, { name: string; brand: string; logoUrl: string }>> {
+  const { data, error } = await supabase.from("trainers").select("id,brand,logo_url,profile").in("id", trainerIds);
+  if (error) throw error;
+  return Object.fromEntries((data ?? []).map((t) => [t.id, { name: String((t.profile as any)?.name || ""), brand: t.brand || "", logoUrl: t.logo_url || "" }]));
 }
 
 export async function fetchClientActivities(clientId: string): Promise<ClientActivity[]> {

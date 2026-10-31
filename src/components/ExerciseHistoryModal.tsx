@@ -1,7 +1,7 @@
 import { BarChart3, HeartPulse, ListOrdered } from "lucide-react";
 import { useMemo, useState } from "react";
 import { fmtDate, parseNum } from "../lib/format";
-import { fmtRpe, isFact } from "../lib/sessionUtils";
+import { exKey, fmtRpe, isFact } from "../lib/sessionUtils";
 import type { Metric, Session } from "../types";
 import ModalShell from "./ModalShell";
 import TrendChart from "./TrendChart";
@@ -28,15 +28,15 @@ export default function ExerciseHistoryModal({
   name, sessions, metrics, onClose,
 }: { name: string; sessions: Session[]; metrics: Metric[]; onClose: () => void }) {
   const [view, setView] = useState<"sets" | "chart">("sets");
-  const key = name.trim().toLowerCase();
+  const key = exKey(name);
 
   const entries = useMemo<Entry[]>(() => {
     const metricByDate = new Map<string, Metric>();
-    for (const m of metrics) if (m.exercise.trim().toLowerCase() === key) metricByDate.set(m.date, m);
+    for (const m of metrics) if (exKey(m.exercise) === key) metricByDate.set(m.date, m);
 
     const list: Entry[] = [];
     for (const s of sessions) {
-      const item = s.items?.find((i) => i.name.trim().toLowerCase() === key);
+      const item = s.items?.find((i) => exKey(i.name) === key);
       if (!item) continue;
       // Факт — только отмеченные подходы; план вместо факта — лишь у старых записей без actualSets
       const sets = item.actualSets?.length ? item.actualSets.filter(isFact)

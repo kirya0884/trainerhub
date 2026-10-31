@@ -7,6 +7,10 @@ import type { Day, Metric, Session } from "../types";
 type SetVal = { weight: string; reps: string; rpe?: number; done?: boolean };
 type SetsMeta = { done?: boolean; setsDone?: Record<number, boolean> };
 
+/** Ключ сравнения упражнений по названию: регистр, ё/е и лишние пробелы не важны.
+ *  Только для сопоставления — сами названия в данных не меняются. */
+export const exKey = (name: string) => name.trim().toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ");
+
 /** Сделанные подходы: отмеченные галочкой (или всё упражнение отмечено «Готово») и не пустые.
  *  Вес и повторы подставлены из плана заранее — неотмеченный подход это план, а не факт,
  *  поэтому в итог, тоннаж и метрики идут только эти подходы. */
@@ -117,7 +121,7 @@ export function lastTimeFor(sessions: Session[], day: Day): LastTime | null {
   // Подходы целиком, по индексам; неотмеченные (done: false) при подстановке пропускаются
   const byName: Record<string, SetVal[]> = {};
   for (const it of s.items) {
-    if (it.actualSets?.some(isFact)) byName[it.name.trim().toLowerCase()] = it.actualSets;
+    if (it.actualSets?.some(isFact)) byName[exKey(it.name)] = it.actualSets;
   }
   return { date: s.date, byName };
 }
@@ -128,7 +132,7 @@ export function lastTimeFor(sessions: Session[], day: Day): LastTime | null {
 export function applyLastTime(day: Day, vals: Record<string, SetVal[]>, setsDone: (exId: string) => Record<number, boolean> | undefined, last: LastTime) {
   const next = { ...vals };
   for (const ex of day.exercises) {
-    const prev = last.byName[ex.name.trim().toLowerCase()];
+    const prev = last.byName[exKey(ex.name)];
     if (!prev || ex.kind === "functional") continue;
     const done = setsDone(ex.id) ?? {};
     const facts = prev.filter(isFact);
@@ -151,7 +155,7 @@ export function lastFactsByName(sessions: Session[]): Record<string, LastFact> {
   const out: Record<string, LastFact> = {};
   const sorted = [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
   for (const s of sorted) for (const it of s.items ?? []) {
-    const key = it.name.trim().toLowerCase();
+    const key = exKey(it.name);
     if (!key || out[key]) continue;
     const actual = [...(it.actualSets ?? [])];
     if (!actual.some(isFact)) continue;
