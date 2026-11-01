@@ -134,18 +134,30 @@ export async function fetchClientDoneSessions(trainerId: string, clientId: strin
 }
 
 // Автоматически отмечает запись в календаре как «Проведена» когда тренер завершает тренировку дня.
-// Ищет запись за сегодня с совпадающим dayName для данного клиента.
+// Разбор путей 4.19: запись, по которой начали тренировку, приходит явно (booking). Иначе —
+// осторожная догадка по клиенту, дате и времени (см. ниже): день в записи необязателен.
 // Отметка — через mark_occurrence без списаний (списание сделал finishWorkout): ключ
 // вхождения — его исходная дата (occDate), а не дата после переноса; правка exceptions —
 // слиянием на сервере, без перезаписи всего объекта устаревшей копией.
 // П.23 аудита: совместную запись (несколько подопечных) отмечаем, только когда тренировку
 // за этот день записали ВСЕ её участники. Раньше её отмечал первый завершивший, и гард
 // finishWorkout («запись уже проведена — списание было») не списывал второго.
-export async function markSessionDone(trainerId: string, clientId: string, dayName: string, date: string) {
+export async function markSessionDone(trainerId: string, clientId: string, dayName: string, date: string, booking?: { id: string; occDate: string } | null, guess = true) {
   try {
     const bookings = await fetchBookings(trainerId);
     const occs = expandBookings(bookings, date, date);
-    const match = occs.find((o) => o.clientIds.includes(clientId) && o.dayName === dayName && o.status === "scheduled");
+    const mine = occs.filter((o) => o.clientIds.includes(clientId) && o.status === "scheduled");
+    let match: Occurrence | undefined;
+    if (booking) match = mine.find((o) => o.id === booking.id && o.occDate === booking.occDate);
+    else if (guess && date === today()) {
+      // Без явной записи — только сегодняшняя, по времени подходящая к концу тренировки (от 15 мин
+      // до начала до полутора часов после конца записи) и только если такая одна (или одна с этим
+      // днём плана). Иначе не отмечаем: закрытая чужая запись потом не даст списать настоящую.
+      const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+      const near = mine.filter((o) => nowMin >= toMin(o.time) - 15 && nowMin <= toMin(o.time) + (Number(o.duration) || 60) + 90);
+      const sameDay = near.filter((o) => o.dayName === dayName);
+      match = near.length === 1 ? near[0] : sameDay.length === 1 ? sameDay[0] : undefined;
+    }
     if (!match) return;
     const others = match.clientIds.filter((id) => id !== clientId);
     if (others.length && !(await Promise.all(others.map((id) => hasSessionOnDate(id, date)))).every(Boolean)) return;

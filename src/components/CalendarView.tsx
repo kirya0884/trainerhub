@@ -1,18 +1,17 @@
 import { useEffect, useRef, useState } from "react";
 import { loadViewState, saveViewState } from "../lib/viewState";
-import { CalendarDays, Check, ClipboardList, UserX, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share, Trash2 } from "lucide-react";
+import { CalendarClock, CalendarDays, Check, ClipboardList, UserX, Bell, ChevronLeft, ChevronRight, Pencil, Plus, Play, Repeat, Share, Trash2 } from "lucide-react";
 import { bookingsOverlap, expandBookings, toMin } from "../lib/bookings";
 import type { Booking, Occurrence } from "../lib/bookings";
-import * as clientsApi from "../lib/clients";
 import type { ClientListItem } from "../lib/clients";
 import BookingModal, { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
-import { useActiveWorkout } from "../hooks/useActiveWorkout";
+import { useStartFromBooking } from "../hooks/useStartFromBooking";
 import ModalShell from "./ModalShell";
 import RemindModal from "./RemindModal";
 import RenewModal from "./RenewModal";
 import NoShowModal, { type NoShowReason } from "./NoShowModal";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
-import { today as todayFn, addDays, addMonths, plural, toDateStr } from "../lib/format";
+import { today as todayFn, addDays, addMonths, fmtDate, plural, toDateStr } from "../lib/format";
 import { ask, notify } from "../lib/dialog";
 import { track } from "../lib/events";
 
@@ -68,6 +67,9 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   const [quickView, setQuickView] = useState<Occurrence | null>(null);
   const [noShow, setNoShow] = useState<Occurrence | null>(null);
   const [delOcc, setDelOcc] = useState<Occurrence | null>(null);
+  // Разбор путей 4.20: перенос одного занятия (и одного из серии) — дата и время, без перетаскивания
+  const [moveOcc, setMoveOcc] = useState<{ o: Occurrence; date: string; time: string } | null>(null);
+  const [moving, setMoving] = useState(false);
   const [renew, setRenew] = useState<string | null>(null);
   const [remind, setRemind] = useState<{ id: string; date: string; time: string } | null>(null);
   // П.14 аудита: статус и списания всех подопечных — одна серверная транзакция. Раньше
@@ -92,19 +94,10 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
   const [dragOverDay, setDragOverDay] = useState<string | null>(null);
   const [confirmPending, setConfirmPending] = useState<{ text: string; onConfirm: () => void } | null>(null);
   const askConfirm = (text: string, onConfirm: () => void) => setConfirmPending({ text, onConfirm });
-  // Тренировка по записи — совместная (на всех из записи) и живёт на уровне приложения:
-  // сворачивается, переживает переходы и перезагрузку; запись отмечается, когда завершат все
-  const workout = useActiveWorkout();
-  const startGroup = async (o: Occurrence) => {
-    const list = o.clientIds.map((id) => { const c = clients.find((x) => x.id === id); return { id, name: clientName(id), color: c?.color || "#c6ff3d", remaining: c?.remaining ?? null }; });
-    if (!(await clientsApi.confirmEmptyMembership(list))) return;
-    const ok = workout.start({
-      kind: "group", id: String(Date.now()),
-      clients: list,
-      booking: { id: o.id, occDate: o.occDate, isOccurrence: o.isOccurrence, clientIds: o.clientIds },
-    });
-    if (!ok) notify("Одна тренировка уже идёт — заверши или сверни её.");
-  };
+  // Тренировка по записи живёт на уровне приложения: один клиент — обычная тренировка
+  // с днём из записи, несколько — совместная (разбор путей 4.7)
+  const bookingStart = useStartFromBooking(trainerId);
+  const startGroup = bookingStart.start;
 
   const weekStart = startOfWeekMon(anchor);
   const weekEnd = addDays(weekStart, 6);
@@ -193,6 +186,25 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
     if (conflict && !(await ask("На это время уже есть запись. Перенести всё равно?", { ok: "Перенести" }))) return;
     try { await rescheduleOccurrence(b, occDate, targetDate, newTime); }
     catch (e) { console.error("[CalendarView] onDropAt:", e); notify("Не удалось перенести запись."); }
+  };
+
+  const saveMove = async () => {
+    if (!moveOcc || moving) return;
+    const { o, date, time } = moveOcc;
+    const b = findBookingById(o.id);
+    if (!b || !date || !time) return;
+    if (date === o.date && time === o.time) { setMoveOcc(null); return; }
+    setMoving(true);
+    try {
+      // Пересечения — по всем записям на новую дату, а не только в видимом диапазоне
+      const moved = { ...o, date, time };
+      const conflict = expandBookings(bookings, date, date).some((x) => !(x.id === o.id && x.occDate === o.occDate) && bookingsOverlap(moved, x));
+      if (conflict && !(await ask("На это время уже есть запись. Перенести всё равно?", { ok: "Перенести" }))) return;
+      await rescheduleOccurrence(b, o.occDate, date, time);
+      setMoveOcc(null);
+      notify(`Занятие перенесено на ${fmtDate(date)}, ${time}`, "info");
+    } catch (e) { console.error("[CalendarView] saveMove:", e); notify("Не удалось перенести запись."); }
+    finally { setMoving(false); }
   };
 
   const exportIcs = () => {
@@ -474,13 +486,31 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
             </div>
             {quickView.note && <p className="text-sm text-zinc-400 bg-zinc-800/60 rounded-xl px-3 py-2.5 whitespace-pre-wrap">{quickView.note}</p>}
             <button onClick={() => { startGroup(quickView); setQuickView(null); }} className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98]"><Play size={18} /> Начать тренировку</button>
-            <div className="flex gap-2">
-              <button onClick={() => { const base = findBookingById(quickView.id); setModal({ booking: base && { ...base, status: quickView.status }, occDate: quickView.occDate }); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition"><Pencil size={15} /> Изменить</button>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => { const base = findBookingById(quickView.id); setModal({ booking: base && { ...base, status: quickView.status }, occDate: quickView.occDate }); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition"><Pencil size={15} /> {quickView.isOccurrence ? "Изменить серию" : "Изменить"}</button>
+              {quickView.status === "scheduled" && (
+                <button onClick={() => { setMoveOcc({ o: quickView, date: quickView.date, time: quickView.time }); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-100 font-semibold rounded-xl text-sm transition"><CalendarClock size={15} /> Перенести</button>
+              )}
               {quickView.status === "scheduled" && (
                 <button onClick={() => { setNoShow(quickView); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-orange-500/15 text-orange-400 font-semibold rounded-xl text-sm transition"><UserX size={15} /> Не пришёл</button>
               )}
               <button onClick={() => { setDelOcc(quickView); setQuickView(null); }} className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-red-500/15 text-red-400 font-semibold rounded-xl text-sm transition"><Trash2 size={15} /> Удалить</button>
             </div>
+          </div>
+        </ModalShell>
+      )}
+
+      {moveOcc && (
+        <ModalShell title="Перенести занятие" onClose={() => setMoveOcc(null)}>
+          <div className="p-4 space-y-3">
+            {moveOcc.o.isOccurrence && <p className="text-sm text-zinc-400">Перенесётся только это занятие, остальные в серии останутся как были.</p>}
+            <div className="grid grid-cols-2 gap-2">
+              <label className="text-[13px] font-semibold text-zinc-400 space-y-1"><span>Дата</span>
+                <input type="date" value={moveOcc.date} onChange={(e) => setMoveOcc({ ...moveOcc, date: e.target.value })} className="w-full h-12 bg-zinc-800 rounded-xl px-3 text-base text-zinc-100 outline-none focus:ring-2 focus:ring-lime-400/60" /></label>
+              <label className="text-[13px] font-semibold text-zinc-400 space-y-1"><span>Время</span>
+                <input type="time" value={moveOcc.time} onChange={(e) => setMoveOcc({ ...moveOcc, time: e.target.value })} className="w-full h-12 bg-zinc-800 rounded-xl px-3 text-base text-zinc-100 outline-none focus:ring-2 focus:ring-lime-400/60" /></label>
+            </div>
+            <button onClick={saveMove} disabled={moving || !moveOcc.date || !moveOcc.time} className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50">{moving ? "Переносим…" : "Перенести"}</button>
           </div>
         </ModalShell>
       )}
@@ -578,6 +608,7 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
           </div>
         </ModalShell>
       )}
+      {bookingStart.modal}
     </div>
   );
 }

@@ -16,8 +16,11 @@ import { notify } from "../lib/dialog";
 // Дальше всё как с кнопкой ▶ в редакторе плана — тренировка живёт в ActiveWorkoutHost.
 // «Тренировать вместе с…» открывает совместную тренировку на 2–4 человек (не только сплит):
 // у каждого свой план и день, выбираются уже на экране тренировки.
-export default function StartWorkoutModal({ trainerId, self, partner, plans, onClose }: {
-  trainerId: string; self: GroupClient; partner?: { id: string; name: string } | null; plans: PlanListItem[]; onClose: () => void;
+export default function StartWorkoutModal({ trainerId, self, partner, plans, booking, onClose }: {
+  trainerId: string; self: GroupClient; partner?: { id: string; name: string } | null; plans: PlanListItem[];
+  /** Открыто из записи календаря — она и отметится «проведена» при завершении */
+  booking?: { id: string; occDate: string };
+  onClose: () => void;
 }) {
   const clientId = self.id, clientName = self.name;
   const workout = useActiveWorkout();
@@ -80,7 +83,7 @@ export default function StartWorkoutModal({ trainerId, self, partner, plans, onC
   const start = async (dayId: string) => {
     const day = days.find((d) => d.id === dayId);
     if (!day || !(await confirmEmptyMembership([self]))) return;
-    if (!workout.start({ day, planId, clientId, clientName })) { notify("Одна тренировка уже идёт — заверши или сверни её."); return; }
+    if (!workout.start({ day, planId, clientId, clientName, booking })) { notify("Одна тренировка уже идёт — заверши или сверни её."); return; }
     onClose();
   };
 

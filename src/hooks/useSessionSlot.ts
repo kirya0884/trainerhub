@@ -4,12 +4,13 @@ import * as clientsApi from "../lib/clients";
 import type { Membership, PlanListItem } from "../lib/clients";
 import { fmtDate, today } from "../lib/format";
 import * as plansApi from "../lib/plans";
-import { applyLastTime, buildMetrics, doneSets, factSets, itemRpe, lastFactsByName, lastTimeFor, tonnageOf, type LastFact, type LastTime } from "../lib/sessionUtils";
+import { applyLastTime, buildMetrics, doneSets, factSets, itemRpe, lastFactsByName, lastTimeFor, nextDayOf, tonnageOf, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgressCached } from "../lib/progress";
-import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
-import { finishOrQueue } from "../lib/finishWorkout";
+import { cached, onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
+import { useActiveWorkout } from "./useActiveWorkout";
+import { finishOrQueue, finishSummary } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
-import { askUnmarked, confirmFinish, resolveWorkoutDate } from "../components/SessionParts";
+import { addSetRow, askUnmarked, confirmFinish, metaAfterRemove, resolveWorkoutDate } from "../components/SessionParts";
 import type { Day, Plan, Session } from "../types";
 import { notify } from "../lib/dialog";
 import { draftPrefix, readSlotDraft, type SlotDraft } from "../lib/slotDrafts";
@@ -47,7 +48,7 @@ export const buildMeta = (day: Day): Record<string, ExMeta> => {
 // Черновики слотов — в lib/slotDrafts (App пишет их, не загружая этот модуль)
 export { readSlotDraft, writeSlotDraft, clearSlotDrafts, type SlotDraft } from "../lib/slotDrafts";
 
-export function useSessionSlot(clientId: string, trainerId: string, onFinished: () => void, groupId?: string) {
+export function useSessionSlot(clientId: string, trainerId: string, onFinished: () => void, groupId?: string, clientName?: string) {
   // Черновик читаем один раз при монтировании
   const [draft] = useState(() => (groupId ? readSlotDraft(groupId, clientId) : null));
   const restored = useRef(false);
@@ -65,23 +66,65 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   const [review, setReview] = useState(draft?.review ?? "");
   const [clientRating, setClientRating] = useState(draft?.clientRating ?? 0);
 
+  // Начата из записи календаря — день из записи у того, чей это план (разбор путей 4.7)
+  const { active } = useActiveWorkout();
+  const [prefer] = useState(() => (active?.kind === "group" ? active.booking : undefined));
+  // Разбор путей 4.8: планы и абонемент — с кэшем, без сети открываются сохранённые;
+  // не загрузились совсем — ошибка с «Повторить», а не вечная «Загрузка планов…»
+  const [plansFailed, setPlansFailed] = useState(false);
+  const [planFailed, setPlanFailed] = useState(false);
+  const [plansKey, setPlansKey] = useState(0);
+  const [planKey, setPlanKey] = useState(0);
+  // Повторяем только то, что не загрузилось: иначе сбросился бы выбранный план и день
+  const retryLoad = () => {
+    if (plansFailed) { setPlansFailed(false); setPlansKey((k) => k + 1); }
+    if (planFailed) setPlanKey((k) => k + 1);
+  };
   useEffect(() => {
-    clientsApi.fetchClientPlans(clientId).then((list) => {
+    cached(`client-plans:${clientId}`, () => clientsApi.fetchClientPlans(clientId)).then((list) => {
       setPlans(list);
-      const first = (draft && list.find((p) => p.id === draft.planId)) || list.find((p) => !p.archived) || list[0];
+      // План из записи — только действующий: у старой серии он мог уйти в архив
+      const first = (draft && list.find((p) => p.id === draft.planId)) || (prefer?.planId && list.find((p) => p.id === prefer.planId && !p.archived))
+        || list.find((p) => !p.archived) || list[0];
       if (first) setPlanId(first.id);
-    }).catch((e) => console.error("[useSessionSlot] fetchPlans:", e));
-    clientsApi.fetchClient(clientId).then((c) => setMembership(c.membership)).catch((e) => console.error("[useSessionSlot] fetchClient:", e));
-  }, [clientId]);
+    }).catch((e) => { console.error("[useSessionSlot] fetchPlans:", e); setPlansFailed(true); });
+    cached(`client:${clientId}`, () => clientsApi.fetchClient(clientId)).then((c) => setMembership(c.membership)).catch((e) => console.error("[useSessionSlot] fetchClient:", e));
+  }, [clientId, plansKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Тренер уже выбрал день или ввёл подходы — «следующий день» по истории его не перебивает
+  const touched = useRef(false);
+  // Загруженный план: не загрузился новый — возвращаемся к нему, а не пишем тренировку в старый под чужим названием
+  const planRef = useRef<Plan | null>(null);
   useEffect(() => {
     if (!planId) { setPlan(null); setDayId(""); return; }
+    let alive = true;
+    setPlanFailed(false);
     plansApi.fetchPlanCached(planId).then((p) => {
-      setPlan(p);
+      if (!alive) return;
+      // Тот же план (повтор, возврат после сбоя) — выбранный день не трогаем
+      if (planRef.current?.id === p.id) { planRef.current = p; setPlan(p); return; }
+      const archived = new Set((p.mesocycles ?? []).filter((m) => m.archivedAt).map((m) => m.id));
+      const live = p.days.filter((d) => !(d.mesocycleId && archived.has(d.mesocycleId)));
       const fromDraft = !restored.current && draft?.planId === planId && p.days.some((d) => d.id === draft.dayId);
-      setDayId(fromDraft ? draft!.dayId : p.days[0]?.id || "");
-    }).catch((e) => console.error("[useSessionSlot] fetchPlan:", e));
-  }, [planId]);
+      let id = fromDraft ? draft!.dayId : "";
+      if (!id && prefer?.planId === planId && prefer.dayId && live.some((d) => d.id === prefer.dayId)) id = prefer.dayId;
+      const guess = !id;
+      // План — сразу (из кэша без ожидания сети), следующий день по истории — когда она придёт
+      touched.current = false;
+      planRef.current = p; setPlan(p); setDayId(id || live[0]?.id || p.days[0]?.id || "");
+      if (guess) fetchProgressCached(planId).then((hist) => {
+        const next = nextDayOf(live, hist.sessions);
+        if (alive && next && !touched.current) setDayId(next.id);
+      }).catch(() => {});
+    }).catch((e) => {
+      console.error("[useSessionSlot] fetchPlan:", e);
+      if (!alive) return;
+      if (planRef.current) { setPlanId(planRef.current.id); notify("Не удалось загрузить этот план — остался прежний. Проверь интернет."); }
+      else setPlanFailed(true);
+    });
+    return () => { alive = false; };
+  }, [planId, planKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pickDay = (id: string) => { touched.current = true; setDayId(id); };
 
   const day = plan?.days.find((d) => d.id === dayId) || null;
 
@@ -108,11 +151,21 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     if (writeJson(`${p}-vals`, { planId, dayId, vals, meta, mood, wellbeing, review, clientRating, finished } satisfies SlotDraft)) touchDraft(p);
   }, [groupId, clientId, planId, dayId, vals, meta, mood, wellbeing, review, clientRating, finished]);
 
-  const setVal = (exId: string, i: number, patch: Partial<SetVal>) =>
+  const setVal = (exId: string, i: number, patch: Partial<SetVal>) => {
+    touched.current = true;
     setVals((a) => ({ ...a, [exId]: (a[exId] ?? []).map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));
-  const setMetaFor = (exId: string, patch: Partial<ExMeta>) => setMeta((m) => ({ ...m, [exId]: { ...m[exId], ...patch } }));
+  };
+  const setMetaFor = (exId: string, patch: Partial<ExMeta>) => (touched.current = true) && setMeta((m) => ({ ...m, [exId]: { ...m[exId], ...patch } }));
+  // Разбор путей 4.1: подход на ходу — только в этой тренировке, план не меняется
+  const addSet = (exId: string) => { touched.current = true; setVals((a) => ({ ...a, [exId]: addSetRow(a[exId] ?? []) })); setMetaFor(exId, { done: false }); };
+  const removeSet = (exId: string) => {
+    touched.current = true;
+    const left = (vals[exId] ?? []).length - 1;
+    setVals((a) => ({ ...a, [exId]: (a[exId] ?? []).slice(0, left) }));
+    setMeta((m) => ({ ...m, [exId]: metaAfterRemove(m[exId] ?? { done: false, note: "", setsDone: {} }, left) }));
+  };
   // Отметка подхода, как в индивидуальной тренировке: все подходы отмечены — упражнение выполнено
-  const toggleSetDone = (exId: string, setIdx: number, total: number) =>
+  const toggleSetDone = (exId: string, setIdx: number, total: number) => (touched.current = true) &&
     setMeta((m) => {
       const cur = m[exId] || { done: false, note: "", setsDone: {} };
       const sd = { ...(cur.setsDone || {}), [setIdx]: !cur.setsDone?.[setIdx] };
@@ -141,8 +194,8 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     const offOnline = onRevalidate(() => { if (staleAtOf(`progress:${plan.id}`) !== null) load(); });
     return () => { alive = false; offOnline(); releaseStale(`progress:${plan.id}`); };
   }, [plan?.id, day?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const applyLast = () => { if (!day || !last) return; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
-  const undoLast = () => { if (beforeLast) { setVals(beforeLast); setBeforeLast(null); } };
+  const applyLast = () => { if (!day || !last) return; touched.current = true; setBeforeLast(vals); setVals(applyLastTime(day, vals, (id) => meta[id]?.setsDone, last)); };
+  const undoLast = () => { if (beforeLast) { touched.current = true; setVals(beforeLast); setBeforeLast(null); } };
 
   const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
   const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(doneSets(vals[ex.id] || [], meta[ex.id]))), 0) : 0;
@@ -179,7 +232,8 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
       const note = `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${done}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`;
       // Д3: запись сессии, архивация дня, отметка в календаре и двойной гард
       // списания — всё в одной общей функции, а не копией на каждый экран.
-      const res = await finishOrQueue({ trainerId, clientId, planId: plan.id, day, metrics, note, session, membership });
+      const res = await finishOrQueue({ trainerId, clientId, planId: plan.id, day, metrics, note, session, membership, booking: prefer && { id: prefer.id, occDate: prefer.occDate } });
+      if (!res.queued) notify(`${clientName ? clientName + ": " : ""}${finishSummary(res)}`, res.skipped === "error" ? "error" : "info");
       setMembership(res.membership);
       setFinished(true);
       onFinished();
@@ -190,9 +244,9 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   };
 
   return {
-    plans, planId, setPlanId, plan, dayId, setDayId, day,
+    plans, planId, setPlanId, plan, dayId, setDayId: pickDay, day, plansFailed, planFailed, retryLoad,
     membership, finished, busy,
-    vals, meta, setVal, setMetaFor, toggleSetDone, openSets,
+    vals, meta, setVal, setMetaFor, toggleSetDone, openSets, addSet, removeSet,
     mood, setMood, wellbeing, setWellbeing, review, setReview, clientRating, setClientRating,
     doneEx, totalTonnage, finish,
     last, lastApplied: !!beforeLast, applyLast, undoLast, prevByName,

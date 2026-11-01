@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { readJson, removeKey, writeJson } from "../lib/storage";
 import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User, Users } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ModalShell from "./ModalShell";
@@ -70,7 +71,16 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   const mark = (k: keyof typeof failed, v: boolean) => setFailed((f) => (!!f[k] === v ? f : { ...f, [k]: v }));
   // П9: у подопечного не было индикатора непрочитанных — он не узнавал, что тренер написал.
   // Тренировка, завершённая без сети, ещё «идёт» на сервере — но для клиента она закончена
-  const [activeSession, setActiveSession] = useState(() => (portalApi.hasPendingClientFinish(client.id) ? null : client.activeSession));
+  // Разбор путей 4.13: начатая без сервера (offlineStart) живёт только на телефоне — храним её
+  // сами, иначе перезапуск приложения, пока прошлая в очереди, закрыл бы идущую тренировку
+  const OFFLINE_KEY = `th-offline-session-${client.id}`;
+  const [activeSession, setActiveSession] = useState(() => {
+    const local = readJson<typeof client.activeSession>(OFFLINE_KEY, null);
+    return portalApi.hasPendingClientFinish(client.id) ? local : client.activeSession ?? local;
+  });
+  useEffect(() => {
+    if (activeSession?.offlineStart) writeJson(OFFLINE_KEY, activeSession); else removeKey(OFFLINE_KEY);
+  }, [activeSession, OFFLINE_KEY]);
   const [profile, setProfile] = useState({ phone: client.phone, telegram: client.telegram, whatsapp: client.whatsapp, avatarUrl: client.avatarUrl, accentColor: client.accentColor, name: client.name, goal: client.goal, health: client.health });
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
@@ -180,7 +190,14 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
     if (!currentPlan) return;
     if (portalApi.hasPendingClientFinish(client.id)) {
       await flushOutbox();
-      if (portalApi.hasPendingClientFinish(client.id)) { notify("Прошлая тренировка ещё не отправлена — она уйдёт, как только появится интернет. Новую можно начать после этого."); return; }
+      // Разбор путей 4.13: прошлая ещё не ушла — новую начинаем на телефоне, без сервера;
+      // в очереди она встанет за прошлой и уйдёт следом
+      if (portalApi.hasPendingClientFinish(client.id)) {
+        setActiveSession({ planId: currentPlan.id, dayId, dayName, startedAt: Date.now(), offlineStart: true });
+        track("action", "workout_start", { offline: true });
+        notify("Прошлая тренировка ещё не отправлена. Эта сохранится на телефоне и уйдёт тренеру следом за ней.", "info");
+        return;
+      }
     }
     try {
       await portalApi.startSession(client.id, currentPlan.id, dayId, dayName);
@@ -612,7 +629,8 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
           lastTime={lastTimeFor(progressHook.sessions, activeDay)}
           prevByName={lastFactsByName(progressHook.sessions)}
           startedAt={activeSession.startedAt}
-          onProgress={(p) => portalApi.updateSessionProgress(client.id, p).catch((e) => console.error("[ClientPortal] прогресс тренировки не ушёл тренеру:", e))}
+          // Начатая без сервера: на сервере ещё может «идти» прошлая — её прогресс не перетираем
+          onProgress={(p) => activeSession.offlineStart ? undefined : portalApi.updateSessionProgress(client.id, p).catch((e) => console.error("[ClientPortal] прогресс тренировки не ушёл тренеру:", e))}
           onCancel={async () => { try { if (!activeSession.offlineStart) await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { setActiveSession(null); setSessionMinimized(false); } }}
           onFinish={async (metrics, session) => {
             try {
@@ -620,6 +638,9 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
                 clientId: client.id, trainerId: client.trainerId, planId: activeSession.planId, dayId: activeSession.dayId,
                 dayName: activeSession.dayName, metrics, session, offlineStart: activeSession.offlineStart,
               });
+              // Сразу, не дожидаясь эффекта: выгрузи iOS приложение сейчас — тренировка, уже стоящая
+              // в очереди, не поднялась бы снова как идущая (второе «Завершить» списало бы дважды)
+              removeKey(OFFLINE_KEY);
               track("action", "workout_finish", { queued });
               if (queued) notify("Нет интернета — тренировка сохранена на телефоне и отправится сама, как только появится сеть.", "info");
               else await progressHook.reload().catch((err) => console.error("[ClientPortal] reload:", err));

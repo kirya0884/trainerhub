@@ -1,5 +1,5 @@
 import { fetchClientDoneSessions, markSessionDone } from "./bookings";
-import { combinedRemaining, decrementMembershipRemaining, fetchClient } from "./clients";
+import { combinedRemaining, decrementMembershipRemaining, fetchClient, remainingOf } from "./clients";
 import { enqueue, isNetworkError, registerHandler } from "./outbox";
 import { notify } from "./dialog";
 import type { Membership } from "./clients";
@@ -47,7 +47,9 @@ export async function finishWorkout(opts: {
   membership?: Membership | null;
   /** Повтор из очереди отправки — перед записью проверяем, не записана ли уже */
   retry?: boolean;
-}, st: FinishState = {}, save: (s: FinishState) => void = () => {}): Promise<{ membership: Membership | null; charged: boolean }> {
+  /** Запись календаря, по которой начали тренировку, — её и отмечаем «проведена» */
+  booking?: { id: string; occDate: string } | null;
+}, st: FinishState = {}, save: (s: FinishState) => void = () => {}): Promise<{ membership: Membership | null; charged: boolean; skipped?: SkipWhy }> {
   const { trainerId, clientId, planId, day, metrics, note, session } = opts;
   const put = (patch: FinishState) => { st = { ...st, ...patch }; save(st); };
 
@@ -73,9 +75,11 @@ export async function finishWorkout(opts: {
 
   let membership = opts.membership ?? null;
   let charged = false;
+  // Почему не списали — для итога после «Завершить» (разбор путей 4.2)
+  let skipped: SkipWhy | undefined;
   // Пустой день (ни одного упражнения) пишем без списания — тренер подтвердил это при
   // завершении. Шаг сохраняется в очередь отправки вместе с остальными.
-  if (!st.charge && isEmptyDay(day)) put({ charge: "skip" });
+  if (!st.charge && isEmptyDay(day)) { put({ charge: "skip" }); skipped = "empty"; }
   if (st.charge !== "skip" && st.charge !== "done") {
     // Гард двойного списания, два источника:
     // 1) клиент уже залогировал эту сессию сам (fromClient);
@@ -85,19 +89,21 @@ export async function finishWorkout(opts: {
     try {
       const { sessions } = await fetchProgress(planId);
       skip = sessions.some((s) => s.dayName === session.dayName && s.date === session.date && s.fromClient);
-    } catch (e) { skip = guard(e, "проверка сессий"); }
+      if (skip) skipped = "client";
+    } catch (e) { skip = guard(e, "проверка сессий"); skipped = "error"; }
     if (!skip) {
       try {
         const done = await fetchClientDoneSessions(trainerId, clientId);
         skip = done.some((d) => d.date === session.date);
-      } catch (e) { skip = guard(e, "проверка календаря"); }
+        if (skip) skipped = "calendar";
+      } catch (e) { skip = guard(e, "проверка календаря"); skipped = "error"; }
     }
     // Списываем только от свежего абонемента: переданный загружен в начале тренировки,
     // и если за это время его продлили, запись «старый минус один» стёрла бы продление.
     let fresh: Membership | null = null;
     if (!skip) {
       try { fresh = (await fetchClient(clientId)).membership; }
-      catch (e) { skip = guard(e, "чтение абонемента"); }
+      catch (e) { skip = guard(e, "чтение абонемента"); skipped = "error"; }
     }
     if (skip || !fresh) put({ charge: "skip" });
     else {
@@ -105,11 +111,17 @@ export async function finishWorkout(opts: {
       const now = combinedRemaining(fresh);
       // Повтор после оборванного списания: остаток уже не тот, что был перед ним, —
       // значит, списание прошло (или абонемент меняли). Не списываем второй раз.
+      // В итоге не пишем «списана»: остаток могли и просто поменять
       if (typeof st.charge === "object" && now !== st.charge.before) put({ charge: "done" });
       else {
         put({ charge: { before: now } });
         membership = await decrementMembershipRemaining(clientId, fresh, { kind: "workout", date: session.date });
-        charged = true;
+        // На нуле сервер не списывает (charged: false) — остаток не изменился, так и говорим.
+        // Подписка и учёт без пакета — без остатка, там «списана» и не показываем.
+        // Без пакета (пустой остаток) сервер не вызывается — итог просто «записана», без «на нуле»
+        const noPackage = fresh.type !== "subscription" && (fresh.remaining === "" || fresh.remaining == null);
+        charged = fresh.type === "subscription" || (!noPackage && combinedRemaining(membership) !== now);
+        if (!charged && !noPackage) skipped = "zero";
         put({ charge: "done" });
       }
     }
@@ -123,10 +135,29 @@ export async function finishWorkout(opts: {
   // раньше, чем запись стала «проведена», и показывает старый статус.
   // Пустой день запись не закрывает: иначе у неё пропадёт «Не пришёл» со списанием,
   // а гард выше не спишет настоящую тренировку в ту же дату.
-  if (!isEmptyDay(day)) await markSessionDone(trainerId, clientId, day.name, session.date);
+  // Без явной записи из очереди не угадываем: досылка могла прийти позже, «сейчас» — не время тренировки
+  if (!isEmptyDay(day)) await markSessionDone(trainerId, clientId, day.name, session.date, opts.booking, !opts.retry);
 
   notifyWorkoutFinished(planId);
-  return { membership, charged };
+  return { membership, charged, skipped };
+}
+
+type SkipWhy = "empty" | "client" | "calendar" | "zero" | "error";
+
+/** Итог после «Завершить» (разбор путей 4.2): записано ли и списано ли, а если нет — почему */
+export function finishSummary(r: { membership: Membership | null; charged: boolean; skipped?: SkipWhy }): string {
+  if (r.charged) {
+    const left = remainingOf(r.membership);
+    return left == null ? "Тренировка записана" : `Тренировка записана · списана 1 · осталось ${left}`;
+  }
+  const why = r.skipped && {
+    empty: "в дне нет упражнений",
+    client: "клиент уже записал эту тренировку сам",
+    calendar: "запись в календаре за этот день уже отмечена проведённой",
+    zero: "в абонементе не осталось тренировок",
+    error: "не удалось проверить абонемент, проверь остаток в карточке клиента",
+  }[r.skipped];
+  return why ? `Тренировка записана, не списана: ${why}` : "Тренировка записана";
 }
 
 type FinishOpts = Parameters<typeof finishWorkout>[0];
@@ -135,7 +166,7 @@ type FinishOpts = Parameters<typeof finishWorkout>[0];
  * Завершить сейчас, а если пропала сеть — положить в очередь отправки с уже сделанными
  * шагами. Тренер закрывает тренировку как обычно; очередь дошлёт её сама.
  */
-export async function finishOrQueue(opts: FinishOpts): Promise<{ membership: Membership | null; charged: boolean; queued: boolean }> {
+export async function finishOrQueue(opts: FinishOpts): Promise<{ membership: Membership | null; charged: boolean; skipped?: SkipWhy; queued: boolean }> {
   const key = logKeyOf(opts);
   const prevId = pendingIds.get(key);
   let st: FinishState = prevId ? { sessionId: prevId } : {};

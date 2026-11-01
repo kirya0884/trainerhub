@@ -16,6 +16,7 @@ import RemainingBadge from "./RemainingBadge";
 import { remainingOf } from "../lib/clients";
 import { notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
+import { useStartFromBooking } from "../hooks/useStartFromBooking";
 
 // Без сети главная открывается с последними сохранёнными данными. Храним оплаты и списания
 // за последний год (неоплаченные — все): за годы работы история не влезла бы в бюджет кэша.
@@ -50,6 +51,8 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   const [data, setData] = useState<Awaited<ReturnType<typeof fetchDashboardData>> | null>(() => peekCache<Awaited<ReturnType<typeof fetchDashboardData>>>("dashboard")?.data ?? null);
   // Ш4б: какой чип «Требует внимания» раскрыт (имена под ним)
   const [attn, setAttn] = useState<"debt" | "exp" | "bday" | null>(null);
+  // Разбор путей 2.1: «Начать тренировку» сразу открывает тренировку по записи, без захода в календарь
+  const bookingStart = useStartFromBooking(trainerId);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
@@ -267,7 +270,8 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           </div>
           {onOpenOccurrence && (
             <button
-              onClick={() => onOpenOccurrence(nextOcc.id, nextOcc.occDate)}
+              onClick={() => (nextOcc.date === todayStr ? bookingStart.start(nextOcc) : onOpenOccurrence(nextOcc.id, nextOcc.occDate))}
+              disabled={bookingStart.busy}
               className="relative mt-4 w-full h-12 rounded-2xl bg-lime-400 text-zinc-950 font-bold flex items-center justify-center gap-2 hover:bg-lime-300 transition active:scale-[0.98]"
             >
               {nextOcc.date === todayStr ? <><Play size={18} /> Начать тренировку</> : <><CalendarClock size={18} /> Открыть запись</>}
@@ -300,7 +304,8 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
                     : !finished && onOpenOccurrence && (
                       // B24: провести тренировку прямо из расписания
                       <button
-                        onClick={() => onOpenOccurrence(o.id, o.occDate)}
+                        onClick={() => bookingStart.start(o)}
+                        disabled={bookingStart.busy}
                         title="Провести тренировку"
                         aria-label={`Провести тренировку в ${o.time}`}
                         className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl text-zinc-500 hover:text-lime-400 hover:bg-lime-400/10 transition"
@@ -398,6 +403,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         </div>
       </div>
 
+      {bookingStart.modal}
     </div>
   );
 }

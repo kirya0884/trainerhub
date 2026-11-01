@@ -60,6 +60,10 @@ export function isNetworkError(e: unknown) {
   return /failed to fetch|networkerror|network request failed|load failed|fetch failed|timeout|timed out|ERR_INTERNET|ERR_NETWORK/i.test(m);
 }
 
+/** Обработчик просит отложить запись до следующей досылки — не ошибка и не обрыв сети:
+ *  очередь идёт дальше, запись остаётся (так тренировка клиента ждёт его же прошлую) */
+export class DeferError extends Error {}
+
 export function registerHandler(kind: OutboxKind, h: Handler) { handlers[kind] = h; }
 
 // ── Одна досылка на все вкладки ──
@@ -222,6 +226,7 @@ export async function flushOutbox() {
             return "ok" as const;
           },
           (e) => {
+            if (e instanceof DeferError) { setBusy(item.id, undefined); return "skip" as const; }
             if (isNetworkError(e)) { setBusy(item.id, undefined); return "net" as const; }
             console.error("[outbox]", item.kind, e);
             // Сбой не из-за сети — говорим один раз на запись (у неё ещё не было ошибки), а не на каждый повтор

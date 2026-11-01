@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SupersetRounds, WorkoutDatePick, askUnmarked, confirmFinish, resolveWorkoutDate, tonnageOf } from "./SessionParts";
+import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SetCountRow, SupersetRounds, WorkoutDatePick, addSetRow, askUnmarked, canRemoveSet, confirmFinish, metaAfterRemove, resolveWorkoutDate, tonnageOf } from "./SessionParts";
 import { applyLastTime, buildMetrics, doneSets, exKey, factSets, itemRpe, lastFactsByName, lastTimeFor, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgressCached } from "../lib/progress";
 import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
@@ -128,6 +128,13 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
       const allDone = Array.from({ length: total }, (_, i) => i).every((i) => sd[i]);
       return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
     });
+  // Разбор путей 4.1: подход на ходу — только в этой тренировке, план не меняется
+  const addSet = (exId: string) => { setVals((a) => ({ ...a, [exId]: addSetRow(a[exId] ?? []) })); setMetaFor(exId, { done: false }); };
+  const removeSet = (exId: string) => {
+    const left = (vals[exId] ?? []).length - 1;
+    setVals((a) => ({ ...a, [exId]: (a[exId] ?? []).slice(0, left) }));
+    setMeta((m) => ({ ...m, [exId]: metaAfterRemove(m[exId] ?? { done: false, note: "", setsDone: {} }, left) }));
+  };
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
   // Текущее — первое невыполненное: подсвечиваем, чтобы в зале не искать глазами, где остановились
   const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
@@ -358,6 +365,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
                       </div>
                     );
                   })}
+                  <SetCountRow onAdd={() => addSet(ex.id)} onRemove={canRemoveSet(rows, md) ? () => removeSet(ex.id) : undefined} />
                 </div>
                 )}
                 <input value={md.note} onChange={(e) => setMetaFor(ex.id, { note: e.target.value })} placeholder="Примечание по упражнению..." className="w-full mt-2 bg-zinc-800/60 rounded-lg px-3 h-9 outline-none focus:ring-2 focus:ring-lime-400/60" />

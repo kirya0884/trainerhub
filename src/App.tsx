@@ -28,7 +28,7 @@ import type { Sub } from "./components/ClientProfile";
 import { clearSlotDrafts, writeSlotDraft } from "./lib/slotDrafts";
 import type { PickClient } from "./components/ClientPickModal";
 import { confirmEmptyMembership } from "./lib/clients";
-import { finishOrQueue } from "./lib/finishWorkout";
+import { finishOrQueue, finishSummary } from "./lib/finishWorkout";
 import { ActiveWorkoutProvider, useActiveWorkout, type GroupClient } from "./hooks/useActiveWorkout";
 import { urlToView, viewToUrl, type ViewLike } from "./lib/viewUrl";
 import { useHistoryNav } from "./hooks/useHistoryNav";
@@ -258,10 +258,12 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients, cli
         return true;
       } : undefined}
       onFinish={async (metrics, note, session) => {
-        await finishOrQueue({
+        const r = await finishOrQueue({
           trainerId, clientId: active.clientId, planId: active.planId,
-          day: active.day, metrics, note, session,
+          day: active.day, metrics, note, session, booking: active.booking,
         });
+        // Разбор путей 4.2: записано ли и списано ли. Ушла в очередь — об этом уже сказала очередь
+        if (!r.queued) notify(finishSummary(r), r.skipped === "error" ? "error" : "info");
       }}
       onClose={stop}
     />

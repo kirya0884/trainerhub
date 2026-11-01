@@ -3,14 +3,16 @@ import type { Day } from "../types";
 import { readJson, removeKey, writeJson } from "../lib/storage";
 import { track } from "../lib/events";
 
-export type SingleWorkout = { kind?: "single"; day: Day; planId: string; clientId: string; clientName: string };
+/** booking — запись календаря, по которой начали: при завершении отмечается именно она */
+export type SingleWorkout = { kind?: "single"; day: Day; planId: string; clientId: string; clientName: string; booking?: { id: string; occDate: string } };
 export type GroupClient = { id: string; name: string; color: string; remaining?: string | null };
 /** Совместная тренировка 2+ подопечных. id — метка начала: по ней черновики слотов
  *  отличают эту тренировку от прошлых с теми же людьми. booking — если начата из
  *  записи календаря: когда все завершат, запись отмечается проведённой. */
 export type GroupWorkout = {
   kind: "group"; id: string; clients: GroupClient[];
-  booking?: { id: string; occDate: string; isOccurrence: boolean; clientIds: string[] };
+  /** planId/dayId — день из записи: слот клиента, у которого есть этот план, откроется на нём */
+  booking?: { id: string; occDate: string; isOccurrence: boolean; clientIds: string[]; planId?: string | null; dayId?: string | null };
 };
 export type ActiveWorkout = SingleWorkout | GroupWorkout;
 

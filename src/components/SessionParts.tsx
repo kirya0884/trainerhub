@@ -1,4 +1,4 @@
-import { Check, History, Layers } from "lucide-react";
+import { Check, History, Layers, Minus, Plus } from "lucide-react";
 import { addDays, fmtDate, fmtSet, today } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
 import { RPE_SCALE, doneSets, exKey, fmtRpe, isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
@@ -137,6 +137,27 @@ export function RpePick({ value, onChange, trainer, label }: { value?: number; o
  * показывало все свои подходы подряд, и порядок выполнения не читался.
  */
 /** Колонки подходов: #, вес, повторы, RPE, отметка; с «было» — ещё колонка после # */
+// Разбор путей 4.1: подход на ходу. «+ подход» — копия последнего (без RPE), «Убрать» — последний,
+// если он не отмечен и не единственный. Меняется только эта тренировка, план — нет.
+type SetMeta = { done: boolean; note: string; setsDone?: Record<number, boolean> };
+export const addSetRow = (rows: SetVal[]): SetVal[] => [...rows, { weight: rows[rows.length - 1]?.weight ?? "", reps: rows[rows.length - 1]?.reps ?? "" }];
+export const canRemoveSet = (rows: SetVal[], m?: SetMeta) => rows.length > 1 && !m?.setsDone?.[rows.length - 1];
+export function metaAfterRemove<M extends SetMeta>(m: M, left: number): M {
+  const sd = { ...(m.setsDone || {}) };
+  delete sd[left];
+  // Отмечено целиком кнопкой «Готово», без отметок подходов, — так и остаётся выполненным
+  const wholeDone = m.done && !Object.values(m.setsDone || {}).some(Boolean);
+  return { ...m, setsDone: sd, done: wholeDone || Array.from({ length: left }, (_, k) => k).every((k) => sd[k]) };
+}
+export function SetCountRow({ onAdd, onRemove }: { onAdd: () => void; onRemove?: () => void }) {
+  return (
+    <div className="flex gap-1.5 pt-0.5">
+      <button onClick={onAdd} className="flex-1 h-10 rounded-lg bg-zinc-800/60 text-sm font-semibold text-zinc-300 hover:bg-zinc-800 transition flex items-center justify-center gap-1.5"><Plus size={15} /> Подход</button>
+      {onRemove && <button onClick={onRemove} aria-label="Убрать последний подход" className="h-10 px-3 rounded-lg bg-zinc-800/60 text-sm text-zinc-400 hover:bg-zinc-800 transition flex items-center justify-center gap-1.5"><Minus size={15} /> Убрать</button>}
+    </div>
+  );
+}
+
 export const SET_COLS = "grid-cols-[1.25rem_1fr_1fr_2.75rem_3rem]";
 export const PREV_COLS = "grid-cols-[1.25rem_3.25rem_1fr_1fr_2.75rem_3rem]";
 /** «было»: вес×повторы этого подхода в прошлый раз (или прочерк, если подходов тогда было меньше) */

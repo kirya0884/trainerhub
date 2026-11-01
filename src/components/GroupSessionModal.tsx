@@ -6,7 +6,7 @@ import { useScrollAnchor } from "../hooks/useScrollAnchor";
 import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { readSlotDraft, useSessionSlot } from "../hooks/useSessionSlot";
-import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SupersetRounds, WorkoutDatePick, doneSets, tonnageOf } from "./SessionParts";
+import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SetCountRow, SupersetRounds, WorkoutDatePick, canRemoveSet, doneSets, tonnageOf } from "./SessionParts";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
@@ -58,6 +58,14 @@ const tapSet = (slot: Slot, ex: Exercise, i: number, total: number, startRest: (
 };
 const selectCls = "h-10 bg-zinc-800 border border-zinc-700 rounded-xl px-3 text-sm outline-none focus:border-lime-400/50";
 
+// Разбор путей 4.8: планы не загрузились и в телефоне их нет — честно, с повтором
+const SlotLoadError = ({ onRetry }: { onRetry: () => void }) => (
+  <div className="text-center py-10 space-y-3">
+    <p className="text-sm text-zinc-400">Не удалось загрузить план. Проверь интернет.</p>
+    <button onClick={onRetry} className="h-10 px-4 rounded-xl bg-zinc-800 text-zinc-100 text-sm font-semibold hover:bg-zinc-700 transition">Повторить</button>
+  </div>
+);
+
 export type SlotClient = { id: string; name: string; color: string; remaining?: string | null; avatarUrl?: string };
 
 // Один "слот" — полностью независимая тренировка одного подопечного: свой план/день/веса/повторы.
@@ -65,7 +73,7 @@ export type SlotClient = { id: string; name: string; color: string; remaining?: 
 function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest, date, setDate }: { client: SlotClient; trainerId: string; groupId: string; active: boolean; onFinished: () => void; startRest: (sec: number) => void; date: string | null; setDate: (v: string | null) => void }) {
   // Д1: всё состояние слота живёт в хуке — так родитель может держать сразу двоих
   // и показывать их подходы рядом, а не по вкладкам.
-  const s = useSessionSlot(client.id, trainerId, onFinished, groupId);
+  const s = useSessionSlot(client.id, trainerId, onFinished, groupId, client.name);
   const { plans, planId, setPlanId, plan, dayId, setDayId, day, membership, finished, busy,
     vals, meta, setVal, setMetaFor, mood, setMood, wellbeing, setWellbeing,
     review, setReview, clientRating, setClientRating, doneEx, totalTonnage, finish, prevByName } = s;
@@ -87,7 +95,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
   return (
     <div className={active ? "space-y-2.5" : "hidden"}>
       {!plans ? (
-        <p className="text-zinc-500 text-sm text-center py-10">Загрузка планов…</p>
+        s.plansFailed ? <SlotLoadError onRetry={s.retryLoad} /> : <p className="text-zinc-500 text-sm text-center py-10">Загрузка планов…</p>
       ) : plans.length === 0 ? (
         <p className="text-zinc-500 text-sm text-center py-10">У {client.name} нет планов тренировок.</p>
       ) : (
@@ -108,7 +116,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
           )}
 
           {!day ? (
-            <p className="text-zinc-500 text-sm text-center py-10">Загрузка плана…</p>
+            s.planFailed ? <SlotLoadError onRetry={s.retryLoad} /> : <p className="text-zinc-500 text-sm text-center py-10">Загрузка плана…</p>
           ) : (
             <>
               {day.exercises.length > 0 && (
@@ -186,6 +194,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                               </div>
                             );
                           })}
+                          <SetCountRow onAdd={() => s.addSet(ex.id)} onRemove={canRemoveSet(rows, md) ? () => s.removeSet(ex.id) : undefined} />
                         </div>
                       )}
                       <input value={md.note} onChange={(e) => setMetaFor(ex.id, { note: e.target.value })} placeholder="Примечание по упражнению..." className="w-full mt-2 bg-zinc-800/60 rounded-lg px-3 h-9 outline-none focus:ring-2 focus:ring-lime-400/60" />
@@ -401,8 +410,8 @@ function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest, date,
   a: SlotClient; b: SlotClient; trainerId: string; groupId: string; onFinishedOne: (id: string) => void; startRest: (sec: number) => void;
   date: string | null; setDate: (v: string | null) => void;
 }) {
-  const sa = useSessionSlot(a.id, trainerId, () => onFinishedOne(a.id), groupId);
-  const sb = useSessionSlot(b.id, trainerId, () => onFinishedOne(b.id), groupId);
+  const sa = useSessionSlot(a.id, trainerId, () => onFinishedOne(a.id), groupId, a.name);
+  const sb = useSessionSlot(b.id, trainerId, () => onFinishedOne(b.id), groupId, b.name);
 
   // Объединение по названию: порядок по дню первой, недостающие у второй — в конец.
   const merged = (() => {
@@ -437,7 +446,8 @@ function PairSession({ a, b, trainerId, groupId, onFinishedOne, startRest, date,
       ))}
 
       {!bothReady ? (
-        <p className="text-zinc-500 text-sm text-center py-10">Выбери план и день у обоих клиентов.</p>
+        [sa, sb].some((s) => s.plansFailed || s.planFailed) ? <SlotLoadError onRetry={() => [sa, sb].forEach((s) => { if (s.plansFailed || s.planFailed) s.retryLoad(); })} />
+          : <p className="text-zinc-500 text-sm text-center py-10">Выбери план и день у обоих клиентов.</p>
       ) : merged.length === 0 ? (
         <p className="text-zinc-500 text-sm text-center py-10">В выбранных днях нет упражнений.</p>
       ) : (

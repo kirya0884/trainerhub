@@ -3,7 +3,7 @@ import { expandBookings } from "./bookings";
 import type { Booking } from "./bookings";
 import type { Metric, Session } from "../types";
 import { today, addDays } from "./format";
-import { enqueue, isNetworkError, pending, registerHandler } from "./outbox";
+import { DeferError, enqueue, flushOutbox, isNetworkError, pending, registerHandler } from "./outbox";
 import { fetchProgress, logWorkout } from "./progress";
 import { fetchAll, fetchAllIn } from "./fetchAll";
 import { upgradeLime } from "./brand";
@@ -208,6 +208,10 @@ async function runClientFinish(job: ClientFinishJob, st: ClientFinishState, save
   }
 }
 registerHandler("clientFinish", async (item, save) => {
+  // Разбор путей 4.13: тренировки клиента уходят строго по порядку — сервер помнит только
+  // одну идущую (active_session), и поздняя, начатая без сети, не должна закрыться раньше
+  const mine = pending(item.owner, "clientFinish").filter((i) => (i.payload as ClientFinishJob).clientId === (item.payload as ClientFinishJob).clientId);
+  if (mine.length && mine[0].id !== item.id) throw new DeferError("ждёт прошлую тренировку");
   await runClientFinish(item.payload as ClientFinishJob, item.state as ClientFinishState, save, true);
 });
 
@@ -215,6 +219,11 @@ registerHandler("clientFinish", async (item, save) => {
 // Сорвалось не из-за сети и клиент жмёт «Завершить» снова — продолжаем с того же шага
 const attempts = new Map<string, ClientFinishState>();
 export async function finishClientOrQueue(job: ClientFinishJob): Promise<{ queued: boolean }> {
+  // Прошлая ещё в очереди — эта встаёт за ней (её начинали без сервера, см. startDay в ClientPortal)
+  if (hasPendingClientFinish(job.clientId)) {
+    await flushOutbox();
+    if (hasPendingClientFinish(job.clientId)) { await enqueue("clientFinish", { ...job, offlineStart: true }, {}); return { queued: true }; }
+  }
   const key = `${job.clientId}|${job.dayId}|${job.session.date}`;
   const retry = attempts.has(key);
   let st: ClientFinishState = attempts.get(key) ?? {};
