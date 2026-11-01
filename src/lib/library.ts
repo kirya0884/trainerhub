@@ -13,10 +13,22 @@ export async function addCustomExercise(trainerId: string, name: string) {
 
 // ===================== Медиа упражнений (фото/видео техники) =====================
 // Хранится по имени упражнения, без FK на exercise_library — покрывает и встроенные упражнения из статичного датасета.
-export async function fetchExerciseMedia(trainerId: string): Promise<Record<string, string>> {
-  const { data, error } = await supabase.from("exercise_media").select("name,media_url").eq("trainer_id", trainerId);
-  if (error) throw error;
-  return Object.fromEntries((data ?? []).map((r) => [r.name, r.media_url]));
+export async function fetchExerciseMedia(trainerId: string, names?: string[]): Promise<Record<string, string>> {
+  const base = () => supabase.from("exercise_media").select("name,media_url").eq("trainer_id", trainerId);
+  if (!names) {
+    const { data, error } = await base();
+    if (error) throw error;
+    return Object.fromEntries((data ?? []).map((r) => [r.name, r.media_url]));
+  }
+  // Клиенту — только упражнения его плана: фото лежат картинками, вся медиатека — мегабайты.
+  // Пачками по 30 названий: кириллица в адресе запроса раздувается, длинный адрес прокси не примет
+  const out: Record<string, string> = {};
+  for (let i = 0; i < names.length; i += 30) {
+    const { data, error } = await base().in("name", names.slice(i, i + 30));
+    if (error) throw error;
+    for (const r of data ?? []) out[r.name] = r.media_url;
+  }
+  return out;
 }
 
 export async function setExerciseMedia(trainerId: string, name: string, mediaUrl: string) {

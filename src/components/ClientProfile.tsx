@@ -1010,7 +1010,7 @@ function PlansTab({ trainerId, clientId, failed, onRetry, clientName, allPlans, 
     e.stopPropagation();
     if (planBusy) return;
     setPlanBusy(id);
-    try { await makePlanActive(clientId, id); notify("Теперь клиент видит этот план", "info"); }
+    try { await makePlanActive(id); notify("Теперь клиент видит этот план", "info"); }
     catch (err) { console.error("[ClientProfile] activate:", err); notify("Не удалось сделать план активным."); }
     finally { setPlanBusy(null); reloadPlans(); }
   };

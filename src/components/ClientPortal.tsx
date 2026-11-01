@@ -121,9 +121,6 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
       }
     }).catch((e) => { console.error("[ClientPortal] fetchUpcoming:", e); mark("upcoming", true); });
     cached(`cplans:${client.id}`, () => clientsApi.fetchClientPlans(client.id)).then(setPlans).catch((e) => console.error("[ClientPortal] fetchPlans:", e));
-    // Техника из библиотеки тренера (разбор путей 3.18): без доступа база отдаёт пусто — тогда только свои ссылки упражнений
-    // Без кэша на телефоне: фото библиотеки хранятся картинками и заняли бы всё место
-    fetchExerciseMedia(client.trainerId).then(setMedia).catch((e) => console.error("[ClientPortal] медиа техники:", e));
     clientsApi.fetchPayments(client.id).then((v) => { setPayments(v); mark("payments", false); }).catch((e) => { console.error("[ClientPortal] fetchPayments:", e); mark("payments", true); });
     clientsApi.fetchMeasurements(client.id).then((v) => { setMeasurements(v); mark("measurements", false); }).catch((e) => { console.error("[ClientPortal] fetchMeasurements:", e); mark("measurements", true); });
     nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
@@ -175,8 +172,18 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
     return () => clearInterval(id);
   }, [client.id]);
 
+  // Техника из библиотеки тренера (разбор путей 3.18) — один раз на план и только для его
+  // упражнений без своей ссылки. Без кэша на телефоне: фото хранятся картинками и заняли бы место.
+  const mediaKey = useRef("");
   const currentPlan = plans?.find((p) => !p.archived && p.visibleToClient !== false) || null;
   const planHook = usePlan(currentPlan?.id || "");
+  useEffect(() => {
+    const names = [...new Set((planHook.plan?.days ?? []).flatMap((d) => d.exercises).filter((e) => e.name && !e.video).map((e) => e.name))].sort();
+    const key = names.join("|");
+    if (!planHook.plan || key === mediaKey.current) return;
+    mediaKey.current = key;
+    fetchExerciseMedia(client.trainerId, names).then(setMedia).catch((e) => console.error("[ClientPortal] медиа техники:", e));
+  }, [planHook.plan, client.trainerId]);
   const progressHook = useProgress(currentPlan?.id || "");
   // Тренировка дошла из очереди (lib/outbox) — перечитываем историю «Пройденные»
   // Досланная из очереди тренировка — перечитать историю (еда и прочее в очереди её не меняют)
@@ -663,8 +670,14 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
         />
       )}
       {activeSession && !activeDay && (
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-sm text-zinc-400">
-          Загрузка тренировки…
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-zinc-900 border-t border-zinc-700 px-4 py-3 text-sm text-zinc-400 flex items-center gap-3" style={{ paddingBottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}>
+          {/* План загрузился, а дня в нём нет — тренер убрал или сменил его. Раньше здесь была
+              вечная «Загрузка» без выхода; теперь тренировку можно закрыть */}
+          {planHook.loading || !planHook.plan ? "Загрузка тренировки…" : <>
+            <span className="flex-1">Тренер изменил план — этого дня в нём больше нет, тренировку не записать. Закрой её и начни нужный день.</span>
+            <button onClick={async () => { try { if (!activeSession.offlineStart) await portalApi.cancelSession(client.id); } catch (e) { console.error("[ClientPortal] cancelSession:", e); } finally { setActiveSession(null); setSessionMinimized(false); } }}
+              className="shrink-0 h-10 px-3 rounded-xl bg-zinc-800 text-zinc-100 font-semibold hover:bg-zinc-700 transition">Закрыть</button>
+          </>}
         </div>
       )}
       {showDocs && <LegalList slugs={["privacy", "consent-client", "terms"]} onClose={() => setShowDocs(false)} />}

@@ -185,14 +185,11 @@ export async function duplicatePlan(trainerId: string, clientId: string, sourceP
 }
 
 // Разбор путей 3.26: клиент видит самый новый видимый неархивный план. «Сделать активным» —
-// показать этот (и вернуть из архива), остальные действующие скрыть. Сначала показываем
-// нужный: если второй запрос сорвётся, клиент увидит план, а не пустоту.
-export async function makePlanActive(clientId: string, planId: string) {
-  const { error } = await supabase.from("plans").update({ visible_to_client: true, archived: false }).eq("id", planId);
+// показать этот (и вернуть из архива), остальные действующие скрыть — одной транзакцией
+// на сервере (make_plan_active), чтобы клиент не остался с чужим «самым новым» планом.
+export async function makePlanActive(planId: string) {
+  const { error } = await supabase.rpc("make_plan_active", { p_plan_id: planId });
   if (error) throw error;
-  const { error: e2 } = await supabase.from("plans").update({ visible_to_client: false })
-    .eq("client_id", clientId).neq("id", planId).eq("archived", false).is("deleted_at", null);
-  if (e2) throw e2;
 }
 // Из архива — скрытым, если у клиента уже есть другой видимый действующий план: иначе
 // возвращённый (он новее) молча подменил бы клиенту текущую программу

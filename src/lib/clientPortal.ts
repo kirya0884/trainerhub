@@ -144,7 +144,7 @@ export const finishClientSession = (clientId: string, booking?: { id: string; oc
 // Одной транзакцией (RPC log_workout); повтор с тем же sessionId дубля не создаёт.
 export async function logClientSession(sessionId: string, planId: string, metricsIn: Omit<Metric, "id">[], session: Omit<Session, "id">) {
   await logWorkout(sessionId, planId,
-    { date: session.date, day_name: session.dayName, done: session.done, total: session.total, from_client: true },
+    { date: session.date, day_name: session.dayName, day_id: session.dayId ?? null, done: session.done, total: session.total, from_client: true },
     session.items.map((i) => ({ name: i.name, effort: i.effort, rpe: i.rpe || 0, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null })),
     metricsIn);
 }
@@ -193,9 +193,9 @@ async function runClientFinish(job: ClientFinishJob, st: ClientFinishState, save
     const sessionId = st.sessionId ?? crypto.randomUUID();
     // Ключ сохраняем ДО отправки: оборвётся — повтор пойдёт с тем же
     if (!st.sessionId) put({ sessionId });
-    // day_id клиент не шлёт: тренер мог удалить или пересоздать день (откат версии), пока шла
-    // тренировка, — тогда ключ на plan_days уронил бы запись и застопорил очередь клиента
-    if (!already) await logClientSession(sessionId, job.planId, job.metrics, s);
+    // Разбор путей 3.9: с id дня — отметка «пройдена» не путает копии дня. Удалённый или
+    // пересозданный откатом день сервер (log_workout) запишет как «без дня», запись не упадёт
+    if (!already) await logClientSession(sessionId, job.planId, job.metrics, { ...s, dayId: s.dayId ?? job.dayId });
     put({ logged: true });
   }
   if (!st.finished) {
