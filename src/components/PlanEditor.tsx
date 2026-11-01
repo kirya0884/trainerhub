@@ -17,7 +17,7 @@ import type { Day, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import ExerciseRow from "./ExerciseRow";
 import ExerciseHistoryModal from "./ExerciseHistoryModal";
-import { exKey as nameKey, fmtRpe, isFact, lastFactsByName } from "../lib/sessionUtils";
+import { exKey as nameKey, fmtRpe, isFact, isSessionOfDay, lastFactsByName } from "../lib/sessionUtils";
 import { useDragSort } from "../hooks/useDragSort";
 import LibraryModal from "./LibraryModal";
 import MetricsView from "./MetricsView";
@@ -195,6 +195,25 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     catch (e) { console.error("[PlanEditor] runAdd:", e); notify(failMsg); }
     finally { setAddBusy(false); }
   };
+  // Разбор путей 3.7–3.8: новые дни (вставка, шаблон, библиотека) встают в конец текущего блока —
+  // верхнего действующего, как у «+ День»; копия дня — сразу под оригиналом в его блоке. Раньше
+  // они уходили в конец плана без блока, а «новый сверху» ломал клиенту «следующую тренировку».
+  // Вставка пишет дни в конец плана, здесь мы их переносим: блок и порядок — двумя запросами.
+  const placeNewDays = async (before: Day[], after?: Day) => {
+    // Сначала дослать очередь: иначе отложенный порядок дней (после перетаскивания) придёт после нашего
+    await settleSaves(3000);
+    const fresh = await plansApi.fetchPlan(planId);
+    const old = new Set(before.map((d) => d.id));
+    const added = fresh.days.filter((d) => !old.has(d.id));
+    if (!added.length) return;
+    const meso = after ? after.mesocycleId ?? null
+      : [...(fresh.mesocycles ?? [])].filter((m) => !m.archivedAt).sort((a, b) => a.position - b.position)[0]?.id ?? null;
+    if (meso) await Promise.all(added.filter((d) => d.mesocycleId !== meso).map((d) => plansApi.updateDay(d.id, { mesocycleId: meso })));
+    const rest = fresh.days.filter((d) => old.has(d.id));
+    const at = after ? rest.findIndex((d) => d.id === after.id) : rest.map((d) => d.mesocycleId ?? null).lastIndexOf(meso);
+    rest.splice(at >= 0 ? at + 1 : rest.length, 0, ...added);
+    await plansApi.reorderDays(rest.map((d, i) => ({ id: d.id, position: i })));
+  };
   // B06: дублировать день — один клик с автоименем. Копирование в буфер оставлено:
   // оно нужно, чтобы перенести день в ДРУГОЙ план, а дубликат работает внутри текущего.
   const [dupBusy, setDupBusy] = useState<string | null>(null);
@@ -203,7 +222,15 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     if (dupBusy || locked()) return;
     setDupBusy(day.id);
     try {
-      await templatesApi.applyDayTemplate(planId, { ...day, name: `${day.name} (копия)` }, plan?.days.length ?? 0);
+      const before = plan?.days ?? [];
+      await templatesApi.applyDayTemplate(planId, { ...day, name: `${day.name} (копия)` }, before.length);
+      await placeNewDays(before, day).catch((e) => console.error("[PlanEditor] placeNewDays:", e));
+      // Копия скрытого дня — тоже скрытая (вставка создаёт день видимым)
+      if (day.visibleToClient === false) {
+        const fresh = await plansApi.fetchPlan(planId).catch(() => null);
+        const copy = fresh?.days.find((d) => !before.some((b) => b.id === d.id));
+        if (copy) await plansApi.updateDay(copy.id, { visibleToClient: false }).catch((e) => console.error("[PlanEditor] скрыть копию:", e));
+      }
       reload();
     } catch (e) { console.error("[PlanEditor] duplicateDay:", e); showToast("Не удалось дублировать день"); }
     finally { setDupBusy(null); }
@@ -222,7 +249,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     if (!dayClipboard || !pasteInput?.trim() || addBusy || locked()) return;
     setAddBusy(true);
     try {
-      await templatesApi.applyDayTemplate(planId, { id: "", name: pasteInput.trim(), weekday: null, exercises: dayClipboard.exercises } as Day, (plan?.days.length ?? 0));
+      const before = plan?.days ?? [];
+      await templatesApi.applyDayTemplate(planId, { id: "", name: pasteInput.trim(), weekday: null, exercises: dayClipboard.exercises } as Day, before.length);
+      await placeNewDays(before).catch((e) => console.error("[PlanEditor] placeNewDays:", e));
       reload();
       setPasteInput(null);
     } catch (e) {
@@ -378,7 +407,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
   };
 
   const sortedSessions = useMemo(() => [...sessions].sort((a, b) => (a.date < b.date ? 1 : -1)), [sessions]);
-  const lastSessionOf = (day: Day) => sortedSessions.find((s) => s.dayName === day.name);
+  const lastSessionOf = (day: Day) => sortedSessions.find((s) => isSessionOfDay(s, day));
   // Проведённый день остаётся в «Тренировках» с датой и галочкой. archivedAt ставился
   // раньше при завершении — такие дни тоже считаются проведёнными.
   const doneDateOf = (day: Day) => lastSessionOf(day)?.date ?? day.archivedAt ?? null;
@@ -540,15 +569,15 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         <TemplatesModal
           trainerId={trainerId}
           currentDays={plan.days}
-          onApplyPlan={(days) => runAdd(() => templatesApi.applyPlanTemplate(plan.id, days, plan.days.length), "Не удалось применить шаблон плана.")}
-          onApplyDay={(day) => runAdd(() => templatesApi.applyDayTemplate(plan.id, day, plan.days.length), "Не удалось применить шаблон дня.")}
+          onApplyPlan={(days) => runAdd(async () => { await templatesApi.applyPlanTemplate(plan.id, days, plan.days.length); await placeNewDays(plan.days).catch((e) => console.error("[PlanEditor] placeNewDays:", e)); }, "Не удалось применить шаблон плана.")}
+          onApplyDay={(day) => runAdd(async () => { await templatesApi.applyDayTemplate(plan.id, day, plan.days.length); await placeNewDays(plan.days).catch((e) => console.error("[PlanEditor] placeNewDays:", e)); }, "Не удалось применить шаблон дня.")}
           onClose={() => setShowTemplates(false)}
         />
       )}
       {showPrint && <PlanPrintView plan={plan} trainerId={trainerId} clientName={clientName} onClose={() => setShowPrint(false)} />}
-      {showMeso && <PeriodizationModal days={plan.days} planId={plan.id} onClose={() => setShowMeso(false)} onDone={() => { setShowMeso(false); reload(); }} />}
+      {showMeso && <PeriodizationModal days={plan.days} mesocycles={plan.mesocycles ?? []} planId={plan.id} onClose={() => setShowMeso(false)} onDone={() => { setShowMeso(false); reload(); }} />}
       {showVersions && <PlanVersionsModal planId={plan.id} onClose={() => setShowVersions(false)} onRestored={() => { setShowVersions(false); reload(); }} />}
-      {showDayLibrary && plan && <DayTemplateLibrary trainerId={trainerId} planId={planId} dayCount={plan.days.length} onInserted={() => { setShowDayLibrary(false); reload(); }} onClose={() => setShowDayLibrary(false)} />}
+      {showDayLibrary && plan && <DayTemplateLibrary trainerId={trainerId} planId={planId} dayCount={plan.days.length} onInserted={async () => { setShowDayLibrary(false); await placeNewDays(plan.days).catch((e) => console.error("[PlanEditor] placeNewDays:", e)); reload(); }} onClose={() => setShowDayLibrary(false)} />}
 
       {showMembership && membership && (
         <ModalShell title="Абонемент" icon={<Wallet size={17} className="text-lime-400" />} onClose={() => setShowMembership(false)}>
@@ -912,6 +941,9 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
       {libFor && (
         <LibraryModal trainerId={trainerId} customNames={customNames} addToLibrary={addToLibrary}
           onPick={(name) => { addExercise(libFor, name); setLibFor(null); }}
+          // По очереди, с паузой на перерисовку: так упражнения встают в том порядке, в каком их
+          // выбрали, и каждое берёт позицию уже с учётом предыдущего
+          onPickMany={async (names) => { const dayId = libFor; setLibFor(null); for (const n of names) { await addExercise(dayId, n); await new Promise((r) => setTimeout(r, 0)); } }}
           onClose={() => setLibFor(null)} />
       )}
 

@@ -147,7 +147,8 @@ export function setSetRows(exerciseId: string, rows: SetRow[]): Promise<void> {
 export async function duplicatePlan(trainerId: string, clientId: string, sourcePlanId: string, newName: string) {
   const src = await fetchPlan(sourcePlanId);
   const { data: planRow, error: planErr } = await supabase
-    .from("plans").insert({ trainer_id: trainerId, client_id: clientId, name: newName, note: src.note }).select("id").single();
+    // Копия — скрытой (разбор путей 3.26): иначе она, как самый новый план, сразу подменяет клиенту программу
+    .from("plans").insert({ trainer_id: trainerId, client_id: clientId, name: newName, note: src.note, visible_to_client: false }).select("id").single();
   if (planErr) throw planErr;
   const newPlanId = planRow.id as string;
 
@@ -181,6 +182,30 @@ export async function duplicatePlan(trainerId: string, clientId: string, sourceP
     await supabase.from("plans").delete().eq("id", newPlanId);
     throw e;
   }
+}
+
+// Разбор путей 3.26: клиент видит самый новый видимый неархивный план. «Сделать активным» —
+// показать этот (и вернуть из архива), остальные действующие скрыть. Сначала показываем
+// нужный: если второй запрос сорвётся, клиент увидит план, а не пустоту.
+export async function makePlanActive(clientId: string, planId: string) {
+  const { error } = await supabase.from("plans").update({ visible_to_client: true, archived: false }).eq("id", planId);
+  if (error) throw error;
+  const { error: e2 } = await supabase.from("plans").update({ visible_to_client: false })
+    .eq("client_id", clientId).neq("id", planId).eq("archived", false).is("deleted_at", null);
+  if (e2) throw e2;
+}
+// Из архива — скрытым, если у клиента уже есть другой видимый действующий план: иначе
+// возвращённый (он новее) молча подменил бы клиенту текущую программу
+export async function setPlanArchived(planId: string, archived: boolean, clientId?: string) {
+  let hide = false;
+  if (!archived && clientId) {
+    const { data, error } = await supabase.from("plans").select("id").eq("client_id", clientId).neq("id", planId)
+      .is("deleted_at", null).eq("archived", false).or("visible_to_client.is.null,visible_to_client.eq.true").limit(1);
+    if (error) throw error;
+    hide = !!(data ?? []).length;
+  }
+  const { error } = await supabase.from("plans").update({ archived, ...(hide ? { visible_to_client: false } : {}) }).eq("id", planId);
+  if (error) throw error;
 }
 
 // B06: дублирование блока (в интерфейсе — «неделя») вместе с его днями.

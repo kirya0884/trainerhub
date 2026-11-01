@@ -127,10 +127,10 @@ export function usePlan(planId: string) {
   const addDay = async (name: string) => {
     if (locked()) return;
     if (!plan || !name.trim()) return;
-    // П2: новый день встаёт сверху. Самый свежий блок теперь тоже наверху,
-    // то есть с наименьшей позицией — сортировка по возрастанию, не по убыванию.
+    // Разбор путей 3.7–3.8: новый день — в КОНЕЦ текущего блока (верхнего действующего). Раньше
+    // он вставал сверху, и клиенту «следующим» предлагался последний добавленный день.
     const sortedMesos = [...(plan.mesocycles ?? [])].sort((a, b) => a.position - b.position);
-    const activeMeso = sortedMesos.find((m) => m.visibleToClient !== false) ?? null;
+    const activeMeso = sortedMesos.find((m) => !m.archivedAt) ?? null;
     const snapshot = plan.days;
     // Вставку сами не повторяем: при обрыве связи она могла пройти, и повтор задвоил бы день
     const row = await q.track(() => api.addDay(planId, name.trim(), 0, activeMeso?.id));
@@ -138,7 +138,9 @@ export function usePlan(planId: string) {
       id: row.id, name: row.name, weekday: row.weekday, dateOf: null,
       exercises: [], visibleToClient: true, mesocycleId: activeMeso?.id ?? null, archivedAt: null,
     };
-    const next = [day, ...snapshot];
+    const last = snapshot.map((d) => d.mesocycleId ?? null).lastIndexOf(activeMeso?.id ?? null);
+    const next = [...snapshot];
+    next.splice(last >= 0 ? last + 1 : snapshot.length, 0, day);
     setPlan((p) => (p ? { ...p, days: next } : p));
     saveDayOrder(next);
   };
@@ -188,6 +190,9 @@ export function usePlan(planId: string) {
 
   const addExercise = async (dayId: string, name = "") => {
     if (locked()) return;
+    // Из актуального плана: несколько упражнений из библиотеки добавляются подряд одним
+    // вызывающим, и по плану из его замыкания все получили бы одну и ту же позицию
+    const plan = planRef.current;
     if (!plan) return;
     const day = plan.days.find((d) => d.id === dayId);
     if (!day) return;

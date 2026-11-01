@@ -26,9 +26,10 @@ export default function PlanVersionsModal({ planId, onClose, onRestored }: { pla
     try { await versionsApi.snapshotPlan(planId, label); load(); } catch (e) { setError(humanError(e, "Не удалось сохранить версию")); } finally { setBusy(false); }
   };
   const restore = async (v: PlanVersion) => {
-    if (!(await ask(`Откатить план к версии «${v.label || fmtDate(v.createdAt.slice(0, 10))}»? Текущее содержимое дней будет заменено (саму версию можно сохранить перед откатом).`, { ok: "Откатить" }))) return;
+    if (!(await ask(`Откатить план к версии «${v.label || fmtDate(v.createdAt.slice(0, 10))}»? Текущий план сохранится отдельной версией «Перед откатом» — к нему можно будет вернуться.`, { ok: "Откатить" }))) return;
     setBusy(true);
-    try { await versionsApi.restorePlanVersion(planId, v); onRestored(); } catch (e) { setError(humanError(e, "Не удалось восстановить версию")); } finally { setBusy(false); }
+    // Разбор путей 3.23: авто-снимок перед откатом — не вышел, не откатываем
+    try { await versionsApi.snapshotPlan(planId, "Перед откатом"); await versionsApi.restorePlanVersion(planId, v); onRestored(); } catch (e) { setError(humanError(e, "Не удалось восстановить версию")); } finally { setBusy(false); }
   };
   const remove = async (v: PlanVersion) => {
     if (!(await ask(`Удалить версию «${v.label || fmtDate(v.createdAt.slice(0, 10))}»?`, { ok: "Удалить", danger: true }))) return;

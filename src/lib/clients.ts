@@ -194,10 +194,15 @@ export async function fetchAllPlans(trainerId: string): Promise<PlanOverviewItem
   }));
 }
 
+// Разбор путей 3.26: клиент видит самый новый видимый план — новый пустой план не должен
+// подменять ему программу. Есть другой действующий видимый — создаём скрытым («Сделать активным»).
 export async function addPlan(trainerId: string, clientId: string, name: string) {
+  const { data: others, error: oErr } = await supabase.from("plans").select("id")
+    .eq("client_id", clientId).is("deleted_at", null).eq("archived", false).or("visible_to_client.is.null,visible_to_client.eq.true").limit(1);
+  if (oErr) throw oErr;
   const { data, error } = await supabase
     .from("plans")
-    .insert({ trainer_id: trainerId, client_id: clientId, name })
+    .insert({ trainer_id: trainerId, client_id: clientId, name, visible_to_client: !(others ?? []).length })
     .select()
     .single();
   if (error) throw error;

@@ -1,6 +1,6 @@
 import { supabase } from "./supabase";
 import { parseNum } from "./format";
-import type { Day, Exercise } from "../types";
+import type { Day, Exercise, Mesocycle } from "../types";
 
 // Схема не хранится (выбирается в окне генератора), поэтому прежняя «Линейная + разгрузка»
 // просто слилась с «Линейной» — разгрузка каждую 4-ю неделю теперь есть в обеих схемах.
@@ -81,35 +81,83 @@ export function progressExercise(ex: Pick<Exercise, "weight" | "reps" | "sets" |
   return out;
 }
 
-// Клонирует дни базовой недели в planId на weeks-1 последующих недель с прогрессией по схеме scheme.
-// Базовая неделя (i=0) не трогается — генерируются только новые недели 2..weeks.
-export async function generateMesocycle(planId: string, baseDays: Day[], weeks: number, scheme: MesoScheme) {
-  const prog = baseDays.map((d) => d.exercises.map((ex) => progressExercise(ex, weeks, scheme)));
-  let position = baseDays.length; // дни базовой недели уже занимают первые позиции в плане
-  for (let w = 1; w < weeks; w++) {
-    const mod = weekModifier(w, scheme);
-    for (const [di, day] of baseDays.entries()) {
-      const { data: dayRow, error: dayErr } = await supabase
-        .from("plan_days")
-        .insert({ plan_id: planId, name: `${mod.label} · ${day.name}`, weekday: day.weekday, position: position++, method: day.method ?? "" })
-        .select()
-        .single();
-      if (dayErr) throw dayErr;
+// Подходы «разных подходов» на неделях 2..weeks: каждая строка прогрессирует как отдельный подход,
+// число строк — по схеме (разгрузка — половина, «объём» — +1 копией последней, «интенсивность» — −1).
+// Раньше такие упражнения уходили в новые недели пустыми: прогрессия читала сводку, а не строки.
+export function progressRows(ex: Pick<Exercise, "setRows" | "kind" | "note" | "sets" | "weight" | "reps">, weeks: number, scheme: MesoScheme) {
+  const rows = ex.setRows ?? [];
+  const perRow = rows.map((r) => progressExercise({ weight: r.weight, reps: r.reps, sets: "1", kind: ex.kind, note: "" }, weeks, scheme));
+  const whole = progressExercise({ ...ex, sets: String(rows.length) }, weeks, scheme);
+  return whole.map((w, k) => {
+    const n = Math.max(1, parseInt(w.sets, 10) || rows.length);
+    const week = perRow.map((pr) => ({ weight: pr[k].weight, reps: pr[k].reps }));
+    while (week.length < n) week.push({ ...week[week.length - 1] });
+    return { note: w.note, rows: week.slice(0, n) };
+  });
+}
 
-      if (!day.exercises.length) continue;
-      const exRows = day.exercises.map((ex, i) => {
-        const p = prog[di][i][w - 1];
-        return {
-          day_id: dayRow.id, position: i, name: ex.name,
-          sets: p.sets, reps: p.reps, weight: p.weight,
-          rest: ex.rest, note: p.note, video: ex.video, detailed: false, exercise_group: ex.group,
-          tempo: ex.tempo, duration: ex.duration, target: ex.target, kind: ex.kind ?? "", pulse_zone: ex.pulseZone ?? "",
-          // ponytail: detailed=false — построчные подходы (setRows) при клонировании недель не переносим,
-          // прогрессия применяется к общему весу/sets; при необходимости тренер разворачивает день вручную
-        };
-      });
-      const { error: exErr } = await supabase.from("plan_exercises").insert(exRows);
-      if (exErr) throw exErr;
+// Разбор путей 3.22: недели 2..weeks из дней выбранного блока (или дней без блока), каждая неделя —
+// свой блок сразу после исходного; дни — в конец плана, по порядку недель (так «следующий день»
+// у клиента идёт неделя за неделей). Исходные дни не трогаются. Сбой посередине — созданное
+// убираем (каскадом блок уносит и свои дни), чтобы повтор не размножал недели.
+export async function generateMesocycle(planId: string, baseDays: Day[], weeks: number, scheme: MesoScheme,
+  opts: { dayCount: number; mesocycles: Mesocycle[]; sourceMesoId: string | null }) {
+  const prog = baseDays.map((d) => d.exercises.map((ex) => ex.detailed && ex.setRows?.length ? null : progressExercise(ex, weeks, scheme)));
+  const progR = baseDays.map((d) => d.exercises.map((ex) => ex.detailed && ex.setRows?.length ? progressRows(ex, weeks, scheme) : null));
+  const sorted = [...opts.mesocycles].sort((a, b) => a.position - b.position);
+  const srcIdx = opts.sourceMesoId ? sorted.findIndex((m) => m.id === opts.sourceMesoId) : sorted.length - 1;
+  // Недели из скрытого блока — тоже скрытые: черновик не должен открыться клиенту с недели 2
+  const srcVisible = opts.sourceMesoId ? sorted[srcIdx]?.visibleToClient !== false : true;
+  const createdMesos: string[] = [], createdDays: string[] = [];
+  let position = opts.dayCount;
+  try {
+    for (let w = 1; w < weeks; w++) {
+      const mod = weekModifier(w, scheme);
+      const { data: mesoRow, error: mesoErr } = await supabase.from("plan_mesocycles")
+        .insert({ plan_id: planId, name: mod.label, position: 0, visible_to_client: srcVisible }).select("id").single();
+      if (mesoErr) throw mesoErr;
+      createdMesos.push(mesoRow.id as string);
+      for (const [di, day] of baseDays.entries()) {
+        const { data: dayRow, error: dayErr } = await supabase
+          .from("plan_days")
+          .insert({ plan_id: planId, name: day.name, weekday: day.weekday, position: position++, method: day.method ?? "", mesocycle_id: mesoRow.id, visible_to_client: day.visibleToClient !== false })
+          .select("id")
+          .single();
+        if (dayErr) throw dayErr;
+        createdDays.push(dayRow.id as string);
+        if (!day.exercises.length) continue;
+        const exRows = day.exercises.map((ex, i) => {
+          const pr = progR[di][i]?.[w - 1];
+          const p = prog[di][i]?.[w - 1];
+          const s = pr ? { sets: String(pr.rows.length), weight: pr.rows[0]?.weight ?? "", reps: pr.rows[0]?.reps ?? "", note: pr.note } : p!;
+          return {
+            day_id: dayRow.id, position: i, name: ex.name,
+            sets: s.sets, reps: s.reps, weight: s.weight,
+            rest: ex.rest, note: s.note, video: ex.video, detailed: !!pr, exercise_group: ex.group,
+            tempo: ex.tempo, duration: ex.duration, target: ex.target, kind: ex.kind ?? "", pulse_zone: ex.pulseZone ?? "",
+          };
+        });
+        const { data: inserted, error: exErr } = await supabase.from("plan_exercises").insert(exRows).select("id,position");
+        if (exErr) throw exErr;
+        const setRows = (inserted ?? []).flatMap((r) => (progR[di][r.position as number]?.[w - 1]?.rows ?? [])
+          .map((row, k) => ({ exercise_id: r.id, position: k, weight: row.weight, reps: row.reps })));
+        if (setRows.length) {
+          const { error: srErr } = await supabase.from("plan_exercise_set_rows").insert(setRows);
+          if (srErr) throw srErr;
+        }
+      }
     }
+    // Порядок блоков: новые недели — сразу после исходного блока
+    const order = [...sorted];
+    order.splice(srcIdx + 1, 0, ...createdMesos.map((id) => ({ id } as Mesocycle)));
+    const { error: ordErr } = await supabase.rpc("reorder_plan_mesocycles", { p_rows: order.map((m, i) => ({ id: m.id, position: i })) });
+    // Без порядка новые блоки делят позицию 0 с верхним, и новые дни уходят в неделю N — откатываем всё
+    if (ordErr) throw ordErr;
+  } catch (e) {
+    const del = async (table: string, ids: string[]) => { if (!ids.length) return true; const { error } = await supabase.from(table).delete().in("id", ids); return !error; };
+    const clean = (await del("plan_days", createdDays)) && (await del("plan_mesocycles", createdMesos));
+    // Убрать созданное не вышло — сказать честно: «план не изменился» тут неправда
+    if (!clean) throw Object.assign(new Error("partial"), { partial: true, cause: e });
+    throw e;
   }
 }

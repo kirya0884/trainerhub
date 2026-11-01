@@ -1,3 +1,4 @@
+import TechniqueButton from "./TechniqueButton";
 import { AlertTriangle, Check, CheckCircle2, Minimize2, Play, Send, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
@@ -54,8 +55,10 @@ function SessionTimer({ startedAt }: { startedAt: number }) {
   return <>{`${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`}</>;
 }
 
-export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#c6ff3d", onProgress, minimized = false, onMinimize, onExpand, lastTime = null, prevByName = {} }: {
+export default function ClientSessionView({ day, startedAt, onFinish, onCancel, accent = "#c6ff3d", onProgress, minimized = false, onMinimize, onExpand, lastTime = null, prevByName = {}, media = {} }: {
   day: Day; startedAt: number;
+  /** Фото и видео техники из библиотеки тренера — если у упражнения нет своей ссылки */
+  media?: Record<string, string>;
   /** Последнее проведение этого дня — для «Как в прошлый раз» */
   lastTime?: LastTime | null;
   /** «было» у подходов — прошлый результат каждого упражнения */
@@ -377,7 +380,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             }
             return (
               <div key={ex.id} data-exid={ex.id} className={shell}>
-                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
+                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><TechniqueButton url={ex.video || (Object.prototype.hasOwnProperty.call(media, ex.name) ? media[ex.name] : "")} name={ex.name} /><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
                 {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-lime-400" /> отдых между подходами: {ex.rest}</p>}
                 {ex.kind === "functional" ? (
                 <div className="text-sm text-zinc-300 flex flex-wrap items-center gap-x-4 gap-y-1">

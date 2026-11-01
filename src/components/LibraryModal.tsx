@@ -7,15 +7,24 @@ import ModalShell from "./ModalShell";
 import { notify } from "../lib/dialog";
 import { toEmbedUrl } from "../lib/videoEmbed";
 import { normSearch } from "../lib/search";
+import { plural } from "../lib/format";
 
 type Item = BuiltinExercise & { custom?: boolean };
 
 // Видео-ссылку (YouTube и т.п.) показываем как iframe, остальное (data URL фото) — как картинку.
 const isVideoUrl = (url: string) => /youtube\.com|youtu\.be|vimeo\.com/.test(url);
 
-export default function LibraryModal({ trainerId, customNames, addToLibrary, onPick, onClose }: {
-  trainerId: string; customNames: string[]; addToLibrary: (name: string) => void; onPick: (name: string) => void; onClose: () => void;
+export default function LibraryModal({ trainerId, customNames, addToLibrary, onPick, onPickMany, onClose }: {
+  trainerId: string; customNames: string[]; addToLibrary: (name: string) => void; onPick: (name: string) => void;
+  /** Разбор путей 3.20: выбрать несколько за один заход — окно не закрывается, внизу «Добавить N» */
+  onPickMany?: (names: string[]) => void;
+  onClose: () => void;
 }) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const pick = (name: string) => {
+    if (!onPickMany) { onPick(name); return; }
+    setPicked((p) => (p.includes(name) ? p.filter((x) => x !== name) : [...p, name]));
+  };
   const [q, setQ] = useState("");
   const [group, setGroup] = useState("Все");
   const [detail, setDetail] = useState<Item | null>(null);
@@ -50,13 +59,18 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
   // Ищем по названию, мышцам и снаряду
   const term = normSearch(q);
   const filtered = items.filter((i) => (group === "Все" || i.group === group) && (!term || [i.name, i.primary, i.secondary, i.equipment].some((f) => normSearch(f).includes(term))));
-  const saveCustom = () => { const n = custom.trim(); if (!n) return; addToLibrary(n); onPick(n); setCustom(""); };
+  const saveCustom = () => { const n = custom.trim(); if (!n) return; addToLibrary(n); if (onPickMany) setPicked((p) => (p.includes(n) ? p : [...p, n])); else onPick(n); setCustom(""); };
   const embed = detail && media[detail.name] ? toEmbedUrl(media[detail.name]) : null;
 
   return (
     <ModalShell title={detail ? "Упражнение" : "Библиотека упражнений"} icon={<BookOpen size={17} className="text-lime-400" />} onClose={onClose} wide
       footer={!detail && (
         <div className="border-t border-zinc-800 shrink-0">
+          {picked.length > 0 && (
+            <div className="px-3 pt-3">
+              <button onClick={() => onPickMany?.(picked)} className="w-full h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] flex items-center justify-center gap-1.5"><Plus size={17} /> Добавить {picked.length} {plural(picked.length, ["упражнение", "упражнения", "упражнений"])}</button>
+            </div>
+          )}
           <div className="p-3 flex gap-2">
             <input value={custom} onChange={(e) => setCustom(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveCustom()} placeholder="Добавить своё упражнение..." className="flex-1 min-w-0 bg-zinc-800 rounded-xl px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
             <button onClick={saveCustom} className="bg-zinc-700 text-zinc-100 font-medium rounded-lg px-3 text-sm hover:bg-zinc-600 transition shrink-0">+ Своё</button>
@@ -103,7 +117,7 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
           ) : <p className="text-sm text-zinc-600">Для своего упражнения методичка не задана.</p>}
           {detail.notes && <p className="text-xs text-amber-400 bg-amber-400/10 rounded-xl px-3 py-2">⚠ {detail.notes}</p>}
           <p className="text-xs text-zinc-500">Это не медицинская рекомендация. При боли или проблемах со здоровьем — сначала к врачу.</p>
-          <button onClick={() => { onPick(detail.name); setDetail(null); }} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition flex items-center justify-center gap-1.5"><Plus size={16} /> Добавить в день</button>
+          <button onClick={() => { pick(detail.name); setDetail(null); }} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 text-sm hover:bg-lime-300 transition flex items-center justify-center gap-1.5"><Plus size={16} /> {!onPickMany ? "Добавить в день" : picked.includes(detail.name) ? "Убрать из выбранных" : "Выбрать"}</button>
         </div>
       ) : (
         <>
@@ -116,7 +130,12 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
               <div key={i.name + i.group} className="flex items-center gap-2 bg-zinc-800/40 rounded-xl px-3 py-2 hover:bg-zinc-800/70 transition">
                 <button onClick={() => setDetail(i)} className="flex-1 min-w-0 text-left"><p className="text-sm font-medium truncate flex items-center gap-1.5">{i.name}{media[i.name] && <Film size={12} className="text-cyan-400 shrink-0" />}</p><p className="text-[11px] text-zinc-500 truncate">{[i.group, i.equipment].filter(Boolean).join(" · ") || "своё"}</p></button>
                 <button onClick={() => setDetail(i)} className="p-1.5 rounded-lg hover:bg-zinc-700 text-zinc-400 transition shrink-0" title="Подробнее"><Info size={15} /></button>
-                <button onClick={() => onPick(i.name)} className="p-1.5 rounded-lg bg-lime-400/15 text-lime-400 hover:bg-lime-400/25 transition shrink-0" title="Добавить в день"><Plus size={15} /></button>
+                {(() => {
+                  const n = picked.indexOf(i.name) + 1;
+                  return n > 0
+                    ? <button onClick={() => pick(i.name)} className="w-8 h-8 rounded-lg bg-lime-400 text-zinc-950 text-sm font-bold transition shrink-0" title="Убрать из выбранных" aria-label={`Выбрано ${n}-м, убрать`}>{n}</button>
+                    : <button onClick={() => pick(i.name)} className="w-8 h-8 flex items-center justify-center rounded-lg bg-lime-400/15 text-lime-400 hover:bg-lime-400/25 transition shrink-0" title={onPickMany ? "Выбрать" : "Добавить в день"} aria-label={onPickMany ? "Выбрать" : "Добавить в день"}><Plus size={15} /></button>;
+                })()}
               </div>
             ))}
             {filtered.length === 0 && <p className="text-sm text-zinc-600 text-center py-6">Ничего не найдено. Можно добавить своё упражнение внизу.</p>}

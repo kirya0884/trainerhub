@@ -193,6 +193,8 @@ async function runClientFinish(job: ClientFinishJob, st: ClientFinishState, save
     const sessionId = st.sessionId ?? crypto.randomUUID();
     // Ключ сохраняем ДО отправки: оборвётся — повтор пойдёт с тем же
     if (!st.sessionId) put({ sessionId });
+    // day_id клиент не шлёт: тренер мог удалить или пересоздать день (откат версии), пока шла
+    // тренировка, — тогда ключ на plan_days уронил бы запись и застопорил очередь клиента
     if (!already) await logClientSession(sessionId, job.planId, job.metrics, s);
     put({ logged: true });
   }

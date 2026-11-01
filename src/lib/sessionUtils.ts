@@ -1,5 +1,18 @@
-import { parseNum, parseRest, today } from "./format";
-import type { Day, Metric, Session } from "../types";
+import { fmtSet, parseNum, parseRest, today } from "./format";
+import type { Day, Exercise, Metric, Session } from "../types";
+
+// Разбор путей 3.14: сводка упражнения из «разных подходов» — подходы по числу строк, вес и
+// повторы первой. Пишется вместе со строками, чтобы простой режим, печать и генератор не видели пустоту.
+export const rowsSummary = (rows: { weight: string; reps: string }[]) =>
+  ({ sets: rows.length ? String(rows.length) : "", weight: rows[0]?.weight ?? "", reps: rows[0]?.reps ?? "" });
+
+/** Подходы упражнения плана текстом: «60×10, 65×8» у разных подходов, «4×10 · 60» у простых */
+export function planSetsText(ex: Pick<Exercise, "kind" | "detailed" | "setRows" | "sets" | "reps" | "weight" | "duration" | "pulseZone">) {
+  if (ex.kind === "functional") return [ex.duration, ex.weight, ex.pulseZone ? `пульс ${ex.pulseZone}` : ""].filter(Boolean).join(" · ");
+  if (ex.detailed && ex.setRows?.length) return ex.setRows.map((s) => fmtSet(s.weight, s.reps)).join(", ");
+  if (!ex.sets && !ex.reps) return ex.weight;
+  return `${ex.sets || "—"}×${ex.reps || "—"}${ex.weight ? ` · ${ex.weight}` : ""}`;
+}
 
 /** rpe — усилие подхода по запасу повторов (см. RPE_SCALE); нет/0 — не указано.
  *  done — только в сохранённом факте (actualSets): false — подход не отмечен (это план, а не
@@ -96,6 +109,10 @@ export const isEmptyDay = (day: Day) => !day.exercises.some((ex) => ex.name);
 /** Тренер уже записывал этот день за эту дату (по id дня, у старых записей — по названию) */
 export const isRepeatOf = (sessions: Session[], day: Day, date: string) =>
   sessions.some((s) => !s.fromClient && s.date === date && (s.dayId ? s.dayId === day.id : s.dayName === day.name));
+
+/** Разбор путей 3.9: тренировка этого дня — по id дня, по названию только у старых записей без id.
+ *  По одному названию копия дня или блока сразу выглядела «проведённой». */
+export const isSessionOfDay = (s: Pick<Session, "dayId" | "dayName">, d: Pick<Day, "id" | "name">) => (s.dayId ? s.dayId === d.id : s.dayName === d.name);
 
 /** Следующий день плана: после дня последней проведённой тренировки (по id дня, у старых
  *  записей — по названию); после последнего дня — снова первый. Тренировок по этим дням

@@ -1,5 +1,6 @@
 import { usePrintBrand, PrintTopBar, PrintBrandHeader } from "./PrintTopBar";
 import type { Plan } from "../types";
+import { planSetsText } from "../lib/sessionUtils";
 
 // Печать плана через native window.print() + @media print в index.css (.print-area) — без PDF-библиотек.
 export default function PlanPrintView({ plan, trainerId, clientName, onClose }: { plan: Plan; trainerId: string; clientName: string; onClose: () => void }) {
@@ -27,7 +28,7 @@ export default function PlanPrintView({ plan, trainerId, clientName, onClose }: 
                     <tr key={ex.id} className="border-b border-zinc-100">
                       <td className="py-1 pr-2 text-zinc-400 w-5">{i + 1}</td>
                       <td className="py-1 pr-2 font-medium">{ex.name || "—"}</td>
-                      <td className="py-1 pr-2 text-zinc-600 whitespace-nowrap">{ex.sets}×{ex.reps}{ex.weight && ` · ${ex.weight}`}</td>
+                      <td className="py-1 pr-2 text-zinc-600">{planSetsText(ex)}</td>
                       <td className="py-1 text-zinc-500">{ex.note}</td>
                     </tr>
                   ))}

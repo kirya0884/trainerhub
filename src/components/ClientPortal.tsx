@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { readJson, removeKey, writeJson } from "../lib/storage";
+import TechniqueButton from "./TechniqueButton";
+import { fetchExerciseMedia } from "../lib/library";
 import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User, Users } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ModalShell from "./ModalShell";
@@ -25,7 +27,7 @@ import MetricsView from "./MetricsView";
 import { addDays, fmtDate, fmtSet, today as todayFn } from "../lib/format";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import ClientSessionView from "./ClientSessionView";
-import { fmtRpe, isFact, lastFactsByName, lastTimeFor, nextDayOf } from "../lib/sessionUtils";
+import { fmtRpe, isFact, isSessionOfDay, lastFactsByName, lastTimeFor, nextDayOf } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
 import { flushOutbox, isNetworkError } from "../lib/outbox";
@@ -62,6 +64,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   const [brand, setBrand] = useState({ brand: "Reps", logoUrl: "", trainingRules: "" });
   const [upcoming, setUpcoming] = useState<portalApi.UpcomingBooking | null>(null);
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
+  const [media, setMedia] = useState<Record<string, string>>({});
   const [payments, setPayments] = useState<Payment[]>([]);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLog[]>([]);
@@ -118,6 +121,9 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
       }
     }).catch((e) => { console.error("[ClientPortal] fetchUpcoming:", e); mark("upcoming", true); });
     cached(`cplans:${client.id}`, () => clientsApi.fetchClientPlans(client.id)).then(setPlans).catch((e) => console.error("[ClientPortal] fetchPlans:", e));
+    // Техника из библиотеки тренера (разбор путей 3.18): без доступа база отдаёт пусто — тогда только свои ссылки упражнений
+    // Без кэша на телефоне: фото библиотеки хранятся картинками и заняли бы всё место
+    fetchExerciseMedia(client.trainerId).then(setMedia).catch((e) => console.error("[ClientPortal] медиа техники:", e));
     clientsApi.fetchPayments(client.id).then((v) => { setPayments(v); mark("payments", false); }).catch((e) => { console.error("[ClientPortal] fetchPayments:", e); mark("payments", true); });
     clientsApi.fetchMeasurements(client.id).then((v) => { setMeasurements(v); mark("measurements", false); }).catch((e) => { console.error("[ClientPortal] fetchMeasurements:", e); mark("measurements", true); });
     nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
@@ -214,8 +220,8 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   const activeDay = activeSession ? (planHook.plan?.days.find((d) => d.id === activeSession.dayId) ?? null) : null;
 
   // Как у тренера: проведённый день остаётся в списке с датой и галочкой
-  const lastDone = new Map<string, string>();
-  for (const s of progressHook.sessions) if (!lastDone.has(s.dayName) || s.date > lastDone.get(s.dayName)!) lastDone.set(s.dayName, s.date);
+  // Разбор путей 3.9: по id дня (у старых записей — по названию), иначе копия дня «уже пройдена»
+  const lastDoneOf = (d: { id: string; name: string }) => progressHook.sessions.filter((s) => isSessionOfDay(s, d)).reduce<string | undefined>((m, s) => (!m || s.date > m ? s.date : m), undefined);
   const mesoList = planHook.plan?.mesocycles ?? [];
   // Видимые дни: не скрыты тренером и не из скрытого или архивного блока
   const hiddenMeso = (id?: string | null) => { const x = id ? mesoList.find((mm) => mm.id === id) : undefined; return !!x && (x.visibleToClient === false || !!x.archivedAt); };
@@ -374,7 +380,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
                 // #5 Wait for sessions to load before computing doneEver — prevents flash of all days
                 if (progressHook.loading) return null;
                 const visibleDays = portalDays;
-                const todayDay = visibleDays.find((d) => d.dateOf === todayStr && !lastDone.has(d.name)) ?? null;
+                const todayDay = visibleDays.find((d) => d.dateOf === todayStr && !lastDoneOf(d)) ?? null;
                 const hasMesos = mesocycles.filter((m) => m.visibleToClient !== false).length > 0;
 
                 // Вспомогательные функции для групповых отображений
@@ -402,6 +408,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
                       <div className="flex items-center gap-2.5">
                         <span className="w-7 h-7 shrink-0 rounded-lg bg-zinc-800 flex items-center justify-center text-xs font-bold text-zinc-400">{label}</span>
                         <span className="flex-1 min-w-0 font-semibold truncate">{ex.name || "—"}</span>
+                        <TechniqueButton url={ex.video || (Object.prototype.hasOwnProperty.call(media, ex.name) ? media[ex.name] : "")} name={ex.name} />
                         {!(ex.detailed && ex.setRows?.length) && summary && <span className="shrink-0 text-sm font-semibold text-zinc-400 whitespace-nowrap">{summary}</span>}
                       </div>
                       {ex.detailed && ex.setRows?.length ? (
@@ -438,7 +445,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
                 // упражнения, справа ▶ «начать» или галочка у пройденного (повтор — с подтверждением)
                 const renderDay = (day: typeof visibleDays[0]) => {
                   const dayOpen = expandedDays.has(day.id);
-                  const done = lastDone.get(day.name);
+                  const done = lastDoneOf(day);
                   const meta = [`${day.exercises.length} упр.`, day.dateOf ? fmtDate(day.dateOf, true) : null].filter(Boolean).join(" · ");
                   return (
                     <div key={day.id} className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
@@ -621,6 +628,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
       {/* #6 Session overlay — renders on top; minimized shows bottom bar only */}
       {activeSession && activeDay && (
         <ClientSessionView
+          media={media}
           minimized={sessionMinimized}
           onMinimize={() => setSessionMinimized(true)}
           onExpand={() => setSessionMinimized(false)}

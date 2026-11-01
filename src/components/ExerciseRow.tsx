@@ -1,7 +1,7 @@
 import { Activity, ArrowDown, ArrowUp, GripVertical, Layers, Pencil, Plus, TrendingUp, Video, X } from "lucide-react";
 import { memo, useState } from "react";
 import type { Exercise, Metric } from "../types";
-import type { LastFact } from "../lib/sessionUtils";
+import { rowsSummary, type LastFact } from "../lib/sessionUtils";
 import NumField from "./NumField";
 import { ask } from "../lib/dialog";
 import { toEmbedUrl } from "../lib/videoEmbed";
@@ -71,12 +71,17 @@ function ExerciseRow({
       const n = Math.max(1, Math.min(12, parseInt(ex.sets) || 3));
       rows = Array.from({ length: n }, () => ({ id: crypto.randomUUID(), weight: ex.weight || "", reps: ex.reps || "" }));
     }
-    update({ detailed: true, setRows: rows });
+    update({ detailed: true, setRows: rows, ...rowsSummary(rows) });
   };
-  const addSetRow = () => update({ setRows: [...ex.setRows, { id: crypto.randomUUID(), weight: "", reps: "" }] });
+  // Разбор путей 3.14: «разные подходы» — один источник правды. Сводка (подходы × повторы · вес)
+  // пересчитывается из строк, поэтому печать, генератор и простой режим видят те же цифры.
+  const setRowsAll = (rows: Exercise["setRows"]) => update({ setRows: rows, ...rowsSummary(rows) });
+  // Новый подход — копия предыдущего: обычно меняют одну цифру, а не вбивают обе заново
+  const addSetRow = () => { const last = ex.setRows[ex.setRows.length - 1]; setRowsAll([...ex.setRows, { id: crypto.randomUUID(), weight: last?.weight ?? "", reps: last?.reps ?? "" }]); };
   const updateSetRow = (sid: string, patch: Partial<{ weight: string; reps: string }>) =>
-    update({ setRows: ex.setRows.map((s) => (s.id === sid ? { ...s, ...patch } : s)) });
-  const removeSetRow = (sid: string) => update({ setRows: ex.setRows.filter((s) => s.id !== sid) });
+    setRowsAll(ex.setRows.map((s) => (s.id === sid ? { ...s, ...patch } : s)));
+  const removeSetRow = (sid: string) => setRowsAll(ex.setRows.filter((s) => s.id !== sid));
+  const fillLikeFirst = () => { const f = ex.setRows[0]; if (f) setRowsAll(ex.setRows.map((s) => ({ ...s, weight: f.weight, reps: f.reps }))); };
   const dragCls = `${dragging ? "opacity-40 ring-2 ring-lime-400" : ""} ${dropBefore ? "shadow-[0_-2px_0_0_var(--accent)]" : ""} ${dropAfter ? "shadow-[0_2px_0_0_var(--accent)]" : ""}`;
   const handle = (
     <button data-ds-handle type="button"
@@ -185,7 +190,10 @@ function ExerciseRow({
               </div>
             ))}
             <div className="flex items-center gap-3 mt-0.5">
-              <button onClick={addSetRow} className="flex items-center gap-1 text-xs text-zinc-500 hover:text-lime-400 transition"><Plus size={13} /> подход</button>
+              <button onClick={addSetRow} className="flex items-center gap-1 h-9 text-xs text-zinc-500 hover:text-lime-400 transition"><Plus size={13} /> подход</button>
+              {ex.setRows.length > 1 && (ex.setRows[0].weight || ex.setRows[0].reps) && ex.setRows.some((s) => s.weight !== ex.setRows[0].weight || s.reps !== ex.setRows[0].reps) && (
+                <button onClick={fillLikeFirst} className="h-9 text-xs text-zinc-500 hover:text-lime-400 transition">как первый — во все</button>
+              )}
               <span className="text-xs text-zinc-500 ml-auto">Отдых</span>
               <DraftInput value={ex.rest} inputMode="decimal" onValue={(v) => update({ rest: v })} placeholder="90 с" className="h-11 w-16 bg-zinc-800 rounded-lg px-1.5 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40" />
             </div>

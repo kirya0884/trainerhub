@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, CloudOff, Settings2, Apple, MoreHorizontal, CalendarCheck, Camera, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles, Share2 } from "lucide-react";
+import { ArrowLeft, Check, CloudOff, Settings2, Apple, MoreHorizontal, CalendarCheck, Camera, Clock, ClipboardList, HeartPulse, MessageCircle, MessageSquare, Pencil, Percent, Phone, Pin, Play, Plus, Printer, Ruler, Scissors, Send, SplitSquareVertical, Trash2, TrendingUp, Users, Wallet, Images, X, Target, Copy, Sparkles, Share2, Archive, ArchiveRestore } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { GOALS } from "../constants";
 import * as api from "../lib/clients";
@@ -22,7 +22,7 @@ import type { NutritionLog } from "../lib/nutrition";
 import SessionHistoryModal from "./SessionHistoryModal";
 import { BOOKING_STATUS_COLOR, BOOKING_STATUS_LABEL } from "./BookingModal";
 import { expandBookings } from "../lib/bookings";
-import { duplicatePlan } from "../lib/plans";
+import { duplicatePlan, makePlanActive, setPlanArchived } from "../lib/plans";
 import PlanCreateModal from "./PlanCreateModal";
 import type { PlanOverviewItem } from "../lib/clients";
 import type { Booking } from "../lib/bookings";
@@ -982,6 +982,7 @@ function PlansTab({ trainerId, clientId, failed, onRetry, clientName, allPlans, 
     if (!name.trim()) return;
     try {
       const row = await api.addPlan(trainerId, clientId, name.trim());
+      if (row.visible_to_client === false) notify("План создан скрытым: у клиента уже есть действующий. Когда допишешь — «Сделать активным».", "info");
       setName("");
       api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e));
       onOpenPlan(row.id);
@@ -995,9 +996,32 @@ function PlansTab({ trainerId, clientId, failed, onRetry, clientName, allPlans, 
     setDupId(id);
     try {
       await duplicatePlan(trainerId, clientId, id, `${planName} (копия)`);
+      notify("Копия создана скрытой от клиента. Допиши её и нажми «Сделать активным».", "info");
       api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e));
     } catch (err) { console.error("[ClientProfile] duplicate:", err); notify("Не удалось дублировать план."); }
     finally { setDupId(null); }
+  };
+  // Разбор путей 3.26: какой план видит клиент — самый новый видимый действующий (список уже
+  // от новых к старым, как у клиента). Его помечаем, остальные можно сделать активными или убрать в архив.
+  const activeId = plans?.find((p) => !p.archived && p.visibleToClient !== false)?.id;
+  const [planBusy, setPlanBusy] = useState<string | null>(null);
+  const reloadPlans = () => api.fetchClientPlans(clientId).then(setPlans).catch((e) => console.error("[ClientProfile] fetchPlans:", e));
+  const activate = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (planBusy) return;
+    setPlanBusy(id);
+    try { await makePlanActive(clientId, id); notify("Теперь клиент видит этот план", "info"); }
+    catch (err) { console.error("[ClientProfile] activate:", err); notify("Не удалось сделать план активным."); }
+    finally { setPlanBusy(null); reloadPlans(); }
+  };
+  const toggleArchive = async (id: string, archived: boolean, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (planBusy) return;
+    setPlanBusy(id);
+    if (!archived && id === activeId && !(await ask("Это план, который видит клиент. После архива у него не будет программы, пока не сделаешь активным другой. Убрать в архив?", { ok: "В архив" }))) { setPlanBusy(null); return; }
+    try { await setPlanArchived(id, !archived, clientId); }
+    catch (err) { console.error("[ClientProfile] archive:", err); notify(archived ? "Не удалось вернуть план из архива." : "Не удалось убрать план в архив."); }
+    finally { setPlanBusy(null); reloadPlans(); }
   };
   const deletePlan = async (id: string, planName: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -1034,9 +1058,17 @@ function PlansTab({ trainerId, clientId, failed, onRetry, clientName, allPlans, 
           {plans.length === 0 && <p className="text-zinc-600 text-sm text-center py-8">Планов пока нет</p>}
           {plans.map((p) => (
             <button key={p.id} onClick={() => onOpenPlan(p.id)} className="w-full text-left bg-zinc-900 border border-zinc-800 rounded-2xl p-3 hover:border-zinc-700 transition flex items-center justify-between gap-2">
-              <span className="font-medium truncate">{p.name}</span>
+              <span className="min-w-0">
+                <span className="block font-medium truncate">{p.name}</span>
+                {p.id === activeId ? <span className="text-xs text-lime-400">Клиент видит этот план</span>
+                  : !p.archived && <span className="text-xs text-zinc-500">{p.visibleToClient === false ? "Скрыт от клиента" : "Клиент видит более новый план"}</span>}
+              </span>
               <span className="flex items-center gap-2 shrink-0">
                 {p.archived && <span className="text-xs bg-zinc-700 text-zinc-400 rounded-lg px-1.5 py-0.5">архив</span>}
+                {p.id !== activeId && (
+                  <span role="button" tabIndex={0} onClick={(e) => activate(p.id, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); activate(p.id, e as unknown as React.MouseEvent); } }} className={`h-8 px-2 inline-flex items-center rounded-lg text-xs font-semibold bg-lime-400/15 text-lime-400 hover:bg-lime-400/25 transition ${planBusy === p.id ? "opacity-40" : ""}`}>Сделать активным</span>
+                )}
+                <span role="button" tabIndex={0} onClick={(e) => toggleArchive(p.id, p.archived, e)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleArchive(p.id, p.archived, e as unknown as React.MouseEvent); } }} className={`p-1 rounded-lg hover:bg-zinc-700 hover:text-zinc-200 text-zinc-500 transition ${planBusy === p.id ? "opacity-40" : ""}`} title={p.archived ? "Вернуть из архива" : "В архив"} aria-label={p.archived ? "Вернуть из архива" : "В архив"}>{p.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}</span>
                 <span onClick={(e) => duplicate(p.id, p.name, e)} className={`p-1 rounded-lg hover:bg-zinc-700 hover:text-zinc-200 text-zinc-500 transition ${dupId === p.id ? "opacity-40" : ""}`} title="Дублировать план"><Copy size={14} /></span>
                 <span onClick={(e) => deletePlan(p.id, p.name, e)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition" title="Удалить"><Trash2 size={14} /></span>
               </span>
