@@ -56,9 +56,6 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   /** «+ подопечный»: кого можно добавить и что сделать (true — переход состоялся) */
   addCandidates?: PickClient[]; onAddClient?: (c: PickClient, snap: SessionSnapshot) => Promise<boolean>; onFinish: (metrics: Omit<Metric, "id">[], note: string, session: Omit<Session, "id">) => void | Promise<void>; onClose: () => void;
 }) {
-  // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
-  // Вызов до любых ранних return — иначе порядок хуков поедет.
-  const { panelProps } = useModalA11y(onClose, "Проведение тренировки");
   const SK = `th-tsess-${day.id}`;
   // А3: раньше сбой записи черновика глушился catch {} — тренер терял введённое молча
   const [draftFailed, setDraftFailed] = useState(false);
@@ -89,6 +86,9 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   // Дата проведения: null — сегодня; иначе тренер вносит пропущенную задним числом
   const [workoutDate, setWorkoutDate] = useState<string | null>(null);
   const [minimized, setMinimized] = useState(false);
+  // Escape и «Назад» сворачивают тренировку, а не закрывают: введённое остаётся на экране
+  // А1: роль, ловушка Tab, возврат фокуса; вызов до любых ранних return
+  const { panelProps } = useModalA11y(() => setMinimized(true), "Проведение тренировки", !minimized);
   const [submitting, setSubmitting] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   // Автосейв прогресса тренировки (как у клиента) — переживает перезагрузку страницы

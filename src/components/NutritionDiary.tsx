@@ -16,6 +16,7 @@ import { addDays, plural, today } from "../lib/format";
 import { ask, dismiss, notify } from "../lib/dialog";
 import { track } from "../lib/events";
 import { lazyRetry } from "../lib/lazy";
+import { stepBack } from "../lib/modalHistory";
 
 const NutritionCatalog = lazyRetry(() => import("./NutritionCatalog"));
 
@@ -132,13 +133,15 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
     if (!selecting) return;
     history.pushState({ ...history.state, foodSel: true }, "");
     selHist.current = true;
-    const onPop = () => { selHist.current = false; setSel(null); };
+    // Закрыли окно поверх выбора (0.1) — вернулись на свою же запись, выбор не снимаем
+    const onPop = () => { if (history.state?.foodSel) return; selHist.current = false; setSel(null); };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, [selecting]);
-  const exitSel = () => { if (selHist.current) { selHist.current = false; history.back(); } };
+  // stepBack: если поверх выбора ещё лежит метка окна (0.1), снимет и её
+  const exitSel = () => { if (selHist.current) { selHist.current = false; stepBack(); } };
   // Ушли с экрана в режиме выбора — убираем свою запись, если она ещё сверху
-  useEffect(() => () => { if (selHist.current && history.state?.foodSel) { selHist.current = false; history.back(); } }, []);
+  useEffect(() => () => { if (selHist.current && history.state?.foodSel) { selHist.current = false; stepBack(); } }, []);
   const selected = sel ? (entries ?? []).filter((e) => sel.ids.has(e.id)) : [];
   const toggle = (id: string) => setSel((s) => {
     if (!s) return s;

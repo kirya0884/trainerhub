@@ -5,6 +5,7 @@ import * as api from "../lib/templates";
 import type { DayTemplate } from "../lib/templates";
 import type { Day, Exercise } from "../types";
 import { SkeletonRows } from "./Skeleton";
+import LoadError from "./LoadError";
 import { ask, notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 
@@ -44,13 +45,15 @@ export default function DayTemplateLibrary({
 }) {
   const [templates, setTemplates] = useState<DayTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  // 0.3: ошибка загрузки — не «Шаблонов пока нет»
+  const [failed, setFailed] = useState(false);
   const [editing, setEditing] = useState<EditState | null>(null);
   const [insertFor, setInsertFor] = useState<{ id: string; name: string } | null>(null);
   const [saving, setSaving] = useState(false);
 
   const load = () => {
-    setLoading(true);
-    api.fetchDayTemplates(trainerId).then(setTemplates).catch((e) => console.error("[DayTemplateLibrary]:", e)).finally(() => setLoading(false));
+    setLoading(true); setFailed(false);
+    api.fetchDayTemplates(trainerId).then(setTemplates).catch((e) => { console.error("[DayTemplateLibrary]:", e); setFailed(true); }).finally(() => setLoading(false));
   };
   useEffect(() => { load(); }, [trainerId]);
 
@@ -183,7 +186,8 @@ export default function DayTemplateLibrary({
               <Plus size={16} /> Создать шаблон дня
             </button>
             {loading && <SkeletonRows />}
-            {!loading && templates.length === 0 && (
+            {!loading && failed && <LoadError onRetry={load} />}
+            {!loading && !failed && templates.length === 0 && (
               <p className="text-zinc-600 text-sm text-center py-6">Шаблонов пока нет. Создай первый — сохранишь упражнения и сразу вставишь в любой план.</p>
             )}
             {templates.map((t) => (

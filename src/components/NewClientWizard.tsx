@@ -1,10 +1,10 @@
 import { ChevronLeft, UserPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ModalShell from "./ModalShell";
 import { GOALS } from "../constants";
 import { addClient, emptyMembership, updateClient } from "../lib/clients";
 import { fetchPackageTemplates, markPaid, type PackageTemplate, type PayStatus } from "../lib/payments";
-import { notify } from "../lib/dialog";
+import { ask, notify } from "../lib/dialog";
 import { track } from "../lib/events";
 
 const STEPS = ["Кто", "Контакты", "Здоровье", "Абонемент"];
@@ -33,6 +33,9 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   const [tplId, setTplId] = useState("");
   const [busy, setBusy] = useState(false);
+  // 2.12: что уже записано в базу. Повтор после сбоя сети не создаёт второго клиента
+  // и не начисляет пакет дважды — дописывает только оставшееся
+  const created = useRef<{ id: string; paid: boolean } | null>(null);
   useEffect(() => { fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[NewClientWizard] шаблоны:", e)); }, [trainerId]);
 
   const tpl = templates.find((t) => t.id === tplId);
@@ -41,9 +44,11 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
     if (busy || !name.trim()) return;
     setBusy(true);
     try {
-      const c = await addClient(trainerId, name.trim(), goal, existingCount);
+      if (!created.current) created.current = { id: (await addClient(trainerId, name.trim(), goal, existingCount)).id, paid: false };
+      const c = { id: created.current.id };
+      // Имя и цель — ещё раз: при повторе после сбоя их могли поправить
       const fields = {
-        format, phone: phone.trim(), telegram: telegram.trim(), whatsapp: whatsapp.trim(),
+        name: name.trim(), goal, format, phone: phone.trim(), telegram: telegram.trim(), whatsapp: whatsapp.trim(),
         health: { injuries: injuries.trim(), restrictions: restrictions.trim(), notes: "" },
       };
       const mail = email.trim().toLowerCase();
@@ -55,18 +60,34 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
         await updateClient(c.id, fields);
         notify("Эта почта уже у другого клиента — карточку создали без неё.", "info");
       }
-      if (tpl) {
+      if (tpl && !created.current.paid) {
         const m = { ...emptyMembership, total: String(tpl.sessions), packagePrice: String(tplPrice(tpl)), split: tpl.split };
         // «Оплата позже» — как во вкладке «Оплаты»: блок начислен, платёж в журнале «ожидается»
         await markPaid(c.id, m, [], pay);
+        created.current.paid = true;
       }
       track("action", "client_created", { via: "wizard", contacts: !!(phone || telegram || whatsapp), health: !!(injuries || restrictions), package: !!tpl });
       onCreated(c.id);
     } catch (e) {
       console.error("[NewClientWizard] сохранение:", e);
-      notify("Не удалось добавить клиента. Проверь интернет и попробуй ещё раз.");
+      notify(created.current ? "Карточка создана, но не всё сохранилось. Нажми ещё раз — допишем остальное." : "Не удалось добавить клиента. Проверь интернет и попробуй ещё раз.");
       setBusy(false);
     }
+  };
+  // 2.11: крестик, Escape и «Назад» раньше молча стирали всё введённое
+  const dirty = !!(name.trim() || phone.trim() || telegram.trim() || whatsapp.trim() || email.trim() || injuries.trim() || restrictions.trim() || tplId);
+  const asking = useRef(false);
+  const close = async () => {
+    if (busy || asking.current) return;
+    // Карточка уже в базе (сбой на середине) — не теряем её, а открываем
+    if (created.current) { notify("Карточка создана — проверь в ней контакты и абонемент.", "info"); onCreated(created.current.id); return; }
+    if (dirty) {
+      asking.current = true;
+      const ok = await ask("Закрыть без сохранения? Введённое пропадёт.", { ok: "Закрыть", cancel: "Продолжить" });
+      asking.current = false;
+      if (!ok) return;
+    }
+    onClose();
   };
 
   const footer = (
@@ -91,7 +112,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
   );
 
   return (
-    <ModalShell title="Новый клиент" icon={<UserPlus size={16} className="text-lime-400" />} onClose={onClose} footer={footer}>
+    <ModalShell title="Новый клиент" icon={<UserPlus size={16} className="text-lime-400" />} onClose={close} footer={footer} backdropClose={false}>
       <div className="p-4 space-y-4">
         <div>
           <div className="flex gap-1.5">

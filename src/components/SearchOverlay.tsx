@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ClipboardList, Search, Users, X } from "lucide-react";
 import type { ClientListItem, PlanOverviewItem } from "../lib/clients";
 import { normSearch, phoneMatches } from "../lib/search";
+import { registerModal } from "../lib/modalHistory";
 
 // B04: единый поиск по подопечным и планам. Отдельный оверлей, а не поле в шапке —
 // строку шапки четырьмя пунктами подряд расчищали (B23, B27, B28, B30), и возвращать
@@ -17,6 +18,10 @@ export default function SearchOverlay({ clients, plans, onOpenClient, onOpenPlan
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
+  // 0.1: «Назад» на телефоне закрывает поиск, а не уводит экран под ним
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => registerModal(closeRef), []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", onKey);

@@ -2,6 +2,7 @@ import { Bell, Copy, MessageCircle, MessageSquare, Send, Share2 } from "lucide-r
 import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import { fetchClient } from "../lib/clients";
+import { cached } from "../lib/offlineCache";
 import { addDays, today, waPhone } from "../lib/format";
 import { track } from "../lib/events";
 
@@ -29,12 +30,16 @@ export default function RemindModal({ clientId, name, date = "", time = "", paym
     : `${hi} Напоминаю: тренировка ${whenText(date)}${time ? `, в ${time}` : ""}. До встречи!`);
   const [contacts, setContacts] = useState<{ phone: string; telegram: string; whatsapp: string } | null>(null);
   const [copied, setCopied] = useState(false);
+  // 0.3: контакты не загрузились — так и говорим, а не «в профиле нет телефона»
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
-    fetchClient(clientId).then((c) => { if (alive) setContacts({ phone: c.phone, telegram: c.telegram, whatsapp: c.whatsapp }); })
-      .catch((e) => { console.error("[RemindModal] контакты:", e); if (alive) setContacts({ phone: "", telegram: "", whatsapp: "" }); });
+    setFailed(false);
+    cached(`client:${clientId}`, () => fetchClient(clientId)).then((c) => { if (alive) setContacts({ phone: c.phone, telegram: c.telegram, whatsapp: c.whatsapp }); })
+      .catch((e) => { console.error("[RemindModal] контакты:", e); if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [clientId]);
+  }, [clientId, attempt]);
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* нет доступа к буферу — текст можно выделить вручную */ }
@@ -60,6 +65,10 @@ export default function RemindModal({ clientId, name, date = "", time = "", paym
           <button onClick={copy} className={`${btn} bg-zinc-800 text-zinc-100 hover:bg-zinc-700`}><Copy size={16} /> {copied ? "Скопировано" : "Копировать"}</button>
         </div>
         {tg && <p className="text-[13px] text-zinc-500">Telegram: текст скопируется — вставь его в чат.</p>}
+        {failed && !contacts && (
+          <p className="text-[13px] text-zinc-500">Не удалось загрузить контакты — можно скопировать текст.{" "}
+            <button onClick={() => setAttempt((n) => n + 1)} className="underline underline-offset-2 text-zinc-300 hover:text-zinc-100">Повторить</button></p>
+        )}
         {contacts && !wa && !tg && !sms && <p className="text-[13px] text-zinc-500">В профиле нет телефона и мессенджеров — добавь их, чтобы отправлять в один тап.</p>}
       </div>
     </ModalShell>

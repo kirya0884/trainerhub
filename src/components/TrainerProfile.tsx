@@ -11,6 +11,7 @@ import { deleteMyAccount } from "../lib/account";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
 import { checkForUpdate } from "../lib/swUpdate";
 import { ScreenSkeleton } from "./Skeleton";
+import LoadError from "./LoadError";
 import { ask, notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 
@@ -49,6 +50,10 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   const saveLabel = (key: SaveKey, idle: string) => saveState[key] === "saving" ? "Сохранение..." : saveState[key] === "saved" ? "✓ Сохранено" : idle;
   const [showSubscription, setShowSubscription] = useState(false);
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
+  // 0.3: не загрузилось — «Повторить» вместо вечного скелетона и пустых шаблонов
+  const [profileFailed, setProfileFailed] = useState(false);
+  const [tplFailed, setTplFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [editingTpl, setEditingTpl] = useState<Record<string, PackageTemplate>>({});
   const [rawTpl, setRawTpl] = useState<Record<string, Record<string, string>>>({}); // raw strings while typing numeric fields
   const [newPw, setNewPw] = useState("");
@@ -59,15 +64,16 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   useEffect(() => {
     let alive = true;
     // Без сети — сохранённые: профиль (и кнопка «Выйти» в нём) должен открываться и в зале
-    const loadProfile = () => cached("trainer", () => trainerApi.fetchTrainerSelf(trainerId)).then((s) => { if (alive) { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); } }).catch((e) => console.error("[TrainerProfile] fetchSelf:", e));
+    setProfileFailed(false); setTplFailed(false);
+    const loadProfile = () => cached("trainer", () => trainerApi.fetchTrainerSelf(trainerId)).then((s) => { if (alive) { setProfile(s.profile); setBrand({ brand: s.brand, logoUrl: s.logoUrl }); } }).catch((e) => { console.error("[TrainerProfile] fetchSelf:", e); if (alive) setProfileFailed(true); });
     const loadStats = () => cached("stats", () => trainerApi.fetchTrainerStats(trainerId)).then((s) => { if (alive) setStats(s); }).catch((e) => console.error("[TrainerProfile] fetchStats:", e));
     loadProfile(); loadStats();
     // Вернулась сеть (или ожил сервер) — перечитываем то, что было с телефона
     const off = onRevalidate(() => { if (staleAtOf("trainer") !== null) loadProfile(); if (staleAtOf("stats") !== null) loadStats(); });
-    fetchPackageTemplates(trainerId).then((t) => { if (alive) setTemplates(t); }).catch((e) => console.error("[TrainerProfile] fetchTemplates:", e));
+    cached("pkg-templates", () => fetchPackageTemplates(trainerId)).then((t) => { if (alive) setTemplates(t); }).catch((e) => { console.error("[TrainerProfile] fetchTemplates:", e); if (alive) setTplFailed(true); });
     // «trainer» нужен и шапке приложения — её отметку не снимаем
     return () => { alive = false; off(); releaseStale("stats"); };
-  }, [trainerId]);
+  }, [trainerId, attempt]);
 
   const onPhotoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -90,7 +96,15 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   const saveProfile = () => { if (profile) runSave("profile", async () => { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl); }); };
   const saveBrand = () => runSave("brand", () => trainerApi.saveTrainerBrand(trainerId, brand));
 
-  if (!profile || !stats) return <div className="p-4"><ScreenSkeleton avatar /></div>;
+  // Без профиля нечего показать, но выйти из аккаунта должно быть можно и тогда
+  if (!profile && profileFailed) return (
+    <div className="p-4 space-y-2">
+      <LoadError onRetry={() => setAttempt((n) => n + 1)} />
+      {onSignOut && <button onClick={onSignOut} className="w-full h-11 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition">Выйти</button>}
+    </div>
+  );
+  // Статистика не обязательна: без неё профиль открывается с прочерками
+  if (!profile) return <div className="p-4"><ScreenSkeleton avatar /></div>;
 
   return (
     <div className="space-y-4 max-w-2xl">
@@ -257,6 +271,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           {section === "packages" && (
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 space-y-3">
         <p className="text-xs text-zinc-500">Создай шаблоны один раз — применяй в карточке клиента одним кликом</p>
+        {tplFailed && !templates.length && <LoadError onRetry={() => { setTplFailed(false); cached("pkg-templates", () => fetchPackageTemplates(trainerId)).then(setTemplates).catch((e) => { console.error("[TrainerProfile] fetchTemplates:", e); setTplFailed(true); }); }} />}
         {templates.map((t) => {
           const draft = editingTpl[t.id] ?? t;
           const setDraft = (p: Partial<PackageTemplate>) => setEditingTpl((prev) => ({ ...prev, [t.id]: { ...(prev[t.id] ?? t), ...p } }));
@@ -333,7 +348,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           </div>
 
           <div className="grid grid-cols-3 gap-2">
-            {([[stats.activeClients, "активных"], [stats.plansCount, "планов"], [stats.sessionsDone, "тренировок"]] as const).map(([v, l]) => (
+            {([[stats?.activeClients ?? "—", "активных"], [stats?.plansCount ?? "—", "планов"], [stats?.sessionsDone ?? "—", "тренировок"]] as const).map(([v, l]) => (
               <div key={l} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3">
                 <p className="font-display text-[22px] font-extrabold tracking-tight">{v}</p>
                 <p className="text-[13px] text-zinc-400">{l}</p>

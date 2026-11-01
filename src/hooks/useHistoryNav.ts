@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { hasModalMark, screenBack } from "../lib/modalHistory";
 
 const KEY = "thView";
 
@@ -40,7 +41,8 @@ export function useHistoryNav<T>(initial: T, toUrl?: (v: T) => string, fromUrl?:
 
     const onPop = (e: PopStateEvent) => {
       const v = (e.state as Record<string, unknown> | null)?.[KEY];
-      if (v !== undefined) { setView(v as T); return; }
+      // Снятая метка окна (0.1) возвращает на тот же экран — не перерисовываем его
+      if (v !== undefined) { if (JSON.stringify(v) !== JSON.stringify(ref.current)) setView(v as T); return; }
       // Записи без нашего состояния: адрес правили руками или пришли по ссылке
       if (fromUrl) {
         const fromHash = fromUrl(location.hash);
@@ -67,6 +69,9 @@ export function useHistoryNav<T>(initial: T, toUrl?: (v: T) => string, fromUrl?:
   const push = useCallback((v: T) => {
     const same = JSON.stringify(v) === JSON.stringify(ref.current);
     if (same) history.replaceState({ ...(history.state ?? {}), [KEY]: v }, "", url(v));
+    // Переход из открытого окна (поиск → клиент): экран встаёт на место метки окна,
+    // иначе «Назад» с нового экрана сначала попал бы в пустую метку
+    else if (hasModalMark()) history.replaceState({ [KEY]: v }, "", url(v));
     else history.pushState({ [KEY]: v }, "", url(v));
     setView(v);
   }, [url]);
@@ -77,7 +82,7 @@ export function useHistoryNav<T>(initial: T, toUrl?: (v: T) => string, fromUrl?:
     setView(v);
   }, [url]);
 
-  const back = useCallback(() => history.back(), []);
+  const back = useCallback(() => screenBack(), []);
 
   return { view, push, replace, back };
 }

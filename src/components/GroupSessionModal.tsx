@@ -230,13 +230,12 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
 // Живёт на уровне приложения (ActiveWorkoutHost), как одиночная: сворачивается в плашку,
 // переживает переходы по разделам, а введённое лежит в черновиках слотов (groupId).
 export default function GroupSessionModal({ groupId, clients, trainerId, onClose, onClientFinished, addCandidates, onAddClient }: { groupId: string; clients: SlotClient[]; trainerId: string; onClose: () => void; onClientFinished?: (clientId: string) => void; addCandidates?: PickClient[]; onAddClient?: (c: PickClient) => void }) {
-  // А1: роль, ловушка Tab, возврат фокуса, Escape только для верхнего окна.
-  // Вызов до любых ранних return — иначе порядок хуков поедет.
-  const { panelProps } = useModalA11y(() => setMinimized(true), "Совместная тренировка");
   const [activeId, setActiveId] = useState(clients[0]?.id || "");
   // После перезагрузки — кто уже записан, из черновиков
   const [finishedIds, setFinishedIds] = useState<string[]>(() => clients.filter((c) => readSlotDraft(groupId, c.id)?.finished).map((c) => c.id));
   const [minimized, setMinimized] = useState(false);
+  // А1: роль, ловушка Tab, возврат фокуса; вызов до любых ранних return
+  const { panelProps } = useModalA11y(() => setMinimized(true), "Совместная тренировка", !minimized);
   const [showAdd, setShowAdd] = useState(false);
   // Дата проведения — одна на всех: null — сегодня, иначе задним числом
   const [workoutDate, setWorkoutDate] = useState<string | null>(null);

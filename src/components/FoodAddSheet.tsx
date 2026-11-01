@@ -2,6 +2,8 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { BookOpen, Check, ChevronLeft, ChevronRight, Pencil, Plus, Search, Star, Trash2 } from "lucide-react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
+import LoadError from "./LoadError";
+import { cached } from "../lib/offlineCache";
 import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
 import RecipeEditor from "./RecipeEditor";
 import * as api from "../lib/foodDiary";
@@ -52,10 +54,13 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
   const [p, setP] = useState(""); const [f, setF] = useState(""); const [c, setC] = useState(""); const [kcal, setKcal] = useState("");
   const [remember, setRemember] = useState(true);
 
-  const loadRecipes = () => api.fetchRecipes(clientId).then((l) => { setRecipes(l); return l; })
-    .catch((e) => { console.error("[FoodAddSheet] рецепты:", e); setRecipes([]); return [] as Recipe[]; });
+  // 0.3: продукты нужны в зале — без сети из сохранённого; ошибка — «Повторить», а не пустой список
+  const [loadFailed, setLoadFailed] = useState(false);
+  const loadRecipes = () => cached(`recipes:${clientId}`, () => api.fetchRecipes(clientId)).then((l) => { setRecipes(l); return l; })
+    .catch((e) => { console.error("[FoodAddSheet] рецепты:", e); setLoadFailed(true); setRecipes((r) => r ?? []); return [] as Recipe[]; });
   const loadAll = () => {
-    api.fetchProducts(clientId).then(setProducts).catch((e) => { console.error("[FoodAddSheet] продукты:", e); setProducts([]); });
+    setLoadFailed(false);
+    cached(`products:${clientId}`, () => api.fetchProducts(clientId)).then(setProducts).catch((e) => { console.error("[FoodAddSheet] продукты:", e); setLoadFailed(true); setProducts((p) => p ?? []); });
     loadRecipes();
   };
   useEffect(loadAll, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -210,7 +215,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
             {list === "recipes"
               ? <button onClick={() => setRecipeEdit("new")} className="w-full flex items-center gap-2 h-10 px-1 text-sm font-semibold text-lime-400"><Plus size={18} /> Новый рецепт</button>
               : <button onClick={startNew} className="w-full flex items-center gap-2 h-10 px-1 text-sm font-semibold text-lime-400"><Plus size={18} /> {term ? `Новый продукт «${q.trim()}»` : "Новый продукт"}</button>}
-            {products === null || recipes === null ? <SkeletonRows rows={3} /> : shown.length === 0 ? (
+            {products === null || recipes === null ? <SkeletonRows rows={3} /> : loadFailed && shown.length === 0 ? <LoadError onRetry={loadAll} /> : shown.length === 0 ? (
               <p className="text-sm text-zinc-500 px-1">
                 {list === "recipes" && !recipes.length ? "Рецептов пока нет. Собери блюдо из своих продуктов — КБЖУ посчитаются по весу готового."
                   : !products.length && !recipes.length ? "Здесь появятся продукты, которые ты добавишь. Начни с «Новый продукт» — КБЖУ на 100 г есть на упаковке."

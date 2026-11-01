@@ -41,13 +41,14 @@ let saveErrToastAt = 0;
 import type { ClientActivity } from "../lib/clientPortal";
 import { ScreenSkeleton, SkeletonRows } from "./Skeleton";
 import StartWorkoutModal from "./StartWorkoutModal";
-import { ask, askInput, notify } from "../lib/dialog";
+import { ask, askInput, choose, notify } from "../lib/dialog";
 import { checkEmail } from "../lib/emailCheck";
+import { loadViewState, saveViewState } from "../lib/viewState";
 import { track } from "../lib/events";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans";
 /** Разделы карточки, которые грузятся отдельно (флаги ошибки загрузки) */
-type Part = "client" | "plans" | "measurements" | "photos" | "notes";
+type Part = "client" | "plans" | "measurements" | "photos" | "notes" | "activities";
 
 // Порядок задан владельцем: обзор — отчёты — записи — планы. Оплаты открываются карточкой абонемента.
 const TABS: { k: Sub; label: string; icon: typeof Users }[] = [
@@ -56,8 +57,10 @@ const TABS: { k: Sub; label: string; icon: typeof Users }[] = [
   { k: "bookings", label: "Записи", icon: CalendarCheck },
   { k: "plans", label: "Планы", icon: ClipboardList },
 ];
-export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient, bookings, allPlans, onOpenOccurrence }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void; bookings?: Booking[]; allPlans?: PlanOverviewItem[]; onOpenOccurrence?: (id: string, occDate: string) => void }) {
-  const [sub, setSub] = useState<Sub>(initialSub || "overview");
+export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, onSubChange, pinned, onTogglePinned, onBookClient, bookings, allPlans, onOpenOccurrence }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; onSubChange?: (s: Sub) => void; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void; bookings?: Booking[]; allPlans?: PlanOverviewItem[]; onOpenOccurrence?: (id: string, occDate: string) => void }) {
+  const [sub, setSubState] = useState<Sub>(initialSub || "overview");
+  // 0.2: вкладка живёт в адресе — после «Назад» из плана карточка открывается на ней же
+  const setSub = (s: Sub) => { setSubState(s); onSubChange?.(s); };
   const [noAccessHidden, setNoAccessHidden] = useState(() => { try { return localStorage.getItem(`reps-noaccess-hidden-${clientId}`) === "1"; } catch { return false; } });
   const [showSubSettings, setShowSubSettings] = useState(false);
   // Имя — крупным заголовком; правка по тапу (у полей ввода на iOS шрифт не меньше 16 px — см. index.css)
@@ -103,6 +106,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       measurements: part("measurements", "замеры", () => api.fetchMeasurements(clientId), setMeasurements),
       photos: part("photos", "фото", () => api.fetchPhotos(clientId), setPhotos),
       notes: part("notes", "заметки", () => api.fetchNotes(clientId), setNotes),
+      activities: part("activities", "активность", () => portalApi.fetchClientActivities(clientId), setActivities),
     };
     retry.current = (p) => loaders[p]();
     loadClient();
@@ -111,7 +115,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     loaders.photos();
     loaders.notes();
     loadPlans();
-    portalApi.fetchClientActivities(clientId).then((v) => { if (alive) setActivities(v); }).catch(fail("активность"));
+    loaders.activities();
     // Завершённая тренировка списала занятие — подтягиваем только абонемент. Не onClientsChanged:
     // он приходит и от собственных сохранений карточки и перечитал бы абонемент посреди ввода
     const off = onWorkoutFinished(() => api.fetchClient(clientId).then((v) => { if (alive) setClient((c) => (c ? { ...c, membership: v.membership } : v)); }).catch((e) => console.error("[ClientProfile] обновление абонемента:", e)));
@@ -177,11 +181,29 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const lowStock = client.membership.type !== "subscription" && client.membership.remaining !== "" && remainingNum > 0 && remainingNum <= 2;
   const outOfStock = client.membership.type !== "subscription" && client.membership.remaining !== "" && remainingNum <= 0;
   const overdue = client.membership.type === "subscription" && client.membership.nextPaymentDate && client.membership.nextPaymentDate < today();
+  // 2.17: ушедших тренеры удаляли — а через 30 дней пропадали планы и история оплат.
+  // Архив всё сохраняет, поэтому при удалении предлагаем его первым, а удаление можно отменить.
+  const archiveClient = (archived: boolean) => {
+    const p = { status: archived ? "archived" : "active", pauseReason: "" };
+    setClient((c) => (c ? { ...c, ...p } : c));
+    // Сообщаем после сохранения, а не до: иначе при сбое пришли бы два противоречащих
+    api.updateClient(clientId, p).then(() => notify(archived ? "Клиент в архиве — планы и история оплат сохранены" : "Клиент снова активный", "info")).catch(saveFailed);
+  };
   const deleteClient = async () => {
     if (locked()) return;
-    if (!(await ask(`Удалить «${client.name}»? Карточка переместится в корзину — её можно восстановить позже.`, { danger: true, ok: "Удалить" }))) return;
-    try { await api.deleteClient(clientId); onBack(); }
-    catch (e) { console.error("[ClientProfile] deleteClient:", e); notify("Не удалось удалить карточку. Попробуй ещё раз."); }
+    if (client.status !== "archived") {
+      const r = await choose(`Удалить «${client.name}»? Через 30 дней в корзине пропадут планы и история оплат. Если клиент просто ушёл — убери его в архив: всё сохранится.`, { ok: "В архив", alt: "Удалить" });
+      if (r === null) return;
+      if (r === "ok") { archiveClient(true); return; }
+    } else if (!(await ask(`Удалить «${client.name}»? Карточка полежит в корзине 30 дней, потом пропадёт вместе с планами и историей оплат.`, { danger: true, ok: "Удалить" }))) return;
+    try {
+      await api.deleteClient(clientId);
+      onBack();
+      notify(`«${client.name}» в корзине`, "info", { label: "Отменить", run: () => {
+        api.restoreClient(clientId).then(() => notify("Клиент восстановлен", "info"))
+          .catch((e) => { console.error("[ClientProfile] restoreClient:", e); notify("Не удалось восстановить. Карточка в корзине — в профиле."); });
+      } });
+    } catch (e) { console.error("[ClientProfile] deleteClient:", e); notify("Не удалось удалить карточку. Попробуй ещё раз."); }
   };
 
   // Абонемент под именем: остаток кольцом, нажатие — вкладка оплат
@@ -231,6 +253,9 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
                     <Printer size={15} className="text-zinc-500 shrink-0" /> Отчёт по прогрессу
                   </button>
                   <div className="my-1 border-t border-zinc-800" />
+                  <button onClick={() => { setShowSubSettings(false); if (!locked()) archiveClient(client.status !== "archived"); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-sm text-zinc-300 hover:bg-zinc-800 transition">
+                    {client.status === "archived" ? <><ArchiveRestore size={15} className="text-zinc-500 shrink-0" /> Вернуть из архива</> : <><Archive size={15} className="text-zinc-500 shrink-0" /> В архив</>}
+                  </button>
                   <button onClick={() => { setShowSubSettings(false); deleteClient(); }} className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl text-sm text-red-400 hover:bg-red-500/10 transition">
                     <Trash2 size={15} className="shrink-0" /> Удалить клиента
                   </button>
@@ -430,13 +455,17 @@ function OverviewTab({ client, patch, patchHealth, notes, notesFailed, onRetry, 
   trainerId: string;
 }) {
   const [noteText, setNoteText] = useState("");
+  // 0.4: двойной Enter давал две заметки, ошибка сохранения молчала
+  const [noteBusy, setNoteBusy] = useState(false);
   const addNote = async () => {
-    if (!noteText.trim()) return;
+    if (noteBusy || !noteText.trim()) return;
+    setNoteBusy(true);
     try {
       await api.addNote(clientId, noteText.trim());
       setNoteText("");
       api.fetchNotes(clientId).then(setNotes).catch((e) => console.error("[ClientProfile] fetchNotes:", e));
-    } catch (e) { console.error("[ClientProfile] addNote:", e); }
+    } catch (e) { console.error("[ClientProfile] addNote:", e); notify(humanError(e, "Не удалось сохранить заметку"), "error"); }
+    finally { setNoteBusy(false); }
   };
   const deleteNote = async (id: string) => {
     if (!(await ask("Удалить заметку?", { ok: "Удалить", danger: true }))) return;
@@ -507,7 +536,7 @@ function OverviewTab({ client, patch, patchHealth, notes, notesFailed, onRetry, 
         <h3 className="font-semibold text-sm flex items-center gap-1.5"><MessageSquare size={15} className="text-cyan-400" /> Заметки / история общения</h3>
         <div className="flex gap-2">
           <input value={noteText} onChange={(e) => setNoteText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addNote()} placeholder="Что обсудили, договорённости..." className="flex-1 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <button onClick={addNote} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 text-sm transition">Добавить</button>
+          <button onClick={addNote} disabled={noteBusy} className="bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg px-3 text-sm transition disabled:opacity-50">{noteBusy ? "…" : "Добавить"}</button>
         </div>
         <div className="space-y-1.5 max-h-64 overflow-y-auto">
           {notesFailed ? <LoadError onRetry={onRetry} /> : notes.length === 0 && <p className="text-xs text-zinc-600">Заметок пока нет</p>}
@@ -541,7 +570,9 @@ function ReportingTab({ clientId, failed, onRetry, measurements, setMeasurements
     { key: "activity", label: "Активность", icon: TrendingUp },
     { key: "photos", label: "Фото", icon: Images },
   ];
-  const [reportSub, setReportSub] = useState<ReportSub>("goals");
+  // 0.2: внутренняя вкладка «Отчётов» — на время сессии, своя у каждого клиента
+  const [reportSub, setReportSubState] = useState<ReportSub>(() => loadViewState<ReportSub>(`report-sub:${clientId}`, "goals"));
+  const setReportSub = (s: ReportSub) => { setReportSubState(s); saveViewState(`report-sub:${clientId}`, s); };
   // B03: кнопка «Замер» в шапке карточки — переключаем на «Замеры» и просим раскрыть форму.
   useEffect(() => { if (measureTick) setReportSub("body"); }, [measureTick]);
   return (
@@ -556,7 +587,7 @@ function ReportingTab({ clientId, failed, onRetry, measurements, setMeasurements
       </div>
       {reportSub === "body" && <BodyTab clientId={clientId} loadFailed={!!failed.measurements} onRetry={() => onRetry("measurements")} measurements={measurements} setMeasurements={setMeasurements} openForm={!!measureTick} />}
       {reportSub === "nutrition" && <NutritionDiary clientId={clientId} legacyLogs={nutritionLogs} measurements={measurements} asTrainer />}
-      {reportSub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly />}
+      {reportSub === "activity" && <ActivityTab clientId={clientId} activities={activities} setActivities={setActivities} readOnly loadFailed={!!failed.activities} onRetry={() => onRetry("activities")} />}
       {reportSub === "photos" && <PhotosTab clientId={clientId} photos={photos} setPhotos={setPhotos} loadFailed={!!failed.photos} onRetry={() => onRetry("photos")} />}
       {reportSub === "goals" && <GoalsDashboard clientId={clientId} />}
     </div>

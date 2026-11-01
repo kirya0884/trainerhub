@@ -4,16 +4,19 @@ import ModalShell from "./ModalShell";
 import * as api from "../lib/clients";
 import type { DeletedItem } from "../lib/clients";
 import { SkeletonRows } from "./Skeleton";
+import LoadError from "./LoadError";
 import { ask, notify } from "../lib/dialog";
 
 export default function TrashModal({ trainerId, onClose }: { trainerId: string; onClose: () => void }) {
   const [clients, setClients] = useState<DeletedItem[]>([]);
   const [plans, setPlans] = useState<DeletedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  // 0.3: ошибка загрузки — не «Корзина пуста»
+  const [failed, setFailed] = useState(false);
 
-  const load = () => Promise.all([api.fetchDeletedClients(trainerId), api.fetchDeletedPlans(trainerId)])
+  const load = () => { setFailed(false); return Promise.all([api.fetchDeletedClients(trainerId), api.fetchDeletedPlans(trainerId)])
     .then(([c, p]) => { setClients(c); setPlans(p); setLoading(false); })
-    .catch((e) => { setLoading(false); console.error("[TrashModal] load:", e); });
+    .catch((e) => { setLoading(false); setFailed(true); console.error("[TrashModal] load:", e); }); };
   useEffect(() => { load(); }, [trainerId]);
 
   const restoreClient = async (id: string) => { try { await api.restoreClient(id); load(); } catch (e) { console.error("[TrashModal] restoreClient:", e); notify("Не удалось восстановить."); } };
@@ -33,7 +36,8 @@ export default function TrashModal({ trainerId, onClose }: { trainerId: string; 
         {loading && <SkeletonRows />}
         {/* Срок из политики обработки данных; удаляет ночная задача purge_trash в базе */}
         <p className="text-xs text-zinc-500">Удалённое хранится здесь 30 дней, затем удаляется навсегда.</p>
-        {!loading && clients.length === 0 && plans.length === 0 && <p className="text-zinc-600 text-center py-6">Корзина пуста</p>}
+        {failed && <LoadError onRetry={() => { setLoading(true); load(); }} />}
+        {!loading && !failed && clients.length === 0 && plans.length === 0 && <p className="text-zinc-600 text-center py-6">Корзина пуста</p>}
 
         {clients.length > 0 && (
           <div>

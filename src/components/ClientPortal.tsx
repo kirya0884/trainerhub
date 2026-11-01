@@ -77,7 +77,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   const [nutritionLogs, setNutritionLogs] = useState<NutritionLog[]>([]);
   const [activities, setActivities] = useState<ClientActivity[]>([]);
   // Аудит п. 41: раздел не загрузился — «Не удалось загрузить» с повтором, а не «пока нет»
-  const [failed, setFailed] = useState<Partial<Record<"upcoming" | "payments" | "measurements", boolean>>>({});
+  const [failed, setFailed] = useState<Partial<Record<"upcoming" | "payments" | "measurements" | "activities", boolean>>>({});
   const mark = (k: keyof typeof failed, v: boolean) => setFailed((f) => (!!f[k] === v ? f : { ...f, [k]: v }));
   // П9: у подопечного не было индикатора непрочитанных — он не узнавал, что тренер написал.
   // Тренировка, завершённая без сети, ещё «идёт» на сервере — но для клиента она закончена
@@ -132,7 +132,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
     clientsApi.fetchPayments(client.id).then((v) => { setPayments(v); mark("payments", false); }).catch((e) => { console.error("[ClientPortal] fetchPayments:", e); mark("payments", true); });
     clientsApi.fetchMeasurements(client.id).then((v) => { setMeasurements(v); mark("measurements", false); }).catch((e) => { console.error("[ClientPortal] fetchMeasurements:", e); mark("measurements", true); });
     nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
-    portalApi.fetchClientActivities(client.id).then(setActivities).catch((e) => console.error("[ClientPortal] fetchActivities:", e));
+    portalApi.fetchClientActivities(client.id).then((v) => { setActivities(v); mark("activities", false); }).catch((e) => { console.error("[ClientPortal] fetchActivities:", e); mark("activities", true); });
     portalApi.fetchMyMembership(client.id).then(setMembership).catch((e) => console.error("[ClientPortal] абонемент:", e));
   };
   // Во время тренировки не обновляем — иначе сбивается ввод
@@ -653,7 +653,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
             </div>
           )}
           {reportSub === "body" && <BodyTab clientId={client.id} measurements={measurements} setMeasurements={setMeasurements} loadFailed={!!failed.measurements} onRetry={() => refresh()} />}
-          {reportSub === "activity" && <ActivityTab clientId={client.id} activities={activities} setActivities={setActivities} accent={profile.accentColor} />}
+          {reportSub === "activity" && <ActivityTab clientId={client.id} activities={activities} setActivities={setActivities} accent={profile.accentColor} loadFailed={!!failed.activities} onRetry={() => refresh()} />}
         </div>
       )}
 

@@ -51,7 +51,7 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
       const thumb = await fileToThumb(file);
       setMediaUrlInput(thumb);
       await saveMedia(detail.name, thumb);
-    } catch (e) { console.error("[LibraryModal] onMediaFile:", e); }
+    } catch (e) { console.error("[LibraryModal] onMediaFile:", e); notify("Не удалось обработать картинку. Попробуй другой файл."); }
   };
 
   const groups = ["Все", ...LIB_GROUP_ORDER, ...(customNames.length ? ["Мои"] : [])];

@@ -5,6 +5,7 @@ import * as portalApi from "../lib/clientPortal";
 import { fileToThumb } from "../lib/thumb";
 import { GOALS } from "../constants";
 import { notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 
 export const ACCENT_COLORS = ["#22d3ee", "#c6ff3d", "#fb923c", "#f472b6", "#a78bfa", "#facc15", "#34d399", "#f87171", "#60a5fa", "#e879f9"];
 
@@ -34,6 +35,7 @@ export default function ClientSettingsModal({ clientId, initial, onClose, onSave
   };
 
   const save = async () => {
+    if (busy) return;
     setBusy(true);
     try {
       await portalApi.updateSelfProfile(clientId, {
@@ -43,6 +45,10 @@ export default function ClientSettingsModal({ clientId, initial, onClose, onSave
       });
       onSaved(form);
       onClose();
+    } catch (e) {
+      // 0.4: раньше ошибка уходила в никуда — окно молча оставалось открытым
+      console.error("[ClientSettingsModal] save:", e);
+      notify(humanError(e, "Не удалось сохранить. Проверь интернет и попробуй ещё раз"), "error");
     } finally { setBusy(false); }
   };
 

@@ -3,6 +3,9 @@ import * as api from "../lib/progress";
 import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
 import type { DeletedSession, DeleteReason } from "../lib/progress";
 import type { Metric, ProgressNote, Session } from "../types";
+import { notify } from "../lib/dialog";
+
+let reviewWarnAt = 0;
 
 export function useProgress(planId: string) {
   const [progress, setProgress] = useState<ProgressNote[]>([]);
@@ -58,10 +61,14 @@ export function useProgress(planId: string) {
       throw e;
     }
   };
-  const restoreSession = async (id: string) => { try { await api.restoreSession(id); await load(); } catch (e) { console.error("[useProgress] restoreSession:", e); } };
+  const restoreSession = async (id: string) => { try { await api.restoreSession(id); await load(); } catch (e) { console.error("[useProgress] restoreSession:", e); notify("Не удалось восстановить тренировку."); } };
   const updateSessionReview = (id: string, review: string) => {
     setSessions((p) => p.map((x) => (x.id === id ? { ...x, review } : x)));
-    api.updateSessionReview(id, review).catch((e) => console.error("[useProgress] updateSessionReview:", e));
+    api.updateSessionReview(id, review).catch((e) => {
+      console.error("[useProgress] updateSessionReview:", e);
+      // 0.4: отзыв сохраняется на каждую букву — сообщаем о сбое один раз, а не на каждую
+      if (Date.now() - reviewWarnAt > 5000) { reviewWarnAt = Date.now(); notify("Отзыв не сохранился. Проверь интернет — допиши его, когда сеть вернётся."); }
+    });
   };
   const purgeSession = async (id: string) => {
     const snap = deletedSessions.find((x) => x.id === id);

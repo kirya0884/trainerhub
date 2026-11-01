@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from "react";
+import { registerModal } from "../lib/modalHistory";
 
 /** Стек открытых модалов: Escape должен закрывать только верхний, а не всю стопку. */
 const stack: symbol[] = [];
@@ -16,7 +17,8 @@ const FOCUSABLE =
  * с autoFocus, и перехват фокуса подрался бы с ними. Поэтому фокус ставится один
  * раз, на саму панель, и только если внутри нет autoFocus и ничего ещё не в фокусе.
  */
-export function useModalA11y(onClose: () => void, label?: string) {
+/** active=false — окно свёрнуто (тренировка): ни Escape, ни «Назад» его не касаются */
+export function useModalA11y(onClose: () => void, label?: string, active = true) {
   const ref = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
   // onClose родители передают новой стрелкой на каждой отрисовке. Раньше эффект зависел
@@ -27,7 +29,10 @@ export function useModalA11y(onClose: () => void, label?: string) {
   onCloseRef.current = onClose;
 
   useEffect(() => {
+    if (!active) return;
     const me = Symbol("modal");
+    // 0.1: «Назад» на телефоне закрывает это окно
+    const unregBack = registerModal(onCloseRef);
     stack.push(me);
     const restoreTo = document.activeElement as HTMLElement | null;
 
@@ -60,12 +65,13 @@ export function useModalA11y(onClose: () => void, label?: string) {
     window.addEventListener("keydown", onKey, true);
     return () => {
       window.removeEventListener("keydown", onKey, true);
+      unregBack();
       const i = stack.indexOf(me);
       if (i >= 0) stack.splice(i, 1);
       // Возврат фокуса туда, откуда открыли, — иначе он падает на body
       if (restoreTo && document.contains(restoreTo)) restoreTo.focus({ preventScroll: true });
     };
-  }, []);
+  }, [active]);
 
   return {
     titleId,

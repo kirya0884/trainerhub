@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, ClipboardList, Dumbbell, Play, Plus } from "lucide-react";
 import { SkeletonRows } from "./Skeleton";
+import LoadError from "./LoadError";
 import NutritionDiary from "./NutritionDiary";
 import BodyTab from "./BodyTab";
 import { ensureSelfClient } from "../lib/me";
 import { addPlan, fetchClientPlans, fetchMeasurements, type Measurement, type PlanListItem } from "../lib/clients";
-import { fetchPlan } from "../lib/plans";
+import { fetchPlanCached } from "../lib/plans";
+import { cached } from "../lib/offlineCache";
 import { useActiveWorkout } from "../hooks/useActiveWorkout";
 import type { Plan } from "../types";
 import { notify } from "../lib/dialog";
@@ -31,16 +33,19 @@ export default function MeTab({ trainerId, trainerName, action, onOpenPlan }: {
     if (action === "measure") { setSub("progress"); setMeasureTick((n) => n + 1); }
   }, [action]);
   const [selfId, setSelfId] = useState<string | null>(null);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(false);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
+  const [attempt, setAttempt] = useState(0);
 
+  // 0.3 / 2.16: «Я» нужен в зале — без сети берём сохранённое, при ошибке даём повторить
   useEffect(() => {
     let alive = true;
-    ensureSelfClient(trainerId, trainerName)
-      .then((id) => { if (!alive) return; setSelfId(id); fetchMeasurements(id).then((m) => alive && setMeasurements(m)).catch((e) => console.error("[MeTab] замеры:", e)); })
-      .catch((e) => { console.error("[MeTab]", e); if (alive) setError("Не удалось открыть раздел. Проверь интернет и попробуй ещё раз."); });
+    setError(false);
+    cached("self-id", () => ensureSelfClient(trainerId, trainerName))
+      .then((id) => { if (!alive) return; setSelfId(id); cached(`meas:${id}`, () => fetchMeasurements(id)).then((m) => alive && setMeasurements(m)).catch((e) => console.error("[MeTab] замеры:", e)); })
+      .catch((e) => { console.error("[MeTab]", e); if (alive) setError(true); });
     return () => { alive = false; };
-  }, [trainerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [trainerId, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-3 max-w-2xl">
@@ -51,7 +56,7 @@ export default function MeTab({ trainerId, trainerName, action, onOpenPlan }: {
             className={`flex-1 h-9 rounded-lg text-sm font-semibold transition ${sub === k ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100"}`}>{l}</button>
         ))}
       </div>
-      {error ? <p className="text-sm text-red-400 px-1">{error}</p> : !selfId ? <SkeletonRows rows={3} /> : (
+      {error && !selfId ? <LoadError onRetry={() => setAttempt((n) => n + 1)} /> : !selfId ? <SkeletonRows rows={3} /> : (
         <>
           {sub === "workouts" && <Workouts trainerId={trainerId} selfId={selfId} name={trainerName} onOpenPlan={(id) => onOpenPlan(id, selfId)} />}
           {sub === "nutrition" && <NutritionDiary clientId={selfId} measurements={measurements} embedded addRequest={addFood} />}
@@ -69,17 +74,21 @@ function Workouts({ trainerId, selfId, name, onOpenPlan }: { trainerId: string; 
   const [plan, setPlan] = useState<Plan | null>(null);
   const [newName, setNewName] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
-    fetchClientPlans(selfId).then((l) => {
+    setFailed(false);
+    // Ключ тот же, что у старта тренировки (useSessionSlot), — один кэш на оба экрана
+    cached(`client-plans:${selfId}`, () => fetchClientPlans(selfId)).then((l) => {
       if (!alive) return;
       setPlans(l);
       const cur = l.find((p) => !p.archived);
-      if (cur) fetchPlan(cur.id).then((p) => alive && setPlan(p)).catch((e) => console.error("[MeTab] план:", e));
-    }).catch((e) => { console.error("[MeTab] планы:", e); if (alive) setPlans([]); });
+      if (cur) fetchPlanCached(cur.id).then((p) => alive && setPlan(p)).catch((e) => { console.error("[MeTab] план:", e); if (alive) setFailed(true); });
+    }).catch((e) => { console.error("[MeTab] планы:", e); if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [selfId]);
+  }, [selfId, attempt]);
 
   const create = async () => {
     if (busy || !newName?.trim()) return;
@@ -88,6 +97,8 @@ function Workouts({ trainerId, selfId, name, onOpenPlan }: { trainerId: string; 
     catch (e) { console.error("[MeTab] новый план:", e); notify("Не удалось создать план."); setBusy(false); }
   };
 
+  // Раньше ошибка давала пустой список и ложное «собери свой план»
+  if (failed && (plans === null || !plan)) return <LoadError onRetry={() => setAttempt((n) => n + 1)} />;
   if (plans === null) return <SkeletonRows rows={3} />;
   const archivedMesos = new Set((plan?.mesocycles ?? []).filter((m) => m.archivedAt).map((m) => m.id));
   const days = (plan?.days ?? []).filter((d) => !(d.mesocycleId && archivedMesos.has(d.mesocycleId)));

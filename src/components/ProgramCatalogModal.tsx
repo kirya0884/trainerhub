@@ -4,6 +4,8 @@ import { GOAL_LABELS, PROGRAM_CATALOG, type CatalogProgram } from "../data/progr
 import * as api from "../lib/clients";
 import * as templatesApi from "../lib/templates";
 import ModalShell from "./ModalShell";
+import { notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 
 export default function ProgramCatalogModal({ trainerId, clientId, onClose, onCloned }: {
   trainerId: string; clientId: string; onClose: () => void; onCloned: (planId: string) => void;
@@ -14,11 +16,19 @@ export default function ProgramCatalogModal({ trainerId, clientId, onClose, onCl
   const filtered = PROGRAM_CATALOG.filter((p) => goal === "Все" || p.goal === goal);
 
   const clone = async (p: CatalogProgram) => {
+    if (cloning) return;
     setCloning(true);
+    let planId = "";
     try {
       const plan = await api.addPlan(trainerId, clientId, p.name);
+      planId = plan.id;
       await templatesApi.applyPlanTemplate(plan.id, p.days, 0);
       onCloned(plan.id);
+    } catch (e) {
+      // 0.4: ошибка молчала; план мог создаться пустым — тогда открываем его и говорим об этом
+      console.error("[ProgramCatalogModal] clone:", e);
+      if (planId) { notify("План создан, но дни скопировались не все — проверь его.", "error"); onCloned(planId); }
+      else notify(humanError(e, "Не удалось создать план"), "error");
     } finally { setCloning(false); }
   };
 

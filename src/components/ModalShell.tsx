@@ -3,8 +3,10 @@ import { type ReactNode } from "react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 
-export default function ModalShell({ title, icon, onClose, children, footer, wide }: {
+export default function ModalShell({ title, icon, onClose, children, footer, wide, backdropClose = true }: {
   title: string; icon?: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean;
+  /** false — тап мимо окна его не закрывает (мастер: случайный тап стирал введённое) */
+  backdropClose?: boolean;
 }) {
   // А1: роль, подпись, ловушка Tab, возврат фокуса и Escape только для верхнего модала
   const { titleId, panelProps } = useModalA11y(onClose);
@@ -16,7 +18,7 @@ export default function ModalShell({ title, icon, onClose, children, footer, wid
   const safeBottom = kb ? "" : "pb-[env(safe-area-inset-bottom)] sm:pb-0";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={onClose}
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={backdropClose ? onClose : undefined}
       style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       <div {...panelProps} onClick={(e) => e.stopPropagation()} className={`bg-zinc-900 text-zinc-100 border border-zinc-800 w-full ${wide ? "sm:max-w-2xl" : "sm:max-w-lg"} sm:rounded-2xl rounded-t-3xl max-h-[88vh] flex flex-col outline-none ${safeBottom}`}
         style={kb ? { maxHeight: kb.height - 12 } : undefined}>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { SkeletonRows } from "./Skeleton";
+import LoadError from "./LoadError";
 import { MACRO_COLOR } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
 import type { FoodEntry, Macros } from "../lib/foodDiary";
@@ -50,17 +51,20 @@ export default function NutritionReport({ clientId, goal, legacyLogs, measuremen
   const [anchor, setAnchor] = useState(today());
   const [entries, setEntries] = useState<FoodEntry[] | null>(null);
   const [sel, setSel] = useState<string | null>(null);
+  // 0.3: ошибка загрузки — не «ничего не съедено»
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const { from, to } = range(period, anchor);
   // Для графика веса — 8 недель до конца периода
   const loadFrom = period === "day" ? from : [from, addDays(weekStart(to), -49)].sort()[0];
 
   useEffect(() => {
     let alive = true;
-    setEntries(null); setSel(null);
+    setEntries(null); setSel(null); setFailed(false);
     api.fetchEntries(clientId, loadFrom, to).then((l) => { if (alive) setEntries(l); })
-      .catch((e) => { console.error("[NutritionReport]", e); if (alive) setEntries([]); });
+      .catch((e) => { console.error("[NutritionReport]", e); if (alive) setFailed(true); });
     return () => { alive = false; };
-  }, [clientId, loadFrom, to]);
+  }, [clientId, loadFrom, to, attempt]);
 
   // Итог по дням: записи по приёмам, иначе старый итог дня
   const byDay = useMemo(() => {
@@ -92,7 +96,7 @@ export default function NutritionReport({ clientId, goal, legacyLogs, measuremen
         <button onClick={() => setAnchor(shift(period, anchor, 1))} disabled={to >= t} aria-label="Позже" className="w-10 h-10 flex items-center justify-center rounded-lg text-zinc-400 hover:text-zinc-100 transition disabled:opacity-30"><ChevronRight size={20} /></button>
       </div>
 
-      {entries === null ? <SkeletonRows rows={3} /> : period === "day" ? (
+      {failed ? <LoadError onRetry={() => setAttempt((n) => n + 1)} /> : entries === null ? <SkeletonRows rows={3} /> : period === "day" ? (
         <DayReport entries={entries.filter((e) => e.date === from)} legacy={byDay.get(from)} goal={goal} onOpen={() => onOpenDay(from)} />
       ) : (
         <>

@@ -6,6 +6,7 @@ import { fmtDate, today } from "../lib/format";
 import { ask, notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 import { goalActivityType, parseGoalValue } from "../lib/goals";
+import LoadError from "./LoadError";
 
 const ACTIVITY_PRESETS = ["Шаги", "Активные минуты", "Прогулка", "Бег", "Велосипед", "Плавание", "Йога", "Растяжка", "Другое"];
 // Цели тренера (lib/goals) считают только записи с type "steps" / "active_minutes" —
@@ -15,12 +16,14 @@ const GOAL_LABELS: Record<string, string> = { steps: "Шаги", active_minutes:
 const typeLabel = (t: string) => GOAL_LABELS[goalActivityType(t) ?? ""] ?? t;
 const UNIT_PRESETS: Record<string, string> = { "Шаги": "шагов", "Активные минуты": "мин", "Прогулка": "шагов", "Бег": "км", "Велосипед": "км", "Плавание": "м", "Йога": "мин", "Растяжка": "мин" };
 
-export default function ActivityTab({ clientId, activities, setActivities, readOnly, accent }: {
+export default function ActivityTab({ clientId, activities, setActivities, readOnly, accent, loadFailed, onRetry }: {
   clientId: string;
   activities: ClientActivity[];
   setActivities: React.Dispatch<React.SetStateAction<ClientActivity[]>>;
   readOnly?: boolean;
   accent?: string;
+  /** 0.3: список не загрузился — «Повторить», а не «активность не записана» */
+  loadFailed?: boolean; onRetry?: () => void;
 }) {
   const [type, setType] = useState("");
   const [value, setValue] = useState("");
@@ -36,7 +39,7 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
   };
 
   const add = async () => {
-    if (!type.trim() || !value.trim()) return;
+    if (busy || !type.trim() || !value.trim()) return;
     const goalType = goalActivityType(type);
     // В цель идёт голое число: «8 000» / «8.000» → 8000, «12,5» мин → 12.5
     const n = goalType ? parseGoalValue(goalType, value) : null;
@@ -92,7 +95,7 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
         </div>
       )}
 
-      {dates.length === 0 && <p className="text-sm text-zinc-600 text-center py-6">Активность не записана</p>}
+      {dates.length === 0 && (loadFailed && onRetry ? <LoadError onRetry={onRetry} /> : <p className="text-sm text-zinc-600 text-center py-6">Активность не записана</p>)}
 
       {dates.map((d) => (
         <div key={d} className="space-y-1.5">
