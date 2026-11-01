@@ -5,8 +5,7 @@ import ModalShell from "./ModalShell";
 export const NO_SHOW_REASONS = ["Уважительная", "Проспал", "Забыл", "Другое"] as const;
 export type NoShowReason = (typeof NO_SHOW_REASONS)[number];
 
-// «Не пришёл»: причина у каждого подопечного своя. Списываем всё, кроме уважительной —
-// так же, как при удалении тренировки (DeleteSessionModal).
+// «Не пришёл»: причина у каждого подопечного своя. Списываем всё, кроме уважительной.
 export default function NoShowModal({ clients, onConfirm, onClose }: {
   clients: { id: string; name: string; remaining?: string | null }[]; onConfirm: (reasons: Record<string, NoShowReason>) => void | Promise<void>; onClose: () => void;
 }) {

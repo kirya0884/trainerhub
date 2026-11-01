@@ -17,6 +17,7 @@ export interface ClientListItem {
   remaining: string | null;
   avatarUrl: string;
   format: string;
+  phone: string; // для поиска по номеру
 }
 
 // remaining — остаток тренировок из абонемента (только для типа "sessions"); для подписки/без абонемента — null (бейдж не рисуем).
@@ -38,7 +39,7 @@ export async function confirmEmptyMembership(clients: { name: string; remaining?
 export async function fetchClients(trainerId: string): Promise<ClientListItem[]> {
   const { data, error } = await supabase
     .from("clients")
-    .select("id,name,goal,color,status,format,active_session,health,membership,avatar_url")
+    .select("id,name,goal,color,status,format,active_session,health,membership,avatar_url,phone")
     .eq("trainer_id", trainerId)
     .eq("is_self", false) // своя карточка тренера («Я») — не подопечный
     .is("deleted_at", null)
@@ -48,7 +49,7 @@ export async function fetchClients(trainerId: string): Promise<ClientListItem[]>
     id: c.id, name: c.name, goal: c.goal ?? "", color: upgradeLime(c.color), status: c.status, format: c.format ?? "",
     activeSession: c.active_session, hasHealthFlags: !!(c.health?.injuries || c.health?.restrictions),
     remaining: remainingOf(c.membership),
-    avatarUrl: c.avatar_url ?? "",
+    avatarUrl: c.avatar_url ?? "", phone: c.phone ?? "",
   }));
 }
 
@@ -362,15 +363,34 @@ export async function incrementMembershipRemaining(clientId: string, membership:
   return { membership: { ...emptyMembership, ...(d?.membership || {}) } as Membership, duplicate: !!d?.duplicate };
 }
 
+// Списана ли тренировка за эту дату: строки списаний (workout / client / no_show) минус уже
+// сделанные возвраты за ту же дату. Отдельной связи «сессия → списание» нет, поэтому по дате
+// (как и гард П12: одно списание на день).
+export async function sessionChargedOnDate(clientId: string, date: string): Promise<boolean> {
+  const { data, error } = await supabase.from("session_charges").select("kind").eq("client_id", clientId).eq("date", date);
+  if (error) throw error;
+  const rows = data ?? [];
+  const refunds = rows.filter((r) => r.kind === "refund").length;
+  return rows.length - refunds > refunds;
+}
+
 export interface Measurement {
   id: string; date: string; note: string;
   weight: string; neck: string; shoulders: string; chest: string; waist: string;
   glutes: string; thigh: string; biceps: string; bodyfat: string; muscleMass: string;
 }
-const numOrNull = (v: string) => (v === "" || v == null ? null : Number(v));
+// «72,5» с русской клавиатуры: Number дал бы NaN, и замер сохранялся пустым. Пусто/мусор → null.
+export const numOrNull = (v: string) => {
+  const s = String(v ?? "").trim().replace(",", ".");
+  if (s === "") return null;
+  const n = Number(s);
+  return isNaN(n) ? null : n;
+};
 
 export async function fetchMeasurements(clientId: string): Promise<Measurement[]> {
-  const { data, error } = await supabase.from("client_measurements").select("*").eq("client_id", clientId).order("date");
+  // Второй ключ — id: при двух замерах в один день порядок иначе не определён
+  // (created_at в client_measurements нет; uuid даёт стабильный, но не хронологический порядок)
+  const { data, error } = await supabase.from("client_measurements").select("*").eq("client_id", clientId).order("date").order("id");
   if (error) throw error;
   return (data ?? []).map((m) => ({
     id: m.id, date: m.date, note: m.note ?? "",

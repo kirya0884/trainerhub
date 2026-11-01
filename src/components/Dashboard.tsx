@@ -6,6 +6,7 @@ import { cached, onRevalidate, peekCache, releaseStale, staleAtOf } from "../lib
 import { onClientsChanged } from "../lib/clientsBus";
 import type { DashboardClient } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
+import { debtClients } from "../lib/analytics";
 import type { Booking } from "../lib/bookings";
 import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
 import { supabase } from "../lib/supabase";
@@ -92,7 +93,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
     if (!data) return;
     const ts = today();
     const act = data.clients.filter((c) => c.status !== "left");
-    const dbt = act.filter((c) => c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && Number(c.membership.remaining) <= 0);
+    const dbt = debtClients(act, ts, new Set(data.payments.filter((p) => p.payStatus !== "paid").map((p) => p.clientId)));
     const exp = act.filter((c) => { const r = Number(c.membership.remaining); return c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && (r === 1 || r === 2); });
     const todayOccs = expandBookings(bookings, ts, ts).sort((a, b) => a.time.localeCompare(b.time));
     notifyDailyDigest(trainerId, { todayCount: todayOccs.length, debtNames: dbt.map((c) => c.name), expiringNames: exp.map((c) => c.name) });
@@ -154,7 +155,9 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   const todayStr = today();
 
   const activeClients = clients.filter((c) => c.status !== "left");
-  const debt = activeClients.filter((c) => c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && Number(c.membership.remaining) <= 0);
+  // Долг: пакет закончился или подписка просрочена — то же правило, что в «Финансах»
+  // (подписку клиента с неоплаченным платежом не считаем — она уже в «ждут оплаты»)
+  const debt = debtClients(activeClients, todayStr, new Set(payments.filter((p) => p.payStatus !== "paid").map((p) => p.clientId)));
   const expiring = activeClients.filter((c) => { const r = Number(c.membership.remaining); return c.membership.type === "sessions" && c.membership.remaining !== "" && c.membership.remaining != null && (r === 1 || r === 2); });
   const birthdays = activeClients.map((c) => {
     if (!c.birthday) return null;
@@ -373,7 +376,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           )}
           {(cashPending > 0 || debt.length > 0) && (
             <span className="block text-[13px] text-orange-300 truncate">
-              {[cashPending > 0 ? `ждут оплаты ${cashPending.toLocaleString("ru-RU")} ₽` : null, debt.length > 0 ? `пакет закончился у ${debt.length}` : null].filter(Boolean).join(" · ")}
+              {[cashPending > 0 ? `ждут оплаты ${cashPending.toLocaleString("ru-RU")} ₽` : null, debt.length > 0 ? `долг у ${debt.length}` : null].filter(Boolean).join(" · ")}
             </span>
           )}
         </span>

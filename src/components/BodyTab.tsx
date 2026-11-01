@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, Ruler, X } from "lucide-react";
 import TrendChart from "./TrendChart";
 import { BODY_METRICS } from "../constants";
-import { today } from "../lib/format";
+import { fmtDate, today } from "../lib/format";
 import * as api from "../lib/clients";
 import type { Measurement } from "../lib/clients";
 import NumField from "./NumField";
@@ -21,6 +21,7 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
   const [form, setForm] = useState(emptyMeasurement());
   const [bodyMetric, setBodyMetric] = useState<string>(BODY_METRICS[0].key);
   const [allFields, setAllFields] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // B08: форма показывала все десять полей сразу — на 59 подопечных за всё время
   // сделано 12 замеров. Вместо угадывания «правильной тройки» берём те поля,
@@ -28,7 +29,8 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
   // увидит талию и бёдра. Если замеров ещё нет — разумный стартовый набор.
   // ponytail: без настроек и без хранилища — набор выводится из самих данных.
   const lastFilled = (() => {
-    const last = measurements[0];
+    // fetchMeasurements сортирует по возрастанию даты — последний замер в конце массива
+    const last = measurements[measurements.length - 1];
     if (!last) return null;
     const keys = BODY_METRICS.map((m) => m.key).filter((k) => {
       const v = (last as any)[k];
@@ -41,12 +43,29 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
   const hiddenCount = BODY_METRICS.length - visibleMetrics.length;
 
   const submit = async () => {
+    if (saving) return; // двойной тап давал два одинаковых замера
+    // по тем же значениям, что уйдут в базу: пустое или «abc» станет null
+    if (BODY_METRICS.every((m) => api.numOrNull((form as any)[m.key]) == null)) { notify("Заполни хотя бы одно поле"); return; }
+    setSaving(true);
     try {
       await api.addMeasurement(clientId, form);
       setForm(emptyMeasurement());
       setShowForm(false);
       api.fetchMeasurements(clientId).then(setMeasurements).catch((e) => console.error("[BodyTab] fetchMeasurements:", e));
     } catch (e) { console.error("[BodyTab] submit:", e); notify("Не удалось сохранить замер."); }
+    finally { setSaving(false); }
+  };
+
+  // Разница веса и талии с предыдущим (по дате) замером, где этот параметр заполнен: «−1,2 кг», «+0,5 см»
+  const diffOf = (idx: number, key: "weight" | "waist", unit: string) => {
+    const has = (m: Measurement) => m[key] !== "" && m[key] != null;
+    if (!has(measurements[idx])) return null;
+    let j = idx - 1;
+    while (j >= 0 && !has(measurements[j])) j--;
+    if (j < 0) return null;
+    const d = Math.round((Number(measurements[idx][key]) - Number(measurements[j][key])) * 10) / 10;
+    if (!d || isNaN(d)) return null;
+    return `${d > 0 ? "+" : "−"}${Math.abs(d).toLocaleString("ru-RU")} ${unit}`;
   };
   const remove = async (id: string) => {
     if (!(await ask("Удалить замер?", { ok: "Удалить", danger: true }))) return;
@@ -83,7 +102,7 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
             </button>
           )}
           <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="заметка (необязательно)" className="w-full bg-zinc-800 rounded-xl px-2.5 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-          <button onClick={submit} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm transition" style={{ background: "var(--accent)" }}>Сохранить замер</button>
+          <button onClick={submit} disabled={saving} className="w-full text-zinc-950 font-semibold rounded-xl py-2 text-sm transition disabled:opacity-50" style={{ background: "var(--accent)" }}>{saving ? "Сохраняю…" : "Сохранить замер"}</button>
         </div>
       )}
 
@@ -104,11 +123,15 @@ export default function BodyTab({ clientId, measurements, setMeasurements, openF
       )}
       {measurements.length > 0 && (
         <div className="space-y-1.5">
-          {[...measurements].reverse().map((e) => (
+          {/* список — от новых к старым; разница считается по хронологическому индексу */}
+          {measurements.map((e, idx) => ({ e, idx })).reverse().map(({ e, idx }) => (
             <div key={e.id} className="flex items-center gap-2 bg-zinc-800/40 rounded-xl px-3 py-2 text-sm">
-              <span className="text-zinc-400 shrink-0 w-16">{e.date.slice(5)}</span>
+              <span className="text-zinc-400 shrink-0 w-20">{fmtDate(e.date)}</span>
               <span className="flex-1 flex flex-wrap gap-x-3 gap-y-0.5 text-zinc-300">
-                {BODY_METRICS.filter((m) => (e as any)[m.key] !== "" && (e as any)[m.key] != null).map((m) => <span key={m.key}>{m.label.toLowerCase()} {(e as any)[m.key]}{m.unit === "%" ? "%" : ""}</span>)}
+                {BODY_METRICS.filter((m) => (e as any)[m.key] !== "" && (e as any)[m.key] != null).map((m) => {
+                  const diff = m.key === "weight" || m.key === "waist" ? diffOf(idx, m.key, m.unit) : null;
+                  return <span key={m.key}>{m.label.toLowerCase()} {(e as any)[m.key]}{m.unit === "%" ? "%" : ""}{diff && <span className="text-zinc-500"> ({diff})</span>}</span>;
+                })}
                 {e.note && <span className="text-zinc-500">· {e.note}</span>}
               </span>
               <button onClick={() => remove(e.id)} aria-label="Удалить замер" className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>

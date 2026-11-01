@@ -5,7 +5,7 @@ import { FeelingBadge } from "./FeelingScale";
 import { usePlan } from "../hooks/usePlan";
 import { useExerciseLibrary } from "../hooks/useExerciseLibrary";
 import { useProgress } from "../hooks/useProgress";
-import { incrementMembershipRemaining, fetchClient, sessionPrice, combinedRemaining, confirmEmptyMembership, remainingOf, type Membership } from "../lib/clients";
+import { incrementMembershipRemaining, sessionChargedOnDate, fetchClient, sessionPrice, combinedRemaining, confirmEmptyMembership, remainingOf, type Membership } from "../lib/clients";
 import { fmtDate, initials, today } from "../lib/format";
 import type { DeleteReason } from "../lib/progress";
 import * as templatesApi from "../lib/templates";
@@ -333,16 +333,46 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
     }
   };
 
-  const confirmDeleteSession = async (reason: DeleteReason) => {
-    if (!deletingSessionId) return;
+  // Списана ли удаляемая тренировка — чтобы не вернуть в абонемент то, что не списывали.
+  // Ответ привязан к id: пока он от другой тренировки — «проверяем»; null — проверить не вышло
+  // (тогда по умолчанию не возвращаем, решает тренер переключателем).
+  const [deleteCharged, setDeleteCharged] = useState<{ id: string; v: boolean | null } | null>(null);
+  const deleteRefundable = !!membership && membership.type !== "subscription";
+  useEffect(() => {
+    const id = deletingSessionId;
+    // Старый результат (та же тренировка после восстановления из корзины) не используем — проверяем заново
+    setDeleteCharged(null);
+    if (!id || !deleteRefundable) return;
+    const delDate = sessions.find((s) => s.id === id)?.date;
+    if (!delDate) { setDeleteCharged({ id, v: null }); return; }
+    let alive = true;
+    sessionChargedOnDate(clientId, delDate).then((v) => { if (alive) setDeleteCharged({ id, v }); }, (e) => {
+      console.error("[PlanEditor] sessionChargedOnDate:", e);
+      if (alive) setDeleteCharged({ id, v: null });
+    });
+    return () => { alive = false; };
+  }, [deletingSessionId, deleteRefundable]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Другая тренировка этого плана за тот же день — списание за дату, скорее всего, её
+  const deleteDate = sessions.find((s) => s.id === deletingSessionId)?.date;
+  const deleteOtherSameDay = !!deleteDate && sessions.some((s) => s.id !== deletingSessionId && s.date === deleteDate);
+
+  // Повторный тап, пока идёт удаление, не должен вернуть тренировку в абонемент второй раз
+  const deletingBusy = useRef(false);
+  const confirmDeleteSession = async (reason: DeleteReason, refund: boolean) => {
+    const id = deletingSessionId;
+    const delDate = sessions.find((s) => s.id === id)?.date;
+    if (!id || !delDate || deletingBusy.current) return;
+    deletingBusy.current = true;
     try {
-      const delDate = sessions.find((s) => s.id === deletingSessionId)?.date;
-      await deleteSession(deletingSessionId, reason);
-      if (reason === "Уважительная" && membership) setMembership((await incrementMembershipRemaining(clientId, membership, { date: delDate })).membership);
-    } catch (e: any) {
-      console.error("[PlanEditor] confirmDeleteSession:", e);
-      notify("Не удалось удалить тренировку. Попробуй ещё раз.");
+      try { await deleteSession(id, reason); }
+      catch (e) { notify(humanError(e, "Не удалось удалить тренировку")); return; }
+      // Возврат — только после успешного удаления
+      if (refund && membership) {
+        try { setMembership((await incrementMembershipRemaining(clientId, membership, { date: delDate })).membership); }
+        catch (e) { notify(humanError(e, "Тренировка удалена, но вернуть её в абонемент не удалось")); }
+      }
     } finally {
+      deletingBusy.current = false;
       setDeletingSessionId(null);
     }
   };
@@ -559,7 +589,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
         </ModalShell>
       )}
 
-      {deletingSessionId && <DeleteSessionModal onConfirm={confirmDeleteSession} onClose={() => setDeletingSessionId(null)} />}
+      {deletingSessionId && <DeleteSessionModal refundable={deleteRefundable} otherSameDay={deleteOtherSameDay} charged={deleteCharged?.id === deletingSessionId ? deleteCharged.v : undefined} onConfirm={confirmDeleteSession} onClose={() => setDeletingSessionId(null)} />}
 
       {sub === "progress" && (
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">

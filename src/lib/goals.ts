@@ -63,20 +63,41 @@ export async function fetchNutritionByDay(clientId: string, from: string, to: st
   return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
 }
 
+// Тип записи активности, который идёт в цели: без учёта регистра и лишних пробелов,
+// по-английски (служебный) или по-русски (клиент мог вписать «шаги» руками).
+const GOAL_ACTIVITY: Record<string, "steps" | "active_minutes"> = { "steps": "steps", "шаги": "steps", "active_minutes": "active_minutes", "активные минуты": "active_minutes" };
+export const goalActivityType = (t: string) => GOAL_ACTIVITY[String(t ?? "").trim().toLowerCase().replace(/\s+/g, " ")] ?? null;
+
+// Значение для цели. Шаги — только целое: «8 000», «8.000», «8,000» → 8000 (точка/запятая перед
+// ровно тремя цифрами — разделитель тысяч), «8000.5» → null. Минуты — «12,5» → 12.5. Мусор → null.
+export function parseGoalValue(kind: "steps" | "active_minutes", v: unknown): number | null {
+  let s = String(v ?? "").replace(/\s/g, "");
+  if (kind === "steps") {
+    if (/^\d{1,3}([.,]\d{3})+$/.test(s)) s = s.replace(/[.,]/g, "");
+    return /^\d+$/.test(s) ? Number(s) : null;
+  }
+  s = s.replace(",", ".");
+  const n = Number(s);
+  return s && !isNaN(n) ? n : null;
+}
+
 export async function fetchActivityByDay(clientId: string, from: string, to: string): Promise<DayActivity[]> {
-  const { data } = await supabase
+  // Тип фильтруем здесь, а не в запросе: in("type", …) сравнивал строго, и «Шаги»/«steps » терялись
+  const { data, error } = await supabase
     .from("client_activities")
     .select("date,type,value")
     .eq("client_id", clientId)
     .gte("date", from)
-    .lte("date", to)
-    .in("type", ["steps", "active_minutes"]);
+    .lte("date", to);
+  if (error) throw error;
   const map: Record<string, DayActivity> = {};
   for (const r of data ?? []) {
+    const kind = goalActivityType(r.type);
+    if (!kind) continue;
     if (!map[r.date]) map[r.date] = { date: r.date, steps: 0, activeMinutes: 0 };
-    const v = Number(r.value ?? 0);
-    if (r.type === "steps") map[r.date].steps += v;
-    if (r.type === "active_minutes") map[r.date].activeMinutes += v;
+    const v = parseGoalValue(kind, r.value) ?? 0;
+    if (kind === "steps") map[r.date].steps += v;
+    else map[r.date].activeMinutes += v;
   }
   return Object.values(map).sort((a, b) => a.date.localeCompare(b.date));
 }

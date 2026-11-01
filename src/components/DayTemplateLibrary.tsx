@@ -5,7 +5,8 @@ import * as api from "../lib/templates";
 import type { DayTemplate } from "../lib/templates";
 import type { Day, Exercise } from "../types";
 import { SkeletonRows } from "./Skeleton";
-import { ask } from "../lib/dialog";
+import { ask, notify } from "../lib/dialog";
+import { humanError } from "../lib/errors";
 
 interface TplEx {
   tempId: string;
@@ -15,19 +16,24 @@ interface TplEx {
   weight: string;
   rest: string;
   note: string;
+  // Исходное упражнение шаблона: редактор показывает не все поля, остальные
+  // (разные подходы, суперсет, видео, kind, пульсовая зона…) берём отсюда как есть
+  src?: Exercise;
 }
 
 interface EditState {
   id: string | null;
   name: string;
   exercises: TplEx[];
+  srcDay?: Day;
 }
 
 function exToTpl(ex: Exercise, i: number): TplEx {
-  return { tempId: ex.id || `tmp-${i}`, name: ex.name, sets: ex.sets ?? "", reps: ex.reps ?? "", weight: ex.weight ?? "", rest: ex.rest ?? "", note: ex.note ?? "" };
+  return { tempId: ex.id || `tmp-${i}`, name: ex.name, sets: ex.sets ?? "", reps: ex.reps ?? "", weight: ex.weight ?? "", rest: ex.rest ?? "", note: ex.note ?? "", src: ex };
 }
 
-function tplToEx(e: TplEx): Partial<Exercise> & { id: string; name: string; setRows: [] } {
+function tplToEx(e: TplEx): Partial<Exercise> & { id: string; name: string } {
+  if (e.src) return { ...e.src, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest: e.rest, note: e.note };
   return { id: e.tempId, name: e.name, sets: e.sets, reps: e.reps, weight: e.weight, rest: e.rest, note: e.note, video: "", detailed: false, group: "", tempo: "", duration: "", target: "", setRows: [] };
 }
 
@@ -50,7 +56,7 @@ export default function DayTemplateLibrary({
 
   const startNew = () => setEditing({ id: null, name: "", exercises: [] });
   const startEdit = (t: DayTemplate) =>
-    setEditing({ id: t.id, name: t.name, exercises: (t.day.exercises ?? []).map(exToTpl) });
+    setEditing({ id: t.id, name: t.name, exercises: (t.day.exercises ?? []).map(exToTpl), srcDay: t.day });
 
   const addEx = () =>
     setEditing((e) => e ? { ...e, exercises: [...e.exercises, { tempId: `tmp-${Date.now()}`, name: "", sets: "", reps: "", weight: "", rest: "", note: "" }] } : e);
@@ -64,9 +70,10 @@ export default function DayTemplateLibrary({
     setSaving(true);
     try {
       const day: Day = {
+        ...editing.srcDay,
         id: editing.id ?? "",
         name: editing.name,
-        weekday: null,
+        weekday: editing.srcDay?.weekday ?? null,
         exercises: editing.exercises.map(tplToEx) as Exercise[],
         visibleToClient: true,
         dateOf: null,
@@ -79,6 +86,9 @@ export default function DayTemplateLibrary({
       }
       load();
       setEditing(null);
+    } catch (e) {
+      console.error("[DayTemplateLibrary] save:", e);
+      notify(humanError(e, "Не удалось сохранить шаблон"), "error");
     } finally {
       setSaving(false);
     }
@@ -86,8 +96,8 @@ export default function DayTemplateLibrary({
 
   const handleDelete = async (id: string) => {
     if (!(await ask("Удалить шаблон?", { danger: true, ok: "Удалить" }))) return;
-    await api.deleteDayTemplate(id);
-    load();
+    try { await api.deleteDayTemplate(id); load(); }
+    catch (e) { console.error("[DayTemplateLibrary] delete:", e); notify(humanError(e, "Не удалось удалить шаблон"), "error"); }
   };
 
   const handleInsert = async () => {
@@ -98,9 +108,12 @@ export default function DayTemplateLibrary({
     try {
       await api.applyDayTemplate(planId, { ...tpl.day, name: insertFor.name }, dayCount);
       onInserted();
+      setInsertFor(null);
+    } catch (e) {
+      console.error("[DayTemplateLibrary] insert:", e);
+      notify(humanError(e, "Не удалось вставить день"), "error");
     } finally {
       setSaving(false);
-      setInsertFor(null);
     }
   };
 
@@ -124,22 +137,30 @@ export default function DayTemplateLibrary({
               <div className="hidden sm:grid grid-cols-[1fr_2.5rem_3.5rem_3.5rem_3.5rem_1.5rem] gap-1.5 px-2 text-xs text-zinc-500">
                 <span>Упражнение</span><span className="text-center">×</span><span className="text-center">Кг</span><span className="text-center">Повт.</span><span className="text-center">Отд.</span><span />
               </div>
-              {editing.exercises.map((ex, i) => (
-                <div key={ex.tempId} className="flex items-center gap-1.5 bg-zinc-800/50 rounded-lg p-2">
+              {editing.exercises.map((ex, i) => {
+                // Построчные подходы главнее sets/reps/weight — правка здесь бы тихо игнорировалась
+                const rowsLocked = !!(ex.src?.detailed && ex.src.setRows?.length);
+                const locked = rowsLocked ? " opacity-50 cursor-not-allowed" : "";
+                return (
+                <div key={ex.tempId} className="bg-zinc-800/50 rounded-lg p-2">
+                <div className="flex items-center gap-1.5">
                   <span className="text-zinc-600 text-xs w-4 shrink-0 text-right">{i + 1}</span>
                   <input value={ex.name} onChange={(e) => updateEx(ex.tempId, { name: e.target.value })}
                     placeholder="Упражнение" className="flex-1 min-w-0 bg-zinc-900 rounded-xl px-2 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40" />
-                  <input value={ex.sets} onChange={(e) => updateEx(ex.tempId, { sets: e.target.value })}
-                    inputMode="numeric" placeholder="×" className="w-10 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
-                  <input value={ex.weight} onChange={(e) => updateEx(ex.tempId, { weight: e.target.value })}
-                    inputMode="decimal" placeholder="кг" className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
-                  <input value={ex.reps} onChange={(e) => updateEx(ex.tempId, { reps: e.target.value })}
-                    inputMode="text" placeholder="пов." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
+                  <input value={ex.sets} onChange={(e) => updateEx(ex.tempId, { sets: e.target.value })} readOnly={rowsLocked} aria-readonly={rowsLocked}
+                    inputMode="numeric" placeholder="×" className={`w-10 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0${locked}`} />
+                  <input value={ex.weight} onChange={(e) => updateEx(ex.tempId, { weight: e.target.value })} readOnly={rowsLocked} aria-readonly={rowsLocked}
+                    inputMode="decimal" placeholder="кг" className={`w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0${locked}`} />
+                  <input value={ex.reps} onChange={(e) => updateEx(ex.tempId, { reps: e.target.value })} readOnly={rowsLocked} aria-readonly={rowsLocked}
+                    inputMode="text" placeholder="пов." className={`w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0${locked}`} />
                   <input value={ex.rest} onChange={(e) => updateEx(ex.tempId, { rest: e.target.value })}
                     inputMode="decimal" placeholder="отд." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />
                   <button onClick={() => removeEx(ex.tempId)} className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition shrink-0"><X size={13} /></button>
                 </div>
-              ))}
+                {rowsLocked && <p className="text-xs text-zinc-500 mt-1 pl-6">Построчные подходы — правь в плане</p>}
+                </div>
+                );
+              })}
               {editing.exercises.length === 0 && (
                 <p className="text-zinc-600 text-sm text-center py-3">Нет упражнений — добавь первое</p>
               )}

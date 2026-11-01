@@ -2,7 +2,7 @@ import { Bell, Copy, MessageCircle, MessageSquare, Send, Share2 } from "lucide-r
 import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import { fetchClient } from "../lib/clients";
-import { addDays, today } from "../lib/format";
+import { addDays, today, waPhone } from "../lib/format";
 import { track } from "../lib/events";
 
 const whenText = (date: string) => {
@@ -30,7 +30,7 @@ export default function RemindModal({ clientId, name, date, time, onClose }: { c
     try { await navigator.clipboard.writeText(text); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* нет доступа к буферу — текст можно выделить вручную */ }
   };
   const enc = encodeURIComponent(text);
-  const wa = contacts?.whatsapp ? `https://wa.me/${contacts.whatsapp.replace(/\D/g, "")}?text=${enc}` : "";
+  const wa = contacts?.whatsapp ? `https://wa.me/${waPhone(contacts.whatsapp)}?text=${enc}` : "";
   // Telegram не умеет подставлять текст в чат по нику — копируем текст и открываем чат
   const tg = contacts?.telegram ? (contacts.telegram.startsWith("http") ? contacts.telegram : `https://t.me/${contacts.telegram.replace(/^@/, "")}`) : "";
   const sms = contacts?.phone ? `sms:${contacts.phone.replace(/[^\d+]/g, "")}?&body=${enc}` : "";

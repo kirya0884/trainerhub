@@ -1,7 +1,7 @@
 import type { DashboardClient, DashboardPayment } from "./dashboard";
 // Ключ месяца — из локальной даты: toISOString на UTC+ сдвигал 1-е число в прошлый месяц,
 // и доход сентября стоял под подписью «октябрь».
-import { toDateStr } from "./format";
+import { toDateStr, today } from "./format";
 
 // Чистые функции аналитики дашборда — без сетевых вызовов, работают над уже загруженными clients/payments.
 
@@ -42,12 +42,23 @@ export function revenueBySource(clients: DashboardClient[], payments: DashboardP
   return Object.entries(totals).map(([source, total]) => ({ source, total })).sort((a, b) => b.total - a.total);
 }
 
-// Клиенты с исчерпанным пакетом (долг)
-export function debtClients(clients: DashboardClient[]) {
+// На сколько дней просрочена подписка (дата следующей оплаты раньше сегодня); 0 — не просрочена или не подписка
+export function subscriptionOverdueDays(c: DashboardClient, t = today()) {
+  const m = c.membership;
+  if (m?.type !== "subscription" || !m.nextPaymentDate || m.nextPaymentDate >= t) return 0;
+  return Math.round((new Date(t + "T00:00:00").getTime() - new Date(m.nextPaymentDate + "T00:00:00").getTime()) / 86400000);
+}
+
+// Долг: исчерпанный пакет или просроченная подписка. Раньше просроченная подписка не попадала
+// никуда — «Скоро продление» берёт только даты от сегодня.
+// Без ушедших, архивных и на паузе: у них дата оплаты стоит, и «просрочка» росла бы бесконечно.
+// pendingIds — клиенты с неоплаченным платежом: их подписку вторым долгом не считаем.
+export function debtClients(clients: DashboardClient[], t = today(), pendingIds?: Set<string>) {
   return clients.filter((c) => {
-    if (c.status === "left") return false;
+    if (c.status === "left" || c.status === "archived" || c.status === "paused") return false;
     const m = c.membership;
-    return m?.type === "sessions" && m.remaining !== "" && m.remaining != null && Number(m.remaining) <= 0;
+    if (m?.type === "sessions") return m.remaining !== "" && m.remaining != null && Number(m.remaining) <= 0;
+    return !pendingIds?.has(c.id) && subscriptionOverdueDays(c, t) > 0;
   });
 }
 

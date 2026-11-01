@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import type { Day } from "../types";
+import { notify } from "./dialog";
 
 export interface PlanTemplate { id: string; name: string; days: Day[] }
 export interface DayTemplate { id: string; name: string; day: Day }
@@ -81,4 +82,30 @@ export async function applyPlanTemplate(planId: string, templateDays: Day[], exi
 }
 export async function applyDayTemplate(planId: string, day: Day, position: number) {
   await insertDayFromTemplate(planId, day, position);
+}
+// Новый план для клиента из шаблона: план + дни шаблона. Клиент видит самый новый видимый
+// план, поэтому создаём скрытым (иначе подменит текущий, да ещё пустым) и открываем клиенту,
+// только если другого видимого неархивного плана у него нет. Сбой на середине — удаляем
+// созданный план целиком (как duplicatePlan); не удалось удалить — он хотя бы скрыт.
+export async function createPlanFromTemplate(trainerId: string, clientId: string, name: string, templateDays: Day[]): Promise<{ planId: string; hidden: boolean }> {
+  const { data, error } = await supabase.from("plans").insert({ trainer_id: trainerId, client_id: clientId, name, visible_to_client: false }).select("id").single();
+  if (error) throw error;
+  const planId = data.id as string;
+  try {
+    await applyPlanTemplate(planId, templateDays, 0);
+  } catch (e) {
+    const { error: delErr } = await supabase.from("plans").delete().eq("id", planId);
+    if (delErr) {
+      console.error("[templates] откат плана:", delErr);
+      notify(`Остался неполный план «${name}» (скрыт от клиента) — удали его вручную`, "error");
+    }
+    throw e;
+  }
+  const { data: others, error: othersErr } = await supabase
+    .from("plans").select("id,archived,visible_to_client").eq("client_id", clientId).is("deleted_at", null).neq("id", planId);
+  if (othersErr) { console.error("[templates] планы клиента:", othersErr); return { planId, hidden: true }; }
+  if ((others ?? []).some((p) => !p.archived && p.visible_to_client !== false)) return { planId, hidden: true };
+  const { error: visErr } = await supabase.from("plans").update({ visible_to_client: true }).eq("id", planId);
+  if (visErr) { console.error("[templates] показать план:", visErr); return { planId, hidden: true }; }
+  return { planId, hidden: false };
 }

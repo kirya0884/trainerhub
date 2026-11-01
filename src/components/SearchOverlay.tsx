@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ClipboardList, Search, Users, X } from "lucide-react";
 import type { ClientListItem, PlanOverviewItem } from "../lib/clients";
+import { normSearch, phoneMatches } from "../lib/search";
 
 // B04: единый поиск по подопечным и планам. Отдельный оверлей, а не поле в шапке —
 // строку шапки четырьмя пунктами подряд расчищали (B23, B27, B28, B30), и возвращать
@@ -22,11 +23,11 @@ export default function SearchOverlay({ clients, plans, onOpenClient, onOpenPlan
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const term = q.trim().toLowerCase();
+  const term = normSearch(q);
   // ponytail: подстрока без нечёткого поиска. У самого крупного тренера 18 подопечных
   // и 16 планов — библиотека ради этого не нужна.
-  const foundClients = term ? clients.filter((c) => c.name.toLowerCase().includes(term) || c.goal.toLowerCase().includes(term)).slice(0, 8) : [];
-  const foundPlans = term ? plans.filter((p) => p.name.toLowerCase().includes(term) || p.clientName.toLowerCase().includes(term)).slice(0, 8) : [];
+  const foundClients = term ? clients.filter((c) => normSearch(c.name).includes(term) || normSearch(c.goal).includes(term) || phoneMatches(q, c.phone)).slice(0, 8) : [];
+  const foundPlans = term ? plans.filter((p) => normSearch(p.name).includes(term) || normSearch(p.clientName).includes(term)).slice(0, 8) : [];
   const nothing = term.length > 0 && !foundClients.length && !foundPlans.length;
 
   return (

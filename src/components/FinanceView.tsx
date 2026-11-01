@@ -6,7 +6,7 @@ import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardCharge, DashboardClient, DashboardPayment } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
 import type { Booking } from "../lib/bookings";
-import { cohortRetention, debtClients, revenueBySource, topClientsByRevenue, trialConversionRate } from "../lib/analytics";
+import { cohortRetention, debtClients, revenueBySource, subscriptionOverdueDays, topClientsByRevenue, trialConversionRate } from "../lib/analytics";
 import { exportAnalyticsCsv } from "../lib/exportAnalytics";
 import { markPaymentPaid } from "../lib/payments";
 import { addDays, addMonths, plural, toDateStr, today as todayFn } from "../lib/format";
@@ -112,7 +112,9 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
   const active = clients.filter((x) => x.status !== "left");
   const pending = payments.filter((x) => x.payStatus !== "paid").sort((a, b) => a.date.localeCompare(b.date));
   const pendingSum = pending.reduce((s, x) => s + x.amount, 0);
-  const debt = debtClients(clients);
+  // Просроченная подписка — тоже долг; если у клиента уже есть неоплаченный платёж выше, второй строкой не повторяем
+  const pendingIds = new Set(pending.map((x) => x.clientId));
+  const debt = debtClients(clients, t, pendingIds);
   const soon = addDays(t, 14);
   const renewals = active.flatMap((x) => {
     const m = x.membership;
@@ -216,16 +218,16 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
                 <button onClick={() => settle(x)} className="h-9 px-2.5 shrink-0 flex items-center gap-1 rounded-lg bg-lime-400/15 text-lime-400 text-[13px] font-semibold hover:bg-lime-400/25 transition"><Check size={14} /> Оплачено</button>
               </div>
             ))}
-            {debt.map((x) => (
+            {debt.map((x) => { const overdue = subscriptionOverdueDays(x, t); return (
               <div key={x.id} className="flex items-center gap-2.5 py-2.5">
                 <ClientDot c={x} />
                 <button onClick={() => onOpenClient(x.id)} className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-semibold truncate">{x.name}</p>
-                  <p className="text-xs text-orange-400">Пакет закончился</p>
+                  <p className="text-xs text-orange-400">{overdue > 0 ? `Подписка просрочена ${overdue} ${plural(overdue, ["день", "дня", "дней"])}` : "Пакет закончился"}</p>
                 </button>
                 <button onClick={() => setRenew(x)} className="h-9 px-3 shrink-0 rounded-lg bg-zinc-800 text-zinc-100 text-[13px] font-semibold hover:bg-zinc-700 transition">Продлить</button>
               </div>
-            ))}
+            ); })}
           </div>
         </Card>
       )}

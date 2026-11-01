@@ -6,6 +6,7 @@ import { logEvent } from "../lib/events";
 import { useScrollRestore } from "../hooks/useScrollRestore";
 import { lazyRetry } from "../lib/lazy";
 import type { ClientListItem } from "../lib/clients";
+import { normSearch, phoneMatches } from "../lib/search";
 
 // Окна грузятся при первом открытии — список остаётся в основном файле и открывается сразу
 const RenewModal = lazyRetry(() => import("./RenewModal"));
@@ -49,9 +50,10 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
     </div>
   );
 
+  const term = normSearch(search);
   const visible = clients
     .filter((c) => showArchive ? c.status === "archived" : c.status !== "archived")
-    .filter((c) => !search.trim() || c.name.toLowerCase().includes(search.toLowerCase()))
+    .filter((c) => !term || normSearch(c.name).includes(term) || phoneMatches(search, c.phone))
     .filter((c) => showArchive || !fmtFilter || c.format === fmtFilter);
   // Ш4в: группы — кто тренируется сейчас, кому продлить (≤2 тренировок или долг), остальные.
   // Каждый подопечный попадает ровно в одну группу; в архиве группировки нет.
@@ -146,7 +148,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
       </div>
       <div className="relative mb-3">
         <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по имени" aria-label="Поиск по имени" className="w-full h-11 bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-3 outline-none focus:border-zinc-700 placeholder:text-zinc-600" />
+        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Имя или телефон" aria-label="Поиск по имени или телефону" className="w-full h-11 bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-3 outline-none focus:border-zinc-700 placeholder:text-zinc-600" />
       </div>
       {/* Ш4в: формат и архив — одним рядом сегментов вместо select и отдельной кнопки */}
       <div className="flex gap-1.5 mb-4 overflow-x-auto -mx-1 px-1">

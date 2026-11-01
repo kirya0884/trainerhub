@@ -6,7 +6,7 @@ import { onWorkoutFinished } from "../lib/clientsBus";
 import type { ClientFull, ClientNote, Measurement, Payment, PlanListItem, Photo } from "../lib/clients";
 import * as paymentsApi from "../lib/payments";
 import type { PackageTemplate, Promotion } from "../lib/payments";
-import { fmtDate, today, addDays } from "../lib/format";
+import { fmtDate, today, addDays, waPhone } from "../lib/format";
 import { fileToThumb } from "../lib/thumb";
 import { useDebouncedPersist } from "../hooks/useDebouncedPersist";
 import NumField from "./NumField";
@@ -171,7 +171,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const setMembership = (m: ClientFull["membership"]) => setClient((c) => (c ? { ...c, membership: m } : c));
 
   const tgLink = client.telegram ? (client.telegram.startsWith("http") ? client.telegram : `https://t.me/${client.telegram.replace(/^@/, "")}`) : "";
-  const waLink = client.whatsapp ? `https://wa.me/${client.whatsapp.replace(/\D/g, "")}` : "";
+  const waLink = client.whatsapp ? `https://wa.me/${waPhone(client.whatsapp)}` : "";
   const remainingNum = api.combinedRemaining(client.membership);
   const lowStock = client.membership.type !== "subscription" && client.membership.remaining !== "" && remainingNum > 0 && remainingNum <= 2;
   const outOfStock = client.membership.type !== "subscription" && client.membership.remaining !== "" && remainingNum <= 0;

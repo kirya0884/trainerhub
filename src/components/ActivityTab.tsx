@@ -5,9 +5,15 @@ import type { ClientActivity } from "../lib/clientPortal";
 import { fmtDate, today } from "../lib/format";
 import { ask, notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
+import { goalActivityType, parseGoalValue } from "../lib/goals";
 
-const ACTIVITY_PRESETS = ["Прогулка", "Бег", "Велосипед", "Плавание", "Йога", "Растяжка", "Другое"];
-const UNIT_PRESETS: Record<string, string> = { "Прогулка": "шагов", "Бег": "км", "Велосипед": "км", "Плавание": "м", "Йога": "мин", "Растяжка": "мин" };
+const ACTIVITY_PRESETS = ["Шаги", "Активные минуты", "Прогулка", "Бег", "Велосипед", "Плавание", "Йога", "Растяжка", "Другое"];
+// Цели тренера (lib/goals) считают только записи с type "steps" / "active_minutes" —
+// раньше клиент выбирал «Прогулка» и т.п., и у тренера цель по шагам всегда была 0%.
+// Пишем служебный type, показываем русское название.
+const GOAL_LABELS: Record<string, string> = { steps: "Шаги", active_minutes: "Активные минуты" };
+const typeLabel = (t: string) => GOAL_LABELS[goalActivityType(t) ?? ""] ?? t;
+const UNIT_PRESETS: Record<string, string> = { "Шаги": "шагов", "Активные минуты": "мин", "Прогулка": "шагов", "Бег": "км", "Велосипед": "км", "Плавание": "м", "Йога": "мин", "Растяжка": "мин" };
 
 export default function ActivityTab({ clientId, activities, setActivities, readOnly, accent }: {
   clientId: string;
@@ -31,12 +37,18 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
 
   const add = async () => {
     if (!type.trim() || !value.trim()) return;
+    const goalType = goalActivityType(type);
+    // В цель идёт голое число: «8 000» / «8.000» → 8000, «12,5» мин → 12.5
+    const n = goalType ? parseGoalValue(goalType, value) : null;
+    if (goalType && !(n != null && n > 0)) { notify(goalType === "steps" ? "Шаги — целым числом, например 8000" : "Введи число минут, например 30"); return; }
+    const v = n != null ? String(n) : value.trim();
     setBusy(true);
     try {
-      const entry = await portalApi.addClientActivity(clientId, { date, type: type.trim(), value: value.trim(), unit: unit.trim() });
+      const entry = await portalApi.addClientActivity(clientId, { date, type: goalType ?? type.trim(), value: v, unit: unit.trim() });
       setActivities((prev) => [entry, ...prev]);
       setValue("");
-    } finally { setBusy(false); }
+    } catch (e) { console.error("[ActivityTab] add:", e); notify(humanError(e, "Не удалось сохранить активность"), "error"); }
+    finally { setBusy(false); }
   };
 
   const remove = async (id: string) => {
@@ -70,7 +82,7 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
           <div className="grid grid-cols-2 gap-2">
             <input value={type} onChange={(e) => setType(e.target.value)} placeholder="Тип активности" className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
-            <input value={value} onChange={(e) => setValue(e.target.value)} placeholder="Значение (8000)" className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
+            <input value={value} onChange={(e) => setValue(e.target.value)} inputMode={goalActivityType(type) === "steps" ? "numeric" : goalActivityType(type) ? "decimal" : undefined} placeholder="Значение (8000)" className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
             <input value={unit} onChange={(e) => setUnit(e.target.value)} placeholder="Единица (шагов, км...)" className="bg-zinc-800 rounded-xl px-3 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-[var(--accent)]" style={{ "--accent": accentColor } as React.CSSProperties} />
           </div>
 
@@ -88,7 +100,7 @@ export default function ActivityTab({ clientId, activities, setActivities, readO
           {byDate[d].map((a) => (
             <div key={a.id} className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
               <div>
-                <span className="text-sm font-medium text-zinc-200">{a.type}</span>
+                <span className="text-sm font-medium text-zinc-200">{typeLabel(a.type)}</span>
                 <span className="text-sm text-zinc-400 ml-2">{a.value}{a.unit ? ` ${a.unit}` : ""}</span>
               </div>
               {!readOnly && (

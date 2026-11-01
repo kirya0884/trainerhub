@@ -60,3 +60,12 @@ export const plural = (n: number, [one, few, many]: [string, string, string]) =>
 };
 /** Подход везде пишем «вес×повторы»: «60×8»; без веса — только повторы: «8 повт.»; пусто — «—». */
 export const fmtSet = (weight?: string, reps?: string) => (weight ? `${weight}×${reps || "—"}` : reps ? `${reps} повт.` : "—");
+/** Номер для wa.me: только цифры. Российские «8…» и «9…» без «+» приводим к «7…» — иначе WhatsApp
+ *  открывает чужой номер. «8 0…» не трогаем (Беларусь: 8 029…), с «+» номер уже международный. */
+export const waPhone = (raw: string) => {
+  const d = raw.replace(/\D/g, "");
+  if (raw.includes("+")) return d;
+  if (d.length === 11 && d[0] === "8" && d[1] !== "0") return "7" + d.slice(1);
+  if (d.length === 10 && d[0] === "9") return "7" + d;
+  return d;
+};

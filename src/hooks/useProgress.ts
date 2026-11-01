@@ -54,6 +54,8 @@ export function useProgress(planId: string) {
     } catch (e) {
       if (snap) setSessions((p) => [...p, snap]);
       console.error("[useProgress] deleteSession:", e);
+      // Пробрасываем: вызывающий не должен возвращать тренировку в абонемент, если удаление не прошло
+      throw e;
     }
   };
   const restoreSession = async (id: string) => { try { await api.restoreSession(id); await load(); } catch (e) { console.error("[useProgress] restoreSession:", e); } };

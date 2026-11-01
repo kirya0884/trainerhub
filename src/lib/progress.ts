@@ -94,7 +94,9 @@ export const deleteMetric = async (id: string) => { const { error } = await supa
 export const updateSessionReview = async (id: string, review: string) => { const { error } = await supabase.from("plan_sessions").update({ review }).eq("id", id); if (error) throw error; };
 
 // ===================== Корзина тренировок (soft-delete) =====================
-export type DeleteReason = "Уважительная" | "Проспал" | "Забыл" | "Ошибка";
+// Причина пишется текстом в plan_sessions.delete_reason и показывается в корзине.
+// Старые записи могут хранить прежние значения («Уважительная», «Проспал»…) — это просто строка.
+export type DeleteReason = "Записана по ошибке" | "Дубль" | "Не тот клиент" | "Клиент не пришёл" | "Другое";
 export interface DeletedSession { id: string; date: string; dayName: string; deletedAt: string; deleteReason: string }
 
 export async function deleteSession(id: string, reason: DeleteReason) {

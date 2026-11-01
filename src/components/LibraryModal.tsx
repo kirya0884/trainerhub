@@ -6,6 +6,7 @@ import { fileToThumb } from "../lib/thumb";
 import ModalShell from "./ModalShell";
 import { notify } from "../lib/dialog";
 import { toEmbedUrl } from "../lib/videoEmbed";
+import { normSearch } from "../lib/search";
 
 type Item = BuiltinExercise & { custom?: boolean };
 
@@ -46,7 +47,9 @@ export default function LibraryModal({ trainerId, customNames, addToLibrary, onP
 
   const groups = ["Все", ...LIB_GROUP_ORDER, ...(customNames.length ? ["Мои"] : [])];
   const items: Item[] = [...BUILTIN_EXERCISES, ...customNames.map((name) => ({ name, group: "Мои", equipment: "", primary: "", secondary: "", type: "", cues: [], level: "", description: "", notes: "", custom: true }))];
-  const filtered = items.filter((i) => (group === "Все" || i.group === group) && i.name.toLowerCase().includes(q.toLowerCase()));
+  // Ищем по названию, мышцам и снаряду
+  const term = normSearch(q);
+  const filtered = items.filter((i) => (group === "Все" || i.group === group) && (!term || [i.name, i.primary, i.secondary, i.equipment].some((f) => normSearch(f).includes(term))));
   const saveCustom = () => { const n = custom.trim(); if (!n) return; addToLibrary(n); onPick(n); setCustom(""); };
   const embed = detail && media[detail.name] ? toEmbedUrl(media[detail.name]) : null;
 
