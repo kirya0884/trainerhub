@@ -16,6 +16,9 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
   const [type, setType] = useState<"percent" | "fixed">("percent");
   const [value, setValue] = useState("");
   const [appliesTo, setAppliesTo] = useState<string>("sessions");
+  // 5.7: новая акция по умолчанию — на одну оплату; «до» — необязательно
+  const [once, setOnce] = useState(true);
+  const [until, setUntil] = useState("");
 
   const [failed, setFailed] = useState(false);
   const load = () => { setFailed(false); return api.fetchPromotions(clientId).then(setPromos).catch((e) => { console.error("[PromotionsModal] load:", e); setFailed(true); }); };
@@ -28,10 +31,11 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
 
   const submit = async () => {
     const v = Number(value);
-    if (!v || v <= 0) return;
+    if (type === "percent" && (!v || v < 1 || v > 100)) { notify("Скидка в процентах — от 1 до 100."); return; }
+    if (type === "fixed" && !(v > 0)) { notify("Укажи сумму скидки больше 0 ₽."); return; }
     try {
-      await api.addPromotion(clientId, { label, type, value: v, appliesTo, active: true });
-      setLabel(""); setValue("");
+      await api.addPromotion(clientId, { label, type, value: v, appliesTo, active: true, once, until });
+      setLabel(""); setValue(""); setOnce(true); setUntil("");
       load();
     } catch (e) { console.error("[PromotionsModal] submit:", e); notify("Не удалось добавить акцию."); }
   };
@@ -51,6 +55,14 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
               {APPLIES.map(([k, l]) => <option key={k} value={k} className="bg-zinc-900">{l}</option>)}
             </select>
           </div>
+          <label className="flex items-center gap-3 min-h-[44px] cursor-pointer">
+            <input type="checkbox" className="sr-only peer" checked={once} onChange={() => setOnce((v) => !v)} />
+            <span className="relative w-11 h-7 shrink-0 rounded-full bg-zinc-700 peer-checked:bg-lime-400 peer-focus-visible:ring-2 peer-focus-visible:ring-lime-400/50 transition after:content-[''] after:absolute after:top-1 after:left-1 after:w-5 after:h-5 after:rounded-full after:bg-white after:transition peer-checked:after:translate-x-4" />
+            <span className="flex-1"><span className="block font-semibold">Один раз</span><span className="block text-xs text-zinc-400">{once ? "Выключится после первой оплаты с ней" : "Действует на все оплаты, пока включена"}</span></span>
+          </label>
+          <label className="block text-xs text-zinc-400">Действует до (необязательно)
+            <input type="date" value={until} onChange={(e) => setUntil(e.target.value)} className="mt-1 w-full h-10 bg-zinc-800 rounded-xl px-2.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+          </label>
           <button onClick={submit} className="w-full flex items-center justify-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2 text-sm hover:bg-lime-300 transition"><Plus size={15} /> Добавить акцию</button>
         </div>
 
@@ -60,7 +72,7 @@ export default function PromotionsModal({ clientId, onClose }: { clientId: strin
           {promos?.map((p) => (
             <div key={p.id} className={`flex items-center gap-2 rounded-xl px-3 py-2 ${p.active ? "bg-orange-500/10" : "bg-zinc-800/30 opacity-60"}`}>
               <button onClick={() => api.togglePromotion(p.id, !p.active).then(load).catch((e) => console.error("[PromotionsModal] toggle:", e))} className={`text-xs font-medium px-2 py-1 rounded-lg shrink-0 ${p.active ? "bg-orange-400 text-zinc-950" : "bg-zinc-700 text-zinc-400"}`}>{p.active ? "Активна" : "Выкл"}</button>
-              <span className="flex-1 truncate">{p.label || (p.type === "percent" ? `${p.value}%` : `${p.value}₽`)} <span className="text-zinc-500">· {APPLIES.find((a) => a[0] === p.appliesTo)?.[1]}</span></span>
+              <span className="flex-1 truncate">{p.label || (p.type === "percent" ? `${p.value}%` : `${p.value}₽`)} <span className="text-zinc-500">· {[APPLIES.find((a) => a[0] === p.appliesTo)?.[1], p.once ? "один раз" : "", p.until ? `до ${new Date(p.until + "T00:00:00").toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}` : ""].filter(Boolean).join(" · ")}</span></span>
               <button onClick={() => remove(p)} aria-label="Удалить акцию" className="p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-500 transition shrink-0"><X size={14} /></button>
             </div>
           ))}

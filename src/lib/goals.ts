@@ -2,12 +2,9 @@ import { supabase } from "./supabase";
 import { today, addDays } from "./format";
 import { fetchEntries } from "./foodDiary";
 
+// 5.13: КБЖУ и вода — только «Цели питания» (nutrition_goals). В clients.goals остались
+// активность и тренировки; старые ключи calories/protein/… не трогаем — их перенесла миграция.
 export interface ClientGoals {
-  calories?: number;
-  protein?: number;
-  carbs?: number;
-  fat?: number;
-  water?: number;
   steps?: number;
   activeMinutes?: number;
   sessionsPerWeek?: number;
@@ -33,9 +30,13 @@ export async function fetchClientGoals(clientId: string): Promise<ClientGoals> {
   return (data?.goals as ClientGoals) ?? {};
 }
 
-export async function saveClientGoals(clientId: string, goals: ClientGoals): Promise<void> {
+/** Меняет только переданные ключи (undefined — убрать) поверх свежих из базы: чужие ключи не затираются */
+export async function saveClientGoals(clientId: string, patch: ClientGoals): Promise<ClientGoals> {
+  const goals: Record<string, unknown> = { ...(await fetchClientGoals(clientId)) };
+  for (const [k, v] of Object.entries(patch)) if (v === undefined) delete goals[k]; else goals[k] = v;
   const { error } = await supabase.from("clients").update({ goals }).eq("id", clientId);
   if (error) throw error;
+  return goals as ClientGoals;
 }
 
 // Итог по дням из дневника питания (food_entries); старый итог дня (nutrition_logs) —

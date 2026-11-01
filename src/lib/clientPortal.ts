@@ -98,7 +98,7 @@ export async function updateSelfProfile(clientId: string, p: { phone: string; te
 // Бренд для печати у самого тренера (свою строку trainers он читает)
 export async function fetchTrainerBrand(trainerId: string) {
   const { data } = await supabase.from("trainers").select("brand,logo_url,profile").eq("id", trainerId).maybeSingle();
-  return { brand: data?.brand || "Reps", logoUrl: data?.logo_url || "", trainingRules: (data?.profile as any)?.trainingRules || "" };
+  return { brand: data?.brand || "Reps", logoUrl: data?.logo_url || "", trainingRules: (data?.profile as any)?.trainingRules || "", name: (data?.profile as any)?.name || "" };
 }
 
 export interface TrainerCard { brand: string; logoUrl: string; trainingRules: string; name: string; avatarUrl: string; phone: string; telegram: string; whatsapp: string }

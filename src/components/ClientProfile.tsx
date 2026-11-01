@@ -612,9 +612,13 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
 
   const loadPayments = () => api.fetchPayments(clientId).then((v) => { setPayments(v); setPaymentsFailed(false); })
     .catch((e) => { console.error("[PaymentsTab] fetchPayments:", e); setPaymentsFailed(true); });
+  // Ревью 5.7: акции не загрузились — не молчим, оплата иначе молча пойдёт без скидки
+  const [promosFailed, setPromosFailed] = useState(false);
+  const loadPromotions = () => paymentsApi.fetchPromotions(clientId).then((v) => { setPromotions(v); setPromosFailed(false); })
+    .catch((e) => { console.error("[ClientProfile] акции:", e); setPromosFailed(true); });
   const load = () => {
     paymentsApi.fetchPackageTemplates(trainerId).then(setTemplates).catch((e) => console.error("[PaymentsTab] fetchTemplates:", e));
-    paymentsApi.fetchPromotions(clientId).then(setPromotions).catch((e) => console.error("[ClientProfile] акции:", e));
+    loadPromotions();
     loadPayments();
     api.fetchClients(trainerId).then((cs) => setOtherClients(cs.filter((c) => c.id !== clientId))).catch((e) => console.error("[ClientProfile] список подопечных:", e));
   };
@@ -632,15 +636,32 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
     catch (e) { console.error("[PaymentsTab] unlinkPartner:", e); notify("Не удалось отвязать партнёра."); }
   };
 
-  const activePromo = promotions.find((p) => p.active && p.appliesTo === (m.type === "subscription" ? "subscription" : "sessions"));
-  const basePrice = m.type === "subscription" ? Number(m.pricePerSession) || 0 : Number(m.packagePrice) || 0;
-  const preview = activePromo ? paymentsApi.applyPromotion(basePrice, promotions, m.type === "subscription" ? "subscription" : "sessions") : null;
+  const isSub = m.type === "subscription";
+  const tplPrice = (t: PackageTemplate) => (t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price);
+  // 5.6: шаблон выбирается только для этой оплаты — пакет клиента записывается вместе с ней (p_package),
+  // а не сразу по тапу. pm — пакет этой оплаты: выбранный шаблон или сохранённый пакет.
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const picked = isSub ? undefined : templates.find((t) => t.id === pickedId);
+  const pm = picked ? { ...m, total: String(picked.sessions), packagePrice: String(tplPrice(picked)), split: picked.split } : m;
+  const basePrice = isSub ? Number(pm.pricePerSession) || 0 : Number(pm.packagePrice) || 0;
+  // 5.7: акция — действующая на дату оплаты
+  const preview = paymentsApi.applyPromotion(basePrice, promotions, isSub ? "subscription" : "sessions", payDate);
+  const activePromo = !!preview.promo;
 
-  const applyTemplate = (id: string) => {
-    const t = templates.find((x) => x.id === id);
-    if (!t) return;
-    const finalPrice = t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price;
-    patchMembership({ total: String(t.sessions), packagePrice: String(finalPrice), split: t.split }, true);
+  // 5.5: у шаблона без цены сначала спрашиваем цену и сохраняем её в шаблон; повторный тап снимает выбор
+  const pickTemplate = async (t: PackageTemplate) => {
+    if (pickedId === t.id) { setPickedId(null); return; }
+    if (!t.price) {
+      const r = await askInput(`Цена «${t.name}»`, [{ key: "price", label: "Цена пакета, ₽", placeholder: "24000", numeric: true }], { ok: "Сохранить" });
+      if (!r) return;
+      const price = Math.round(Number(r.price.replace(",", ".").replace(/\s/g, "")));
+      if (!(price > 0)) { notify("Укажи цену больше 0 ₽."); return; }
+      try {
+        await paymentsApi.updatePackageTemplate(t.id, { name: t.name, sessions: t.sessions, price, discount: t.discount, split: t.split });
+        setTemplates((ts) => ts.map((x) => (x.id === t.id ? { ...x, price } : x)));
+      } catch (e) { console.error("[PaymentsTab] цена шаблона:", e); notify(humanError(e, "Не удалось сохранить цену"), "error"); return; }
+    }
+    setPickedId(t.id);
   };
   const saveAsTemplate = async () => {
     const r = await askInput("Сохранить как шаблон", [{ key: "name", label: "Название шаблона", placeholder: "Например, «10 тренировок»" }], { ok: "Сохранить" });
@@ -659,46 +680,137 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
   const [paying, setPaying] = useState(false);
   // П17: ключ от повторов. Живёт до успешной записи: если ответ потерялся и тренер жмёт
   // «Оплачено» ещё раз, сервер узнает тот же id и второй платёж не создаст.
-  const payKey = useRef<string | null>(null);
+  // Ревью 5.3: ключ один на попытку оплаты, какую бы кнопку ни нажали после сбоя — иначе смена
+  // кнопки после потерянного ответа записала бы второй платёж и второй раз начислила пакет.
+  // kind — чем записан платёж с этим id (известно после ответа сервера); res — отданная часть
+  // «Частями» уже записана, а остаток ещё нет (повтор допишет только остаток).
+  type PayKey = { kind: string; id: string; restId: string; res?: Awaited<ReturnType<typeof paymentsApi.markPaid>> };
+  const payKey = useRef<PayKey | null>(null);
+  const keyFor = (kind: string) => {
+    if (!payKey.current) payKey.current = { kind, id: crypto.randomUUID(), restId: crypto.randomUUID() };
+    return payKey.current;
+  };
+  const restPending = () => { if (!payKey.current?.res) return false; notify("Сначала допиши остаток: нажми «Частями» с той же суммой.", "error"); return true; };
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
-    if (payLock.current) return;
+    if (payLock.current || restPending()) return;
     payLock.current = true; setPaying(true);
-    if (!payKey.current) payKey.current = crypto.randomUUID();
-    const id = payKey.current;
+    const key = keyFor(payStatus);
+    const { id } = key;
     try {
       // Настройки пакета оплата берёт с экрана (p_package) — недосохранённый ввод не мешает
-      const res = await paymentsApi.markPaid(clientId, { ...m, paymentDate: payDate }, promotions, payStatus, id);
+      const res = await paymentsApi.markPaid(clientId, { ...pm, paymentDate: payDate }, promotions, payStatus, id);
+      // Дошла прошлая попытка «Частями» (записана только часть) — остаток ещё не записан, ключ держим
+      if (res.duplicate && key.kind !== payStatus) {
+        const row = await paymentsApi.fetchPaymentRow(id).catch(() => null);
+        if (row?.payStatus === "paid" && row.amount < preview.amount) {
+          payKey.current = { ...key, kind: `installment:${Math.round(row.amount)}`, res };
+          setMembership(res.membership);
+          notify(`Эта оплата записана как часть ${rub(row.amount)} «Частями». Нажми «Частями» с этой суммой, чтобы дописать остаток.`, "error");
+          return;
+        }
+      }
       payKey.current = null;
-      setMembership(res.membership);
-      if (res.duplicate) notify("Эта оплата уже была записана — повтор не создан.");
+      afterPaid(res);
+      if (res.duplicate) notify(key.kind === payStatus ? "Эта оплата уже была записана — повтор не создан." : "Эта оплата уже была записана другой кнопкой — повтор не создан. Проверь журнал платежей.");
       else {
         track("action", "payment", { status: payStatus, via: "profile" });
         // Аудит п. 40: без подтверждения (частое действие), но с отменой — удаляем этот же платёж.
         // Сплит и подписку отменой не откатить: delete_payment не трогает строку партнёра и дату подписки.
         const text = payStatus === "paid" ? "Оплата записана" : payStatus === "deferred" ? "Записано: оплата позже" : "Записано: оплата частями";
-        const canUndo = m.type !== "subscription" && !m.split;
-        notify(text, "info", canUndo ? { label: "Отменить", run: () => undoPayment(id) } : undefined);
+        notify(text + (res.promoOff ? " · разовая акция выключена" : ""), "info", canUndo ? { label: "Отменить", run: () => undoPayment([id], res.promoOff) } : undefined);
       }
-      api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
     }
     catch (e) { console.error("[PaymentsTab] doMarkPaid:", e); notify("Не удалось записать оплату."); }
     finally { payLock.current = false; setPaying(false); }
   };
-  // Отмена только что записанной оплаты — как «Удалить платёж»: сервер вернёт остаток
-  const undoPayment = async (id: string) => {
-    try { setMembership(await paymentsApi.deletePayment(id, clientId)); api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e)); }
+  const canUndo = !isSub && !m.split && !pm.split;
+  // После записи: абонемент с сервера, выбор шаблона сброшен (5.6), журнал и акции (5.7) — заново
+  const afterPaid = (res: { membership: ClientFull["membership"]; promoOff: string | null }) => {
+    setMembership(res.membership);
+    setPickedId(null);
+    api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
+    if (res.promoOff) loadPromotions();
+  };
+  // Отмена только что записанной оплаты — как «Удалить платёж»: сервер вернёт остаток.
+  // Выключенную разовую акцию включаем обратно.
+  const undoPayment = async (ids: string[], promoId: string | null) => {
+    try {
+      // Сначала остаток, потом платёж с начислением: сбой посередине не оставит долг без пакета
+      for (const id of [...ids].reverse()) setMembership(await paymentsApi.deletePayment(id, clientId));
+      if (promoId) paymentsApi.togglePromotion(promoId, true).then(loadPromotions).catch((e) => { console.error("[PaymentsTab] акция:", e); notify("Оплата отменена, но разовую акцию включить не удалось — включи её в «Акциях».", "error"); });
+      api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
+    }
     catch (e) { console.error("[PaymentsTab] undoPayment:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }
+  };
+
+  // 5.3: «Частями» — сколько отдал сейчас и до какого числа остаток. Отданная часть — оплата
+  // через record_payment (он же начисляет пакет), остаток — строка installment датой оплаты
+  // со сроком due_date. Срок по умолчанию +14 дней: пакет обычно расходуется за месяц, и остаток
+  // приходит, пока не пройдена половина пакета, а не когда тренировки уже закончились.
+  const doInstallment = async () => {
+    if (payLock.current) return;
+    // Сплит с привязанным партнёром — как раньше: вся сумма «частями», сервер делит её 50/50
+    if (pm.split && m.partnerClientId) return doMarkPaid("installment");
+    const total = preview.amount;
+    const r = await askInput(`Частями · ${rub(total)}`, [
+      { key: "part", label: "Сколько отдал сейчас, ₽", placeholder: "0", numeric: true },
+      { key: "until", label: "Остаток — до", value: addDays(payDate, 14), date: true },
+    ], { ok: "Записать" });
+    if (!r) return;
+    const part = Math.round(Number(r.part.replace(",", ".").replace(/\s/g, "")) || 0);
+    if (part < 0 || part > total) { notify(`Часть — от 0 до ${rub(total)}.`); return; }
+    if (part === total) return doMarkPaid("paid");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.until)) { notify("Укажи дату, до которой клиент отдаст остаток."); return; }
+    if (payLock.current) return;
+    const kind = `installment:${part}`;
+    if (payKey.current?.res && payKey.current.kind !== kind) { notify(`Отданная часть уже записана — нажми «Частями» с суммой ${rub(Number(payKey.current.kind.split(":")[1]))}.`, "error"); return; }
+    payLock.current = true; setPaying(true);
+    // Ключи от повторов (см. keyFor): живут до успеха обеих записей
+    const key = keyFor(kind);
+    const { id, restId } = key;
+    try {
+      // Ничего не отдал — одна строка «частями» на всю сумму датой оплаты, срок — в due_date
+      const res = key.res ?? await paymentsApi.markPaid(clientId, { ...pm, paymentDate: payDate }, promotions, part > 0 ? "paid" : "installment", id, part > 0 ? part : undefined);
+      // Ответ прошлой попытки потерялся. Какая из попыток дошла до базы — смотрим по самой строке:
+      // это «Частями» с той же частью — дописываем остаток (обе записи идемпотентны), иначе не пишем.
+      if (res.duplicate && !key.res) {
+        const row = await paymentsApi.fetchPaymentRow(id);
+        const same = !!row && (part > 0 ? row.payStatus === "paid" && Math.round(row.amount) === part : row.payStatus === "installment");
+        if (!same) {
+          payKey.current = null; afterPaid(res);
+          notify("Эта оплата уже была записана другой кнопкой — повтор не создан. Проверь журнал платежей.");
+          return;
+        }
+      }
+      key.kind = kind;
+      key.res = res;
+      if (part > 0) await paymentsApi.addInstallmentRest(restId, clientId, { date: payDate, dueDate: r.until, amount: total - part, type: isSub ? "subscription" : "sessions" });
+      else await paymentsApi.updatePayment(id, { due_date: r.until });
+      payKey.current = null;
+      afterPaid(res);
+      track("action", "payment", { status: "installment", via: "profile" });
+      const ids = part > 0 ? [id, restId] : [id];
+      notify(`${part > 0 ? `Записано: ${rub(part)} сейчас, остаток до ${fmtDate(r.until)}` : `Записано: частями до ${fmtDate(r.until)}`}${res.promoOff ? " · разовая акция выключена" : ""}`, "info",
+        canUndo ? { label: "Отменить", run: () => undoPayment(ids, res.promoOff) } : undefined);
+    }
+    catch (e) {
+      console.error("[PaymentsTab] doInstallment:", e);
+      if (key.res) { setMembership(key.res.membership); notify("Отданная часть записана, а срок остатка — нет. Нажми «Частями» ещё раз с той же суммой.", "error"); }
+      else notify("Не удалось записать оплату.");
+    }
+    finally { payLock.current = false; setPaying(false); }
   };
   const paidLock = useRef(new Set<string>());
   const [markingIds, setMarkingIds] = useState<string[]>([]);
-  const doMarkPaymentPaid = async (id: string, prev: paymentsApi.PayStatus) => {
+  const doMarkPaymentPaid = async ({ id, payStatus: prev, date: prevDate }: Payment) => {
     if (paidLock.current.has(id)) return;
     paidLock.current.add(id); setMarkingIds((l) => [...l, id]);
     const reload = () => api.fetchPayments(clientId).then(setPayments).catch((e) => console.error("[PaymentsTab] fetchPayments:", e));
     try {
+      // 5.4: дата — сегодня, чтобы долг попал в «Поступило» этого месяца
       await paymentsApi.markPaymentPaid(id); reload();
-      // Новый платёж здесь не создаётся — отмена возвращает прежний статус («позже»/«частями»)
-      notify("Оплата записана", "info", { label: "Отменить", run: () => { paymentsApi.markPaymentPaid(id, prev).then(reload).catch((e) => { console.error("[PaymentsTab] undo markPaymentPaid:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }); } });
+      // Новый платёж здесь не создаётся — отмена возвращает прежние статус («позже»/«частями») и дату
+      notify("Оплата записана", "info", { label: "Отменить", run: () => { paymentsApi.markPaymentPaid(id, prev, prevDate).then(reload).catch((e) => { console.error("[PaymentsTab] undo markPaymentPaid:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }); } });
     }
     catch (e) { console.error("[PaymentsTab] markPaymentPaid:", e); notify("Не удалось обновить платёж."); }
     finally { paidLock.current.delete(id); setMarkingIds((l) => l.filter((x) => x !== id)); }
@@ -734,15 +846,14 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
     catch (e) { console.error("[PaymentsTab] deletePayment:", e); notify("Не удалось удалить платёж."); }
   };
 
-  const isSub = m.type === "subscription";
   const total = Number(m.total) || 0;
   const pkgPrice = Number(m.packagePrice) || 0;
   const perSession = !isSub && total > 0 && pkgPrice > 0 ? Math.round(pkgPrice / total) : 0;
   const rub = (n: number) => `${n.toLocaleString("ru-RU")} ₽`;
-  const tplPrice = (t: PackageTemplate) => (t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price);
-  // Выбранный пакет: шаблон, совпавший с текущим пакетом абонемента, иначе — сам текущий
+  // Шаблон, совпавший с сохранённым пакетом; отмечен выбранный (5.6), а если не выбран — совпавший или сам текущий
   const matchedTpl = templates.find((t) => t.sessions === total && tplPrice(t) === pkgPrice && !!t.split === !!m.split);
-  const payAmount = preview ? preview.amount : basePrice;
+  const selectedId = picked ? picked.id : matchedTpl?.id;
+  const payAmount = preview.amount;
 
   return (
     <div className="space-y-4">
@@ -775,19 +886,21 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
           {!isSub && (
             <div className="flex gap-2 overflow-x-auto -mx-3.5 px-3.5 pb-0.5">
               {!matchedTpl && total > 0 && (
-                <span className="shrink-0 min-w-[8.5rem] rounded-xl bg-zinc-800 px-3 py-2.5 ring-2 ring-inset ring-lime-400">
+                <span className={`shrink-0 min-w-[8.5rem] rounded-xl bg-zinc-800 px-3 py-2.5 ${picked ? "" : "ring-2 ring-inset ring-lime-400"}`}>
                   <span className="block font-semibold">{total} тренировок</span>
                   <span className="block text-[13px] text-zinc-400">{pkgPrice ? rub(pkgPrice) : "цена не указана"} · текущий</span>
                 </span>
               )}
               {templates.map((t) => (
-                <button key={t.id} onClick={() => applyTemplate(t.id)}
-                  className={`shrink-0 min-w-[8.5rem] text-left rounded-xl bg-zinc-800 px-3 py-2.5 transition ${matchedTpl?.id === t.id ? "ring-2 ring-inset ring-lime-400" : "hover:bg-zinc-700"}`}>
+                <button key={t.id} onClick={() => pickTemplate(t)} aria-pressed={selectedId === t.id}
+                  className={`shrink-0 min-w-[8.5rem] text-left rounded-xl bg-zinc-800 px-3 py-2.5 transition ${selectedId === t.id ? "ring-2 ring-inset ring-lime-400" : "hover:bg-zinc-700"}`}>
                   <span className="block font-semibold truncate">{t.name}</span>
-                  <span className="block text-[13px] text-zinc-400">{t.sessions} тр. · {rub(tplPrice(t))}{t.discount ? ` · −${t.discount}%` : ""}</span>
+                  {t.price
+                    ? <span className="block text-[13px] text-zinc-400">{t.sessions} тр. · {rub(tplPrice(t))}{t.discount ? ` · −${t.discount}%` : ""}</span>
+                    : <span className="block text-[13px] text-orange-300">цена не указана →</span>}
                 </button>
               ))}
-              <button onClick={() => setShowPkg(true)} className="shrink-0 min-w-[6.5rem] text-left rounded-xl bg-zinc-800 px-3 py-2.5 hover:bg-zinc-700 transition">
+              <button onClick={() => { setPickedId(null); setShowPkg(true); }} className="shrink-0 min-w-[6.5rem] text-left rounded-xl bg-zinc-800 px-3 py-2.5 hover:bg-zinc-700 transition">
                 <span className="block font-semibold">Свой</span>
                 <span className="block text-[13px] text-zinc-400">кол-во и цена</span>
               </button>
@@ -798,11 +911,14 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
             className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
             <Check size={18} strokeWidth={2.75} /> {paying ? "Сохраняю…" : basePrice ? `Оплачено · ${rub(payAmount)}` : "Укажи цену пакета"}
           </button>
-          {preview && preview.amount !== basePrice && <p className="text-[13px] text-orange-300 text-center -mt-1">{preview.label}: вместо {rub(basePrice)}</p>}
+          {preview.promo && preview.amount !== basePrice && <p className="text-[13px] text-orange-300 text-center -mt-1">{preview.label}: вместо {rub(basePrice)}</p>}
+          {promosFailed && (
+            <p role="alert" className="text-[13px] text-orange-300 text-center -mt-1">Акции не загрузились — оплата пойдёт без скидки · <button onClick={loadPromotions} className="font-semibold underline underline-offset-2 min-h-[28px]">Повторить</button></p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <button onClick={() => doMarkPaid("deferred")} disabled={!basePrice || paying} title="Блок начислен, оплата ожидается"
               className="h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-semibold transition disabled:opacity-40"><Clock size={16} className="text-orange-300" /> Позже</button>
-            <button onClick={() => doMarkPaid("installment")} disabled={!basePrice || paying} title="Блок начислен, оплата разбита на части"
+            <button onClick={doInstallment} disabled={!basePrice || paying} title="Часть сейчас, остаток — до выбранной даты"
               className="h-11 flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-xl text-sm font-semibold transition disabled:opacity-40"><SplitSquareVertical size={16} className="text-cyan-300" /> Частями</button>
           </div>
         </div>
@@ -826,10 +942,11 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
                     {p.payStatus === "deferred" && <span className="h-5 px-2 rounded-full text-xs font-semibold bg-orange-400/15 text-orange-300 inline-flex items-center">ожидается</span>}
                     {p.payStatus === "installment" && <span className="h-5 px-2 rounded-full text-xs font-semibold bg-cyan-400/15 text-cyan-300 inline-flex items-center">частями</span>}
                   </p>
-                  <p className="text-[13px] text-zinc-400 truncate">{[fmtDate(p.date), p.type === "subscription" ? "подписка" : "пакет", p.promoApplied, p.note].filter(Boolean).join(" · ")}</p>
+                  {/* 5.3: срок «частями» — только у строк с due_date; просрочка — оранжевым */}
+                  <p className={`text-[13px] truncate ${p.dueDate && p.payStatus !== "paid" && p.dueDate < today() ? "text-orange-400" : "text-zinc-400"}`}>{[fmtDate(p.date), p.dueDate && p.payStatus !== "paid" ? `до ${fmtDate(p.dueDate)}` : "", p.type === "subscription" ? "подписка" : "пакет", p.promoApplied, p.note].filter(Boolean).join(" · ")}</p>
                 </div>
                 {p.payStatus !== "paid" && (
-                  <button onClick={() => doMarkPaymentPaid(p.id, p.payStatus)} disabled={markingIds.includes(p.id)} title="Отметить оплаченным" className="h-9 px-2.5 rounded-lg text-[13px] font-semibold text-lime-400 hover:bg-lime-400/10 transition shrink-0 disabled:opacity-50">{markingIds.includes(p.id) ? "Сохраняю…" : "Оплачен"}</button>
+                  <button onClick={() => doMarkPaymentPaid(p)} disabled={markingIds.includes(p.id)} title="Отметить оплаченным" className="h-9 px-2.5 rounded-lg text-[13px] font-semibold text-lime-400 hover:bg-lime-400/10 transition shrink-0 disabled:opacity-50">{markingIds.includes(p.id) ? "Сохраняю…" : "Оплачен"}</button>
                 )}
                 <button onClick={() => setPayMenu(payMenu === p.id ? null : p.id)} aria-label="Действия с платежом" aria-expanded={payMenu === p.id}
                   className="w-10 h-10 shrink-0 flex items-center justify-center rounded-xl text-zinc-500 hover:bg-zinc-800 hover:text-zinc-200 transition"><MoreHorizontal size={19} /></button>

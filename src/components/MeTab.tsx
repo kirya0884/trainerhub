@@ -59,7 +59,7 @@ export default function MeTab({ trainerId, trainerName, action, onOpenPlan }: {
       {error && !selfId ? <LoadError onRetry={() => setAttempt((n) => n + 1)} /> : !selfId ? <SkeletonRows rows={3} /> : (
         <>
           {sub === "workouts" && <Workouts trainerId={trainerId} selfId={selfId} name={trainerName} onOpenPlan={(id) => onOpenPlan(id, selfId)} />}
-          {sub === "nutrition" && <NutritionDiary clientId={selfId} measurements={measurements} embedded addRequest={addFood} />}
+          {sub === "nutrition" && <NutritionDiary clientId={selfId} measurements={measurements} embedded library addRequest={addFood} />}
           {sub === "progress" && <BodyTab key={measureTick} clientId={selfId} measurements={measurements} setMeasurements={setMeasurements} openForm={measureTick > 0} />}
         </>
       )}

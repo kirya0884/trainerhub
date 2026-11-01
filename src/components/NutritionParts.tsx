@@ -1,3 +1,4 @@
+import { Users } from "lucide-react";
 import * as api from "../lib/foodDiary";
 import type { Macros } from "../lib/foodDiary";
 
@@ -16,6 +17,24 @@ export function GramsInput({ value, onChange }: { value: string; onChange: (v: s
       <span className="text-zinc-400 font-semibold">г</span>
     </label>
   );
+}
+
+// 5.12: переключатель «Видят мои клиенты» — в «Я» тренера, в форме продукта и рецепта
+export function SharedSwitch({ on, onChange }: { on: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} onClick={() => onChange(!on)} className="w-full min-h-[44px] flex items-center gap-2.5 text-left text-[15px]">
+      <Users size={18} className={on ? "text-lime-400" : "text-zinc-500"} />
+      <span className="flex-1 min-w-0">Видят мои клиенты<small className="block text-[12px] text-zinc-500">В их списках, только для записи в дневник</small></span>
+      <span className={`w-11 h-[26px] shrink-0 rounded-full p-[3px] flex transition ${on ? "bg-lime-400 justify-end" : "bg-zinc-800 border border-zinc-700"}`}>
+        <span className={`w-5 h-5 rounded-full ${on ? "bg-[#0B0D0C]" : "bg-zinc-500"}`} />
+      </span>
+    </button>
+  );
+}
+
+/** Пометка продукта или рецепта тренера в списках клиента */
+export function TrainerBadge() {
+  return <span className="shrink-0 h-5 px-1.5 inline-flex items-center rounded-full text-[11px] font-bold bg-lime-400/15 text-lime-400">от тренера</span>;
 }
 
 export function MacroTiles({ m }: { m: Macros }) {

@@ -13,7 +13,9 @@ export const MEALS: { key: Meal; label: string }[] = [
 ];
 
 export interface Macros { kcal: number; protein: number; fat: number; carbs: number }
-export interface FoodProduct extends Macros { id: string; name: string; favorite: boolean; lastGrams: number | null; lastUsedAt: string | null }
+// 5.12: shared — продукт (рецепт) из «Я» тренера, который видят его клиенты. fromTrainer — такой
+// продукт в кабинете клиента: только чтение, без избранного и «недавних» (их клиенту не записать)
+export interface FoodProduct extends Macros { id: string; name: string; favorite: boolean; lastGrams: number | null; lastUsedAt: string | null; shared: boolean; fromTrainer: boolean }
 export interface FoodEntry extends Macros { id: string; date: string; meal: Meal; productId: string | null; recipeId: string | null; name: string; grams: number;
   /** Добавлена без сети и ждёт отправки (лежит в очереди) */
   pending?: boolean }
@@ -124,31 +126,40 @@ export async function deleteEntries(ids: string[]) {
 }
 
 // ── Мои продукты ──
-const toProduct = (r: any): FoodProduct => ({
-  id: r.id, name: r.name, favorite: !!r.favorite, lastGrams: r.last_grams == null ? null : Number(r.last_grams),
-  lastUsedAt: r.last_used_at, ...toMacros(r),
-});
+// Избранное и «ели последний раз» у продукта тренера — его собственные, клиенту их не показываем
+const toProduct = (r: any, clientId?: string): FoodProduct => {
+  const fromTrainer = !!clientId && r.client_id !== clientId;
+  return {
+    id: r.id, name: r.name, favorite: !fromTrainer && !!r.favorite, lastGrams: fromTrainer || r.last_grams == null ? null : Number(r.last_grams),
+    lastUsedAt: fromTrainer ? null : r.last_used_at, shared: !!r.shared, fromTrainer, ...toMacros(r),
+  };
+};
 
-async function fetchProductsRaw(clientId: string): Promise<FoodProduct[]> {
-  const { data, error } = await supabase.from("food_products").select("*").eq("client_id", clientId)
+// withTrainer — кабинет клиента: свои и общие продукты тренера (лишние shared отсекает RLS).
+// Тренеру RLS отдаёт продукты всех его клиентов, поэтому в «Я» — строго свои.
+async function fetchProductsRaw(clientId: string, withTrainer: boolean): Promise<FoodProduct[]> {
+  const q = supabase.from("food_products").select("*");
+  const { data, error } = await (withTrainer ? q.or(`client_id.eq.${clientId},shared.eq.true`) : q.eq("client_id", clientId))
     .order("last_used_at", { ascending: false, nullsFirst: false });
   if (error) throw error;
-  return (data ?? []).map(toProduct);
+  return (data ?? []).map((r) => toProduct(r, clientId));
 }
 
 /** id — ключ от повторов (из очереди отправки): повтор с тем же id второй продукт не создаст */
-export async function addProduct(clientId: string, p: { name: string; favorite?: boolean } & Macros, id?: string): Promise<FoodProduct> {
-  if (id) return toProduct(await insertOnce("food_products", { id, client_id: clientId, name: p.name, ...macrosRow(p), ...(p.favorite ? { favorite: true } : {}) }));
-  const { data, error } = await supabase.from("food_products").insert({ client_id: clientId, name: p.name, ...macrosRow(p), ...(p.favorite ? { favorite: true } : {}) }).select().single();
+export async function addProduct(clientId: string, p: { name: string; favorite?: boolean; shared?: boolean } & Macros, id?: string): Promise<FoodProduct> {
+  const row = { client_id: clientId, name: p.name, ...macrosRow(p), ...(p.favorite ? { favorite: true } : {}), ...(p.shared ? { shared: true } : {}) };
+  if (id) return toProduct(await insertOnce("food_products", { id, ...row }));
+  const { data, error } = await supabase.from("food_products").insert(row).select().single();
   if (error) throw error;
   return toProduct(data);
 }
 
 /** Правка своего продукта: прошлые записи дневника не меняются — в них снимок значений */
-export async function updateProduct(id: string, patch: Partial<{ name: string; favorite: boolean } & Macros>) {
+export async function updateProduct(id: string, patch: Partial<{ name: string; favorite: boolean; shared: boolean } & Macros>) {
   const row: Record<string, unknown> = {};
   if (patch.name !== undefined) row.name = patch.name;
   if (patch.favorite !== undefined) row.favorite = patch.favorite;
+  if (patch.shared !== undefined) row.shared = patch.shared;
   for (const k of ["kcal", "protein", "fat", "carbs"] as const) if (patch[k] !== undefined) row[k] = r2(patch[k]!);
   const { error } = await supabase.from("food_products").update(row).eq("id", id);
   if (error) throw error;
@@ -186,7 +197,7 @@ export async function saveGoal(clientId: string, setBy: "client" | "trainer", g:
 // Состав — сырой вес и КБЖУ на 100 г каждого продукта (снимок). КБЖУ блюда на 100 г считаются
 // по весу готового: при варке вода уходит или впитывается, поэтому сумма сырых весов не годится.
 export interface RecipeItem extends Macros { productId: string | null; name: string; grams: number }
-export interface Recipe { id: string; name: string; cookedWeight: number | null; servings: number; favorite: boolean; lastGrams: number | null; lastUsedAt: string | null; items: RecipeItem[] }
+export interface Recipe { id: string; name: string; cookedWeight: number | null; servings: number; favorite: boolean; lastGrams: number | null; lastUsedAt: string | null; items: RecipeItem[]; shared: boolean; fromTrainer: boolean }
 
 export const recipeTotal = (items: RecipeItem[]) => sum(items.map((i) => scale(i, i.grams)));
 export const recipeRawWeight = (items: RecipeItem[]) => items.reduce((a, i) => a + i.grams, 0);
@@ -198,8 +209,10 @@ export const recipePer100 = (r: Pick<Recipe, "cookedWeight" | "items">): Macros 
 };
 export const portionWeight = (r: Pick<Recipe, "cookedWeight" | "items" | "servings">) => recipeWeight(r) / Math.max(1, r.servings);
 
-async function fetchRecipesRaw(clientId: string): Promise<Recipe[]> {
-  const { data, error } = await supabase.from("food_recipes").select("*").eq("client_id", clientId)
+// withTrainer — как у продуктов. Состав общих рецептов тренера клиенту отдаёт RLS по тем же id.
+async function fetchRecipesRaw(clientId: string, withTrainer: boolean): Promise<Recipe[]> {
+  const q = supabase.from("food_recipes").select("*");
+  const { data, error } = await (withTrainer ? q.or(`client_id.eq.${clientId},shared.eq.true`) : q.eq("client_id", clientId))
     .order("last_used_at", { ascending: false, nullsFirst: false });
   if (error) throw error;
   const ids = (data ?? []).map((r) => r.id);
@@ -207,16 +220,20 @@ async function fetchRecipesRaw(clientId: string): Promise<Recipe[]> {
     ? await supabase.from("food_recipe_items").select("*").in("recipe_id", ids).order("position")
     : { data: [] as any[], error: null };
   if (e2) throw e2;
-  return (data ?? []).map((r) => ({
-    id: r.id, name: r.name, cookedWeight: r.cooked_weight == null ? null : Number(r.cooked_weight), servings: r.servings || 1,
-    favorite: !!r.favorite, lastGrams: r.last_grams == null ? null : Number(r.last_grams), lastUsedAt: r.last_used_at,
-    items: (items ?? []).filter((i) => i.recipe_id === r.id).map((i) => ({ productId: i.product_id, name: i.name, grams: Number(i.grams) || 0, ...toMacros(i) })),
-  }));
+  return (data ?? []).map((r) => {
+    const fromTrainer = r.client_id !== clientId;
+    return {
+      id: r.id, name: r.name, cookedWeight: r.cooked_weight == null ? null : Number(r.cooked_weight), servings: r.servings || 1,
+      favorite: !fromTrainer && !!r.favorite, lastGrams: fromTrainer || r.last_grams == null ? null : Number(r.last_grams), lastUsedAt: fromTrainer ? null : r.last_used_at,
+      shared: !!r.shared, fromTrainer,
+      items: (items ?? []).filter((i) => i.recipe_id === r.id).map((i) => ({ productId: i.product_id, name: i.name, grams: Number(i.grams) || 0, ...toMacros(i) })),
+    };
+  });
 }
 
-/** Создание (id нет) или правка: строка рецепта и состав целиком заново */
-export async function saveRecipe(clientId: string, r: Omit<Recipe, "id" | "favorite" | "lastGrams" | "lastUsedAt"> & { id?: string }): Promise<string> {
-  const row = { name: r.name, cooked_weight: r.cookedWeight ? r2(r.cookedWeight) : null, servings: Math.max(1, Math.round(r.servings)) };
+/** Создание (id нет) или правка: строка рецепта и состав целиком заново. shared не передан — не меняется */
+export async function saveRecipe(clientId: string, r: Omit<Recipe, "id" | "favorite" | "lastGrams" | "lastUsedAt" | "shared" | "fromTrainer"> & { id?: string; shared?: boolean }): Promise<string> {
+  const row = { name: r.name, cooked_weight: r.cookedWeight ? r2(r.cookedWeight) : null, servings: Math.max(1, Math.round(r.servings)), ...(r.shared !== undefined ? { shared: r.shared } : {}) };
   let id = r.id;
   if (id) {
     const { error } = await supabase.from("food_recipes").update(row).eq("id", id);
@@ -338,12 +355,13 @@ async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   }
 }
 export const fetchEntries = (clientId: string, from: string, to: string) => cached(`entries:${clientId}:${from}:${to}`, () => fetchEntriesRaw(clientId, from, to));
-export const fetchProducts = (clientId: string) => cached(`products:${clientId}`, () => fetchProductsRaw(clientId));
-export const fetchRecipes = (clientId: string) => cached(`recipes:${clientId}`, () => fetchRecipesRaw(clientId));
+// withTrainer — кабинет клиента (с продуктами тренера); у одной карточки режим всегда один, ключ кэша общий
+export const fetchProducts = (clientId: string, withTrainer = false) => cached(`products:${clientId}`, () => fetchProductsRaw(clientId, withTrainer));
+export const fetchRecipes = (clientId: string, withTrainer = false) => cached(`recipes:${clientId}`, () => fetchRecipesRaw(clientId, withTrainer));
 export const fetchGoals = (clientId: string) => cached(`goals:${clientId}`, () => fetchGoalsRaw(clientId));
 export const fetchDay = (clientId: string, date: string) => cached(`day:${clientId}:${date}`, () => fetchDayRaw(clientId, date));
 
-type FoodJob = { clientId: string; entry: Omit<FoodEntry, "id" | "pending">; newProduct?: { name: string } & Macros; touch?: { productId?: string; recipeId?: string; grams: number } };
+type FoodJob = { clientId: string; entry: Omit<FoodEntry, "id" | "pending">; newProduct?: { name: string; shared?: boolean } & Macros; touch?: { productId?: string; recipeId?: string; grams: number } };
 // entryId / newProductId — ключи от повторов; у записей из очереди версии до 31.10 их нет (появятся при досылке)
 type FoodJobState = { productId?: string; done?: boolean; entryId?: string; newProductId?: string };
 

@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChefHat, ChevronLeft, History, Pencil, Plus, Search, SearchX, Star, Trash2, WifiOff, X } from "lucide-react";
+import { ChefHat, ChevronLeft, History, Pencil, Plus, Search, SearchX, Star, Trash2, Users, WifiOff, X } from "lucide-react";
 import ModalShell from "./ModalShell";
 import FoodAddSheet, { Per100 } from "./FoodAddSheet";
 import RecipeEditor from "./RecipeEditor";
-import { MACRO_COLOR } from "./NutritionParts";
+import { MACRO_COLOR, SharedSwitch, TrainerBadge } from "./NutritionParts";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 import * as api from "../lib/foodDiary";
@@ -35,8 +35,11 @@ const lastUsed = (p: FoodProduct) => {
 // Продукты и рецепты: свой каталог отдельно от добавления еды — поправить БЖУ, удалить дубль,
 // заранее собрать рецепт. «Добавить в дневник» открывает обычное окно добавления с выбранным
 // продуктом; при входе из окна добавления (onPick) — просто возвращает выбранное туда.
-export default function NutritionCatalog({ clientId, date, onAdded, onPick, onClose }: {
+// 5.12: у клиента здесь и продукты/рецепты тренера — только посмотреть и записать в дневник.
+export default function NutritionCatalog({ clientId, library = false, date, onAdded, onPick, onClose }: {
   clientId: string;
+  /** «Я» тренера: свои продукты и рецепты можно открыть клиентам; иначе — кабинет клиента */
+  library?: boolean;
   /** День для «Добавить в дневник»; по умолчанию сегодня */
   date?: string;
   /** Запись добавлена из каталога — дневнику обновить список */
@@ -62,7 +65,7 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
 
   const load = () => {
     setFailed(false);
-    return Promise.all([api.fetchProducts(clientId), api.fetchRecipes(clientId)])
+    return Promise.all([api.fetchProducts(clientId, !library), api.fetchRecipes(clientId, !library)])
       .then(([p, r]) => { setProducts(p); setRecipes(r); })
       .catch((e) => { console.error("[NutritionCatalog]", e); setFailed(true); });
   };
@@ -88,6 +91,7 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
     setCard((c) => (c && c.id === p.id ? p : c));
   };
   const toggleFav = (p: FoodProduct) => {
+    if (p.fromTrainer) return; // строку тренера клиенту не изменить — RLS
     patchProduct({ ...p, favorite: !p.favorite });
     api.updateProduct(p.id, { favorite: !p.favorite }).catch((e) => { console.error("[NutritionCatalog] избранное:", e); patchProduct(p); notify("Не удалось сохранить. Проверь интернет."); });
   };
@@ -140,13 +144,15 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
             const perPortion = r && r.servings > 1;
             return (
               <li key={(r ? "r" : "p") + x.id}>
-                <button onClick={() => (r ? setRecipeEdit(r) : setCard(x as FoodProduct))} ref={flash === x.id ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
+                <button onClick={() => (r ? (r.fromTrainer ? addToDiary(r) : setRecipeEdit(r)) : setCard(x as FoodProduct))} ref={flash === x.id ? (el) => el?.scrollIntoView({ block: "nearest" }) : undefined}
                   className={`w-full min-h-[60px] flex items-center gap-3 px-3.5 py-2.5 text-left transition hover:bg-zinc-800/50 ${flash === x.id ? "bg-lime-400/10" : ""}`}>
                   {r && <span className="w-11 h-11 shrink-0 rounded-xl flex items-center justify-center" style={{ color: MACRO_COLOR.kcal, background: `color-mix(in srgb, ${MACRO_COLOR.kcal} 16%, transparent)` }}><ChefHat size={20} /></span>}
                   <span className="flex-1 min-w-0">
                     <span className="flex items-center gap-1.5 font-semibold text-[15px]">
                       {x.favorite && <Star size={14} className={`${STAR} shrink-0`} aria-label="в избранном" />}
                       <span className="truncate">{x.name}</span>
+                      {x.fromTrainer && <TrainerBadge />}
+                      {library && x.shared && <Users size={14} className="text-lime-400 shrink-0" aria-label="видят клиенты" />}
                     </span>
                     <span className="block text-[13px] text-zinc-500 truncate mt-0.5">
                       {r ? (tab === "recipes" ? `${recipeSize(r)} · ${r.items.length} ${plural(r.items.length, ["продукт", "продукта", "продуктов"])}` : `рецепт · ${recipeSize(r)}`) : `на 100 г · ${bju(per)}`}
@@ -232,7 +238,7 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
           onAdd={() => addToDiary(card)} onEdit={() => setForm({ product: card, name: card.name })} onDelete={() => remove(card)} />
       )}
       {form && (
-        <ProductForm clientId={clientId} product={form.product} initialName={form.name} onClose={() => setForm(null)}
+        <ProductForm clientId={clientId} library={library} product={form.product} initialName={form.name} onClose={() => setForm(null)}
           onSaved={(p) => {
             if (form.product) patchProduct(p);
             else { setProducts((l) => [p, ...(l ?? [])]); setTab("products"); setFilter("all"); setFlash(p.id); }
@@ -240,14 +246,14 @@ export default function NutritionCatalog({ clientId, date, onAdded, onPick, onCl
           }} />
       )}
       {recipeEdit && (
-        <RecipeEditor clientId={clientId} recipe={recipeEdit === "new" ? null : recipeEdit} products={products ?? []}
+        <RecipeEditor clientId={clientId} library={library} recipe={recipeEdit === "new" ? null : recipeEdit} products={products ?? []}
           onProductAdded={(p) => setProducts((l) => [p, ...(l ?? [])])} onClose={() => setRecipeEdit(null)}
           onAddToDiary={recipeEdit === "new" ? undefined : addToDiary}
           onSaved={async (id) => { await load(); setRecipeEdit(null); setFlash(id); }}
           onDeleted={(id) => { setRecipes((l) => (l ?? []).filter((r) => r.id !== id)); setRecipeEdit(null); }} />
       )}
       {adding && (
-        <FoodAddSheet clientId={clientId} date={date ?? today()} meal={mealNow()} initial={adding}
+        <FoodAddSheet clientId={clientId} library={library} date={date ?? today()} meal={mealNow()} initial={adding}
           onAdded={(e) => onAdded?.(e)} onClose={() => { setAdding(null); load(); }} />
       )}
     </>
@@ -262,10 +268,10 @@ function ProductCard({ product: p, recipes, onFav, onAdd, onEdit, onDelete, onCl
   return (
     <ModalShell title={p.name} onClose={onClose}>
       <div className="p-4 pt-3">
-        <div className="flex items-center justify-between -mt-1 mb-2">
-          <p className="text-[13px] text-zinc-400">Свой продукт · на 100 г</p>
-          <button onClick={onFav} aria-pressed={p.favorite} aria-label={p.favorite ? "Убрать из избранного" : "В избранное"}
-            className="w-11 h-11 -mr-2 flex items-center justify-center rounded-full hover:bg-zinc-800 transition"><Star size={20} className={p.favorite ? STAR : "text-zinc-500"} /></button>
+        <div className="flex items-center justify-between -mt-1 mb-2 min-h-[44px]">
+          <p className="text-[13px] text-zinc-400">{p.fromTrainer ? "Продукт тренера" : "Свой продукт"} · на 100 г</p>
+          {p.fromTrainer ? <TrainerBadge /> : <button onClick={onFav} aria-pressed={p.favorite} aria-label={p.favorite ? "Убрать из избранного" : "В избранное"}
+            className="w-11 h-11 -mr-2 flex items-center justify-center rounded-full hover:bg-zinc-800 transition"><Star size={20} className={p.favorite ? STAR : "text-zinc-500"} /></button>}
         </div>
         <div className="grid grid-cols-4 gap-1.5">
           {tiles.map(([l, v, color, d]) => (
@@ -276,39 +282,40 @@ function ProductCard({ product: p, recipes, onFav, onAdd, onEdit, onDelete, onCl
           ))}
         </div>
         <div className="mt-3 rounded-2xl bg-zinc-800 divide-y divide-zinc-700">
-          <p className="flex items-center gap-2.5 px-3.5 py-3 text-sm text-zinc-400"><History size={18} className="shrink-0" /><span className="shrink-0">Последний раз</span><b className="ml-auto text-right font-semibold text-zinc-100">{lastUsed(p)}</b></p>
+          {!p.fromTrainer && <p className="flex items-center gap-2.5 px-3.5 py-3 text-sm text-zinc-400"><History size={18} className="shrink-0" /><span className="shrink-0">Последний раз</span><b className="ml-auto text-right font-semibold text-zinc-100">{lastUsed(p)}</b></p>}
           <p className="flex items-center gap-2.5 px-3.5 py-3 text-sm text-zinc-400"><ChefHat size={18} className="shrink-0" /><span className="shrink-0">В рецептах</span><b className="ml-auto min-w-0 text-right font-semibold text-zinc-100">{recipes.length ? recipes.join(", ") : "нет"}</b></p>
         </div>
         <button onClick={onAdd} className="mt-4 w-full h-[52px] flex items-center justify-center gap-2 rounded-xl bg-lime-400 text-zinc-950 font-bold text-base hover:bg-lime-300 transition"><Plus size={20} /> Добавить в дневник</button>
-        <div className="grid grid-cols-2 gap-2 mt-2">
+        {!p.fromTrainer && <div className="grid grid-cols-2 gap-2 mt-2">
           <button onClick={onEdit} className="h-11 flex items-center justify-center gap-1.5 rounded-xl bg-zinc-800 text-[15px] font-semibold hover:bg-zinc-700 transition"><Pencil size={17} /> Изменить</button>
           <button onClick={onDelete} className="h-11 flex items-center justify-center gap-1.5 rounded-xl bg-zinc-800 text-[15px] font-semibold text-red-400 [.light-theme_&]:text-[#c9302c] hover:bg-red-500/10 transition"><Trash2 size={17} /> Удалить</button>
-        </div>
+        </div>}
       </div>
     </ModalShell>
   );
 }
 
 // Новый продукт или правка: БЖУ на 100 г, ккал сами по 4/9/4 — можно вписать своё число с упаковки
-function ProductForm({ clientId, product, initialName, onSaved, onClose }: {
-  clientId: string; product: FoodProduct | null; initialName: string; onSaved: (p: FoodProduct) => void; onClose: () => void;
+function ProductForm({ clientId, library, product, initialName, onSaved, onClose }: {
+  clientId: string; library: boolean; product: FoodProduct | null; initialName: string; onSaved: (p: FoodProduct) => void; onClose: () => void;
 }) {
   const init = product ?? { name: initialName, ...api.ZERO };
   const [name, setName] = useState(init.name);
   const [p, setP] = useState(str(init.protein)); const [f, setF] = useState(str(init.fat)); const [c, setC] = useState(str(init.carbs));
   const [kcal, setKcal] = useState(product && Math.round(api.kcalOf(product)) !== Math.round(product.kcal) ? str(product.kcal) : "");
   const [fav, setFav] = useState(false);
+  const [shared, setShared] = useState(!!product?.shared);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const auto = api.kcalOf({ protein: api.num(p), fat: api.num(f), carbs: api.num(c) });
-  const dirty = name !== init.name || p !== str(init.protein) || f !== str(init.fat) || c !== str(init.carbs) || (product ? kcal !== (Math.round(api.kcalOf(product)) !== Math.round(product.kcal) ? str(product.kcal) : "") : !!kcal) || fav;
+  const dirty = name !== init.name || p !== str(init.protein) || f !== str(init.fat) || c !== str(init.carbs) || (product ? kcal !== (Math.round(api.kcalOf(product)) !== Math.round(product.kcal) ? str(product.kcal) : "") : !!kcal) || fav || shared !== !!product?.shared;
 
   const close = async () => { if (!dirty || busy || (await ask("Выйти без сохранения?", { ok: "Выйти", cancel: "Остаться" }))) onClose(); };
   const save = async () => {
     if (busy || !name.trim()) return;
     if (api.num(p) + api.num(f) + api.num(c) > 100) { setErr("Белков, жиров и углеводов больше 100 г — проверь цифры."); return; }
     setErr(""); setBusy(true);
-    const m = { name: name.trim(), kcal: kcal.trim() ? api.num(kcal) : auto, protein: api.num(p), fat: api.num(f), carbs: api.num(c) };
+    const m = { name: name.trim(), kcal: kcal.trim() ? api.num(kcal) : auto, protein: api.num(p), fat: api.num(f), carbs: api.num(c), ...(library ? { shared } : {}) };
     try {
       if (product) { await api.updateProduct(product.id, m); onSaved({ ...product, ...m }); return; }
       onSaved(await api.addProduct(clientId, { ...m, favorite: fav }));
@@ -344,6 +351,7 @@ function ProductForm({ clientId, product, initialName, onSaved, onClose }: {
             </span>
           </button>
         )}
+        {library && <SharedSwitch on={shared} onChange={setShared} />}
         {err && <p role="alert" className="text-[13px] text-red-400 [.light-theme_&]:text-[#c9302c] px-0.5">{err}</p>}
       </div>
     </ModalShell>

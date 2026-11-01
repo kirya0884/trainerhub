@@ -147,9 +147,9 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
 
   const settle = async (pay: DashboardPayment) => {
     try {
+      // 5.4: дата платежа — сегодня (деньги поступили сейчас); «Отменить» возвращает прежние статус и дату
       await markPaymentPaid(pay.id); await load();
-      // Новый платёж не создаётся — «Отменить» возвращает прежний статус («позже»/«частями»)
-      notify("Оплата записана", "info", { label: "Отменить", run: () => { markPaymentPaid(pay.id, pay.payStatus).then(load).catch((e) => { console.error("[FinanceView] undo markPaymentPaid:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }); } });
+      notify("Оплата записана", "info", { label: "Отменить", run: () => { markPaymentPaid(pay.id, pay.payStatus, pay.date).then(load).catch((e) => { console.error("[FinanceView] undo markPaymentPaid:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }); } });
     }
     catch (e) { console.error("[FinanceView] markPaymentPaid:", e); notify(humanError(e, "Не удалось отметить оплату"), "error"); }
   };
@@ -214,7 +214,10 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
                 <ClientDot c={byId[x.clientId]} />
                 <button onClick={() => onOpenClient(x.clientId)} className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-semibold truncate">{byId[x.clientId]?.name ?? "—"}</p>
-                  <p className="text-xs text-zinc-500">{fmtShort(x.date)} · {x.payStatus === "installment" ? "частями" : "позже"}</p>
+                  {/* 5.3: у «частями» со сроком — срок и просрочка; старые строки без срока — как раньше */}
+                  {x.dueDate
+                    ? <p className={`text-xs ${x.dueDate < t ? "text-orange-400" : "text-zinc-500"}`}>{fmtShort(x.date)} · частями · до {fmtShort(x.dueDate)}</p>
+                    : <p className="text-xs text-zinc-500">{fmtShort(x.date)} · {x.payStatus === "installment" ? "частями" : "позже"}</p>}
                 </button>
                 <span className="text-sm font-bold text-orange-300 shrink-0">{rub(x.amount)}</span>
                 <button onClick={() => setRemind({ id: x.clientId, amount: x.amount })} aria-label="Напомнить об оплате" title="Напомнить об оплате" className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition"><Bell size={16} /></button>

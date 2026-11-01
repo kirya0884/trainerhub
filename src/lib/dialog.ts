@@ -7,8 +7,8 @@
 export type Toast = { id: number; text: string; kind: "info" | "error"; action?: ToastAction };
 /** Кнопка в сообщении, например «Отменить» после переноса */
 export type ToastAction = { label: string; run: () => void };
-/** password — поле со скрытым вводом (пароль перед удалением аккаунта) */
-export type Field = { key: string; label: string; value?: string; placeholder?: string; numeric?: boolean; password?: boolean };
+/** password — поле со скрытым вводом (пароль перед удалением аккаунта); date — выбор даты (ГГГГ-ММ-ДД) */
+export type Field = { key: string; label: string; value?: string; placeholder?: string; numeric?: boolean; password?: boolean; date?: boolean };
 /** alt — вторая явная кнопка (choose); тогда закрытие окна (фон, Esc) — это отмена */
 export type Ask = { id: number; text: string; ok: string; cancel: string; danger: boolean; fields?: Field[]; alt?: string; resolve: (v: boolean | "alt", values?: Record<string, string>) => void };
 type State = { toasts: Toast[]; ask: Ask | null; queue: Ask[] };

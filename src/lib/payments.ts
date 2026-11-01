@@ -3,6 +3,7 @@ import type { Membership } from "./clients";
 import { emptyMembership } from "./clients";
 import { notifyClientsChanged } from "./clientsBus";
 import { today as todayFn } from "./format";
+import { notify } from "./dialog";
 
 // ===================== Шаблоны пакетов =====================
 export interface PackageTemplate { id: string; name: string; sessions: number; price: number; discount: number; split: boolean }
@@ -45,16 +46,17 @@ export async function updatePackageTemplate(id: string, t: Omit<PackageTemplate,
 }
 
 // ===================== Акции/скидки клиента =====================
-export interface Promotion { id: string; label: string; type: "percent" | "fixed"; value: number; appliesTo: string; active: boolean }
+// 5.7: once — акция на одну оплату (после неё выключается, см. markPaid); until — последний день действия
+export interface Promotion { id: string; label: string; type: "percent" | "fixed"; value: number; appliesTo: string; active: boolean; once: boolean; until: string }
 
 export async function fetchPromotions(clientId: string): Promise<Promotion[]> {
-  const { data, error } = await supabase.from("client_promotions").select("id,label,type,value,applies_to,active").eq("client_id", clientId).order("active", { ascending: false });
+  const { data, error } = await supabase.from("client_promotions").select("id,label,type,value,applies_to,active,once,until").eq("client_id", clientId).order("active", { ascending: false });
   if (error) throw error;
-  return (data ?? []).map((p) => ({ id: p.id, label: p.label ?? "", type: p.type, value: Number(p.value), appliesTo: p.applies_to, active: !!p.active }));
+  return (data ?? []).map((p) => ({ id: p.id, label: p.label ?? "", type: p.type, value: Number(p.value), appliesTo: p.applies_to, active: !!p.active, once: !!p.once, until: p.until ?? "" }));
 }
 
 export async function addPromotion(clientId: string, p: Omit<Promotion, "id">) {
-  const { error } = await supabase.from("client_promotions").insert({ client_id: clientId, label: p.label, type: p.type, value: p.value, applies_to: p.appliesTo, active: p.active });
+  const { error } = await supabase.from("client_promotions").insert({ client_id: clientId, label: p.label, type: p.type, value: p.value, applies_to: p.appliesTo, active: p.active, once: p.once, until: p.until || null });
   if (error) throw error;
 }
 
@@ -68,12 +70,13 @@ export async function deletePromotion(id: string) {
   if (error) throw error;
 }
 
-// Применяет первую активную акцию, подходящую под appliesTo, к базовой цене
-export function applyPromotion(basePrice: number, promotions: Promotion[], appliesTo: string) {
-  const promo = promotions.find((p) => p.active && p.appliesTo === appliesTo);
+// Применяет первую активную акцию, подходящую под appliesTo и действующую на дату оплаты, к базовой цене.
+// promo — какая акция применилась (5.7: одноразовую после оплаты выключаем).
+export function applyPromotion(basePrice: number, promotions: Promotion[], appliesTo: string, date: string = todayFn()): { amount: number; label: string; promo?: { id: string; once: boolean } } {
+  const promo = promotions.find((p) => p.active && p.appliesTo === appliesTo && (!p.until || date <= p.until));
   if (!promo) return { amount: basePrice, label: "" };
   const amount = promo.type === "percent" ? Math.round(basePrice * (1 - promo.value / 100)) : Math.max(0, basePrice - promo.value);
-  return { amount, label: promo.label || (promo.type === "percent" ? `-${promo.value}%` : `-${promo.value}₽`) };
+  return { amount, label: promo.label || (promo.type === "percent" ? `-${promo.value}%` : `-${promo.value}₽`), promo: { id: promo.id, once: promo.once } };
 }
 
 // ===================== Платежи (журнал) =====================
@@ -86,9 +89,18 @@ export async function addPayment(clientId: string, p: { date: string; amount: nu
   if (error) throw error;
 }
 
-export async function updatePayment(id: string, p: Partial<{ date: string; amount: number; note: string }>) {
+// due_date — 5.3: срок оплаты «частями» (дата платежа при этом остаётся датой оплаты)
+export async function updatePayment(id: string, p: Partial<{ date: string; amount: number; note: string; due_date: string }>) {
   const { error } = await supabase.from("client_payments").update(p).eq("id", id);
   if (error) throw error;
+}
+
+// 5.3: остаток оплаты «частями» — отдельная строка installment датой оплаты и сроком due_date,
+// без начисления тренировок. id создаёт фронт и хранит до успеха: повтор после потерянного
+// ответа упрётся в 23505 — это успех.
+export async function addInstallmentRest(id: string, clientId: string, p: { date: string; dueDate: string; amount: number; type: string }) {
+  const { error } = await supabase.from("client_payments").insert({ id, client_id: clientId, date: p.date, due_date: p.dueDate, amount: p.amount, type: p.type, note: "остаток", promo_applied: "", sessions_delta: null, pay_status: "installment" });
+  if (error && error.code !== "23505") throw error;
 }
 
 // Аудит 2026-10-30, п. 17–18: оплата, разбивка и удаление платежа, правка абонемента —
@@ -146,24 +158,41 @@ export async function unlinkSplit(clientId: string): Promise<Membership> {
 // (выбранный шаблон мог ещё не сохраниться). Остаток сервер считает от текущего в базе.
 // paymentId — ключ от повторов: при повторе после ошибки передавать тот же.
 // duplicate = true — этот платёж уже был записан раньше, второй не создан.
-export async function markPaid(clientId: string, membership: Membership, promotions: Promotion[], payStatus: PayStatus = 'paid', paymentId: string = crypto.randomUUID()): Promise<{ membership: Membership; duplicate: boolean }> {
+// amount — 5.3: записать другую сумму (отданную часть); акция всё равно считается от пакета.
+// promoOff — 5.7: id одноразовой акции, которая применилась и теперь выключена (для «Отменить»).
+export async function markPaid(clientId: string, membership: Membership, promotions: Promotion[], payStatus: PayStatus = 'paid', paymentId: string = crypto.randomUUID(), amount?: number): Promise<{ membership: Membership; duplicate: boolean; promoOff: string | null }> {
   // Используем дату, которую тренер указал в форме; если не указана — сегодня
   const payDate = membership.paymentDate && membership.paymentDate.length === 10 ? membership.paymentDate : todayFn();
   const type = membership.type === "subscription" ? "subscription" : "sessions";
   const base = Number(membership.type === "subscription" ? membership.pricePerSession : membership.packagePrice) || 0;
-  const { amount, label } = applyPromotion(base, promotions, type);
+  const { amount: promoAmount, label, promo } = applyPromotion(base, promotions, type, payDate);
   const { data, error } = await supabase.rpc("record_payment", {
-    p_payment_id: paymentId, p_client_id: clientId, p_date: payDate, p_amount: amount, p_pay_status: payStatus, p_promo: label,
+    p_payment_id: paymentId, p_client_id: clientId, p_date: payDate, p_amount: amount ?? promoAmount, p_pay_status: payStatus, p_promo: label,
     p_package: { type: membership.type, total: membership.total, packagePrice: membership.packagePrice, pricePerSession: membership.pricePerSession, split: !!membership.split },
   });
   if (error) throw error;
   notifyClientsChanged();
-  return { membership: fullMembership(data?.membership), duplicate: !!data?.duplicate };
+  // 5.7: одноразовая акция отработала — выключаем (и при повторе: оплата с ней уже записана).
+  // Не вышло — оплату не роняем, акция останется включённой и видна в списке.
+  let promoOff: string | null = null;
+  if (promo?.once) {
+    try { await togglePromotion(promo.id, false); promoOff = promo.id; }
+    catch (e) { console.error("[payments] выключить одноразовую акцию:", e); notify("Оплата записана, но разовую акцию выключить не удалось — выключи её в «Акциях»", "error"); }
+  }
+  return { membership: fullMembership(data?.membership), duplicate: !!data?.duplicate, promoOff };
 }
 
 // Конвертирует deferred/installment → paid (клиент погасил долг).
-// status — для «Отменить»: вернуть платежу прежний статус.
-export async function markPaymentPaid(id: string, status: PayStatus = 'paid') {
-  const { error } = await supabase.from("client_payments").update({ pay_status: status }).eq("id", id);
+// 5.4: дата — сегодня, иначе долг, погашенный сейчас, попадал в «Поступило» прошлого месяца.
+// status и date — для «Отменить»: вернуть платежу прежние статус и дату.
+// Чем на самом деле записан платёж с этим id — при ответе duplicate (ответ прошлой попытки потерялся)
+export async function fetchPaymentRow(id: string): Promise<{ payStatus: PayStatus; amount: number } | null> {
+  const { data, error } = await supabase.from("client_payments").select("pay_status,amount").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? { payStatus: data.pay_status as PayStatus, amount: Number(data.amount) } : null;
+}
+
+export async function markPaymentPaid(id: string, status: PayStatus = 'paid', date: string = todayFn()) {
+  const { error } = await supabase.from("client_payments").update({ pay_status: status, date }).eq("id", id);
   if (error) throw error;
 }

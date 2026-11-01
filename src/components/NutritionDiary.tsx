@@ -39,10 +39,12 @@ const weekStart = (d: string) => addDays(d, -((new Date(d + "T00:00:00").getDay(
 // Дневник питания: кольца «съедено из цели», приёмы пищи, быстрый ввод.
 // asTrainer — тот же экран в профиле подопечного у тренера: только чтение, неделя цветными
 // днями, своя цель тренера и комментарий к дню (клиент видит его карточкой).
-export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [], asTrainer = false, embedded = false, addRequest = 0 }: {
+export default function NutritionDiary({ clientId, legacyLogs = [], measurements = [], asTrainer = false, embedded = false, library = false, addRequest = 0 }: {
   clientId: string; legacyLogs?: NutritionLog[]; measurements?: Measurement[]; asTrainer?: boolean;
   /** Внутри другого раздела (вкладка «Я») — без крупного заголовка */
   embedded?: boolean;
+  /** 5.12: «Я» тренера — его продукты и рецепты можно открыть клиентам; без него — кабинет клиента с продуктами тренера */
+  library?: boolean;
   /** Растёт — открыть добавление еды на сегодня в приём по времени суток («+» во вкладке «Я») */
   addRequest?: number;
 }) {
@@ -406,7 +408,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
           }} />
       )}
       {adding && (
-        <FoodAddSheet clientId={clientId} date={date} meal={adding} onClose={() => setAdding(null)}
+        <FoodAddSheet clientId={clientId} library={library} date={date} meal={adding} onClose={() => setAdding(null)}
           onAdded={(e) => setEntries((l) => [...(l ?? []), e])} />
       )}
       {editing && (
@@ -417,7 +419,7 @@ export default function NutritionDiary({ clientId, legacyLogs = [], measurements
       {showGoals && <NutritionGoalsSheet clientId={clientId} goals={goals} asTrainer={asTrainer} measurements={measurements} onSaved={setGoals} onClose={() => setShowGoals(false)} />}
       {showCatalog && (
         <Suspense fallback={null}>
-          <NutritionCatalog clientId={clientId} date={date}
+          <NutritionCatalog clientId={clientId} library={library} date={date}
             onAdded={(e) => { if (e.date === date) setEntries((l) => [...(l ?? []), e]); }}
             onClose={() => setShowCatalog(false)} />
         </Suspense>

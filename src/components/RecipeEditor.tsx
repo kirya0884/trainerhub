@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { BookOpen, ChevronLeft, Plus, Search, Trash2, X } from "lucide-react";
 import ModalShell from "./ModalShell";
-import { MACRO_COLOR } from "./NutritionParts";
+import { MACRO_COLOR, SharedSwitch } from "./NutritionParts";
 import * as api from "../lib/foodDiary";
 import type { FoodProduct, Recipe, RecipeItem } from "../lib/foodDiary";
 import { ask, notify } from "../lib/dialog";
@@ -14,8 +14,10 @@ let seq = 0;
 
 // Рецепт: состав из своих продуктов (сырой вес), вес готового блюда и порции.
 // КБЖУ на 100 г и на порцию считаются сразу. Новый продукт для состава запоминается в «Мои продукты».
-export default function RecipeEditor({ clientId, recipe, products, onProductAdded, onSaved, onDeleted, onClose, onAddToDiary }: {
+export default function RecipeEditor({ clientId, library = false, recipe, products, onProductAdded, onSaved, onDeleted, onClose, onAddToDiary }: {
   clientId: string; recipe: Recipe | null; products: FoodProduct[];
+  /** 5.12: «Я» тренера — переключатель «Видят мои клиенты» */
+  library?: boolean;
   onProductAdded: (p: FoodProduct) => void; onSaved: (id: string) => void; onDeleted: (id: string) => void; onClose: () => void;
   /** Из каталога «Продукты и рецепты»: записать рецепт в дневник (несохранённые правки сначала сохраняются) */
   onAddToDiary?: (r: Recipe) => void;
@@ -24,6 +26,7 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
   const [rows, setRows] = useState<Row[]>(() => (recipe?.items ?? []).map((i) => ({ ...i, key: ++seq, g: str(i.grams) })));
   const [cooked, setCooked] = useState(str(recipe?.cookedWeight));
   const [servings, setServings] = useState(String(recipe?.servings ?? 1));
+  const [shared, setShared] = useState(!!recipe?.shared);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -35,7 +38,7 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
   const perPortion = api.scale(per100, portion);
   const canSave = !!name.trim() && items.some((i) => i.grams > 0);
   // Правки относительно открытого рецепта — для «Выйти без сохранения?» и «Добавить в дневник»
-  const snap = JSON.stringify([name, rows.map((r) => [r.productId, r.name, r.g]), cooked, servings]);
+  const snap = JSON.stringify([name, rows.map((r) => [r.productId, r.name, r.g]), cooked, servings, shared]);
   const initSnap = useRef(snap);
   const dirty = snap !== initSnap.current;
   const close = async () => { if (!dirty || busy || (await ask("Выйти без сохранения?", { ok: "Выйти", cancel: "Остаться" }))) onClose(); };
@@ -51,7 +54,7 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
   };
   const kept = { name: name.trim(), ...draft, items: items.filter((i) => i.grams > 0) };
   const persist = async () => {
-    const id = await api.saveRecipe(clientId, { id: recipe?.id, ...kept });
+    const id = await api.saveRecipe(clientId, { id: recipe?.id, ...kept, ...(library ? { shared } : {}) });
     track(recipe ? "action" : "create", recipe ? "recipe_edit" : "recipe", { items: items.length });
     return id;
   };
@@ -119,6 +122,7 @@ export default function RecipeEditor({ clientId, recipe, products, onProductAdde
           </label>
         </div>
         <p className="text-[13px] text-zinc-500 px-0.5">Взвесь готовое блюдо: рис и крупы впитывают воду, мясо её теряет. Без веса считаем по сумме сырых продуктов.</p>
+        {library && <SharedSwitch on={shared} onChange={setShared} />}
 
         {raw > 0 && (
           <div className="grid grid-cols-2 gap-2">

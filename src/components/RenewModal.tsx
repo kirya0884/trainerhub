@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import { fetchClient, type Membership } from "../lib/clients";
-import { applyPromotion, deletePayment, fetchPackageTemplates, fetchPromotions, markPaid, type PackageTemplate, type PayStatus, type Promotion } from "../lib/payments";
+import { applyPromotion, deletePayment, fetchPackageTemplates, fetchPromotions, markPaid, togglePromotion, type PackageTemplate, type PayStatus, type Promotion } from "../lib/payments";
+import { today } from "../lib/format";
 import { notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 import { track } from "../lib/events";
@@ -40,9 +41,11 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
         .map((t) => ({ key: t.id, title: t.name, sub: `${t.sessions} тр. · ${rub(tplPrice(t))}${t.discount ? ` · −${t.discount}%` : ""}`, patch: { type: "sessions", total: String(t.sessions), packagePrice: String(tplPrice(t)), split: t.split } as Partial<Membership> })),
     ];
   const chosen = options.find((o) => o.key === sel) ?? options[0];
-  const next = m && chosen ? { ...m, ...chosen.patch, paymentDate: "" } : null; // пустая дата — markPaid ставит сегодня
+  // Ревью 5.7: одна дата и для превью суммы (акция «до»), и для самой оплаты
+  const [payDate] = useState(today);
+  const next = m && chosen ? { ...m, ...chosen.patch, paymentDate: payDate } : null;
   const base = next ? Number(next.type === "subscription" ? next.pricePerSession : next.packagePrice) || 0 : 0;
-  const promo = next && data ? applyPromotion(base, data.promos, next.type === "subscription" ? "subscription" : "sessions") : null;
+  const promo = next && data ? applyPromotion(base, data.promos, next.type === "subscription" ? "subscription" : "sessions", payDate) : null;
 
   // Ключ от повторов (п. 17): тот же id, пока окно открыто, — повтор после «не удалось»
   // не создаст второй платёж, если первый на самом деле дошёл до базы.
@@ -59,7 +62,14 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
         // Не для сплита, подписки и смены пакета: delete_payment не откатит строку партнёра, дату и настройки пакета.
         const text = status === "paid" ? "Оплата записана" : status === "deferred" ? "Записано: оплата позже" : "Записано: оплата частями";
         const canUndo = next.type !== "subscription" && !next.split && !m!.split && chosen.key === "cur";
-        notify(text, "info", canUndo ? { label: "Отменить", run: () => { deletePayment(payKey, clientId).then(onDone).catch((e) => { console.error("[RenewModal] отмена оплаты:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); }); } } : undefined);
+        // 5.7: отмена включает обратно разовую акцию, которую выключила эта оплата
+        notify(text + (res.promoOff ? " · разовая акция выключена" : ""), "info", canUndo ? { label: "Отменить", run: () => {
+          deletePayment(payKey, clientId).then(() => {
+            onDone();
+            // Платёж уже удалён — сбой включения акции сообщаем отдельно, а не «не удалось отменить»
+            if (res.promoOff) togglePromotion(res.promoOff, true).catch((e) => { console.error("[RenewModal] акция:", e); notify("Оплата отменена, но разовую акцию включить не удалось — включи её в «Акциях».", "error"); });
+          }).catch((e) => { console.error("[RenewModal] отмена оплаты:", e); notify(humanError(e, "Не удалось отменить оплату"), "error"); });
+        } } : undefined);
       }
       onDone(); onClose();
     }

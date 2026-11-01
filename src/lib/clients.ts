@@ -440,12 +440,12 @@ export async function deletePhoto(id: string) {
   if (error) throw error;
 }
 
-export interface Payment { id: string; date: string; amount: number; type: string; note: string; promoApplied: string; payStatus: 'paid' | 'deferred' | 'installment' }
+export interface Payment { id: string; date: string; amount: number; type: string; note: string; promoApplied: string; payStatus: 'paid' | 'deferred' | 'installment'; sessionsDelta: number | null; dueDate: string }
 
 export async function fetchPayments(clientId: string): Promise<Payment[]> {
   // п.27: больше 1000 платежей — страницами; id — второй ключ сортировки, чтобы страницы не пересекались
-  const data = await fetchAll<any>((from, to) => supabase.from("client_payments").select("id,date,amount,type,note,promo_applied,pay_status").eq("client_id", clientId).order("date", { ascending: false }).order("id").range(from, to));
-  return data.map((p) => ({ id: p.id, date: p.date, amount: Number(p.amount) || 0, type: p.type ?? "", note: p.note ?? "", promoApplied: p.promo_applied ?? "", payStatus: (p.pay_status as Payment["payStatus"]) || "paid" }));
+  const data = await fetchAll<any>((from, to) => supabase.from("client_payments").select("id,date,amount,type,note,promo_applied,pay_status,sessions_delta,due_date").eq("client_id", clientId).order("date", { ascending: false }).order("id").range(from, to));
+  return data.map((p) => ({ id: p.id, date: p.date, amount: Number(p.amount) || 0, type: p.type ?? "", note: p.note ?? "", promoApplied: p.promo_applied ?? "", payStatus: (p.pay_status as Payment["payStatus"]) || "paid", sessionsDelta: p.sessions_delta ?? null, dueDate: p.due_date ?? "" }));
 }
 
 export interface ClientNote { id: string; date: string; text: string }

@@ -4,7 +4,7 @@ import ModalShell from "./ModalShell";
 import { SkeletonRows } from "./Skeleton";
 import LoadError from "./LoadError";
 import { cached } from "../lib/offlineCache";
-import { GramsInput, MacroTiles, MACRO_COLOR } from "./NutritionParts";
+import { GramsInput, MacroTiles, MACRO_COLOR, SharedSwitch, TrainerBadge } from "./NutritionParts";
 import RecipeEditor from "./RecipeEditor";
 import * as api from "../lib/foodDiary";
 import type { FoodEntry, FoodProduct, Meal, Recipe } from "../lib/foodDiary";
@@ -25,12 +25,16 @@ type Item = { kind: "product"; p: FoodProduct } | { kind: "recipe"; r: Recipe; p
 const itemName = (x: Item) => (x.kind === "product" ? x.p.name : x.r.name);
 const itemFav = (x: Item) => (x.kind === "product" ? x.p.favorite : x.r.favorite);
 const itemUsed = (x: Item) => (x.kind === "product" ? x.p.lastUsedAt : x.r.lastUsedAt) ?? "";
+const itemTrainer = (x: Item) => (x.kind === "product" ? x.p.fromTrainer : x.r.fromTrainer);
 
 // Добавление в приём пищи: свой продукт или рецепт из списка (выбрал → граммы или порции)
 // или новый продукт (КБЖУ на 100 г с упаковки → граммы). Новый по умолчанию запоминается.
 // Свой продукт и рецепт можно поправить или удалить — записи в дневнике от этого не меняются.
-export default function FoodAddSheet({ clientId, date, meal: initialMeal, initial, onAdded, onClose }: {
+// 5.12: у клиента в списке и продукты тренера («от тренера») — только записать в дневник.
+export default function FoodAddSheet({ clientId, library = false, date, meal: initialMeal, initial, onAdded, onClose }: {
   clientId: string; date: string; meal: Meal; onAdded: (e: FoodEntry) => void; onClose: () => void;
+  /** «Я» тренера: свои продукты можно открыть клиентам (shared); иначе — кабинет клиента */
+  library?: boolean;
   /** Уже выбранный продукт или рецепт (из каталога): приём пищи тогда выбирается здесь же */
   initial?: FoodProduct | Recipe;
 }) {
@@ -53,14 +57,15 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
   const [name, setName] = useState("");
   const [p, setP] = useState(""); const [f, setF] = useState(""); const [c, setC] = useState(""); const [kcal, setKcal] = useState("");
   const [remember, setRemember] = useState(true);
+  const [shared, setShared] = useState(false);
 
   // 0.3: продукты нужны в зале — без сети из сохранённого; ошибка — «Повторить», а не пустой список
   const [loadFailed, setLoadFailed] = useState(false);
-  const loadRecipes = () => cached(`recipes:${clientId}`, () => api.fetchRecipes(clientId)).then((l) => { setRecipes(l); return l; })
+  const loadRecipes = () => cached(`recipes:${clientId}`, () => api.fetchRecipes(clientId, !library)).then((l) => { setRecipes(l); return l; })
     .catch((e) => { console.error("[FoodAddSheet] рецепты:", e); setLoadFailed(true); setRecipes((r) => r ?? []); return [] as Recipe[]; });
   const loadAll = () => {
     setLoadFailed(false);
-    cached(`products:${clientId}`, () => api.fetchProducts(clientId)).then(setProducts).catch((e) => { console.error("[FoodAddSheet] продукты:", e); setLoadFailed(true); setProducts((p) => p ?? []); });
+    cached(`products:${clientId}`, () => api.fetchProducts(clientId, !library)).then(setProducts).catch((e) => { console.error("[FoodAddSheet] продукты:", e); setLoadFailed(true); setProducts((p) => p ?? []); });
     loadRecipes();
   };
   useEffect(loadAll, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -93,8 +98,8 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
   const pick = (x: FoodProduct) => { setPicked(x); setGrams(String(x.lastGrams ?? 100)); };
   const pickRecipe = (r: Recipe) => { setPickedRecipe(r); setGrams(str(r.lastGrams ?? api.portionWeight(r)) || "100"); };
   const fillForm = (x: { name: string } & api.Macros) => { setName(x.name); setP(str(x.protein)); setF(str(x.fat)); setC(str(x.carbs)); setKcal(Math.round(api.kcalOf(x)) === Math.round(x.kcal) ? "" : str(x.kcal)); };
-  const startNew = () => { setCreating(true); setPicked(null); fillForm({ name: q.trim(), ...api.ZERO }); setGrams("100"); };
-  const startEdit = () => { if (picked) { fillForm(picked); setEditing(true); } };
+  const startNew = () => { setCreating(true); setPicked(null); fillForm({ name: q.trim(), ...api.ZERO }); setShared(false); setGrams("100"); };
+  const startEdit = () => { if (picked && !picked.fromTrainer) { fillForm(picked); setShared(!!picked.shared); setEditing(true); } };
   const back = () => { if (editing) { setEditing(false); return; } setPicked(null); setPickedRecipe(null); setCreating(false); };
 
   const run = async (f: () => Promise<void>, msg = "Не удалось сохранить. Проверь интернет.") => {
@@ -103,6 +108,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
     try { await f(); } catch (e) { console.error("[FoodAddSheet]", e); notify(msg); } finally { setBusy(false); }
   };
   const toggleFav = (x: Item) => {
+    if (itemTrainer(x)) return; // строку тренера клиенту не изменить — RLS
     if (x.kind === "product") {
       patchLocal(x.p.id, { favorite: !x.p.favorite });
       api.updateProduct(x.p.id, { favorite: !x.p.favorite }).catch((e) => { console.error("[FoodAddSheet] избранное:", e); patchLocal(x.p.id, { favorite: x.p.favorite }); });
@@ -114,7 +120,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
   };
   const saveEdit = () => run(async () => {
     if (!picked || !name.trim()) return;
-    const patch = { name: name.trim(), ...formPer100 };
+    const patch = { name: name.trim(), ...formPer100, ...(library ? { shared } : {}) };
     await api.updateProduct(picked.id, patch);
     patchLocal(picked.id, patch);
     setEditing(false);
@@ -134,8 +140,9 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
     const entry = await api.addEntryOrQueue({
       clientId,
       entry: { date, meal, productId: picked?.id ?? null, recipeId: pickedRecipe?.id ?? null, name: pickedRecipe?.name ?? picked?.name ?? name.trim(), grams: g, ...eaten },
-      newProduct: creating && remember ? { name: name.trim(), ...formPer100 } : undefined,
-      touch: picked ? { productId: picked.id, grams: g } : pickedRecipe ? { recipeId: pickedRecipe.id, grams: g } : undefined,
+      newProduct: creating && remember ? { name: name.trim(), ...formPer100, ...(library && shared ? { shared: true } : {}) } : undefined,
+      // Продукт и рецепт тренера не отмечаем «ели только что»: строку тренера клиенту не изменить
+      touch: picked && !picked.fromTrainer ? { productId: picked.id, grams: g } : pickedRecipe && !pickedRecipe.fromTrainer ? { recipeId: pickedRecipe.id, grams: g } : undefined,
     });
     track("action", "food_add", { source: pickedRecipe ? "recipe" : picked ? "product" : remember ? "new_saved" : "new", meal, pending: !!entry.pending });
     if (entry.pending) notify("Нет интернета — запись сохранена на телефоне и отправится сама, когда появится сеть.", "info");
@@ -147,7 +154,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
     // Каталог мог поменять продукты и рецепты — по возвращении список перечитываем
     return (
       <Suspense fallback={null}>
-        <NutritionCatalog clientId={clientId} onClose={() => { setCatalog(false); loadAll(); }}
+        <NutritionCatalog clientId={clientId} library={library} onClose={() => { setCatalog(false); loadAll(); }}
           onPick={(x) => { setCatalog(false); loadAll(); if ("items" in x) pickRecipe(x); else pick(x); }} />
       </Suspense>
     );
@@ -155,7 +162,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
 
   if (recipeEdit) {
     return (
-      <RecipeEditor clientId={clientId} recipe={recipeEdit === "new" ? null : recipeEdit} products={products ?? []}
+      <RecipeEditor clientId={clientId} library={library} recipe={recipeEdit === "new" ? null : recipeEdit} products={products ?? []}
         onProductAdded={(x) => setProducts((l) => [x, ...(l ?? [])])} onClose={onClose}
         onSaved={async (id) => { const l = await loadRecipes(); setRecipeEdit(null); const r = l.find((x) => x.id === id); if (r) pickRecipe(r); }}
         onDeleted={async () => { await loadRecipes(); setRecipeEdit(null); setPickedRecipe(null); }} />
@@ -185,7 +192,8 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
         {(current || creating) && (
           <div className="flex items-center justify-between -mt-1">
             <button onClick={back} className="flex items-center gap-1 text-sm font-semibold text-zinc-400 hover:text-zinc-100 transition"><ChevronLeft size={17} /> {editing ? "Назад" : "К списку"}</button>
-            {current && !editing && (
+            {current && !editing && itemTrainer(current) && <TrainerBadge />}
+            {current && !editing && !itemTrainer(current) && (
               <div className="flex gap-1">
                 <button onClick={() => toggleFav(current)} aria-pressed={itemFav(current)} aria-label={itemFav(current) ? "Убрать из избранного" : "В избранное"}
                   className="w-9 h-9 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition"><Star size={18} className={itemFav(current) ? "text-amber-400 fill-amber-400" : "text-zinc-500"} /></button>
@@ -227,13 +235,13 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
                 {shown.map((x) => (
                   <div key={x.kind + (x.kind === "product" ? x.p.id : x.r.id)} className="flex items-center">
                     <button onClick={() => (x.kind === "product" ? pick(x.p) : pickRecipe(x.r))} className="flex-1 min-w-0 text-left py-2.5 px-1 hover:bg-zinc-800/50 rounded-lg transition">
-                      <span className="flex items-center gap-1.5 font-semibold min-w-0">{x.kind === "recipe" && <BookOpen size={15} className="text-zinc-500 shrink-0" />}<span className="truncate">{itemName(x)}</span></span>
+                      <span className="flex items-center gap-1.5 font-semibold min-w-0">{x.kind === "recipe" && <BookOpen size={15} className="text-zinc-500 shrink-0" />}<span className="truncate">{itemName(x)}</span>{itemTrainer(x) && <TrainerBadge />}</span>
                       <span className="block text-[13px] text-zinc-500 truncate">
                         {x.kind === "product" ? `на 100 г: ${per100(x.p)}` : `рецепт · на 100 г ${api.fmtN(x.per.kcal, 0)} ккал${x.r.servings > 1 ? ` · порция ${api.fmtN(api.portionWeight(x.r), 0)} г` : ""}`}
                       </span>
                     </button>
-                    <button onClick={() => toggleFav(x)} aria-pressed={itemFav(x)} aria-label={itemFav(x) ? `Убрать «${itemName(x)}» из избранного` : `«${itemName(x)}» в избранное`}
-                      className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition"><Star size={18} className={itemFav(x) ? "text-amber-400 fill-amber-400" : "text-zinc-600"} /></button>
+                    {!itemTrainer(x) && <button onClick={() => toggleFav(x)} aria-pressed={itemFav(x)} aria-label={itemFav(x) ? `Убрать «${itemName(x)}» из избранного` : `«${itemName(x)}» в избранное`}
+                      className="w-10 h-10 shrink-0 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition"><Star size={18} className={itemFav(x) ? "text-amber-400 fill-amber-400" : "text-zinc-600"} /></button>}
                   </div>
                 ))}
               </div>
@@ -258,6 +266,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
             </div>
             <p className="text-[13px] text-zinc-500 px-0.5">Ккал считаются сами: Б×4 + Ж×9 + У×4. Если на упаковке другое число — впиши его.</p>
             {editing && <p className="text-[13px] text-zinc-500 px-0.5">Уже записанное в дневник не изменится.</p>}
+            {editing && library && <SharedSwitch on={shared} onChange={setShared} />}
             {creating && <p className="text-[13px] font-semibold text-zinc-400 px-0.5 pt-1">Съедено</p>}
           </>
         )}
@@ -288,6 +297,7 @@ export default function FoodAddSheet({ clientId, date, meal: initialMeal, initia
                 <span className="text-sm">Запомнить в «Мои продукты»</span>
               </label>
             )}
+            {creating && remember && library && <SharedSwitch on={shared} onChange={setShared} />}
           </>
         )}
       </div>
