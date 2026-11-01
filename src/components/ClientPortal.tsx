@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { readJson, removeKey, writeJson } from "../lib/storage";
 import TechniqueButton from "./TechniqueButton";
+import ChangePasswordModal from "./ChangePasswordModal";
+import { FromTrainer, InstallCard, NotifyCard, TrainerContactCard, installCardShown, trainerLinks } from "./ClientHomeCards";
 import { fetchExerciseMedia } from "../lib/library";
-import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, Layers, Lock, LogOut, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User, Users } from "lucide-react";
+import { Activity, Home, Check, Apple, CheckCircle2, Dumbbell, Flame, KeyRound, Layers, Lock, LogOut, MessageSquare, Play, Ruler, ScrollText, Settings, Trash2, TrendingUp, User, Users } from "lucide-react";
 import PinSettingsModal from "./PinSettingsModal";
 import ModalShell from "./ModalShell";
 import { LegalList } from "./LegalDoc";
@@ -25,7 +27,8 @@ import { GROUP_COLORS } from "../constants";
 import { FeelingBadge } from "./FeelingScale";
 import MetricsView from "./MetricsView";
 import { addDays, fmtDate, fmtSet, today as todayFn } from "../lib/format";
-import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
+import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking } from "../lib/notify";
+import { supabase } from "../lib/supabase";
 import ClientSessionView from "./ClientSessionView";
 import { fmtRpe, isFact, isSessionOfDay, lastFactsByName, lastTimeFor, nextDayOf } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
@@ -61,7 +64,11 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   const [programSub, setProgramSub] = useState<ProgramSub>("active");
   const [reportSub, setReportSub] = useState<ReportSub>("exercises");
   const [showNav, setShowNav] = useState(false);
-  const [brand, setBrand] = useState({ brand: "Reps", logoUrl: "", trainingRules: "" });
+  const [brand, setBrand] = useState<portalApi.TrainerCard>({ brand: "Reps", logoUrl: "", trainingRules: "", name: "", avatarUrl: "", phone: "", telegram: "", whatsapp: "" });
+  // Разбор путей 5.23: абонемент — свежий, а не тот, что был при входе
+  const [membership, setMembership] = useState(client.membership);
+  const [email, setEmail] = useState("");
+  useEffect(() => { supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? "")).catch(() => {}); }, []);
   const [upcoming, setUpcoming] = useState<portalApi.UpcomingBooking | null>(null);
   const [plans, setPlans] = useState<PlanListItem[] | null>(null);
   const [media, setMedia] = useState<Record<string, string>>({});
@@ -86,6 +93,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   }, [activeSession, OFFLINE_KEY]);
   const [profile, setProfile] = useState({ phone: client.phone, telegram: client.telegram, whatsapp: client.whatsapp, avatarUrl: client.avatarUrl, accentColor: client.accentColor, name: client.name, goal: client.goal, health: client.health });
   const [showPinSettings, setShowPinSettings] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [showDocs, setShowDocs] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sessionMinimized, setSessionMinimized] = useState(false);
@@ -125,6 +133,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
     clientsApi.fetchMeasurements(client.id).then((v) => { setMeasurements(v); mark("measurements", false); }).catch((e) => { console.error("[ClientPortal] fetchMeasurements:", e); mark("measurements", true); });
     nutritionApi.fetchNutritionLogs(client.id).then(setNutritionLogs).catch((e) => console.error("[ClientPortal] fetchNutrition:", e));
     portalApi.fetchClientActivities(client.id).then(setActivities).catch((e) => console.error("[ClientPortal] fetchActivities:", e));
+    portalApi.fetchMyMembership(client.id).then(setMembership).catch((e) => console.error("[ClientPortal] абонемент:", e));
   };
   // Во время тренировки не обновляем — иначе сбивается ввод
   const refreshIfIdle = () => { if (!activeSessionRef.current) refresh(); };
@@ -145,7 +154,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   });
 
   useEffect(() => {
-    portalApi.fetchTrainerBrand(client.trainerId).then(setBrand).catch((e) => console.error("[ClientPortal] fetchBrand:", e));
+    portalApi.fetchTrainerCard(client.id).then(setBrand).catch((e) => console.error("[ClientPortal] карточка тренера:", e));
     refresh(true);
     // Запасной опрос, если подписка молча не работает (RLS, обрыв сокета): только пока приложение
     // на экране. 3 мин — правки тренера всё равно доходят быстро через события/возврат, а опрос
@@ -155,8 +164,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
       refreshIfIdle();
     }, 180_000);
 
-    // Уведомления клиенту
-    requestNotifyPermission();
+    // Уведомления клиенту — если уже разрешены; само разрешение спрашивает карточка на главной (разбор путей 0.5)
     const m = client.membership as any;
     if (m?.type === "sessions" && m.remaining !== "" && m.remaining != null) {
       const rem = (Number(m.remaining) || 0) + (Number(m.extraRemaining) || 0);
@@ -238,7 +246,12 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   const nextDay = progressHook.loading ? null : nextDayOf(portalDays, progressHook.sessions);
   const lastWeight = [...measurements].filter((x) => Number(String(x.weight).replace(",", ".")) > 0).sort((a, b) => (a.date < b.date ? -1 : 1)).pop();
 
-  const m = client.membership;
+  const m = membership;
+  // Пора продлевать: осталось 2 и меньше или оплата подписки через 2 дня и раньше (или уже прошла)
+  const subOverdue = m.type === "subscription" && !!m.nextPaymentDate && m.nextPaymentDate < todayFn();
+  const renewDue = m.type === "subscription" ? !!m.nextPaymentDate && m.nextPaymentDate <= addDays(todayFn(), 2)
+    : m.remaining !== "" && m.remaining != null && combinedRemaining(m as clientsApi.Membership) <= 2;
+  const renewLinks = trainerLinks(brand, `Привет! ${m.type === "subscription" ? "Подходит срок оплаты подписки" : "В абонементе заканчиваются тренировки"} — хочу продлить.`);
   const sortedSessions = [...progressHook.sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
 
   return (
@@ -251,6 +264,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
             <button onClick={() => { setShowNav(false); setShowPinSettings(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Lock size={18} className="text-zinc-400" /> <span className="font-medium">PIN-код на вход</span></button>
             <button onClick={() => { setShowNav(false); setShowDocs(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><ScrollText size={18} className="text-zinc-400" /> <span className="font-medium">Документы</span></button>
             {onSwitchTrainer && <button onClick={() => { setShowNav(false); onSwitchTrainer(); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><Users size={18} className="text-zinc-400" /> <span className="font-medium">Сменить тренера</span></button>}
+            <button onClick={() => { setShowNav(false); setShowPassword(true); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left"><KeyRound size={18} className="text-zinc-400" /> <span className="font-medium">Сменить пароль</span></button>
             <button onClick={() => signOutAndForget()} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-red-400"><LogOut size={18} /> <span className="font-medium">Выйти</span></button>
             <button onClick={() => { setShowNav(false); deleteMyAccount("client"); }} className="w-full flex items-center gap-3 px-3 h-12 rounded-xl hover:bg-zinc-800 transition text-left text-zinc-500"><Trash2 size={18} /> <span className="font-medium">Удалить аккаунт</span></button>
           </div>
@@ -324,7 +338,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
                 <p className={`font-display text-[28px] font-extrabold tracking-tight mt-0.5 ${combinedRemaining(m as clientsApi.Membership) <= 2 ? "text-orange-400" : ""}`}>
                   {combinedRemaining(m as clientsApi.Membership)}{Number(m.remainingTotal || m.total) ? <span className="text-sm font-semibold text-zinc-500"> из {m.remainingTotal || m.total}</span> : null}
                 </p>
-              ) : <p className="text-base font-semibold mt-1.5">{m.nextPaymentDate ? `оплата ${fmtDate(m.nextPaymentDate, true)}` : "активна"}</p>}
+              ) : <p className="text-base font-semibold mt-1.5">{subOverdue ? <span className="text-orange-400">просрочена с {fmtDate(m.nextPaymentDate, true)}</span> : m.nextPaymentDate ? `оплата ${fmtDate(m.nextPaymentDate, true)}` : "активна"}</p>}
             </div>
             <button onClick={() => { setTab("reporting"); setReportSub("body"); }} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition">
               <p className="text-sm text-zinc-400">Вес</p>
@@ -333,6 +347,17 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
                 : <p className="text-base font-semibold mt-1.5 text-zinc-500">добавить замер</p>}
             </button>
           </div>
+
+          {renewDue && (renewLinks.wa || renewLinks.tg) && (
+            <a href={renewLinks.wa || renewLinks.tg} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-orange-400/10 border border-orange-400/30 rounded-2xl px-4 py-3 text-sm text-orange-300">
+              <MessageSquare size={16} className="shrink-0" />
+              <span className="flex-1">{subOverdue ? "Подписка просрочена." : m.type === "subscription" ? "Скоро оплата подписки." : "Тренировки в абонементе заканчиваются."} Написать тренеру о продлении</span>
+            </a>
+          )}
+          {/* Подсказки по одной: сначала установка, уведомления — когда она уже не нужна */}
+          {installCardShown() ? <InstallCard email={email} /> : <NotifyCard />}
+          <TrainerContactCard trainer={brand} />
+          <FromTrainer clientId={client.id} notes={progressHook.progress} sessions={progressHook.sessions} />
 
           {brand.trainingRules && (
             <div>
@@ -682,6 +707,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
       )}
       {showDocs && <LegalList slugs={["privacy", "consent-client", "terms"]} onClose={() => setShowDocs(false)} />}
       {showPinSettings && <PinSettingsModal onClose={() => setShowPinSettings(false)} />}
+      {showPassword && <ChangePasswordModal onClose={() => setShowPassword(false)} />}
       {showSettings && (
         <ClientSettingsModal clientId={client.id} initial={profile} onClose={() => setShowSettings(false)} onSaved={(p) => setProfile(p)} />
       )}

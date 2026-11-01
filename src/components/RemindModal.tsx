@@ -13,10 +13,20 @@ const whenText = (date: string) => {
   return `${new Date(date + "T00:00:00").toLocaleDateString("ru-RU", { weekday: "long" })}, ${d}`;
 };
 
-// Напоминание клиенту о записи: готовый текст и кнопки мессенджеров из контактов в профиле.
-// Отправляет сам тренер — так сообщение приходит от него, а не от приложения.
-export default function RemindModal({ clientId, name, date, time, onClose }: { clientId: string; name: string; date: string; time: string; onClose: () => void }) {
-  const [text, setText] = useState(`${name.split(" ")[0]}, привет! Напоминаю: тренировка ${whenText(date)}${time ? `, в ${time}` : ""}. До встречи!`);
+// Напоминание клиенту о записи или об оплате: готовый текст и кнопки мессенджеров из контактов
+// в профиле. Отправляет сам тренер — так сообщение приходит от него, а не от приложения.
+// Разбор путей 0.6: об оплате шаблона не было вовсе.
+export default function RemindModal({ clientId, name, date = "", time = "", payment, onClose }: {
+  clientId: string; name: string; date?: string; time?: string;
+  /** Напоминание об оплате: сумма (0 — без суммы) */
+  payment?: { amount: number };
+  onClose: () => void;
+}) {
+  const first = name.split(" ")[0];
+  const hi = first ? `${first}, привет!` : "Привет!";
+  const [text, setText] = useState(payment
+    ? `${hi} Напоминаю про оплату тренировок${payment.amount ? ` — ${payment.amount.toLocaleString("ru-RU")} ₽` : ""}. Спасибо!`
+    : `${hi} Напоминаю: тренировка ${whenText(date)}${time ? `, в ${time}` : ""}. До встречи!`);
   const [contacts, setContacts] = useState<{ phone: string; telegram: string; whatsapp: string } | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {

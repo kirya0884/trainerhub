@@ -26,6 +26,8 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
   const [phone, setPhone] = useState("");
   const [telegram, setTelegram] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
+  // Разбор путей 1.10: почта для кабинета — сразу в мастере, доступ выдаётся в карточке после создания
+  const [email, setEmail] = useState("");
   const [injuries, setInjuries] = useState("");
   const [restrictions, setRestrictions] = useState("");
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
@@ -40,10 +42,19 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
     setBusy(true);
     try {
       const c = await addClient(trainerId, name.trim(), goal, existingCount);
-      await updateClient(c.id, {
+      const fields = {
         format, phone: phone.trim(), telegram: telegram.trim(), whatsapp: whatsapp.trim(),
         health: { injuries: injuries.trim(), restrictions: restrictions.trim(), notes: "" },
-      });
+      };
+      const mail = email.trim().toLowerCase();
+      // Почта уникальна у тренера: занята другим клиентом — сохраняем остальное, иначе повтор
+      // «Добавить» создал бы второго такого же клиента (карточка уже создана выше)
+      try { await updateClient(c.id, mail ? { ...fields, email: mail } : fields); }
+      catch (e) {
+        if (!mail || (e as { code?: string })?.code !== "23505") throw e;
+        await updateClient(c.id, fields);
+        notify("Эта почта уже у другого клиента — карточку создали без неё.", "info");
+      }
       if (tpl) {
         const m = { ...emptyMembership, total: String(tpl.sessions), packagePrice: String(tplPrice(tpl)), split: tpl.split };
         // «Оплата позже» — как во вкладке «Оплаты»: блок начислен, платёж в журнале «ожидается»
@@ -110,6 +121,8 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
             <input value={telegram} onChange={(e) => setTelegram(e.target.value)} placeholder="Telegram, например @marina" className={field} />
             <input type="tel" inputMode="tel" value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="WhatsApp, номер" className={field} />
             {phone.trim() && !whatsapp && <button onClick={() => setWhatsapp(phone)} className="text-sm text-lime-400 font-semibold">WhatsApp на этот же номер</button>}
+            <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email — для кабинета клиента" className={field} />
+            <p className="text-[13px] text-zinc-500 -mt-1">По этой почте клиент войдёт в свой кабинет: ссылку на вход отправишь из его карточки.</p>
           </>
         )}
 

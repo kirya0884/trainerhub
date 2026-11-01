@@ -11,6 +11,8 @@ import "@fontsource-variable/unbounded";
 import "./index.css";
 import { registerSW } from "virtual:pwa-register";
 import { beforeReload, hasUnsaved } from "./lib/unsavedGuard";
+// Ловим «можно установить» (Android) с самого старта — кабинет клиента загрузится позже события
+import "./lib/install";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

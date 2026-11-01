@@ -95,9 +95,31 @@ export async function updateSelfProfile(clientId: string, p: { phone: string; te
   if (error) throw error;
 }
 
+// Бренд для печати у самого тренера (свою строку trainers он читает)
 export async function fetchTrainerBrand(trainerId: string) {
   const { data } = await supabase.from("trainers").select("brand,logo_url,profile").eq("id", trainerId).maybeSingle();
   return { brand: data?.brand || "Reps", logoUrl: data?.logo_url || "", trainingRules: (data?.profile as any)?.trainingRules || "" };
+}
+
+export interface TrainerCard { brand: string; logoUrl: string; trainingRules: string; name: string; avatarUrl: string; phone: string; telegram: string; whatsapp: string }
+// Разбор путей 5.22: клиенту строку тренера база не отдаёт (только сам тренер читает trainers),
+// поэтому и бренд с правилами раньше не приходили. client_trainer_card отдаёт ровно то, что
+// клиенту нужно: бренд, правила, имя, фото и контакты для «Написать тренеру».
+export async function fetchTrainerCard(clientId: string): Promise<TrainerCard> {
+  const { data, error } = await supabase.rpc("client_trainer_card", { p_client_id: clientId });
+  if (error) throw error;
+  const d = (data ?? {}) as Record<string, string | null>;
+  return {
+    brand: d.brand || "Reps", logoUrl: d.logo_url || "", trainingRules: d.training_rules || "",
+    name: d.name || "", avatarUrl: d.avatar_url || "", phone: d.phone || "", telegram: d.telegram || "", whatsapp: d.whatsapp || "",
+  };
+}
+
+// Разбор путей 5.23: абонемент клиента меняется у тренера (продление, списание) — перечитываем
+export async function fetchMyMembership(clientId: string) {
+  const { data, error } = await supabase.from("clients").select("membership").eq("id", clientId).single();
+  if (error) throw error;
+  return (data?.membership || {}) as SelfClient["membership"];
 }
 
 // Строка bookings глазами клиента: участники ему не видны, поэтому в записи только он сам

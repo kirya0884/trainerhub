@@ -72,7 +72,8 @@ function forgetUser(uid: string) {
   if (!uid) return;
   removeOwner(uid);
   try {
-    const drop = [activeKey(uid)];
+    // Доверие PIN этого входа тоже: после выхода PIN снова спросится
+    const drop = [activeKey(uid), `trainerhub-pin-trust-${uid}`];
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && /^th-(tsess-|gslot-|food-cache:|nutri-calc-)/.test(k)) drop.push(k); }
     drop.forEach((k) => removeKey(k));
   } catch (e) { console.error("[offlineCache] черновики:", e); }

@@ -124,6 +124,8 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
         <label className="text-xs text-zinc-500 block">О себе
           <textarea value={profile.bio} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} rows={3} placeholder="Короткий рассказ о себе и подходе к тренировкам" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40 resize-none" />
         </label>
+        {/* Разбор путей 5.22: контакты теперь видят клиенты — тренер должен это знать, вписывая номер */}
+        <p className="text-xs text-zinc-500">Телефон и мессенджеры видят твои клиенты в кабинете: кнопка «Написать тренеру». Оставь пустым то, что не хочешь показывать.</p>
         <div className="grid sm:grid-cols-3 gap-2">
           <label className="text-xs text-zinc-500">Телефон
             <input value={profile.phone} onChange={(e) => setProfile({ ...profile, phone: e.target.value })} placeholder="+7..." className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2 py-1.5 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />

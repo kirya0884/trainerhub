@@ -49,6 +49,7 @@ export default function PinSettingsModal({ onClose, onChanged }: { onClose: () =
           : hasPin === null ? "Не удалось узнать, установлен ли PIN. Можно задать новый."
           : hasPin ? "PIN установлен. Можно сменить или снять." : "PIN не установлен — приложение открывается без доп. защиты."
         }</p>
+        <p className="text-xs text-zinc-500">После ввода PIN этот телефон 4 часа не спрашивает его снова — в том числе без интернета.</p>
         <input
           type="text" inputMode="numeric" placeholder="Новый PIN (4-8 цифр)" value={pin}
           onChange={(e) => { setPinVal(e.target.value.replace(/\D/g, "").slice(0, 8)); setErr(""); }}

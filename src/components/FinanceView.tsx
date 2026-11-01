@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { ArrowDownRight, ArrowLeft, ArrowUpRight, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Search } from "lucide-react";
+import { ArrowDownRight, ArrowLeft, ArrowUpRight, Bell, Check, ChevronLeft, ChevronRight, Download, Eye, EyeOff, Search } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { fetchDashboardData } from "../lib/dashboard";
 import type { DashboardCharge, DashboardClient, DashboardPayment } from "../lib/dashboard";
@@ -15,6 +15,7 @@ import { notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 import { SkeletonRows } from "./Skeleton";
 import RenewModal from "./RenewModal";
+import RemindModal from "./RemindModal";
 
 // Финансы тренера: поступления и заработок за период со сравнением с прошлым,
 // кто должен, кому скоро продлевать, откуда деньги и журнал всех оплат.
@@ -67,6 +68,7 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
   const [hide, setHide] = useState(() => { try { return localStorage.getItem(HIDE_KEY) === "1"; } catch { return false; } });
   const [q, setQ] = useState("");
   const [renew, setRenew] = useState<DashboardClient | null>(null);
+  const [remind, setRemind] = useState<{ id: string; amount: number } | null>(null);
   const load = () => fetchDashboardData(trainerId).then((d) => { setData(d); setError(""); }).catch((e) => { console.error("[FinanceView] load:", e); setError(humanError(e, "Не удалось загрузить финансы")); });
   useEffect(() => { load(); }, [trainerId]); // eslint-disable-line react-hooks/exhaustive-deps
   const toggleHide = () => setHide((v) => { try { localStorage.setItem(HIDE_KEY, v ? "0" : "1"); } catch { /* приватный режим */ } return !v; });
@@ -215,7 +217,8 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
                   <p className="text-xs text-zinc-500">{fmtShort(x.date)} · {x.payStatus === "installment" ? "частями" : "позже"}</p>
                 </button>
                 <span className="text-sm font-bold text-orange-300 shrink-0">{rub(x.amount)}</span>
-                <button onClick={() => settle(x)} className="h-9 px-2.5 shrink-0 flex items-center gap-1 rounded-lg bg-lime-400/15 text-lime-400 text-[13px] font-semibold hover:bg-lime-400/25 transition"><Check size={14} /> Оплачено</button>
+                <button onClick={() => setRemind({ id: x.clientId, amount: x.amount })} aria-label="Напомнить об оплате" title="Напомнить об оплате" className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition"><Bell size={16} /></button>
+                <button onClick={() => settle(x)} aria-label="Оплачено" className="h-9 px-2.5 shrink-0 flex items-center gap-1 rounded-lg bg-lime-400/15 text-lime-400 text-[13px] font-semibold hover:bg-lime-400/25 transition"><Check size={14} /> <span className="hidden min-[380px]:inline">Оплачено</span></button>
               </div>
             ))}
             {debt.map((x) => { const overdue = subscriptionOverdueDays(x, t); return (
@@ -225,6 +228,7 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
                   <p className="text-sm font-semibold truncate">{x.name}</p>
                   <p className="text-xs text-orange-400">{overdue > 0 ? `Подписка просрочена ${overdue} ${plural(overdue, ["день", "дня", "дней"])}` : "Пакет закончился"}</p>
                 </button>
+                <button onClick={() => setRemind({ id: x.id, amount: 0 })} aria-label="Напомнить об оплате" title="Напомнить об оплате" className="w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition"><Bell size={16} /></button>
                 <button onClick={() => setRenew(x)} className="h-9 px-3 shrink-0 rounded-lg bg-zinc-800 text-zinc-100 text-[13px] font-semibold hover:bg-zinc-700 transition">Продлить</button>
               </div>
             ); })}
@@ -305,6 +309,7 @@ export default function FinanceView({ trainerId, bookings, onOpenClient, onBack 
       )}
 
       {renew && <RenewModal trainerId={trainerId} clientId={renew.id} name={renew.name} onDone={load} onClose={() => setRenew(null)} />}
+      {remind && <RemindModal clientId={remind.id} name={byId[remind.id]?.name ?? ""} payment={{ amount: remind.amount }} onClose={() => setRemind(null)} />}
     </Shell>
   );
 }

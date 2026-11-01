@@ -25,14 +25,19 @@ export async function checkMyPin(pin: string): Promise<boolean> {
   return !!data;
 }
 
+// Доверие устройства (4 часа после верного PIN, см. PinGate) — снимаем при смене и снятии PIN
+const dropTrust = async () => { const { data } = await supabase.auth.getSession(); const id = data.session?.user.id; if (id) try { localStorage.removeItem(`trainerhub-pin-trust-${id}`); } catch { /* нет доступа */ } };
+
 export async function setMyPin(pin: string) {
   const { error } = await supabase.rpc("set_my_pin", { p_pin: pin });
   if (error) throw error;
   rememberPin(true);
+  await dropTrust();
 }
 
 export async function clearMyPin() {
   const { error } = await supabase.rpc("clear_my_pin");
   if (error) throw error;
   rememberPin(false);
+  await dropTrust();
 }

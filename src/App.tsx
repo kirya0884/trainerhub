@@ -733,7 +733,15 @@ export default function App() {
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
         {view.kind === "dashboard" && (
-          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} recentSlot={recentRow} onOpenClient={openClient} onOpenFinance={() => go({ kind: "finance" })} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
+          <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} recentSlot={recentRow}
+            onFirstStep={(s) => {
+              // Доступ выдаётся в карточке клиента (плашка «Выдать доступ» вверху) — открываем список
+              if (s === "profile") go({ kind: "trainerProfile" });
+              else if (s === "client") go({ kind: "clients", newForm: true });
+              else if (s === "plan") go({ kind: "plans", newPlan: true });
+              else if (s === "booking") go({ kind: "calendar", newBooking: true });
+              else go({ kind: "clients" });
+            }} onOpenClient={openClient} onOpenFinance={() => go({ kind: "finance" })} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
         )}
         {view.kind === "finance" && (
           <FinanceView trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onBack={goBack} />

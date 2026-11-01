@@ -58,6 +58,7 @@ const TABS: { k: Sub; label: string; icon: typeof Users }[] = [
 ];
 export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan, initialSub, pinned, onTogglePinned, onBookClient, bookings, allPlans, onOpenOccurrence }: { trainerId: string; clientId: string; onBack: () => void; onOpenPlan: (id: string) => void; initialSub?: Sub; pinned?: boolean; onTogglePinned?: () => void; onBookClient?: (clientId: string) => void; bookings?: Booking[]; allPlans?: PlanOverviewItem[]; onOpenOccurrence?: (id: string, occDate: string) => void }) {
   const [sub, setSub] = useState<Sub>(initialSub || "overview");
+  const [noAccessHidden, setNoAccessHidden] = useState(() => { try { return localStorage.getItem(`reps-noaccess-hidden-${clientId}`) === "1"; } catch { return false; } });
   const [showSubSettings, setShowSubSettings] = useState(false);
   // Имя — крупным заголовком; правка по тапу (у полей ввода на iOS шрифт не меньше 16 px — см. index.css)
   const [editingName, setEditingName] = useState(false);
@@ -301,6 +302,14 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         </span>
       </button>
 
+      {/* Разбор путей 1.10: выдачу доступа легко забыть — кнопка жила в «Обзоре» под «Статусом» */}
+      {!client.hasAccount && !client.isSelf && !noAccessHidden && (
+        <div className="flex items-center gap-2 bg-zinc-900 border border-cyan-400/30 rounded-2xl pl-4 pr-2 py-2">
+          <p className="flex-1 text-sm text-zinc-300">У клиента нет кабинета: он не видит программу и не может отмечать тренировки.</p>
+          <button onClick={() => { setSub("overview"); setTimeout(() => document.getElementById("invite-block")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} className="shrink-0 h-10 px-3 rounded-xl bg-cyan-400/15 text-cyan-300 text-sm font-semibold hover:bg-cyan-400/25 transition">Выдать доступ</button>
+          <button onClick={() => { try { localStorage.setItem(`reps-noaccess-hidden-${clientId}`, "1"); } catch { /* приватный режим */ } setNoAccessHidden(true); }} aria-label="Не нужно" title="Не нужно" className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200"><X size={16} /></button>
+        </div>
+      )}
       {/* Начать тренировку по одному из действующих планов — без захода в редактор плана */}
       {activePlans.length > 0 && (
         <button onClick={() => setShowStart(true)}
@@ -477,7 +486,7 @@ function OverviewTab({ client, patch, patchHealth, notes, notesFailed, onRetry, 
           <label className="text-xs text-zinc-500">WhatsApp<input value={client.whatsapp} onChange={(e) => patch({ whatsapp: e.target.value })} placeholder="79001234567" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" /></label>
         </div>
         <label className="text-xs text-zinc-500 block">Email для входа в портал клиента<input type="email" value={client.email} onChange={(e) => patch({ email: e.target.value.trim() })} placeholder="client@mail.com" className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-cyan-400/40" /></label>
-        <InviteBlock clientId={clientId} email={client.email} hasAccount={client.hasAccount} onFixEmail={(email) => patch({ email })} />
+        <div id="invite-block"><InviteBlock clientId={clientId} email={client.email} hasAccount={client.hasAccount} onFixEmail={(email) => patch({ email })} /></div>
         <p className="text-[11px] text-zinc-600 -mt-1">{client.hasAccount ? "Доступ уже выдан. Если клиент ещё не задал пароль — вышли ссылку заново, старая перестанет работать." : "Дадим ссылку для клиента — по ней он сам задаст пароль."}</p>
         <div className="flex flex-wrap gap-2">
           {client.phone && <a href={`tel:${client.phone}`} className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg px-3 py-1.5 text-sm transition"><Phone size={14} /> Позвонить</a>}

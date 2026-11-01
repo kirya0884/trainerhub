@@ -61,7 +61,7 @@ export default function AuthScreen() {
   const title = forgotPw ? "Сброс пароля" : mode === "trainer" && isSignup ? "Регистрация в Reps" : "Вход в Reps";
   const subtitle = forgotPw
     ? "Пришлём ссылку для сброса пароля на почту"
-    : mode === "client" ? "Для клиентов: логин и пароль выдаёт тренер" : "Клиенты, планы и оплаты в одном месте";
+    : mode === "client" ? "Для клиентов: войди по ссылке от тренера или с паролем, который задал" : "Клиенты, планы и оплаты в одном месте";
   const inputCls = "w-full h-12 bg-zinc-900 border border-zinc-800 rounded-xl px-4 outline-none focus:border-lime-400/60 focus:ring-2 focus:ring-lime-400/30 placeholder:text-zinc-600 transition";
   const RoleCard = ({ value, icon: Icon, label, hint }: { value: "trainer" | "client"; icon: typeof Dumbbell; label: string; hint: string }) => {
     const on = mode === value;
@@ -112,8 +112,8 @@ export default function AuthScreen() {
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label htmlFor="auth-password" className="text-sm font-medium">Пароль</label>
-                    {mode === "trainer" && !isSignup && (
-                      <button type="button" onClick={() => { setForgotPw(true); resetMsg(); }} className="text-sm text-zinc-400 hover:text-zinc-100">Забыли?</button>
+                    {!(mode === "trainer" && isSignup) && (
+                      <button type="button" onClick={() => { setForgotPw(true); resetMsg(); }} className="text-sm text-zinc-400 hover:text-zinc-100">Забыл пароль?</button>
                     )}
                   </div>
                   <input id="auth-password" type="password" autoComplete={mode === "trainer" && isSignup ? "new-password" : "current-password"} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === "trainer" && isSignup ? "Минимум 6 символов" : ""} className={inputCls} />

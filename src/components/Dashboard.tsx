@@ -8,7 +8,9 @@ import type { DashboardClient } from "../lib/dashboard";
 import { expandBookings } from "../lib/bookings";
 import { debtClients } from "../lib/analytics";
 import type { Booking } from "../lib/bookings";
-import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking, requestNotifyPermission } from "../lib/notify";
+import { notifyDailyDigest, notifyClientStarted, notifyClientFinished, notifyUpcomingBooking } from "../lib/notify";
+import RemindModal from "./RemindModal";
+import FirstSteps, { type FirstStep } from "./FirstSteps";
 import { supabase } from "../lib/supabase";
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, isPushSupported } from "../lib/pushSubscribe";
 import { today, addDays, plural } from "../lib/format";
@@ -33,7 +35,7 @@ const SectionTitle = ({ children, right }: { children: ReactNode; right?: ReactN
 // Минуты до начала (отрицательные — уже идёт)
 const minsUntil = (date: string, time: string) => Math.round((new Date(`${date}T${time || "00:00"}:00`).getTime() - Date.now()) / 60000);
 
-export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence, recentSlot, onOpenFinance }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenFinance: () => void; onOpenOccurrence?: (id: string, occDate: string) => void; recentSlot?: ReactNode }) {
+export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence, recentSlot, onOpenFinance, onFirstStep }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenFinance: () => void; onOpenOccurrence?: (id: string, occDate: string) => void; recentSlot?: ReactNode; onFirstStep?: (s: FirstStep) => void }) {
   // Имя клиента как ссылка на карточку. Наследует цвет родителя, поэтому одинаково
   // работает в белом расписании и в цветных алертах.
   // ponytail: тап-зону 44px по вертикали внутри строки текста не сделать, не разорвав абзац.
@@ -53,12 +55,13 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
   const [attn, setAttn] = useState<"debt" | "exp" | "bday" | null>(null);
   // Разбор путей 2.1: «Начать тренировку» сразу открывает тренировку по записи, без захода в календарь
   const bookingStart = useStartFromBooking(trainerId);
+  const [remind, setRemind] = useState<{ id: string; date: string; time: string } | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
 
   useEffect(() => {
-    requestNotifyPermission();
+    // Разбор путей 0.5: разрешение на уведомления — не сразу при открытии, а по нажатию на колокольчик вверху
     fetchDashboardData(trainerId).then(setData).catch((e) => { console.error("[Dashboard] load:", e); setLoadError(humanError(e, "Не удалось загрузить данные")); });
     // Списания и продления меняют «Требует внимания» и карточку финансов; вернулась сеть — перечитываем
     const reload = () => { fetchDashboardData(trainerId).then(setData).catch(console.error); };
@@ -248,6 +251,8 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         )}
       </div>
 
+      {onFirstStep && <FirstSteps trainerId={trainerId} bookingsCount={bookings.length} onGo={onFirstStep} />}
+
       {/* Ш4б: ближайшая тренировка — главный блок экрана */}
       {nextOcc ? (
         <div className="relative overflow-hidden bg-zinc-900 border border-zinc-800 rounded-3xl p-4">
@@ -299,6 +304,11 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
                     <p className="font-semibold truncate">{names(o.clientIds)}</p>
                     <p className="text-xs text-zinc-500 truncate">{statusText[o.status] ?? o.dayName ?? ""}</p>
                   </div>
+                  {/* Разбор путей 0.6: напомнить клиенту прямо из расписания, а не только из календаря */}
+                  {!finished && o.clientIds.length === 1 && (
+                    <button onClick={() => setRemind({ id: o.clientIds[0], date: o.date, time: o.time })} title="Напомнить клиенту" aria-label={`Напомнить о тренировке в ${o.time}`}
+                      className="shrink-0 w-10 h-10 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition"><Bell size={17} /></button>
+                  )}
                   {o.status === "done"
                     ? <Check size={18} className="shrink-0 text-lime-400" />
                     : !finished && onOpenOccurrence && (
@@ -327,7 +337,11 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
             {upcomingNotToday.map((o) => (
               <div key={`${o.id}-${o.occDate}`} className="flex items-center gap-3 px-4 py-3">
                 <span className="shrink-0 text-sm text-zinc-400 whitespace-nowrap">{dayLabel(o.date)}, <span className="font-semibold text-zinc-200">{o.time}</span></span>
-                <span className="min-w-0 truncate text-sm">{names(o.clientIds)}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{names(o.clientIds)}</span>
+                {o.clientIds.length === 1 && (
+                  <button onClick={() => setRemind({ id: o.clientIds[0], date: o.date, time: o.time })} title="Напомнить клиенту" aria-label={`Напомнить о тренировке ${dayLabel(o.date)} в ${o.time}`}
+                    className="shrink-0 -my-2 w-10 h-10 flex items-center justify-center rounded-xl text-zinc-500 hover:text-zinc-100 hover:bg-zinc-800 transition"><Bell size={16} /></button>
+                )}
               </div>
             ))}
           </div>
@@ -404,6 +418,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
       </div>
 
       {bookingStart.modal}
+      {remind && <RemindModal clientId={remind.id} name={data.clients.find((c) => c.id === remind.id)?.name ?? ""} date={remind.date} time={remind.time} onClose={() => setRemind(null)} />}
     </div>
   );
 }
