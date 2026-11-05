@@ -1,4 +1,5 @@
-import { Check, History, Layers, Minus, Plus } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, History, Layers, Minus, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
 import { addDays, fmtDate, fmtSet, today } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
 import { RPE_SCALE, doneSets, exKey, fmtRpe, isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
@@ -183,13 +184,35 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
   const current = Array.from({ length: rounds }, (_, r) => r)
     .find((r) => named.some((ex) => r < (vals[ex.id] || []).length && !meta[ex.id]?.setsDone?.[r]));
   const tonnage = named.reduce((s, ex) => s + (ex.kind === "functional" ? 0 : tonnageOf(doneSets(vals[ex.id] || [], meta[ex.id]))), 0);
+  // Двусет можно свернуть, как одиночное упражнение после «Готово»: занимает экран, а уже
+  // сделан или отложен. Все подходы отмечены — сворачивается сам, тап разворачивает.
+  const totalSets = named.reduce((n, ex) => n + (vals[ex.id] || []).length, 0);
+  const doneCount = named.reduce((n, ex) => n + (vals[ex.id] || []).filter((_, i) => meta[ex.id]?.setsDone?.[i]).length, 0);
+  const allDone = totalSets > 0 && doneCount === totalSets;
+  const [collapsed, setCollapsed] = useState(allDone);
+  useEffect(() => { if (allDone) setCollapsed(true); }, [allDone]);
+  const kg = tonnage > 0 ? `${Math.round(tonnage).toLocaleString("ru-RU")} кг` : "";
+
+  if (collapsed) return (
+    <button onClick={() => setCollapsed(false)} aria-expanded={false} aria-label={`${title}: развернуть`}
+      className="w-full rounded-2xl bg-zinc-900 border border-zinc-800 pl-4 pr-3 py-2.5 flex items-center gap-2.5 text-left hover:border-zinc-700 transition" style={{ boxShadow: `inset 3px 0 0 ${color}` }}>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-1.5 text-xs font-bold" style={{ color }}><Layers size={13} /> {title}{allDone && <Check size={13} strokeWidth={3} className="text-lime-400" />}</span>
+        <span className="block text-sm font-semibold truncate mt-0.5">{named.map((ex) => ex.name).join(" · ")}</span>
+        <span className="block text-xs text-zinc-500">{doneCount} из {totalSets} подходов{kg ? ` · ${kg}` : ""}</span>
+      </span>
+      <ChevronDown size={18} className="text-zinc-500 shrink-0" />
+    </button>
+  );
 
   return (
     <div className="rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800" style={{ boxShadow: `inset 3px 0 0 ${color}` }}>
-      <div className="pl-4 pr-3 pt-2.5 pb-1">
+      <div className="pl-4 pr-1.5 pt-1.5 pb-1">
         <div className="flex items-center gap-1.5 text-xs font-bold" style={{ color }}>
           <Layers size={13} /> {title}
-          {tonnage > 0 && <span className="ml-auto text-zinc-400 font-semibold">{Math.round(tonnage).toLocaleString("ru-RU")} кг</span>}
+          {kg && <span className="ml-auto text-zinc-400 font-semibold">{kg}</span>}
+          <button onClick={() => setCollapsed(true)} aria-expanded aria-label={`${title}: свернуть`} title="Свернуть"
+            className={`${kg ? "" : "ml-auto"} h-9 px-2 flex items-center gap-1 rounded-lg text-zinc-400 font-semibold hover:bg-zinc-800 hover:text-zinc-100 transition`}><ChevronUp size={15} /> Свернуть</button>
         </div>
         <p className="text-sm font-semibold mt-1 leading-snug">
           {named.map((ex, k) => <span key={ex.id}>{k > 0 && <span className="text-zinc-600"> · </span>}<span style={{ color }}>{labels[items.indexOf(ex)]}</span> {ex.name}</span>)}
