@@ -39,7 +39,9 @@ precacheAndRoute(self.__WB_MANIFEST);
 // (в localStorage, под id вошедшего, чистится при выходе), здесь запросы идут мимо SW.
 // При активации новой версии убираем то, что накопили прежние: кэш "supabase-api" целиком
 // и картинки из хранилища Supabase (аватары, фото прогресса), попавшие в "static-assets".
-const isSupabase = (url: URL) => url.hostname.endsWith(".supabase.co");
+// api.trainer-hub-online.ru — свой сервер Supabase (переезд с облака)
+const isSupabase = (url: URL) =>
+  url.hostname.endsWith(".supabase.co") || url.hostname === "api.trainer-hub-online.ru";
 self.addEventListener("activate", (event: ExtendableEvent) => {
   event.waitUntil((async () => {
     await caches.delete("supabase-api");
