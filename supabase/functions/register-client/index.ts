@@ -19,17 +19,24 @@
 // Ссылка ведёт в приложение (`${redirectTo}/#/invite?token_hash=…&type=recovery`), а не на
 // /auth/v1/verify: ту гасят превью мессенджеров и почтовые сканеры, открывая её раньше клиента.
 // Приложение само вызывает verifyOtp({ token_hash, type: "recovery" }) и показывает «новый пароль».
-// Если настроен Resend — та же ссылка уходит письмом; письмо не ушло — не ошибка.
+// Если настроена почта (SMTP на своём сервере, иначе Resend) — та же ссылка уходит письмом; письмо не ушло — не ошибка.
 // Пароль функция не ставит никогда. Почту входа меняет только при исправлении опечатки:
 // resend, вход создан этим тренером, ни разу не входил, других карточек нет.
 // Идемпотентна: повтор после сбоя на любом шаге находит вход по почте и доводит дело до конца.
 import { createClient } from "npm:@supabase/supabase-js@2";
+import nodemailer from "npm:nodemailer@7.0.13";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY") ?? "";
 const RESEND_FROM = Deno.env.get("RESEND_FROM") || "Reps <onboarding@resend.dev>";
+const SMTP_HOST = Deno.env.get("SMTP_HOST") ?? "";
+const SMTP_PORT = Number(Deno.env.get("SMTP_PORT") || 465);
+const SMTP_USER = Deno.env.get("SMTP_USER") ?? "";
+const SMTP_PASS = Deno.env.get("SMTP_PASS") ?? "";
+const SMTP_FROM = Deno.env.get("SMTP_FROM") || SMTP_USER;
+const MAIL_SUBJECT = "Доступ в личный кабинет Reps";
 
 // Куда ведёт ссылка: только свои origin (иначе ссылку входа можно было бы увести на чужой сайт).
 // Адреса для разработки (localhost) — через секрет APP_ORIGINS, через запятую.
@@ -199,7 +206,7 @@ Deno.serve(async (req) => {
     const link = `${redirectTo}/#/invite?token_hash=${encodeURIComponent(hashed)}&type=recovery`;
 
     let emailSent = false;
-    if (RESEND_API_KEY) {
+    if (SMTP_HOST || RESEND_API_KEY) {
       const brand = trainerRow.brand || "Reps";
       const html = `
         <p>Здравствуйте, ${escapeHtml(client.name)}!</p>
@@ -216,13 +223,25 @@ Deno.serve(async (req) => {
         `Ссылка одноразовая. Логин для следующих входов — ${email}, на экране входа выберите «Я клиент».`,
       ].join("\n");
       try {
-        const sendRes = await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: RESEND_FROM, to: email, subject: "Доступ в личный кабинет Reps", html, text }),
-        });
-        emailSent = sendRes.ok;
-        if (!sendRes.ok) console.warn("[register-client] письмо не ушло:", await resendError(sendRes));
+        if (SMTP_HOST) {
+          const smtp = nodemailer.createTransport({
+            host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_PORT === 465,
+            // Без name библиотека представляется как [127.0.0.1] — признак спама
+            name: SMTP_USER.split("@")[1],
+            auth: { user: SMTP_USER, pass: SMTP_PASS },
+            connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 15_000,
+          });
+          await smtp.sendMail({ from: SMTP_FROM, to: email, subject: MAIL_SUBJECT, html, text });
+          emailSent = true;
+        } else {
+          const sendRes = await fetch("https://api.resend.com/emails", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ from: RESEND_FROM, to: email, subject: MAIL_SUBJECT, html, text }),
+          });
+          emailSent = sendRes.ok;
+          if (!sendRes.ok) console.warn("[register-client] письмо не ушло:", await resendError(sendRes));
+        }
       } catch (e) {
         console.warn("[register-client] письмо не ушло:", String((e as any)?.message || e));
       }
