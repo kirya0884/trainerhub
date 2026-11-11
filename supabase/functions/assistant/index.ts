@@ -70,10 +70,12 @@ Deno.serve(async (req) => {
     });
     const { data: trainer } = await db.from("trainers").select("id").eq("id", uid).maybeSingle();
     if (!trainer) return json({ error: "Помощник доступен только тренеру" }, 403);
-    // Ключ проверяем после входа: посторонним не сообщаем, подключён ли помощник
-    if (!YANDEX_API_KEY || !YANDEX_FOLDER_ID) return json({ error: "Помощник ещё не подключён" }, 503);
-
     const body = await req.json().catch(() => ({}));
+    // Ключ проверяем после входа: посторонним не сообщаем, подключён ли помощник.
+    // status — приложение спрашивает, открыт ли помощник (пока нет ключа — «в разработке»)
+    const connected = !!(YANDEX_API_KEY && YANDEX_FOLDER_ID);
+    if (body?.mode === "status") return json({ ok: true, connected });
+    if (!connected) return json({ error: "Помощник ещё не подключён" }, 503);
     if (body?.mode !== "command") return json({ error: "Неизвестный режим" }, 400);
     const text = typeof body?.text === "string" ? body.text.trim() : "";
     if (!text) return json({ error: "Пустая команда" }, 400);

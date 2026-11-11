@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Bell, BellOff, Cake, CalendarClock, Check, ChevronRight, Clock, Hourglass, Play, TriangleAlert, Wallet } from "lucide-react";
+import { Bell, BellOff, Cake, CalendarClock, Check, ChevronRight, Clock, Hourglass, Play, Sparkles, TriangleAlert, Wallet } from "lucide-react";
 import { fetchDashboardData as fetchFresh } from "../lib/dashboard";
 import { cached, onRevalidate, peekCache, releaseStale, staleAtOf } from "../lib/offlineCache";
 import { onClientsChanged } from "../lib/clientsBus";
@@ -18,6 +18,7 @@ import RemainingBadge from "./RemainingBadge";
 import { remainingOf } from "../lib/clients";
 import { notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
+import { assistantConnectedCached } from "../lib/assistant";
 import { useStartFromBooking } from "../hooks/useStartFromBooking";
 
 // Без сети главная открывается с последними сохранёнными данными. Храним оплаты и списания
@@ -35,7 +36,7 @@ const SectionTitle = ({ children, right }: { children: ReactNode; right?: ReactN
 // Минуты до начала (отрицательные — уже идёт)
 const minsUntil = (date: string, time: string) => Math.round((new Date(`${date}T${time || "00:00"}:00`).getTime() - Date.now()) / 60000);
 
-export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence, recentSlot, onOpenFinance, onFirstStep }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenFinance: () => void; onOpenOccurrence?: (id: string, occDate: string) => void; recentSlot?: ReactNode; onFirstStep?: (s: FirstStep) => void }) {
+export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOccurrence, recentSlot, onOpenFinance, onFirstStep, onOpenAssistant }: { trainerId: string; bookings: Booking[]; onOpenClient: (id: string) => void; onOpenFinance: () => void; onOpenOccurrence?: (id: string, occDate: string) => void; recentSlot?: ReactNode; onFirstStep?: (s: FirstStep) => void; onOpenAssistant?: () => void }) {
   // Имя клиента как ссылка на карточку. Наследует цвет родителя, поэтому одинаково
   // работает в белом расписании и в цветных алертах.
   // ponytail: тап-зону 44px по вертикали внутри строки текста не сделать, не разорвав абзац.
@@ -221,6 +222,13 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
           <p className="text-sm text-zinc-500 first-letter:uppercase">{new Date().toLocaleDateString("ru-RU", { weekday: "long", day: "numeric", month: "long" })}</p>
           <h1 className="text-2xl font-extrabold tracking-tight">{greeting()}</h1>
         </div>
+        {/* Помощник: команды текстом (прототип stage10, экран 15; микрофон — на этапе 3) */}
+        {onOpenAssistant && (
+          <button onClick={onOpenAssistant} className="relative ml-auto shrink-0 h-11 pl-2.5 pr-3.5 rounded-full bg-lime-400 text-zinc-950 text-sm font-bold flex items-center gap-1.5 active:scale-95 transition">
+            <Sparkles size={17} /> Помощник
+            {!assistantConnectedCached() && <span className="absolute -top-2.5 right-0 text-[11px] font-semibold leading-none px-1.5 py-1 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700 whitespace-nowrap">в разработке</span>}
+          </button>
+        )}
         {isPushSupported() && (
           <button
             onClick={async () => {
@@ -244,7 +252,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
             disabled={pushLoading}
             title={pushEnabled ? "Push включены — нажми чтобы отключить" : "Включить push-уведомления"}
             aria-label={pushEnabled ? "Отключить push-уведомления" : "Включить push-уведомления"}
-            className="ml-auto w-11 h-11 flex items-center justify-center rounded-xl transition text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900"
+            className={`${onOpenAssistant ? "" : "ml-auto "}w-11 h-11 flex items-center justify-center rounded-xl transition text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900`}
           >
             {pushEnabled ? <Bell size={20} className="text-lime-400" /> : <BellOff size={20} />}
           </button>

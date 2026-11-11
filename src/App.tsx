@@ -39,6 +39,7 @@ import { setAnalyticsContext } from "./lib/events";
 import RepsMark from "./components/RepsMark";
 import { cached, onRevalidate, peekCache, setCacheOwner, signOutAndForget, staleAtOf } from "./lib/offlineCache";
 import { isNetworkError } from "./lib/outbox";
+import { assistantConnectedCached } from "./lib/assistant";
 
 // Разделы и окна грузятся при первом открытии (см. lib/lazy) — главная и список
 // подопечных остаются в основном файле, чтобы первый экран открывался сразу.
@@ -57,6 +58,7 @@ const TrainerProfile = lazyRetry(() => import("./components/TrainerProfile"));
 const SessionModal = lazyRetry(() => import("./components/SessionModal"));
 const GroupSessionModal = lazyRetry(() => import("./components/GroupSessionModal"));
 const PinSettingsModal = lazyRetry(() => import("./components/PinSettingsModal"));
+const AssistantChat = lazyRetry(() => import("./components/AssistantChat"));
 // Редкие экраны до входа в данные: документ по ссылке #/legal/… и согласие (раз на версию документов)
 const LegalPage = lazyRetry(() => import("./components/LegalDoc").then((m) => ({ default: m.LegalPage })));
 const ConsentGate = lazyRetry(() => import("./components/ConsentGate"));
@@ -322,6 +324,7 @@ export default function App() {
   const { clients, reload: reloadClients } = useClients(dataTrainerId);
   const { plans: allPlans, reload: reloadPlans } = usePlans(dataTrainerId);
   const [showSearch, setShowSearch] = useState(false);
+  const [showAssistant, setShowAssistant] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
@@ -728,6 +731,16 @@ export default function App() {
             onClose={() => setShowSearch(false)}
           />
         )}
+        {showAssistant && (
+          <AssistantChat
+            trainerId={session.user.id}
+            clients={clients ?? []}
+            plans={allPlans ?? []}
+            onClose={() => setShowAssistant(false)}
+            onOpenPlan={(planId, clientId) => { logEvent(dataTrainerId, "view", "plan"); go({ kind: "plan", planId, clientId, from: "plans" }); }}
+            onChanged={() => { reloadPlans(); bookingsHook.reload(); }}
+          />
+        )}
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
         {showPinSettings && <Suspense fallback={null}><PinSettingsModal onClose={() => setShowPinSettings(false)} onChanged={setTrainerPin} /></Suspense>}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
@@ -741,7 +754,7 @@ export default function App() {
               else if (s === "plan") go({ kind: "plans", newPlan: true });
               else if (s === "booking") go({ kind: "calendar", newBooking: true });
               else go({ kind: "clients" });
-            }} onOpenClient={openClient} onOpenFinance={() => go({ kind: "finance" })} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
+            }} onOpenAssistant={() => { logEvent(dataTrainerId, "view", "assistant"); setShowAssistant(true); }} onOpenClient={openClient} onOpenFinance={() => go({ kind: "finance" })} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
         )}
         {view.kind === "finance" && (
           <FinanceView trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onBack={goBack} />
@@ -826,6 +839,10 @@ export default function App() {
                 </button>
                 <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "booking"); go({ kind: "calendar", newBooking: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <CalendarDays size={16} className="text-lime-400 shrink-0" /> Новая запись
+                </button>
+                <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "view", "assistant"); setShowAssistant(true); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                  <Sparkles size={16} className="text-lime-400 shrink-0" /> Помощник
+                  {!assistantConnectedCached() && <span className="ml-auto text-[11px] text-zinc-500">в разработке</span>}
                 </button>
               </div>
             )}
