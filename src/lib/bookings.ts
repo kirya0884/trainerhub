@@ -82,10 +82,12 @@ export async function moveOccurrence(bookingId: string, occDate: string | null, 
 // нажатие) не списывает второй раз: сервер помнит списание по ключу запись+дата+клиент.
 export type MarkSkipReason = "same_status" | "already" | "session" | "no_membership" | "not_participant" | "nothing_to_charge";
 export interface MarkResult { status: string; charged: string[]; skipped: { client_id: string; reason: MarkSkipReason }[] }
-export async function markOccurrence(bookingId: string, occDate: string | null, status: string, chargeClientIds: string[] = [], note?: string): Promise<MarkResult> {
+// blocks — {клиент: блок}, если тренер выбрал, с какого блока списать (этап 11); кого нет — блок по умолчанию
+export async function markOccurrence(bookingId: string, occDate: string | null, status: string, chargeClientIds: string[] = [], note?: string, blocks?: Record<string, string>): Promise<MarkResult> {
   const { data, error } = await supabase.rpc("mark_occurrence", {
     p_booking_id: bookingId, p_occ_date: occDate, p_status: status,
     p_charge_client_ids: chargeClientIds, p_note: note ?? null,
+    ...(blocks && Object.keys(blocks).length ? { p_blocks: blocks } : {}),
   });
   if (error) throw error;
   return data as MarkResult;

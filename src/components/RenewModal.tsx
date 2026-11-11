@@ -8,6 +8,7 @@ import { today } from "../lib/format";
 import { notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 import { track } from "../lib/events";
+import { confirmNewBlock } from "../lib/blocks";
 
 const rub = (n: number) => `${n.toLocaleString("ru-RU")} ₽`;
 const tplPrice = (t: PackageTemplate) => (t.discount ? Math.round(t.price * (1 - t.discount / 100)) : t.price);
@@ -54,6 +55,8 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
     if (!next || busy) return;
     setBusy(true);
     try {
+      // Этап 11: пакет другого вида или цены станет вторым блоком — предупредить
+      if (!(await confirmNewBlock(clientId, next))) return;
       const res = await markPaid(clientId, next, data!.promos, status, payKey);
       if (res.duplicate) notify("Эта оплата уже была записана — повтор не создан.");
       else {

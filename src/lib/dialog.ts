@@ -10,7 +10,9 @@ export type ToastAction = { label: string; run: () => void };
 /** password — поле со скрытым вводом (пароль перед удалением аккаунта); date — выбор даты (ГГГГ-ММ-ДД) */
 export type Field = { key: string; label: string; value?: string; placeholder?: string; numeric?: boolean; password?: boolean; date?: boolean };
 /** alt — вторая явная кнопка (choose); тогда закрытие окна (фон, Esc) — это отмена */
-export type Ask = { id: number; text: string; ok: string; cancel: string; danger: boolean; fields?: Field[]; alt?: string; resolve: (v: boolean | "alt", values?: Record<string, string>) => void };
+/** Вариант в окне выбора (pickOption): badge — число в цветном кружке, color — класс цвета текста */
+export type Option = { key: string; label: string; sub?: string; badge?: string; color?: string };
+export type Ask = { id: number; text: string; ok: string; cancel: string; danger: boolean; fields?: Field[]; alt?: string; options?: Option[]; picked?: string; resolve: (v: boolean | "alt", values?: Record<string, string>) => void };
 type State = { toasts: Toast[]; ask: Ask | null; queue: Ask[] };
 
 let state: State = { toasts: [], ask: null, queue: [] };
@@ -64,6 +66,17 @@ export function askInput(text: string, fields: Field[], opts: { ok?: string; can
 export function choose(text: string, opts: { ok: string; alt: string; cancel?: string }): Promise<"ok" | "alt" | null> {
   return new Promise((resolve) => {
     const a: Ask = { id: ++seq, text, ok: opts.ok, alt: opts.alt, cancel: opts.cancel ?? "Отмена", danger: false, resolve: (v) => resolve(v === true ? "ok" : v === "alt" ? "alt" : null) };
+    if (state.ask) state = { ...state, queue: [...state.queue, a] };
+    else state = { ...state, ask: a };
+    emit();
+  });
+}
+
+/** Выбор одного варианта из списка: ключ выбранного или null — закрыли окно */
+export function pickOption(text: string, options: Option[], opts: { ok?: string; picked?: string } = {}): Promise<string | null> {
+  return new Promise((resolve) => {
+    const a: Ask = { id: ++seq, text, ok: opts.ok ?? "Готово", cancel: "Отмена", danger: false, options, picked: opts.picked ?? options[0]?.key,
+      resolve: (v, values) => resolve(v === true ? values?.choice ?? null : null) };
     if (state.ask) state = { ...state, queue: [...state.queue, a] };
     else state = { ...state, ask: a };
     emit();

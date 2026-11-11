@@ -13,6 +13,7 @@ import NoShowModal, { type NoShowReason } from "./NoShowModal";
 import { bookingsToIcs, downloadIcs } from "../lib/ics";
 import { today as todayFn, addDays, addMonths, fmtDate, plural, toDateStr } from "../lib/format";
 import { ask, notify } from "../lib/dialog";
+import { chooseBlocks } from "../lib/blocks";
 import { track } from "../lib/events";
 
 const WEEKDAYS_FULL = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"];
@@ -81,8 +82,10 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
     if (!b) return;
     const why = o.clientIds.map((id) => (o.clientIds.length > 1 ? `${clientName(id)} — ` : "") + reasons[id].toLowerCase()).join(", ");
     try {
-      await noShowOccurrence(b, o.occDate, [o.note, `Не пришёл: ${why}`].filter(Boolean).join(" · "),
-        o.clientIds.filter((id) => reasons[id] !== "Уважительная"));
+      const charge = o.clientIds.filter((id) => reasons[id] !== "Уважительная");
+      // Этап 11: у кого два блока и больше — тренер выбирает, с какого списать
+      const blocks = await chooseBlocks(charge, b.id, Object.fromEntries(charge.map((id) => [id, clientName(id)])));
+      await noShowOccurrence(b, o.occDate, [o.note, `Не пришёл: ${why}`].filter(Boolean).join(" · "), charge, blocks);
       reloadClients();
       track("action", "no_show", { clients: o.clientIds.length, excused: o.clientIds.filter((id) => reasons[id] === "Уважительная").length });
       setNoShow(null);
@@ -556,7 +559,9 @@ export default function CalendarView({ trainerId, bookingsHook, clients, reloadC
                 // Автосписание — только при «Проведена». «Не пришёл» из формы не списывает (как
                 // раньше): со списанием и причиной — кнопка «Не пришёл» в карточке занятия.
                 // Гард П12 (у подопечного за этот день уже есть проведённая тренировка) — на сервере.
-                const res = await markOccurrence(id, occDate, status, status === "done" ? clientIds : []);
+                // Этап 11: у кого два блока и больше — тренер выбирает, с какого списать
+                const blocks = status === "done" ? await chooseBlocks(clientIds, id, Object.fromEntries(clientIds.map((c) => [c, clientName(c)]))) : undefined;
+                const res = await markOccurrence(id, occDate, status, status === "done" ? clientIds : [], undefined, blocks);
                 if (status === "done") {
                   reloadClients();
                   const skipped = res.skipped.filter((x) => x.reason === "session" || x.reason === "already").map((x) => clientName(x.client_id));

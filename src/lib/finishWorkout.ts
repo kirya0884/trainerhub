@@ -5,6 +5,7 @@ import { notify } from "./dialog";
 import type { Membership } from "./clients";
 import { fetchProgress, logSession } from "./progress";
 import { isEmptyDay } from "./sessionUtils";
+import { chooseBlock } from "./blocks";
 import { notifyWorkoutFinished } from "./clientsBus";
 import type { Day, Metric, Session } from "../types";
 import { track } from "./events";
@@ -49,6 +50,8 @@ export async function finishWorkout(opts: {
   retry?: boolean;
   /** Запись календаря, по которой начали тренировку, — её и отмечаем «проведена» */
   booking?: { id: string; occDate: string } | null;
+  /** Блок, с которого списать (этап 11): выбран тренером до завершения; хранится и в очереди */
+  blockId?: string;
 }, st: FinishState = {}, save: (s: FinishState) => void = () => {}): Promise<{ membership: Membership | null; charged: boolean; skipped?: SkipWhy }> {
   const { trainerId, clientId, planId, day, metrics, note, session } = opts;
   const put = (patch: FinishState) => { st = { ...st, ...patch }; save(st); };
@@ -115,7 +118,7 @@ export async function finishWorkout(opts: {
       if (typeof st.charge === "object" && now !== st.charge.before) put({ charge: "done" });
       else {
         put({ charge: { before: now } });
-        membership = await decrementMembershipRemaining(clientId, fresh, { kind: "workout", date: session.date });
+        membership = await decrementMembershipRemaining(clientId, fresh, { kind: "workout", date: session.date, blockId: opts.blockId });
         // На нуле сервер не списывает (charged: false) — остаток не изменился, так и говорим.
         // Подписка и учёт без пакета — без остатка, там «списана» и не показываем.
         // Без пакета (пустой остаток) сервер не вызывается — итог просто «записана», без «на нуле»
@@ -167,6 +170,12 @@ type FinishOpts = Parameters<typeof finishWorkout>[0];
  * шагами. Тренер закрывает тренировку как обычно; очередь дошлёт её сама.
  */
 export async function finishOrQueue(opts: FinishOpts): Promise<{ membership: Membership | null; charged: boolean; skipped?: SkipWhy; queued: boolean }> {
+  // Этап 11: два блока и больше — спросить тренера сейчас, пока он у экрана (не из очереди).
+  // Нет сети или блок один — не спрашиваем, сервер возьмёт блок по умолчанию.
+  if (opts.blockId === undefined && !isEmptyDay(opts.day)) {
+    const blockId = await chooseBlock(opts.clientId, { bookingId: opts.booking?.id }).catch(() => undefined);
+    if (blockId) opts = { ...opts, blockId };
+  }
   const key = logKeyOf(opts);
   const prevId = pendingIds.get(key);
   let st: FinishState = prevId ? { sessionId: prevId } : {};

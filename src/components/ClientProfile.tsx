@@ -45,6 +45,7 @@ import { ask, askInput, choose, notify } from "../lib/dialog";
 import { checkEmail } from "../lib/emailCheck";
 import { loadViewState, saveViewState } from "../lib/viewState";
 import { track } from "../lib/events";
+import { activeBlocks, blockColor, blockLabel, confirmNewBlock, fetchBlocks, type Block } from "../lib/blocks";
 
 export type Sub = "overview" | "bookings" | "payments" | "reporting" | "plans";
 /** Разделы карточки, которые грузятся отдельно (флаги ошибки загрузки) */
@@ -126,6 +127,16 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
     });
     return () => { alive = false; off(); offOnline(); releaseStale(`client:${clientId}`); releaseStale(`cplans:${clientId}`); };
   }, [clientId]);
+
+  // Этап 11: оплаченные блоки. Перечитываем, когда меняется сводный остаток (оплата, списание, возврат)
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [openBlock, setOpenBlock] = useState<string | null>(null);
+  const remKey = client ? `${client.membership.remaining}|${client.membership.remainingTotal}|${client.membership.paymentDate}` : "";
+  useEffect(() => {
+    let alive = true;
+    if (remKey) fetchBlocks(clientId).then((b) => { if (alive) setBlocks(b); });
+    return () => { alive = false; };
+  }, [clientId, remKey]);
 
   if (!client) return <div className="p-4">{failed.client ? <LoadError onRetry={() => retry.current("client")} /> : <ScreenSkeleton avatar />}</div>;
   const activePlans = (plans ?? []).filter((p) => !p.archived);
@@ -212,6 +223,10 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   const hasRemaining = isSessions && client.membership.remaining !== "";
   const ringPct = hasRemaining && remTotal > 0 ? Math.max(0, Math.min(1, remainingNum / remTotal)) : 0;
   const ringColor = outOfStock ? "text-red-400" : lowStock ? "text-orange-400" : "text-lime-400";
+  // Два блока с остатком и больше — вместо одного кольца маленькое кольцо на каждый блок
+  const multi = isSessions && activeBlocks(blocks).length >= 2 ? activeBlocks(blocks) : null;
+  const shownBlock = multi?.find((b) => b.id === openBlock) ?? null;
+  const renewTone = outOfStock || lowStock || overdue;
 
   return (
     <div>
@@ -297,6 +312,60 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       </div>
 
       {/* Абонемент под именем: остаток тренировок; нажатие — оплаты */}
+      {multi ? (
+        <div className={`relative mt-4 w-full flex items-center gap-3 bg-zinc-900 border rounded-2xl p-3.5 ${sub === "payments" ? "border-lime-400/50" : "border-zinc-800"}`}>
+          <span className="flex gap-1.5 shrink-0">
+            {multi.map((b) => {
+              const pct = b.total > 0 ? Math.max(0, Math.min(1, b.remaining / b.total)) : 0;
+              const c = blockColor(b);
+              const on = openBlock === b.id;
+              return (
+                <button key={b.id} onClick={() => setOpenBlock(on ? null : b.id)} aria-expanded={on}
+                  aria-label={`${blockLabel(b, clientId)}: осталось ${b.remaining}`} title={blockLabel(b, clientId)}
+                  className={`relative w-12 h-12 rounded-full transition ${c.text} ${on ? "ring-2 ring-current ring-offset-2 ring-offset-zinc-900" : ""}`}>
+                  <svg viewBox="0 0 48 48" className="w-12 h-12 -rotate-90" aria-hidden="true">
+                    <circle cx="24" cy="24" r="20" fill="none" strokeWidth="5" className="stroke-current text-zinc-800" />
+                    <circle cx="24" cy="24" r="20" fill="none" strokeWidth="5" strokeLinecap="round"
+                      className={`stroke-current ${b.remaining <= 2 ? "text-orange-400" : c.ring}`} strokeDasharray={`${pct * 125.7} 125.7`} />
+                  </svg>
+                  <span className="absolute inset-0 flex items-center justify-center text-[15px] font-extrabold">{b.remaining}</span>
+                </button>
+              );
+            })}
+          </span>
+          <button onClick={() => setSub("payments")} aria-current={sub === "payments" ? "page" : undefined} className="min-w-0 flex-1 flex items-center gap-3 text-left">
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold">Осталось {remainingNum}</span>
+              <span className="block text-sm text-zinc-500 truncate">{multi.length} блок{multi.length < 5 ? "а" : "ов"} · нажми на кольцо</span>
+            </span>
+            <span className={`shrink-0 h-9 px-3 rounded-xl text-sm font-semibold flex items-center ${renewTone ? "bg-orange-400/15 text-orange-300" : "bg-zinc-800 text-zinc-300"}`}>
+              {renewTone ? "Продлить" : "Оплаты"}
+            </span>
+          </button>
+          {shownBlock && (
+            <>
+              <div className="fixed inset-0 z-10" onClick={() => setOpenBlock(null)} />
+              <div role="dialog" aria-label={blockLabel(shownBlock, clientId)} className="absolute left-0 right-0 top-full mt-2 z-20 bg-zinc-800 border border-zinc-700 rounded-2xl p-3.5 shadow-xl shadow-black/50">
+                <div className="flex items-center gap-2">
+                  <span className={`w-2 h-2 rounded-full ${blockColor(shownBlock).dot}`} />
+                  <span className="flex-1 font-bold">{blockLabel(shownBlock, clientId)}</span>
+                  <button onClick={() => setOpenBlock(null)} aria-label="Закрыть" className="w-8 h-8 -mr-1 flex items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-700"><X size={16} /></button>
+                </div>
+                <dl className="mt-1 text-sm divide-y divide-zinc-700/70">
+                  {([
+                    ["Осталось", `${shownBlock.remaining}${shownBlock.total ? ` из ${shownBlock.total}` : ""}`],
+                    shownBlock.price ? ["Цена тренировки", `${Math.round(shownBlock.price).toLocaleString("ru-RU")} ₽`] : null,
+                    shownBlock.paidAt ? ["Оплачен", fmtDate(shownBlock.paidAt)] : null,
+                    shownBlock.kind === "split" ? ["Общий с", (shownBlock.clientId === clientId ? shownBlock.partnerName : shownBlock.ownerName) || "партнёром"] : null,
+                  ].filter(Boolean) as [string, string][]).map(([k, v]) => (
+                    <div key={k} className="flex justify-between gap-3 py-2"><dt className="text-zinc-400">{k}</dt><dd className="font-semibold text-right">{v}</dd></div>
+                  ))}
+                </dl>
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
       <button onClick={() => setSub("payments")} aria-current={sub === "payments" ? "page" : undefined} className={`mt-4 w-full flex items-center gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition ${sub === "payments" ? "border-lime-400/50" : ""}`}>
         {hasRemaining ? (
           <span className="relative w-16 h-16 shrink-0">
@@ -326,6 +395,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
           {outOfStock || lowStock || overdue ? "Продлить" : "Оплаты"}
         </span>
       </button>
+      )}
 
       {/* Разбор путей 1.10: выдачу доступа легко забыть — кнопка жила в «Обзоре» под «Статусом» */}
       {!client.hasAccount && !client.isSelf && !noAccessHidden && (
@@ -623,6 +693,11 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
     api.fetchClients(trainerId).then((cs) => setOtherClients(cs.filter((c) => c.id !== clientId))).catch((e) => console.error("[ClientProfile] список подопечных:", e));
   };
   useEffect(load, [clientId, trainerId]);
+  // Этап 11: список оплаченных блоков — перечитываем после оплаты/удаления платежа (меняется остаток)
+  const [tabBlocks, setTabBlocks] = useState<Block[]>([]);
+  useEffect(() => { let alive = true; fetchBlocks(clientId).then((b) => { if (alive) setTabBlocks(b); }); return () => { alive = false; }; }, [clientId, m.remaining, m.remainingTotal]);
+  // Закончившиеся — серым, не больше двух последних
+  const shownTabBlocks = [...activeBlocks(tabBlocks), ...tabBlocks.filter((b) => b.remaining === 0).slice(-2)];
 
   const linkPartner = async (partnerId: string) => {
     const partner = otherClients.find((c) => c.id === partnerId);
@@ -694,9 +769,12 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
   const doMarkPaid = async (payStatus: paymentsApi.PayStatus) => {
     if (payLock.current || restPending()) return;
     payLock.current = true; setPaying(true);
+    const first = !payKey.current;
     const key = keyFor(payStatus);
     const { id } = key;
     try {
+      // Этап 11: пакет другого вида или цены станет вторым блоком — предупредить (только при первой попытке)
+      if (first && !(await confirmNewBlock(clientId, pm))) { payKey.current = null; return; }
       // Настройки пакета оплата берёт с экрана (p_package) — недосохранённый ввод не мешает
       const res = await paymentsApi.markPaid(clientId, { ...pm, paymentDate: payDate }, promotions, payStatus, id);
       // Дошла прошлая попытка «Частями» (записана только часть) — остаток ещё не записан, ключ держим
@@ -765,10 +843,12 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
     const kind = `installment:${part}`;
     if (payKey.current?.res && payKey.current.kind !== kind) { notify(`Отданная часть уже записана — нажми «Частями» с суммой ${rub(Number(payKey.current.kind.split(":")[1]))}.`, "error"); return; }
     payLock.current = true; setPaying(true);
+    const first = !payKey.current;
     // Ключи от повторов (см. keyFor): живут до успеха обеих записей
     const key = keyFor(kind);
     const { id, restId } = key;
     try {
+      if (first && !(await confirmNewBlock(clientId, pm))) { payKey.current = null; return; }
       // Ничего не отдал — одна строка «частями» на всю сумму датой оплаты, срок — в due_date
       const res = key.res ?? await paymentsApi.markPaid(clientId, { ...pm, paymentDate: payDate }, promotions, part > 0 ? "paid" : "installment", id, part > 0 ? part : undefined);
       // Ответ прошлой попытки потерялся. Какая из попыток дошла до базы — смотрим по самой строке:
@@ -872,7 +952,19 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
         </span>
         <Settings2 size={19} className="text-zinc-500 shrink-0" />
       </button>
-      {Number(m.extraRemaining) > 0 && (
+      {activeBlocks(tabBlocks).length >= 2 ? (
+        <div className="space-y-1.5 -mt-1">
+          {shownTabBlocks.map((b) => (
+            <div key={b.id} className={`flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl px-3.5 py-2.5 ${b.remaining === 0 ? "opacity-50" : ""}`}>
+              <span className={`shrink-0 min-w-[28px] h-7 px-1.5 rounded-full bg-zinc-800 text-sm font-extrabold flex items-center justify-center ${b.remaining === 0 ? "text-zinc-500" : blockColor(b).text}`}>{b.remaining}</span>
+              <span className="min-w-0 flex-1">
+                <span className="block font-semibold truncate">{blockLabel(b, clientId)}</span>
+                <span className="block text-[13px] text-zinc-500 truncate">{b.remaining === 0 ? "закончился" : [`${b.remaining} из ${b.total}`, b.price ? `по ${rub(Math.round(b.price))}` : "", b.paidAt ? `с ${fmtDate(b.paidAt)}` : ""].filter(Boolean).join(" · ")}</span>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : Number(m.extraRemaining) > 0 && (
         <p className="text-[13px] text-cyan-300/90 px-1 -mt-2">+ {m.extraRemaining} тр. доп. блока по {rub(Math.round(Number(m.extraPricePerSession) || 0))} — старый пакет с другой ценой</p>
       )}
 

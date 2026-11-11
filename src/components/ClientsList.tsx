@@ -7,6 +7,7 @@ import { useScrollRestore } from "../hooks/useScrollRestore";
 import { lazyRetry } from "../lib/lazy";
 import type { ClientListItem } from "../lib/clients";
 import { normSearch, phoneMatches } from "../lib/search";
+import { BLOCK_COLORS, fetchBlockCounts } from "../lib/blocks";
 
 // Окна грузятся при первом открытии — список остаётся в основном файле и открывается сразу
 const RenewModal = lazyRetry(() => import("./RenewModal"));
@@ -31,6 +32,9 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
   // B16: поиск логируем с задержкой — иначе событие на каждую букву
   useEffect(() => { if (!search.trim()) return; const t = setTimeout(() => logEvent(trainerId, "search", "clients", { len: search.trim().length }), 1200); return () => clearTimeout(t); }, [search, trainerId]);
   useEffect(() => { saveViewState("clients-fmt", fmtFilter); }, [fmtFilter]);
+  // Этап 11: у кого два оплаченных блока и больше — остаток по каждому своим цветом
+  const [blockCounts, setBlockCounts] = useState<Record<string, { remaining: number; color: number }[]>>({});
+  useEffect(() => { let alive = true; fetchBlockCounts().then((c) => { if (alive) setBlockCounts(c); }); return () => { alive = false; }; }, [clients]);
   useScrollRestore("clients", !!clients);
 
   const openRenew = (e: React.MouseEvent, c: { id: string; name: string }) => {
@@ -106,7 +110,14 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
                 ? <span className="block text-sm text-cyan-400 truncate">Тренируется сейчас</span>
                 : <span className="block text-sm text-zinc-500 truncate">{meta || "—"}</span>}
             </span>
-            {rem !== null && (
+            {rem !== null && blockCounts[c.id] ? (
+              <span className="shrink-0 text-right leading-tight">
+                <span className="flex justify-end gap-1.5 text-lg font-bold">
+                  {blockCounts[c.id].map((b, i) => <span key={i} className={b.remaining <= 2 ? "text-orange-400" : (BLOCK_COLORS[b.color] ?? BLOCK_COLORS[0]).text}>{b.remaining}</span>)}
+                </span>
+                <span className="block text-[11px] text-zinc-500">осталось</span>
+              </span>
+            ) : rem !== null && (
               <span className="shrink-0 text-right leading-tight">
                 <span className={`block text-lg font-bold ${rem <= 0 ? "text-red-400" : rem <= 2 ? "text-orange-400" : "text-zinc-200"}`}>{rem}</span>
                 <span className="block text-[11px] text-zinc-500">{rem < 0 ? "долг" : "осталось"}</span>

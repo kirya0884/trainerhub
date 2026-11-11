@@ -31,8 +31,8 @@ export function useBookings(trainerId: string) {
   // Статус занятия и списания — одной серверной транзакцией (api.markOccurrence).
   // occDate — дата вхождения серии; у разовой записи не нужна. Календарь перечитываем
   // и после ошибки: ответ мог не дойти, а отметка — пройти.
-  const markOccurrence = async (id: string, occDate: string | null, status: string, chargeClientIds: string[] = [], note?: string) => {
-    try { return await api.markOccurrence(id, occDate, status, chargeClientIds, note); }
+  const markOccurrence = async (id: string, occDate: string | null, status: string, chargeClientIds: string[] = [], note?: string, blocks?: Record<string, string>) => {
+    try { return await api.markOccurrence(id, occDate, status, chargeClientIds, note, blocks); }
     finally { load(); }
   };
   const occKey = (b: Booking, occDate: string) => (b.recurring ? occDate : null);
@@ -40,8 +40,8 @@ export function useBookings(trainerId: string) {
   const doneOccurrence = async (b: Booking, occDate: string) => { await markOccurrence(b.id, occKey(b, occDate), "done"); };
   // «Не пришёл»: для серии — правка только этой даты, причина дописывается в заметку;
   // chargeClientIds — кого списать (без уважительной причины)
-  const noShowOccurrence = (b: Booking, occDate: string, note: string, chargeClientIds: string[] = []) =>
-    markOccurrence(b.id, occKey(b, occDate), "no-show", chargeClientIds, note);
+  const noShowOccurrence = (b: Booking, occDate: string, note: string, chargeClientIds: string[] = [], blocks?: Record<string, string>) =>
+    markOccurrence(b.id, occKey(b, occDate), "no-show", chargeClientIds, note, blocks);
   // Перенос одного занятия (drag-and-drop в неделе): для разовой записи двигаем дату/время, для повторяющейся — точечная exception на эту дату.
   const rescheduleOccurrence = async (b: Booking, occDate: string, newDate: string, newTime?: string) => {
     try { await api.moveOccurrence(b.id, occKey(b, occDate), newDate, newTime); }

@@ -338,9 +338,10 @@ export type ChargeKind = "workout" | "no_show" | "refund";
 // целиком из переданной копии. Правила те же (подписка, пустой остаток, остаток ≤ 0 —
 // не списываем). Дата — местный день телефона, а не UTC сервера.
 // Сигнатура прежняя; membership нужен только чтобы не ходить на сервер, когда списывать нечего.
-export async function decrementMembershipRemaining(clientId: string, membership: Membership, charge: { kind?: ChargeKind; date?: string } = {}) {
+// blockId — блок, который выбрал тренер (этап 11); без него сервер берёт блок по умолчанию.
+export async function decrementMembershipRemaining(clientId: string, membership: Membership, charge: { kind?: ChargeKind; date?: string; blockId?: string } = {}) {
   if (membership.type === "subscription" || membership.remaining === "" || membership.remaining == null) return membership;
-  const { data, error } = await supabase.rpc("charge_session", { p_client_id: clientId, p_kind: charge.kind ?? "workout", p_date: charge.date ?? today() });
+  const { data, error } = await supabase.rpc("charge_session", { p_client_id: clientId, p_kind: charge.kind ?? "workout", p_date: charge.date ?? today(), ...(charge.blockId ? { p_block_id: charge.blockId } : {}) });
   if (error) throw error;
   notifyClientsChanged();
   return { ...emptyMembership, ...((data as { membership?: Membership } | null)?.membership || {}) } as Membership;

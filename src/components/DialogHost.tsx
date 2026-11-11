@@ -38,7 +38,9 @@ export default function DialogHost() {
 
 function AskDialog({ ask }: { ask: Ask }) {
   const { panelProps } = useModalA11y(() => answer(false), ask.fields ? ask.text : "Подтверждение");
-  const [values, setValues] = useState<Record<string, string>>(() => Object.fromEntries((ask.fields ?? []).map((f) => [f.key, f.value ?? ""])));
+  const [values, setValues] = useState<Record<string, string>>(() => ask.options
+    ? { choice: ask.picked ?? "" }
+    : Object.fromEntries((ask.fields ?? []).map((f) => [f.key, f.value ?? ""])));
   // Окно выезжает снизу, и «Да» оказывается под пальцем: второй тап по кнопке, которая
   // открыла вопрос, сам его подтверждал (или молча закрывал). Первые 400 мс кнопки не нажимаются.
   const [armed, setArmed] = useState(false);
@@ -51,7 +53,25 @@ function AskDialog({ ask }: { ask: Ask }) {
       style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       <div {...panelProps} onClick={(e) => e.stopPropagation()}
         className="w-full sm:max-w-sm bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-4 space-y-4 outline-none" style={{ paddingBottom: kb ? 16 : "calc(env(safe-area-inset-bottom) + 16px)" }}>
-        <p className={`leading-snug text-zinc-100 whitespace-pre-line pt-1 ${ask.fields ? "text-[17px] font-bold" : "text-[15px]"}`}>{ask.text}</p>
+        <p className={`leading-snug text-zinc-100 whitespace-pre-line pt-1 ${ask.fields || ask.options ? "text-[17px] font-bold" : "text-[15px]"}`}>{ask.text}</p>
+        {ask.options && (
+          <div role="radiogroup" className="space-y-2">
+            {ask.options.map((o) => {
+              const on = values.choice === o.key;
+              return (
+                <button key={o.key} role="radio" aria-checked={on} onClick={() => setValues({ choice: o.key })}
+                  className={`w-full flex items-center gap-3 p-3 rounded-2xl border-[1.5px] text-left transition ${on ? "border-lime-400 bg-zinc-800" : "border-zinc-800 bg-zinc-800/60"}`}>
+                  <span className={`w-5 h-5 rounded-full shrink-0 ${on ? "border-[6px] border-lime-400" : "border-2 border-zinc-600"}`} />
+                  {o.badge && <span className={`shrink-0 min-w-[26px] h-[26px] px-1.5 rounded-full bg-zinc-900 text-[13px] font-extrabold flex items-center justify-center ${o.color ?? ""}`}>{o.badge}</span>}
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-semibold truncate">{o.label}</span>
+                    {o.sub && <span className="block text-[13px] text-zinc-400 truncate">{o.sub}</span>}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         {ask.fields && (
           <form onSubmit={submit} className="space-y-2.5">
             {ask.fields.map((f, i) => (
@@ -78,7 +98,7 @@ function AskDialog({ ask }: { ask: Ask }) {
         <div className="flex gap-2">
           {/* В опасном вопросе фокус на «Отмена» — случайный Enter ничего не удалит */}
           <button onClick={() => armed && answer(false)} autoFocus={ask.danger} className="flex-1 h-12 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-sm font-semibold text-zinc-200 transition">{ask.cancel}</button>
-          <button onClick={() => (ask.fields ? submit() : armed && answer(true))} autoFocus={!ask.danger && !ask.fields}
+          <button onClick={() => (ask.fields || ask.options ? submit() : armed && answer(true))} autoFocus={!ask.danger && !ask.fields}
             className={`flex-1 h-12 rounded-xl text-sm font-bold transition ${ask.danger ? "bg-red-500 hover:bg-red-400 text-white" : "bg-lime-400 hover:bg-lime-300 text-zinc-950"}`}>{ask.ok}</button>
         </div>
         )}

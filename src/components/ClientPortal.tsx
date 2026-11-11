@@ -17,6 +17,7 @@ import * as portalApi from "../lib/clientPortal";
 import type { ClientActivity } from "../lib/clientPortal";
 import * as clientsApi from "../lib/clients";
 import { combinedRemaining } from "../lib/clients";
+import { activeBlocks, blockColor, blockLabel, fetchBlocks, type Block } from "../lib/blocks";
 import * as nutritionApi from "../lib/nutrition";
 import type { PlanListItem, Payment, Measurement } from "../lib/clients";
 import type { NutritionLog } from "../lib/nutrition";
@@ -67,6 +68,10 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
   const [brand, setBrand] = useState<portalApi.TrainerCard>({ brand: "Reps", logoUrl: "", trainingRules: "", name: "", avatarUrl: "", phone: "", telegram: "", whatsapp: "" });
   // Разбор путей 5.23: абонемент — свежий, а не тот, что был при входе
   const [membership, setMembership] = useState(client.membership);
+  // Этап 11: оплаченные блоки клиента (свои и общий сплит) — перечитываем при смене остатка
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const remKey = `${membership?.remaining}|${membership?.remainingTotal}`;
+  useEffect(() => { let alive = true; fetchBlocks(client.id).then((b) => { if (alive) setBlocks(b); }); return () => { alive = false; }; }, [client.id, remKey]);
   const [email, setEmail] = useState("");
   useEffect(() => { supabase.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? "")).catch(() => {}); }, []);
   const [upcoming, setUpcoming] = useState<portalApi.UpcomingBooking | null>(null);
@@ -334,7 +339,14 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
           <div className="grid grid-cols-2 gap-2.5">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <p className="text-sm text-zinc-400">{m.type === "subscription" ? "Подписка" : "Осталось"}</p>
-              {m.type !== "subscription" && m.remaining !== "" && m.remaining != null ? (
+              {m.type !== "subscription" && activeBlocks(blocks).length >= 2 ? (
+                <>
+                  <p className="font-display text-[28px] font-extrabold tracking-tight mt-0.5 flex gap-2.5">
+                    {activeBlocks(blocks).map((b) => <span key={b.id} className={b.remaining <= 2 ? "text-orange-400" : blockColor(b).text}>{b.remaining}</span>)}
+                  </p>
+                  <p className="text-xs text-zinc-500 truncate">{activeBlocks(blocks).map((b) => blockLabel(b, client.id)).join(" · ")}</p>
+                </>
+              ) : m.type !== "subscription" && m.remaining !== "" && m.remaining != null ? (
                 <p className={`font-display text-[28px] font-extrabold tracking-tight mt-0.5 ${combinedRemaining(m as clientsApi.Membership) <= 2 ? "text-orange-400" : ""}`}>
                   {combinedRemaining(m as clientsApi.Membership)}{Number(m.remainingTotal || m.total) ? <span className="text-sm font-semibold text-zinc-500"> из {m.remainingTotal || m.total}</span> : null}
                 </p>
