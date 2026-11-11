@@ -110,6 +110,27 @@ export const isEmptyDay = (day: Day) => !day.exercises.some((ex) => ex.name);
 export const isRepeatOf = (sessions: Session[], day: Day, date: string) =>
   sessions.some((s) => !s.fromClient && s.date === date && (s.dayId ? s.dayId === day.id : s.dayName === day.name));
 
+/** Вес последнего сделанного подхода с весом; нет такого — "" */
+export const lastFactWeight = (sets: SetVal[] | undefined) =>
+  [...(sets ?? [])].reverse().find((r) => isFact(r) && r.weight)?.weight ?? "";
+
+/** Копия проведённого дня: вес — фактический из тренировки (последний сделанный), подходы и
+ *  повторы — как в плане. Строки «разных подходов» берут вес своего подхода, лишние — последний. */
+export function withFactWeights(day: Day, session: Pick<Session, "items"> | undefined): Day {
+  if (!session) return day;
+  const exercises = day.exercises.map((ex) => {
+    const actual = session.items?.find((i) => exKey(i.name) === exKey(ex.name))?.actualSets ?? [];
+    const last = lastFactWeight(actual);
+    if (!last) return ex;
+    if (ex.detailed && ex.setRows.length) {
+      const setRows = ex.setRows.map((r, i) => ({ ...r, weight: (actual[i] && isFact(actual[i]) && actual[i].weight) || last }));
+      return { ...ex, setRows, weight: rowsSummary(setRows).weight };
+    }
+    return { ...ex, weight: last };
+  });
+  return { ...day, exercises };
+}
+
 /** Разбор путей 3.9: тренировка этого дня — по id дня, по названию только у старых записей без id.
  *  По одному названию копия дня или блока сразу выглядела «проведённой». */
 export const isSessionOfDay = (s: Pick<Session, "dayId" | "dayName">, d: Pick<Day, "id" | "name">) => (s.dayId ? s.dayId === d.id : s.dayName === d.name);

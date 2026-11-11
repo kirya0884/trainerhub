@@ -17,7 +17,7 @@ import type { Day, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import ExerciseRow from "./ExerciseRow";
 import ExerciseHistoryModal from "./ExerciseHistoryModal";
-import { exKey as nameKey, fmtRpe, isFact, isSessionOfDay, lastFactsByName } from "../lib/sessionUtils";
+import { exKey as nameKey, fmtRpe, isFact, isSessionOfDay, lastFactWeight, lastFactsByName, withFactWeights } from "../lib/sessionUtils";
 import { useDragSort } from "../hooks/useDragSort";
 import LibraryModal from "./LibraryModal";
 import MetricsView from "./MetricsView";
@@ -145,7 +145,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
           id: crypto.randomUUID(), name: item.name,
           sets: String(src.length || parseInt(pe?.sets || "") || 3),
           reps: src[0]?.reps || pe?.reps || "",
-          weight: src[0]?.weight || pe?.weight || "",
+          weight: lastFactWeight(src) || pe?.weight || "",
           rest: pe?.rest || "", note: item.note || pe?.note || "", video: pe?.video || "", group: pe?.group || "",
           detailed: src.length > 0, tempo: pe?.tempo || "", duration: pe?.duration || "", target: pe?.target || "",
           kind: pe?.kind || "", pulseZone: pe?.pulseZone || "",
@@ -736,8 +736,8 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                             </select>
                           </label>
                         )}
-                        <button onClick={() => { setDayMenu(null); duplicateDay(day); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать день</button>
-                        <button onClick={() => { setDayMenu(null); copyDay(day); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Clipboard size={15} className="text-zinc-500 shrink-0" /> Копировать день</button>
+                        <button onClick={() => { setDayMenu(null); duplicateDay(withFactWeights(day, lastSessionOf(day))); }} disabled={!!dupBusy} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition disabled:opacity-40"><Copy size={15} className="text-zinc-500 shrink-0" /> Дублировать день</button>
+                        <button onClick={() => { setDayMenu(null); copyDay(withFactWeights(day, lastSessionOf(day))); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition"><Clipboard size={15} className="text-zinc-500 shrink-0" /> Копировать день</button>
                         <div className="my-1 border-t border-zinc-800" />
                         <button onClick={async () => { setDayMenu(null); if (await ask(`Удалить день «${day.name}»?`, { danger: true, ok: "Удалить" })) deleteDay(day.id); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-xl text-sm text-red-400 hover:bg-zinc-800 transition"><Trash2 size={15} className="shrink-0" /> Удалить день</button>
                       </div>
