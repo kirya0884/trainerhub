@@ -15,21 +15,34 @@ const CAP = 1.1;
 
 /** Неделя i (0 — введённый план, не меняется). Блоки по 4 недели: k — место в блоке,
  *  B — сдвиг блока (+2,5% за каждый пройденный блок); 4-я неделя блока — разгрузка. */
-export function weekModifier(i: number, scheme: MesoScheme): { weightMult: number; setsDelta: number; deload: boolean; label: string } {
+// repsShift — сдвиг обеих границ повторов вместе с весом (волна): −5 % веса ≈ +2 повтора,
+// +7,5 % ≈ −3 повтора, усилие недели остаётся примерно тем же (расчёт по Nuzzo 2024, см.
+// CloudeCode/Агент-тренер/«Шаблоны прогрессий мезоциклов.md», Ш4). Раньше «интенсивность» давала
+// +7,5 % при тех же повторах — при неделе 1 с запасом 2 повтора план был невыполним.
+export function weekModifier(i: number, scheme: MesoScheme): { weightMult: number; setsDelta: number; repsShift: number; deload: boolean; label: string } {
   const b = Math.floor(i / 4), k = i % 4, B = 1 + 0.025 * b;
-  if (k === 3) return { weightMult: 0.9, setsDelta: 0, deload: true, label: `Нед. ${i + 1} · разгрузка` };
+  if (k === 3) return { weightMult: 0.9, setsDelta: 0, repsShift: 0, deload: true, label: `Нед. ${i + 1} · разгрузка` };
   if (scheme === "wave") {
-    if (k === 1) return { weightMult: 0.95 * B, setsDelta: 1, deload: false, label: `Нед. ${i + 1} · объём` };
-    if (k === 2) return { weightMult: 1.075 * B, setsDelta: -1, deload: false, label: `Нед. ${i + 1} · интенсивность` };
-    return { weightMult: B, setsDelta: 0, deload: false, label: `Нед. ${i + 1} · база` };
+    if (k === 1) return { weightMult: 0.95 * B, setsDelta: 1, repsShift: 2, deload: false, label: `Нед. ${i + 1} · объём` };
+    if (k === 2) return { weightMult: 1.075 * B, setsDelta: -1, repsShift: -3, deload: false, label: `Нед. ${i + 1} · интенсивность` };
+    return { weightMult: B, setsDelta: 0, repsShift: 0, deload: false, label: `Нед. ${i + 1} · база` };
   }
-  return { weightMult: B * (1 + 0.025 * k), setsDelta: 0, deload: false, label: `Нед. ${i + 1}` };
+  return { weightMult: B * (1 + 0.025 * k), setsDelta: 0, repsShift: 0, deload: false, label: `Нед. ${i + 1}` };
 }
 
 /** +n к верхней границе повторов: «10» → «11», «8-12» → «8-13». Другое («до отказа», «2×20») — как есть. */
 const addReps = (reps: string, n: number) => {
   const m = n ? reps.match(/^(\s*\d+\s*[-–—]\s*)?(\d+)(\s*)$/) : null;
   return m ? `${m[1] ?? ""}${Number(m[2]) + n}${m[3]}` : reps;
+};
+
+/** Сдвиг обеих границ: «10» → «12», «8-12» → «5-9»; не ниже min. Другое — как есть. */
+const shiftReps = (reps: string, n: number, min: number) => {
+  const m = n ? reps.match(/^(\s*)(?:(\d+)(\s*[-–—]\s*))?(\d+)(\s*)$/) : null;
+  if (!m) return reps;
+  const hi = Math.max(min, Number(m[4]) + n);
+  const lo = m[2] != null ? Math.min(hi, Math.max(min, Number(m[2]) + n)) : null;
+  return lo != null && lo !== hi ? `${m[1]}${lo}${m[3]}${hi}${m[5]}` : `${m[1]}${hi}${m[5]}`;
 };
 
 const DELOAD_NOTE = "разгрузка, 4+ повтора в запасе";
@@ -53,11 +66,15 @@ export function progressExercise(ex: Pick<Exercise, "weight" | "reps" | "sets" |
   const w0 = !functional && /^\s*\d+(?:[.,]\d+)?\s*(?:кг)?\s*$/i.test(ex.weight) ? parseNum(ex.weight) : null;
   const light = w0 != null && w0 < 20;
   const sets0 = parseInt(ex.sets, 10);
+  // Волна с малыми повторами (верх ≤ 6): «интенсивность» мягче — вес ×1,05 вместо ×1,075 и −2 повтора, не ниже 2
+  const top0 = Number(ex.reps.match(/(\d+)\s*$/)?.[1] ?? NaN);
+  const lowReps = scheme === "wave" && top0 <= 6;
   const round = (w: number) => Math.round(w * 2) / 2;
   const out: { weight: string; reps: string; sets: string; note: string }[] = [];
   let prevW = w0, blockW = w0, bonus = 0;
   for (let i = 1; i < weeks; i++) {
     const mod = weekModifier(i, scheme);
+    if (lowReps && mod.repsShift < 0) { mod.weightMult *= 1.05 / 1.075; mod.repsShift = -2; }
     if (light && !mod.deload) {
       const stepW = round(w0! * Math.min(1 + 0.025 * Math.floor(i / 4), CAP));
       if (stepW > blockW!) { blockW = stepW; bonus = 0; } // новый блок: шаг весом, повторы — к исходным
@@ -66,13 +83,21 @@ export function progressExercise(ex: Pick<Exercise, "weight" | "reps" | "sets" |
     if (w0 != null && mod.deload) { const d = w0 * mod.weightMult; w = d < 20 ? Math.floor(d) : round(d); }
     else if (light) w = blockW;
     else if (w0 != null) w = round(w0 * Math.min(mod.weightMult, CAP));
-    if (!functional && !mod.deload) {
-      if (w0 == null || mod.weightMult > CAP || w === prevW) bonus = Math.min(MAX_REPS_BONUS, bonus + 1);
-      prevW = w; // сравниваем с прошлой рабочей неделей, не с разгрузкой
+    // Волна: повторы двигаются вместе с весом только у обычного числового веса; без веса — «объём»
+    // даёт +2 к верхней границе, «интенсивность» оставляет повторы; лёгкие — как раньше (вес стоит в блоке)
+    const wave = scheme === "wave" && !functional && !mod.deload;
+    let reps = ex.reps;
+    if (wave && w0 == null) reps = addReps(ex.reps, Math.max(0, mod.repsShift));
+    else if (!functional) {
+      if (!mod.deload) {
+        if (w0 == null || mod.weightMult > CAP || w === prevW) bonus = Math.min(MAX_REPS_BONUS, bonus + 1);
+        prevW = w; // сравниваем с прошлой рабочей неделей, не с разгрузкой
+      }
+      reps = addReps(wave && !light && w0 != null ? shiftReps(ex.reps, mod.repsShift, 2) : ex.reps, bonus);
     }
     out.push({
       weight: w != null ? String(w).replace(".", ",") : ex.weight,
-      reps: functional ? ex.reps : addReps(ex.reps, bonus),
+      reps,
       sets: !Number.isFinite(sets0) ? ex.sets
         : String(mod.deload ? Math.max(1, Math.round(sets0 * 0.5)) : Math.max(1, sets0 + mod.setsDelta)),
       note: mod.deload ? [ex.note, DELOAD_NOTE].filter(Boolean).join(" · ") : ex.note,
