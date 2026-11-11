@@ -131,6 +131,9 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
   // Этап 11: оплаченные блоки. Перечитываем, когда меняется сводный остаток (оплата, списание, возврат)
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [openBlock, setOpenBlock] = useState<string | null>(null);
+  // Этап 12: кольца «наполняются» после показа карточки, а не появляются сразу полными
+  const [ringsIn, setRingsIn] = useState(false);
+  useEffect(() => { const t = requestAnimationFrame(() => requestAnimationFrame(() => setRingsIn(true))); return () => cancelAnimationFrame(t); }, [clientId]);
   const remKey = client ? `${client.membership.remaining}|${client.membership.remainingTotal}|${client.membership.paymentDate}` : "";
   useEffect(() => {
     let alive = true;
@@ -322,13 +325,13 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
               return (
                 <button key={b.id} onClick={() => setOpenBlock(on ? null : b.id)} aria-expanded={on}
                   aria-label={`${blockLabel(b, clientId)}: осталось ${b.remaining}`} title={blockLabel(b, clientId)}
-                  className={`relative w-12 h-12 rounded-full transition ${c.text} ${on ? "ring-2 ring-current ring-offset-2 ring-offset-zinc-900" : ""}`}>
+                  className={`anim-pop relative w-12 h-12 rounded-full transition ${c.text} ${on ? "ring-2 ring-current ring-offset-2 ring-offset-zinc-900" : ""} ${b.remaining <= 2 ? "anim-glow" : ""}`}>
                   <svg viewBox="0 0 48 48" className="w-12 h-12 -rotate-90" aria-hidden="true">
                     <circle cx="24" cy="24" r="20" fill="none" strokeWidth="5" className="stroke-current text-zinc-800" />
                     <circle cx="24" cy="24" r="20" fill="none" strokeWidth="5" strokeLinecap="round"
-                      className={`stroke-current ${b.remaining <= 2 ? "text-orange-400" : c.ring}`} strokeDasharray={`${pct * 125.7} 125.7`} />
+                      className={`stroke-current ${b.remaining <= 2 ? "text-orange-400" : c.ring}`} strokeDasharray={`${(ringsIn ? pct : 0) * 125.7} 125.7`} style={{ transition: "stroke-dasharray .9s cubic-bezier(.22,1,.36,1)" }} />
                   </svg>
-                  <span className="absolute inset-0 flex items-center justify-center text-[15px] font-extrabold">{b.remaining}</span>
+                  <span key={b.remaining} className="anim-tick absolute inset-0 flex items-center justify-center text-[15px] font-extrabold">{b.remaining}</span>
                 </button>
               );
             })}
@@ -368,13 +371,13 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       ) : (
       <button onClick={() => setSub("payments")} aria-current={sub === "payments" ? "page" : undefined} className={`mt-4 w-full flex items-center gap-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-4 text-left hover:border-zinc-700 transition ${sub === "payments" ? "border-lime-400/50" : ""}`}>
         {hasRemaining ? (
-          <span className="relative w-16 h-16 shrink-0">
+          <span className={`relative w-16 h-16 shrink-0 ${lowStock ? "anim-glow" : ""}`}>
             <svg viewBox="0 0 64 64" className="w-16 h-16 -rotate-90" aria-hidden="true">
               <circle cx="32" cy="32" r="27" fill="none" strokeWidth="7" className="stroke-current text-zinc-800" />
               <circle cx="32" cy="32" r="27" fill="none" strokeWidth="7" strokeLinecap="round" className={`stroke-current ${ringColor}`}
-                strokeDasharray={`${ringPct * 169.6} 169.6`} />
+                strokeDasharray={`${(ringsIn ? ringPct : 0) * 169.6} 169.6`} style={{ transition: "stroke-dasharray .9s cubic-bezier(.22,1,.36,1)" }} />
             </svg>
-            <span className={`absolute inset-0 flex items-center justify-center text-lg font-extrabold ${outOfStock ? "text-red-400" : ""}`}>{remainingNum}</span>
+            <span key={remainingNum} className={`anim-tick absolute inset-0 flex items-center justify-center text-lg font-extrabold ${outOfStock ? "text-red-400" : ""}`}>{remainingNum}</span>
           </span>
         ) : (
           <span className="w-16 h-16 shrink-0 rounded-full bg-zinc-800 flex items-center justify-center"><Wallet size={24} className="text-zinc-400" /></span>
@@ -425,12 +428,17 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       )}
 
       {/* Разделы карточки — четыре плитки в ряд, порядок фиксирован */}
-      <div className="grid grid-cols-4 gap-1.5 mt-3 mb-4 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl">
+      <div className="relative grid grid-cols-4 gap-1.5 mt-3 mb-4 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl">
+        {/* Этап 12: подсветка переезжает к выбранной вкладке, а не прыгает */}
+        {TABS.some((t) => t.k === sub) && (
+          <span aria-hidden="true" className="absolute top-1.5 bottom-1.5 left-1.5 rounded-xl bg-lime-400 transition-transform duration-300"
+            style={{ width: "calc((100% - 0.75rem - 1.125rem) / 4)", transform: `translateX(calc(${TABS.findIndex((t) => t.k === sub)} * (100% + 0.375rem)))`, transitionTimingFunction: "cubic-bezier(.22,1,.36,1)" }} />
+        )}
         {TABS.map((t) => {
           const active = sub === t.k;
           return (
             <button key={t.k} onClick={() => setSub(t.k)} aria-current={active ? "page" : undefined}
-              className={`flex flex-col items-center justify-center gap-1 h-14 rounded-xl text-[13px] font-semibold transition ${active ? "bg-lime-400 text-zinc-950" : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"}`}>
+              className={`relative flex flex-col items-center justify-center gap-1 h-14 rounded-xl text-[13px] font-semibold transition ${active ? "text-zinc-950" : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800"}`}>
               <t.icon size={18} className="shrink-0" />
               <span className="truncate max-w-full px-0.5">{t.label}</span>
             </button>
@@ -753,6 +761,9 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
   // второй платёж и второе начисление пакета.
   const payLock = useRef(false);
   const [paying, setPaying] = useState(false);
+  // Этап 12: после записи оплаты кнопка 1,6 с показывает галочку «Записано»
+  const [paidOk, setPaidOk] = useState(false);
+  const flashPaid = () => { setPaidOk(true); setTimeout(() => setPaidOk(false), 1600); };
   // П17: ключ от повторов. Живёт до успешной записи: если ответ потерялся и тренер жмёт
   // «Оплачено» ещё раз, сервер узнает тот же id и второй платёж не создаст.
   // Ревью 5.3: ключ один на попытку оплаты, какую бы кнопку ни нажали после сбоя — иначе смена
@@ -792,6 +803,7 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
       if (res.duplicate) notify(key.kind === payStatus ? "Эта оплата уже была записана — повтор не создан." : "Эта оплата уже была записана другой кнопкой — повтор не создан. Проверь журнал платежей.");
       else {
         track("action", "payment", { status: payStatus, via: "profile" });
+        if (payStatus === "paid") flashPaid();
         // Аудит п. 40: без подтверждения (частое действие), но с отменой — удаляем этот же платёж.
         // Сплит и подписку отменой не откатить: delete_payment не трогает строку партнёра и дату подписки.
         const text = payStatus === "paid" ? "Оплата записана" : payStatus === "deferred" ? "Записано: оплата позже" : "Записано: оплата частями";
@@ -1001,7 +1013,9 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
           <DateField label="Дата оплаты" value={payDate} onChange={(e) => setPayDate(e.target.value || today())} />
           <button onClick={() => doMarkPaid("paid")} disabled={!basePrice || paying}
             className="w-full h-12 flex items-center justify-center gap-2 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-40">
-            <Check size={18} strokeWidth={2.75} /> {paying ? "Сохраняю…" : basePrice ? `Оплачено · ${rub(payAmount)}` : "Укажи цену пакета"}
+            {paying ? <><span className="w-[18px] h-[18px] rounded-full border-[2.5px] border-current border-t-transparent animate-spin" /> Сохраняю…</>
+              : paidOk ? <span key="ok" className="anim-pop flex items-center gap-2"><Check size={18} strokeWidth={2.75} className="anim-draw" /> Записано</span>
+              : <><Check size={18} strokeWidth={2.75} /> {basePrice ? `Оплачено · ${rub(payAmount)}` : "Укажи цену пакета"}</>}
           </button>
           {preview.promo && preview.amount !== basePrice && <p className="text-[13px] text-orange-300 text-center -mt-1">{preview.label}: вместо {rub(basePrice)}</p>}
           {promosFailed && (

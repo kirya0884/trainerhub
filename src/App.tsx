@@ -29,6 +29,7 @@ import { clearSlotDrafts, writeSlotDraft } from "./lib/slotDrafts";
 import type { PickClient } from "./components/ClientPickModal";
 import { confirmEmptyMembership } from "./lib/clients";
 import { finishOrQueue, finishSummary } from "./lib/finishWorkout";
+import { celebrate, statsOf } from "./lib/celebrate";
 import { ActiveWorkoutProvider, useActiveWorkout, type GroupClient } from "./hooks/useActiveWorkout";
 import { urlToView, viewToUrl, type ViewLike } from "./lib/viewUrl";
 import { useHistoryNav } from "./hooks/useHistoryNav";
@@ -264,8 +265,11 @@ function ActiveWorkoutHost({ trainerId, accent, bookingsHook, reloadClients, cli
           trainerId, clientId: active.clientId, planId: active.planId,
           day: active.day, metrics, note, session, booking: active.booking,
         });
-        // Разбор путей 4.2: записано ли и списано ли. Ушла в очередь — об этом уже сказала очередь
-        if (!r.queued) notify(finishSummary(r), r.skipped === "error" ? "error" : "info");
+        // Разбор путей 4.2: записано ли и списано ли. Ушла в очередь — об этом уже сказала очередь.
+        // Этап 12: удачное завершение — экран-итог; проблема со списанием — по-прежнему сообщение
+        if (r.queued) return;
+        if (r.skipped === "error") notify(finishSummary(r), "error");
+        else celebrate({ ...statsOf(session), title: "Тренировка записана", sub: [active.clientName, active.day.name, finishSummary(r).replace(/^Тренировка записана(?:[,:]|\s·)?\s*/, "")].filter(Boolean).join(" · ") });
       }}
       onClose={stop}
     />
@@ -750,6 +754,8 @@ export default function App() {
         {showPinSettings && <Suspense fallback={null}><PinSettingsModal onClose={() => setShowPinSettings(false)} onChanged={setTrainerPin} /></Suspense>}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
         {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
+        {/* Этап 12: новый раздел мягко проявляется (только прозрачность — без сдвига, см. index.css) */}
+        <div key={view.kind} className="anim-screen">
         {view.kind === "dashboard" && (
           <Dashboard trainerId={session.user.id} bookings={bookingsHook.bookings} recentSlot={recentRow}
             onFirstStep={(s) => {
@@ -786,6 +792,7 @@ export default function App() {
         {view.kind === "plan" && (
           <PlanEditor key={view.planId} planId={view.planId} trainerId={session.user.id} clientId={view.clientId} onBack={goBack} />
         )}
+        </div>
         </Suspense>
       </div>
 

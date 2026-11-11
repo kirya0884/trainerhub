@@ -211,3 +211,23 @@ export function lastFactsByName(sessions: Session[]): Record<string, LastFact> {
   }
   return out;
 }
+
+/** Этап 12: подход тяжелее лучшего веса прошлой тренировки этого упражнения — рекорд */
+export function isWeightRecord(weight: string, prev?: { weight: string }[] | null): boolean {
+  const w = parseNum(weight);
+  if (w == null || !prev?.length) return false;
+  const best = Math.max(...prev.map((p) => parseNum(p.weight) ?? 0));
+  return best > 0 && w > best;
+}
+
+/** Этап 12: сколько недель подряд (пн–вс) были тренировки — по эту или прошлую неделю
+ *  включительно (на этой неделе ещё может быть впереди). */
+export function weeksStreak(dates: string[], todayIso: string): number {
+  const week = (iso: string) => { const d = Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86400000; return Math.floor((d + 3) / 7); }; // 1970-01-01 — четверг
+  const set = new Set(dates.map(week));
+  let w = week(todayIso);
+  if (!set.has(w)) w--;
+  let n = 0;
+  while (set.has(w)) { n++; w--; }
+  return n;
+}

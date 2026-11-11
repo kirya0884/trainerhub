@@ -18,6 +18,7 @@ import type { ClientActivity } from "../lib/clientPortal";
 import * as clientsApi from "../lib/clients";
 import { combinedRemaining } from "../lib/clients";
 import { activeBlocks, blockColor, blockLabel, fetchBlocks, type Block } from "../lib/blocks";
+import { celebrate, statsOf } from "../lib/celebrate";
 import * as nutritionApi from "../lib/nutrition";
 import type { PlanListItem, Payment, Measurement } from "../lib/clients";
 import type { NutritionLog } from "../lib/nutrition";
@@ -31,7 +32,7 @@ import { addDays, fmtDate, fmtSet, today as todayFn } from "../lib/format";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking } from "../lib/notify";
 import { supabase } from "../lib/supabase";
 import ClientSessionView from "./ClientSessionView";
-import { fmtRpe, isFact, isSessionOfDay, lastFactsByName, lastTimeFor, nextDayOf } from "../lib/sessionUtils";
+import { fmtRpe, isFact, isSessionOfDay, lastFactsByName, lastTimeFor, nextDayOf, weeksStreak } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
 import { flushOutbox, isNetworkError } from "../lib/outbox";
@@ -258,6 +259,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
     : m.remaining !== "" && m.remaining != null && combinedRemaining(m as clientsApi.Membership) <= 2;
   const renewLinks = trainerLinks(brand, `Привет! ${m.type === "subscription" ? "Подходит срок оплаты подписки" : "В абонементе заканчиваются тренировки"} — хочу продлить.`);
   const sortedSessions = [...progressHook.sessions].sort((a, b) => (a.date < b.date ? 1 : -1));
+  const streak = weeksStreak(progressHook.sessions.map((s) => s.date), todayFn());
 
   return (
     <div className={`max-w-2xl mx-auto space-y-4 ${activeSession && sessionMinimized ? "pb-40" : "pb-24"}`} style={{ "--accent": profile.accentColor } as React.CSSProperties}>
@@ -360,6 +362,14 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
             </button>
           </div>
 
+          {/* Этап 12: серия недель с тренировками — повод не пропускать */}
+          {streak >= 2 && (
+            <div className="anim-rise flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-3">
+              <span className="anim-pop text-2xl" aria-hidden="true">🔥</span>
+              <span className="min-w-0"><span className="block font-bold">{streak} {streak % 10 === 1 && streak % 100 !== 11 ? "неделя" : [2, 3, 4].includes(streak % 10) && ![12, 13, 14].includes(streak % 100) ? "недели" : "недель"} подряд</span>
+                <span className="block text-sm text-zinc-500">с тренировками — так держать</span></span>
+            </div>
+          )}
           {renewDue && (renewLinks.wa || renewLinks.tg) && (
             <a href={renewLinks.wa || renewLinks.tg} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-orange-400/10 border border-orange-400/30 rounded-2xl px-4 py-3 text-sm text-orange-300">
               <MessageSquare size={16} className="shrink-0" />
@@ -695,7 +705,11 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
               removeKey(OFFLINE_KEY);
               track("action", "workout_finish", { queued });
               if (queued) notify("Нет интернета — тренировка сохранена на телефоне и отправится сама, как только появится сеть.", "info");
-              else await progressHook.reload().catch((err) => console.error("[ClientPortal] reload:", err));
+              else {
+                // Этап 12: экран-итог с числами и салютом
+                celebrate({ ...statsOf(session), title: "Тренировка завершена", sub: activeSession.dayName, accent: profile.accentColor });
+                await progressHook.reload().catch((err) => console.error("[ClientPortal] reload:", err));
+              }
               setActiveSession(null);
               setSessionMinimized(false);
             } catch (e) {

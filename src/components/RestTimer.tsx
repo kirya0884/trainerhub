@@ -25,7 +25,7 @@ export type RestTimer = ReturnType<typeof useRestTimer>;
 
 /** Считаем от момента окончания, а не тиками — после блокировки экрана остаток верный. */
 export function useRestTimer() {
-  const [rest, setRest] = useState<{ endsAt: number; signaled: boolean } | null>(null);
+  const [rest, setRest] = useState<{ endsAt: number; signaled: boolean; startAt: number } | null>(null);
   const [now, setNow] = useState(Date.now());
   const audioRef = useRef<AudioContext | null>(null);
   useEffect(() => () => { audioRef.current?.close().catch(() => {}); }, []);
@@ -54,23 +54,35 @@ export function useRestTimer() {
     } catch (e) { console.warn("[RestTimer] audio:", e); }
     const t = Date.now();
     setNow(t);
-    setRest({ endsAt: t + sec * 1000, signaled: false });
+    setRest({ endsAt: t + sec * 1000, signaled: false, startAt: t });
   };
-  const addSeconds = (sec: number) => setRest((r) => r && { endsAt: Math.max(r.endsAt, Date.now()) + sec * 1000, signaled: false });
+  const addSeconds = (sec: number) => setRest((r) => r && { ...r, endsAt: Math.max(r.endsAt, Date.now()) + sec * 1000, signaled: false });
   const skip = () => setRest(null);
-  return { active, left, start, addSeconds, skip };
+  // Этап 12: всего секунд отдыха — для кольца (с учётом «+30 с»)
+  const total = rest ? Math.max(1, Math.round((rest.endsAt - rest.startAt) / 1000)) : 1;
+  return { active, left, total, start, addSeconds, skip };
 }
 
 /** Плашка над нижней панелью экрана тренировки: отсчёт, «+30 с», «Пропустить»; по окончании — «Отдых окончен». */
 export function RestBar({ timer }: { timer: RestTimer }) {
   if (!timer.active) return null;
-  const { left } = timer;
+  const { left, total } = timer;
+  // Этап 12: кольцо убывает, последние 3 с цифры «бьются» оранжевым, в конце плашка вздрагивает
+  const last = left > 0 && left <= 3;
+  const C = 69.1; // длина окружности r=11
   return (
     <div className="shrink-0 px-3 pb-2">
-      <div role="status" aria-live="polite" className={`max-w-2xl mx-auto flex items-center gap-3 rounded-2xl pl-4 pr-1.5 h-12 text-zinc-950 shadow-lg ${left > 0 ? "bg-zinc-100" : "bg-lime-400"}`}>
-        <Timer size={20} className="shrink-0" />
+      <div role="status" aria-live="polite" className={`anim-rise max-w-2xl mx-auto flex items-center gap-3 rounded-2xl pl-3 pr-1.5 h-12 text-zinc-950 shadow-lg transition-colors duration-300 ${left > 0 ? "bg-zinc-100" : "bg-lime-400 anim-shake"}`}>
+        <span className="relative w-8 h-8 shrink-0">
+          <svg viewBox="0 0 28 28" className="w-8 h-8 -rotate-90" aria-hidden="true">
+            <circle cx="14" cy="14" r="11" fill="none" strokeWidth="3" className="stroke-current opacity-15" />
+            <circle cx="14" cy="14" r="11" fill="none" strokeWidth="3" strokeLinecap="round" className={`stroke-current transition-[stroke-dashoffset] duration-1000 ease-linear ${last ? "text-orange-500" : ""}`}
+              strokeDasharray={C} strokeDashoffset={C * (1 - left / total)} />
+          </svg>
+          <Timer size={14} className="absolute inset-0 m-auto" />
+        </span>
         {left > 0
-          ? <div className="leading-tight"><p className="text-xs opacity-70">Отдых</p><p className="font-mono text-lg font-bold">{fmtClock(left)}</p></div>
+          ? <div className="leading-tight"><p className="text-xs opacity-70">Отдых</p><p key={last ? left : "n"} className={`font-mono text-lg font-bold origin-left ${last ? "text-orange-600 anim-beat" : ""}`}>{fmtClock(left)}</p></div>
           : <p className="font-bold">Отдых окончен</p>}
         <div className="ml-auto flex gap-1.5">
           {left > 0 && <button onClick={() => timer.addSeconds(30)} className="h-11 px-3 rounded-xl bg-black/10 font-semibold text-sm">+30 с</button>}

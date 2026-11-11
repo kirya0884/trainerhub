@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import App from "./App";
 import ErrorScreen from "./components/ErrorScreen";
 import DialogHost from "./components/DialogHost";
+import WorkoutDone from "./components/WorkoutDone";
 import OutboxBadge from "./components/OutboxBadge";
 // Шрифт в бандле, а не с Google Fonts: PWA должна работать в зале без сети,
 // а woff2 попадают в precache сервис-воркера (globPatterns в vite.config.ts)
@@ -16,7 +17,7 @@ import "./lib/install";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <ErrorScreen><App /><DialogHost /><OutboxBadge /></ErrorScreen>
+    <ErrorScreen><App /><DialogHost /><WorkoutDone /><OutboxBadge /></ErrorScreen>
   </React.StrictMode>
 );
 

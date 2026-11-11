@@ -118,7 +118,7 @@ export default function PlansOverview({ trainerId, clients, plans, reloadPlans, 
     );
   };
   const List = ({ items }: { items: PlanOverviewItem[] }) => (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
+    <div className="anim-stagger bg-zinc-900 border border-zinc-800 rounded-2xl divide-y divide-zinc-800">
       {items.map((p) => <Row key={p.id} p={p} />)}
     </div>
   );

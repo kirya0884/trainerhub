@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import CountUp from "./CountUp";
 import { Fragment, useEffect, useRef, useState } from "react";
 import { Bell, BellOff, Cake, CalendarClock, Check, ChevronRight, Clock, Hourglass, Play, Sparkles, TriangleAlert, Wallet } from "lucide-react";
 import { fetchDashboardData as fetchFresh } from "../lib/dashboard";
@@ -397,7 +398,7 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         <span className="w-10 h-10 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center shrink-0"><Wallet size={19} /></span>
         <span className="flex-1 min-w-0">
           <span className="block text-sm font-semibold text-zinc-400">Финансы · {monthName}</span>
-          <span className="block text-lg font-bold text-zinc-100 leading-tight">{cashReceived.toLocaleString("ru-RU")} ₽ <span className="text-sm font-normal text-zinc-500">поступило</span></span>
+          <span className="block text-lg font-bold text-zinc-100 leading-tight"><CountUp value={cashReceived} /> ₽ <span className="text-sm font-normal text-zinc-500">поступило</span></span>
           {earnedToday.n > 0 && (
             <span className="block text-[13px] text-lime-400">сегодня заработано {Math.round(earnedToday.sum).toLocaleString("ru-RU")} ₽ · {earnedToday.n} {plural(earnedToday.n, ["тренировка", "тренировки", "тренировок"])}</span>
           )}
@@ -415,11 +416,11 @@ export default function Dashboard({ trainerId, bookings, onOpenClient, onOpenOcc
         <SectionTitle>Клиенты</SectionTitle>
         <div className="grid grid-cols-2 gap-2">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-lime-400">
-            <p className="text-2xl font-bold text-zinc-50">{activeClients.length}<span className="text-sm font-normal text-zinc-600">/{clients.length}</span></p>
+            <p className="text-2xl font-bold text-zinc-50"><CountUp value={activeClients.length} ms={600} /><span className="text-sm font-normal text-zinc-600">/{clients.length}</span></p>
             <p className="text-xs text-zinc-500 mt-1">Активных</p>
           </div>
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 border-t-2 border-t-cyan-400">
-            <p className="text-2xl font-bold text-zinc-50">{trainedThisWeek}</p>
+            <p className="text-2xl font-bold text-zinc-50"><CountUp value={trainedThisWeek} ms={600} /></p>
             <p className="text-xs text-zinc-500 mt-1">На неделе</p>
           </div>
         </div>

@@ -16,7 +16,7 @@ export default function DialogHost() {
       <div className="fixed inset-x-0 z-[70] flex flex-col items-center gap-2 px-3 pointer-events-none" style={{ top: "calc(env(safe-area-inset-top) + 12px)" }} aria-live="polite">
         {toasts.map((t) => t.action ? (
           // С кнопкой действия: кнопка в кнопке недопустима, поэтому плашка — div с двумя кнопками
-          <div key={t.id} className="pointer-events-auto w-full max-w-md flex items-center gap-2.5 rounded-2xl bg-zinc-800 border border-zinc-700 shadow-xl shadow-black/40 pl-3.5 pr-1 py-1 text-sm text-zinc-100">
+          <div key={t.id} className="anim-drop pointer-events-auto w-full max-w-md flex items-center gap-2.5 rounded-2xl bg-zinc-800 border border-zinc-700 shadow-xl shadow-black/40 pl-3.5 pr-1 py-1 text-sm text-zinc-100">
             {t.kind === "error" ? <AlertCircle size={18} className="text-red-400 shrink-0" /> : <Info size={18} className="text-lime-400 shrink-0" />}
             <span className="flex-1 whitespace-pre-line leading-snug py-2">{t.text}</span>
             <button onClick={() => { dismiss(t.id); t.action!.run(); }} className="h-11 px-3 rounded-xl font-bold text-lime-400 hover:bg-zinc-700 transition shrink-0">{t.action.label}</button>
@@ -24,7 +24,7 @@ export default function DialogHost() {
           </div>
         ) : (
           <button key={t.id} onClick={() => dismiss(t.id)}
-            className="pointer-events-auto w-full max-w-md flex items-start gap-2.5 text-left rounded-2xl bg-zinc-800 border border-zinc-700 shadow-xl shadow-black/40 px-3.5 py-3 text-sm text-zinc-100">
+            className="anim-drop pointer-events-auto w-full max-w-md flex items-start gap-2.5 text-left rounded-2xl bg-zinc-800 border border-zinc-700 shadow-xl shadow-black/40 px-3.5 py-3 text-sm text-zinc-100">
             {t.kind === "error" ? <AlertCircle size={18} className="text-red-400 shrink-0 mt-px" /> : <Info size={18} className="text-lime-400 shrink-0 mt-px" />}
             <span className="flex-1 whitespace-pre-line leading-snug">{t.text}</span>
             <X size={16} className="text-zinc-500 shrink-0 mt-0.5" aria-label="Закрыть" />
@@ -49,10 +49,10 @@ function AskDialog({ ask }: { ask: Ask }) {
   // Окно с полями открывается с клавиатурой — ставим его над ней (полоса «домой» тогда под клавиатурой)
   const kb = useKeyboardViewport();
   return (
-    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => answer(false)}
+    <div className="anim-fade fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => answer(false)}
       style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       <div {...panelProps} onClick={(e) => e.stopPropagation()}
-        className="w-full sm:max-w-sm bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-4 space-y-4 outline-none" style={{ paddingBottom: kb ? 16 : "calc(env(safe-area-inset-bottom) + 16px)" }}>
+        className="anim-sheet w-full sm:max-w-sm bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-4 space-y-4 outline-none" style={{ paddingBottom: kb ? 16 : "calc(env(safe-area-inset-bottom) + 16px)" }}>
         <p className={`leading-snug text-zinc-100 whitespace-pre-line pt-1 ${ask.fields || ask.options ? "text-[17px] font-bold" : "text-[15px]"}`}>{ask.text}</p>
         {ask.options && (
           <div role="radiogroup" className="space-y-2">

@@ -99,7 +99,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
               {c.avatarUrl
                 ? <img src={c.avatarUrl} alt="" className="w-11 h-11 rounded-full object-cover" />
                 : <span className="w-11 h-11 rounded-full flex items-center justify-center font-bold text-zinc-950" style={{ background: c.color }}>{c.name.charAt(0).toUpperCase()}</span>}
-              {!!c.activeSession && <span className="absolute -right-0.5 -bottom-0.5 w-3.5 h-3.5 rounded-full bg-cyan-400 border-[3px] border-zinc-900" />}
+              {!!c.activeSession && <span className="absolute -right-0.5 -bottom-0.5 w-3.5 h-3.5"><span className="absolute inset-0 rounded-full bg-cyan-400 animate-ping opacity-60" /><span className="absolute inset-0 rounded-full bg-cyan-400 border-[3px] border-zinc-900" /></span>}
             </span>
             <span className="flex-1 min-w-0">
               <span className="flex items-center gap-1.5 font-semibold truncate">
@@ -189,7 +189,7 @@ export default function ClientsList({ trainerId, clients, reloadClients, onOpenC
         {shownGroups.map((g) => (
           <div key={g.title || "archive"}>
             {g.title && <h3 className="text-[17px] font-bold mb-2">{g.title} <span className="text-zinc-500 font-semibold">{g.items.length}</span></h3>}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden divide-y divide-zinc-800">
+            <div className="anim-stagger bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden divide-y divide-zinc-800">
               {g.items.map(row)}
             </div>
           </div>

@@ -21,7 +21,9 @@ export default function TrendChart({ data, color, height = 220, formatter, domai
           <XAxis dataKey="date" stroke={cc.axis} fontSize={11} tickLine={false} />
           <YAxis stroke={cc.axis} fontSize={11} tickLine={false} width={36} domain={domain} />
           <Tooltip contentStyle={{ background: cc.tooltipBg, border: `1px solid ${cc.tooltipBorder}`, borderRadius: 8, fontSize: 12 }} labelStyle={{ color: cc.tooltipLabel }} formatter={(v: any) => [formatter(v), ""]} />
-          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2.5} dot={{ r: 3, fill: color }} activeDot={{ r: 5 }} />
+          {/* Этап 12: линия рисуется слева направо; «Уменьшить движение» — сразу целиком */}
+          <Line type="monotone" dataKey="value" stroke={color} strokeWidth={2.5} dot={{ r: 3, fill: color }} activeDot={{ r: 5 }}
+            isAnimationActive={!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches} animationDuration={1100} animationEasing="ease-out" />
         </LineChart>
       </ResponsiveContainer>
     </div>

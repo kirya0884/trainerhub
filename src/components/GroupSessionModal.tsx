@@ -1,4 +1,5 @@
 import WorkoutPill from "./WorkoutPill";
+import { haptic } from "../hooks/useCountUp";
 import ClientPickModal, { type PickClient } from "./ClientPickModal";
 import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, UserPlus, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
@@ -12,7 +13,7 @@ import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { fmtSet, parseRest, repsInput } from "../lib/format";
-import { exKey } from "../lib/sessionUtils";
+import { exKey, isWeightRecord } from "../lib/sessionUtils";
 import { combinedRemaining } from "../lib/clients";
 import type { Day, Exercise } from "../types";
 import RemainingBadge from "./RemainingBadge";
@@ -52,6 +53,7 @@ type Slot = ReturnType<typeof useSessionSlot>;
 // Отметка подхода + запуск общего таймера отдыха (если отдых задан и это не последний подход подопечного)
 const tapSet = (slot: Slot, ex: Exercise, i: number, total: number, startRest: (sec: number) => void) => {
   const was = slot.meta[ex.id]?.setsDone?.[i] ?? false;
+  if (!was) haptic();
   slot.toggleSetDone(ex.id, i, total);
   const sec = parseRest(ex.rest);
   if (!was && sec && slot.openSets() > 1) startRest(sec);
@@ -180,15 +182,15 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                             const isDone = md.setsDone?.[i] ?? false;
                             return (
                               <div key={i}>
-                                <div className={`grid ${prevSets ? PREV_COLS : SET_COLS} gap-1.5 items-center`}>
-                                  <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
+                                <div className={`grid ${prevSets ? PREV_COLS : SET_COLS} gap-1.5 items-center rounded-xl ${isDone ? "anim-flash" : ""}`}>
+                                  <span className="text-sm font-semibold text-zinc-500 text-center">{isDone && isWeightRecord(r.weight, prevSets) ? <span key="pr" className="anim-pop inline-block" title="Рекорд: больше прошлого лучшего веса" aria-label="Рекорд">🏆</span> : i + 1}</span>
 {prevSets && <PrevCell p={prevSets[i]} />}
                                   <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: repsInput(e.target.value) })} inputMode="decimal" placeholder="повт" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <RpePick value={r.rpe} onChange={(v) => setVal(ex.id, i, { rpe: v })} trainer label={`Подход ${i + 1}: RPE`} />
                                   <button onClick={() => tap(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
                                     className={`h-12 w-12 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
-                                    <Check size={20} strokeWidth={2.5} />
+                                    <Check size={20} strokeWidth={2.5} key={isDone ? "d" : "u"} className={isDone ? "anim-draw" : undefined} />
                                   </button>
                                 </div>
                               </div>
@@ -370,7 +372,7 @@ function SetRowsFor({ name, color, ex, slot, startRest }: {
                 <RpePick value={r.rpe} onChange={(v) => slot.setVal(ex.id, i, { rpe: v })} trainer label={`${name}, подход ${i + 1}: RPE`} />
                 <button onClick={() => tapSet(slot, ex, i, rows.length, startRest)} aria-pressed={isDone} aria-label={`${name}: ${isDone ? "снять отметку с подхода" : "подход выполнен"} ${i + 1}`}
                   className={`h-12 rounded-lg flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
-                  <Check size={18} strokeWidth={2.5} />
+                  <Check size={18} strokeWidth={2.5} key={isDone ? "d" : "u"} className={isDone ? "anim-draw" : undefined} />
                 </button>
               </div>
             );

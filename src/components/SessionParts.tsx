@@ -253,7 +253,7 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
                     )}
                     <button onClick={() => onTapSet(ex, r, rows.length)} aria-pressed={isDone} aria-label={isDone ? `${ex.name}: снять отметку с подхода ${r + 1}` : `${ex.name}: подход ${r + 1} выполнен`}
                       className={`h-12 w-12 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
-                      <Check size={20} strokeWidth={2.5} />
+                      <Check size={20} strokeWidth={2.5} key={isDone ? "d" : "u"} className={isDone ? "anim-draw" : undefined} />
                     </button>
                   </div>
                 </div>
