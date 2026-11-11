@@ -336,7 +336,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
           </div>
 
           {/* Остаток и вес — плитками */}
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 gap-3">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4">
               <p className="text-sm text-zinc-400">{m.type === "subscription" ? "Подписка" : "Осталось"}</p>
               {m.type !== "subscription" && activeBlocks(blocks).length >= 2 ? (

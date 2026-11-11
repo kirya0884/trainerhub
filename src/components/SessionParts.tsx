@@ -1,6 +1,6 @@
 import { Check, ChevronDown, ChevronUp, History, Layers, Minus, Plus } from "lucide-react";
 import { useEffect, useState } from "react";
-import { addDays, fmtDate, fmtSet, today } from "../lib/format";
+import { addDays, fmtDate, fmtSet, today, repsInput } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
 import { RPE_SCALE, doneSets, exKey, fmtRpe, isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
@@ -246,7 +246,7 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
                       <>
                         <input value={row.weight} onChange={(e) => onSetVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" aria-label={`${ex.name}, подход ${r + 1}: вес`}
                           className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
-                        <input value={row.reps} onChange={(e) => onSetVal(ex.id, r, { reps: e.target.value })} inputMode="numeric" placeholder="повт" aria-label={`${ex.name}, подход ${r + 1}: повторы`}
+                        <input value={row.reps} onChange={(e) => onSetVal(ex.id, r, { reps: repsInput(e.target.value) })} inputMode="decimal" placeholder="повт" aria-label={`${ex.name}, подход ${r + 1}: повторы`}
                           className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                         <RpePick value={row.rpe} onChange={(v) => onSetVal(ex.id, r, { rpe: v })} trainer={trainer} label={`${ex.name}, подход ${r + 1}: RPE`} />
                       </>

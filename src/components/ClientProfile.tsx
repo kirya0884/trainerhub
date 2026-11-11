@@ -399,7 +399,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
 
       {/* Разбор путей 1.10: выдачу доступа легко забыть — кнопка жила в «Обзоре» под «Статусом» */}
       {!client.hasAccount && !client.isSelf && !noAccessHidden && (
-        <div className="flex items-center gap-2 bg-zinc-900 border border-cyan-400/30 rounded-2xl pl-4 pr-2 py-2">
+        <div className="mt-3 flex items-center gap-2 bg-zinc-900 border border-cyan-400/30 rounded-2xl pl-4 pr-2 py-2">
           <p className="flex-1 text-sm text-zinc-300">У клиента нет кабинета: он не видит программу и не может отмечать тренировки.</p>
           <button onClick={() => { setSub("overview"); setTimeout(() => document.getElementById("invite-block")?.scrollIntoView({ behavior: "smooth", block: "center" }), 50); }} className="shrink-0 h-10 px-3 rounded-xl bg-cyan-400/15 text-cyan-300 text-sm font-semibold hover:bg-cyan-400/25 transition">Выдать доступ</button>
           <button onClick={() => { try { localStorage.setItem(`reps-noaccess-hidden-${clientId}`, "1"); } catch { /* приватный режим */ } setNoAccessHidden(true); }} aria-label="Не нужно" title="Не нужно" className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-zinc-500 hover:text-zinc-200"><X size={16} /></button>
@@ -417,7 +417,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
         plans={activePlans} onClose={() => setShowStart(false)} />}
 
       {!!client.activeSession && (
-        <div className="w-full flex items-center gap-2 rounded-xl px-3.5 py-2.5 mt-4 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
+        <div className="w-full flex items-center gap-2 rounded-xl px-3.5 py-2.5 mt-3 text-sm bg-cyan-400/10 text-cyan-300 border border-cyan-400/20">
           <Play size={14} className="shrink-0 text-cyan-400" />
           <span className="flex-1 font-medium">Сейчас тренируется: <span className="text-cyan-100">{client.activeSession.dayName}</span></span>
           <span className="text-xs text-cyan-500">{(() => { const s = Math.floor((Date.now() - client.activeSession.startedAt) / 1000); const m = Math.floor(s / 60); return m > 0 ? `${m} мин` : "только начал"; })()}</span>
@@ -425,7 +425,7 @@ export default function ClientProfile({ trainerId, clientId, onBack, onOpenPlan,
       )}
 
       {/* Разделы карточки — четыре плитки в ряд, порядок фиксирован */}
-      <div className="grid grid-cols-4 gap-1.5 mt-4 mb-4 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl">
+      <div className="grid grid-cols-4 gap-1.5 mt-3 mb-4 p-1.5 bg-zinc-900 border border-zinc-800 rounded-2xl">
         {TABS.map((t) => {
           const active = sub === t.k;
           return (

@@ -5,7 +5,7 @@ import { rowsSummary, type LastFact } from "../lib/sessionUtils";
 import NumField from "./NumField";
 import { ask } from "../lib/dialog";
 import { toEmbedUrl } from "../lib/videoEmbed";
-import { fmtSet } from "../lib/format";
+import { fmtSet, repsInput } from "../lib/format";
 
 // Черновик текстового поля: ввод меняет своё состояние синхронно. Раньше поле обновлялось через
 // startTransition, React до применения перехода откатывал его к старому значению — на Android-клавиатурах
@@ -185,7 +185,7 @@ function ExerciseRow({
                 <span className="text-xs text-zinc-400 w-5 text-center shrink-0 font-medium">{i + 1}</span>
                 <DraftInput value={s.weight} inputMode="decimal" onValue={(v) => updateSetRow(s.id, { weight: v })} placeholder="вес" className="h-11 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
                 <span className="text-xs text-zinc-500">×</span>
-                <DraftInput value={s.reps} inputMode="text" onValue={(v) => updateSetRow(s.id, { reps: v })} placeholder="повт" className="h-11 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
+                <DraftInput value={s.reps} inputMode="decimal" onValue={(v) => updateSetRow(s.id, { reps: repsInput(v) })} placeholder="повт" className="h-11 w-16 bg-zinc-800 rounded-lg px-1 text-sm text-center outline-none focus:ring-1 focus:ring-lime-400/40 shrink-0" />
                 <button onClick={() => removeSetRow(s.id)} className="ml-auto p-1 rounded-lg hover:bg-red-500/20 hover:text-red-400 text-zinc-600 transition" title="Удалить подход"><X size={13} /></button>
               </div>
             ))}
@@ -203,7 +203,7 @@ function ExerciseRow({
             <DraftNum label="Подходы" value={ex.sets} onValue={(v) => update({ sets: v })} placeholder="4" inputMode="numeric" />
             <DraftNum label="Вес" value={ex.weight} onValue={(v) => update({ weight: v })} placeholder="60 кг" />
             {/* Повторы в плане бывают диапазоном и «max» — текстовая клавиатура */}
-            <DraftNum label="Повторы" value={ex.reps} onValue={(v) => update({ reps: v })} placeholder="8-12" inputMode="text" />
+            <DraftNum label="Повторы" value={ex.reps} onValue={(v) => update({ reps: repsInput(v) })} placeholder="8-12" inputMode="decimal" />
             <DraftNum label="Отдых" value={ex.rest} onValue={(v) => update({ rest: v })} placeholder="90 с" />
           </div>
         )}

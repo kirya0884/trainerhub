@@ -1,4 +1,5 @@
 import { BookOpen, Pencil, Plus, Trash2, X } from "lucide-react";
+import { repsInput } from "../lib/format";
 import { useEffect, useState } from "react";
 import ModalShell from "./ModalShell";
 import * as api from "../lib/templates";
@@ -154,7 +155,7 @@ export default function DayTemplateLibrary({
                     inputMode="numeric" placeholder="×" className={`w-10 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0${locked}`} />
                   <input value={ex.weight} onChange={(e) => updateEx(ex.tempId, { weight: e.target.value })} readOnly={rowsLocked} aria-readonly={rowsLocked}
                     inputMode="decimal" placeholder="кг" className={`w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0${locked}`} />
-                  <input value={ex.reps} onChange={(e) => updateEx(ex.tempId, { reps: e.target.value })} readOnly={rowsLocked} aria-readonly={rowsLocked}
+                  <input value={ex.reps} onChange={(e) => updateEx(ex.tempId, { reps: repsInput(e.target.value) })} readOnly={rowsLocked} aria-readonly={rowsLocked}
                     inputMode="text" placeholder="пов." className={`w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0${locked}`} />
                   <input value={ex.rest} onChange={(e) => updateEx(ex.tempId, { rest: e.target.value })}
                     inputMode="decimal" placeholder="отд." className="w-14 bg-zinc-900 rounded-lg px-1 py-1.5 text-sm outline-none focus:ring-1 focus:ring-lime-400/40 text-center shrink-0" />

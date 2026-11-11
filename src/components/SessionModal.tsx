@@ -13,7 +13,7 @@ import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SetCountRow, Super
 import { applyLastTime, buildMetrics, doneSets, exKey, factSets, itemRpe, lastFactsByName, lastTimeFor, type LastFact, type LastTime } from "../lib/sessionUtils";
 import { fetchProgressCached } from "../lib/progress";
 import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
-import { fmtDate, fmtSet, parseRest, today } from "../lib/format";
+import { fmtDate, fmtSet, parseRest, today, repsInput } from "../lib/format";
 import type { Day, Exercise, Metric, Session } from "../types";
 import { ask, notify } from "../lib/dialog";
 
@@ -291,7 +291,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
                     ) : (
                       <>
                         <input value={row.weight} onChange={(e) => setVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className="h-12 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
-                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className="h-12 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
+                        <input value={row.reps} onChange={(e) => setVal(ex.id, r, { reps: repsInput(e.target.value) })} inputMode="decimal" placeholder="повт" className="h-12 w-14 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 shrink-0" />
                         <span className="w-11 shrink-0"><RpePick value={row.rpe} onChange={(v) => setVal(ex.id, r, { rpe: v })} trainer label={`${ex.name}, круг ${r + 1}: RPE`} /></span>
                       </>
                     )}
@@ -355,7 +355,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
                           <span className="text-sm font-semibold text-zinc-500 text-center">{i + 1}</span>
 {prevSets && <PrevCell p={prevSets[i]} />}
                           <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
-                          <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: e.target.value })} inputMode="numeric" placeholder="повт" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                          <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: repsInput(e.target.value) })} inputMode="decimal" placeholder="повт" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                           <RpePick value={r.rpe} onChange={(v) => setVal(ex.id, i, { rpe: v })} trainer label={`Подход ${i + 1}: RPE`} />
                           <button onClick={() => tapSet(ex, i, rows.length)} aria-pressed={isDone} aria-label={isDone ? `Снять отметку с подхода ${i + 1}` : `Подход ${i + 1} выполнен`}
                             className={`h-12 w-12 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
