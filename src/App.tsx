@@ -325,6 +325,9 @@ export default function App() {
   const { plans: allPlans, reload: reloadPlans } = usePlans(dataTrainerId);
   const [showSearch, setShowSearch] = useState(false);
   const [showAssistant, setShowAssistant] = useState(false);
+  // Помощник после первого открытия не размонтируется — прячется, сохраняя переписку
+  const [assistantMounted, setAssistantMounted] = useState(false);
+  const openAssistant = () => { logEvent(dataTrainerId, "view", "assistant"); setAssistantMounted(true); setShowAssistant(true); };
   const [showBackup, setShowBackup] = useState(false);
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
@@ -731,8 +734,9 @@ export default function App() {
             onClose={() => setShowSearch(false)}
           />
         )}
-        {showAssistant && (
+        {assistantMounted && (
           <AssistantChat
+            open={showAssistant}
             trainerId={session.user.id}
             clients={clients ?? []}
             plans={allPlans ?? []}
@@ -755,7 +759,7 @@ export default function App() {
               else if (s === "plan") go({ kind: "plans", newPlan: true });
               else if (s === "booking") go({ kind: "calendar", newBooking: true });
               else go({ kind: "clients" });
-            }} onOpenAssistant={() => { logEvent(dataTrainerId, "view", "assistant"); setShowAssistant(true); }} onOpenClient={openClient} onOpenFinance={() => go({ kind: "finance" })} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
+            }} onOpenAssistant={openAssistant} onOpenClient={openClient} onOpenFinance={() => go({ kind: "finance" })} onOpenOccurrence={(id, occDate) => { logEvent(dataTrainerId, "action", "start_workout"); go({ kind: "calendar", openOccurrence: { id, occDate } }); }} />
         )}
         {view.kind === "finance" && (
           <FinanceView trainerId={session.user.id} bookings={bookingsHook.bookings} onOpenClient={openClient} onBack={goBack} />
@@ -810,7 +814,15 @@ export default function App() {
       </nav>
 
       {/* «+» — кружок справа над панелью (и над плашкой свёрнутой тренировки, если она есть) */}
-      <div className={`fixed right-4 z-40 ${kbOpen ? "hidden" : ""}`} style={{ bottom: "calc(var(--tabbar-h, 0px) + 12px)" }}>
+      <div className={`fixed right-4 z-40 flex flex-col items-end gap-3 ${kbOpen ? "hidden" : ""}`} style={{ bottom: "calc(var(--tabbar-h, 0px) + 12px)" }}>
+            {/* Помощник с любого экрана — кружок над «+». На «Главной» он не нужен: там кнопка в шапке.
+                При открытом меню «+» прячется, чтобы меню стояло прямо над кнопкой */}
+            {view.kind !== "dashboard" && !showFab && (
+              <button onClick={openAssistant} aria-label="Помощник" title="Помощник"
+                className="w-12 h-12 rounded-full flex items-center justify-center bg-zinc-900 border border-zinc-700 text-lime-400 shadow-lg shadow-black/40 transition active:scale-95">
+                <Sparkles size={21} />
+              </button>
+            )}
             <button
               onClick={() => setShowFab((v) => !v)}
               aria-expanded={showFab}
@@ -841,7 +853,7 @@ export default function App() {
                 <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "create", "booking"); go({ kind: "calendar", newBooking: true }); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <CalendarDays size={16} className="text-lime-400 shrink-0" /> Новая запись
                 </button>
-                <button onClick={() => { setShowFab(false); logEvent(dataTrainerId, "view", "assistant"); setShowAssistant(true); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
+                <button onClick={() => { setShowFab(false); openAssistant(); }} className="w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-sm text-zinc-200 hover:bg-zinc-800 transition">
                   <Sparkles size={16} className="text-lime-400 shrink-0" /> Помощник
                   {!assistantConnectedCached() && <span className="ml-auto text-[11px] text-zinc-500">в разработке</span>}
                 </button>

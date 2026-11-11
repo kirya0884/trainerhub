@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, CalendarDays, Check, ChevronLeft, ClipboardList, Clock, Dumbbell, Loader2, Plus, Sparkles, Trash2, UserRound, WifiOff } from "lucide-react";
 import type { ClientListItem, PlanOverviewItem } from "../lib/clients";
 import { registerModal } from "../lib/modalHistory";
-import { ask, askInput, notify } from "../lib/dialog";
+import { askInput, notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
+import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 import {
   askAssistant, assistantConnectedCached, assistantStatus, AssistantError, createWorkout, currentPlanId, findDayOnDate, fmtDayDate, fmtDayMonth, fmtExercise, undoWorkout,
   type ACommand, type AExercise, type AUsage, type CreatedWorkout,
@@ -36,7 +37,10 @@ type Msg =
 let seq = 0;
 const EXAMPLE = "Создай Анне тренировку на четверг в 18:00: жим лёжа 4 по 8, присед 5 по 5 сто килограмм";
 
-export default function AssistantChat({ trainerId, clients, plans, onClose, onOpenPlan, onChanged, onOpenTariffs }: {
+// Помощник живёт поверх всех экранов: после первого открытия он не размонтируется, а прячется
+// вниз — переписка и недосозданная карточка сохраняются, пока открыто приложение.
+export default function AssistantChat({ open, trainerId, clients, plans, onClose, onOpenPlan, onChanged, onOpenTariffs }: {
+  open: boolean;
   trainerId: string;
   clients: ClientListItem[];
   plans: PlanOverviewItem[];
@@ -54,19 +58,43 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
   const [online, setOnline] = useState(navigator.onLine);
   // Пока на сервере нет ключа Яндекса — «в разработке»: объясняем и ничего не отправляем
   const [connected, setConnected] = useState(assistantConnectedCached);
-  useEffect(() => { assistantStatus().then((v) => { if (v) { setConnected(v.connected); if (v.usage) setUsage(v.usage); } }); }, []);
+  // Подключён ли и сколько осталось — при каждом открытии
+  useEffect(() => {
+    if (!open) return;
+    assistantStatus().then((v) => { if (v) { setConnected(v.connected); if (v.usage) setUsage(v.usage); } });
+  }, [open]);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // Клавиатура: на iOS и на Android (interactive-widget=resizes-visual) она сжимает только видимую
+  // область — окно ставим в неё, иначе поле ввода уходит под клавиатуру
+  const kb = useKeyboardViewport();
 
   const openCard = () => [...msgs].reverse().find((m): m is Extract<Msg, { from: "card" }> => m.from === "card" && m.card.status === "open");
 
-  const tryClose = async () => {
-    if (openCard() && !(await ask("Закрыть помощника? Несохранённая тренировка пропадёт.", { ok: "Закрыть" }))) return;
-    onClose();
-  };
+  // Закрыть = спрятать: переписка остаётся, поэтому без вопроса «точно закрыть?»
+  const tryClose = () => { inputRef.current?.blur(); onClose(); };
   const closeRef = useRef(tryClose);
   closeRef.current = tryClose;
-  useEffect(() => registerModal(closeRef), []);
+  // «Назад» на телефоне и Escape прячут помощника, пока он открыт
+  useEffect(() => (open ? registerModal(closeRef) : undefined), [open]);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector('[aria-modal="true"]')) closeRef.current(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+  // Страница под помощником не прокручивается. На iOS overflow:hidden у body не держит
+  // прокрутку пальцем — фиксируем body на месте и возвращаем позицию после закрытия
+  useEffect(() => {
+    if (!open) return;
+    const y = window.scrollY;
+    const b = document.body.style;
+    const prev = { position: b.position, top: b.top, left: b.left, right: b.right, overflow: b.overflow };
+    Object.assign(b, { position: "fixed", top: `-${y}px`, left: "0", right: "0", overflow: "hidden" });
+    // К последнему сообщению — помощник мог прятаться с длинной перепиской
+    requestAnimationFrame(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }));
+    return () => { Object.assign(b, prev); window.scrollTo(0, y); };
+  }, [open]);
   useEffect(() => {
     const on = () => setOnline(true), off = () => setOnline(false);
     window.addEventListener("online", on); window.addEventListener("offline", off);
@@ -322,7 +350,16 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
   const blocked = !connected || monthOut || dayOut;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-zinc-950 text-zinc-100 flex flex-col" style={{ height: "100dvh" }} role="dialog" aria-label="Помощник">
+    // Выезжает снизу поверх всего и уезжает обратно. Скрытый — visibility:hidden после анимации:
+    // не ловит касания, Tab и экранный диктор. С клавиатурой — в видимой над ней области.
+    <div role="dialog" aria-label="Помощник" aria-hidden={!open}
+      className="fixed inset-x-0 top-0 bottom-0 z-[60] bg-zinc-950 text-zinc-100 flex flex-col overscroll-none motion-reduce:!transition-none"
+      style={{
+        ...(kb && open ? { top: kb.top, bottom: kb.bottom } : null),
+        transform: open ? "translateY(0)" : "translateY(100%)",
+        visibility: open ? "visible" : "hidden",
+        transition: `transform .28s cubic-bezier(.2,.8,.2,1), visibility 0s linear ${open ? "0s" : ".28s"}`,
+      }}>
       <div className="max-w-2xl w-full mx-auto flex flex-col min-h-0 flex-1">
         <div className="flex items-center gap-2 px-2 py-2 shrink-0" style={{ paddingTop: "max(8px, env(safe-area-inset-top))" }}>
           <button onClick={tryClose} aria-label="Закрыть помощника" className="w-11 h-11 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-100"><ChevronLeft size={22} /></button>
@@ -336,7 +373,7 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
           )}
         </div>
 
-        <div ref={listRef} className="flex-1 overflow-y-auto px-3 pb-4 space-y-2.5 min-h-0">
+        <div ref={listRef} className="flex-1 overflow-y-auto overscroll-contain px-3 pb-4 space-y-2.5 min-h-0">
           <div className="flex gap-2 items-end">
             <span className="w-7 h-7 rounded-full bg-lime-400 text-zinc-950 flex items-center justify-center shrink-0"><Sparkles size={14} /></span>
             {!connected ? (
@@ -394,7 +431,8 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
           )}
         </div>
 
-        <div className="shrink-0 border-t border-zinc-800 px-2.5 pt-2" style={{ paddingBottom: "max(10px, env(safe-area-inset-bottom))" }}>
+        {/* Низ: над полосой «домой» iPhone и жестовой панелью Android; с клавиатурой окно стоит над ней — отступ не нужен */}
+        <div className="shrink-0 border-t border-zinc-800 px-2.5 pt-2 bg-zinc-950" style={{ paddingBottom: kb ? "8px" : "max(12px, calc(env(safe-area-inset-bottom) + 6px))" }}>
           {!online && <p className="flex items-center gap-2 text-xs text-amber-400 px-1 pb-2"><WifiOff size={14} /> Нет интернета. Текст не пропадёт, отправь, когда появится связь.</p>}
           <div className="flex items-end gap-2">
             <textarea
@@ -407,7 +445,7 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
               disabled={blocked}
               placeholder={!connected ? "Скоро заработает" : monthOut ? `Запросы закончились до ${fmtDayMonth(usage!.resetsOn)}` : dayOut ? "На сегодня запросы закончились" : openCard() ? "Исправить или добавить…" : "Сообщение…"}
               aria-label="Команда помощнику"
-              className="flex-1 min-w-0 resize-none bg-zinc-900 rounded-3xl px-4 py-[11px] text-[15px] leading-snug outline-none max-h-36 placeholder:text-zinc-600 focus:ring-1 focus:ring-lime-400/40"
+              className="flex-1 min-w-0 resize-none bg-zinc-900 rounded-3xl px-4 py-[10px] text-base leading-snug outline-none max-h-36 placeholder:text-zinc-600 focus:ring-1 focus:ring-lime-400/40"
               style={{ fieldSizing: "content" } as React.CSSProperties}
             />
             <button onClick={send} disabled={blocked || !text.trim() || busy || !online} aria-label="Отправить"
