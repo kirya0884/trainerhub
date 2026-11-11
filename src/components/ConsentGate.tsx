@@ -52,7 +52,7 @@ export default function ConsentGate({ role, onDone }: { role: Role; onDone: () =
   const pickAge = (v: Age) => { setAge(v); setGuardian(false); };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-8">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-4 pt-[calc(env(safe-area-inset-top)+2rem)] pb-8">
       <div className="max-w-md mx-auto space-y-4">
         <div className="w-12 h-12 rounded-2xl bg-lime-400/15 text-lime-400 flex items-center justify-center"><ShieldCheck size={24} /></div>
         <h1 className="text-2xl font-extrabold tracking-tight">{isClient ? "Перед входом в кабинет" : "Документы обновились"}</h1>

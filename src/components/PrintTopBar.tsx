@@ -12,7 +12,7 @@ export function usePrintBrand(trainerId: string) {
 
 export function PrintTopBar({ title, onClose }: { title: string; onClose: () => void }) {
   return (
-    <div className="no-print sticky top-0 bg-zinc-900 border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
+    <div className="no-print sticky top-0 bg-zinc-900 border-b border-zinc-800 px-4 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3 flex items-center justify-between">
       <p className="font-semibold text-sm">{title}</p>
       <div className="flex items-center gap-2">
         <button onClick={() => window.print()} className="flex items-center gap-1.5 bg-lime-400 text-zinc-950 font-semibold rounded-lg px-3 py-1.5 text-sm hover:bg-lime-300 transition">

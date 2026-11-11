@@ -588,7 +588,7 @@ export default function App() {
       // Выбор тренера — за PIN-экраном: на общем телефоне чужой не увидит, у кого ты занимаешься
       <PinGate id={uid} hasPin={selfClients[0].hasPin}>
         {selfClient ? (
-          <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6">
+          <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-4 sm:pb-6">
             <Suspense fallback={<ScreenSkeleton />}>
               <ClientPortal key={selfClient.id} client={selfClient} onSwitchTrainer={selfClients.length > 1 ? () => pick("") : undefined} />
             </Suspense>
@@ -670,7 +670,7 @@ export default function App() {
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined && trainerPin !== undefined} />}
     <ActiveWorkoutProvider key={session.user.id} userId={session.user.id}>
     <PinGate id={session.user.id} hasPin={trainerPin} onUnlock={() => setPinPassedId(session.user.id)}>
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 py-4 sm:py-6 pb-36 sm:pb-36" style={{ "--accent": trainerAccent } as React.CSSProperties}>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-36 sm:pb-36" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4"
         style={swipeDx ? { transform: `translateX(${swipeDx}px)`, transition: "none" } : { transition: "transform .18s ease-out" }}>
         {/* B30: одна строка вместо двух — логотип вместо надписи «Reps», профиль и подписка

@@ -267,7 +267,7 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
         sub={`${finishedIds.length}/${clients.length} записаны`} rest={restTimer.left > 0 ? fmtClock(restTimer.left) : undefined}
         onOpen={() => setMinimized(false)} />
     )}
-    <div {...panelProps} className={`fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex-col outline-none ${minimized ? "hidden" : "flex"}`}
+    <div {...panelProps} className={`fixed inset-0 z-50 pt-[env(safe-area-inset-top)] bg-zinc-950 text-zinc-100 flex-col outline-none ${minimized ? "hidden" : "flex"}`}
       style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       <div className="border-b border-zinc-800 bg-zinc-900 px-4 pt-3 pb-2.5 shrink-0 space-y-2.5">
         <div className="flex items-center justify-between gap-2">

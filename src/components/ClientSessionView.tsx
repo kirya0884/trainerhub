@@ -237,7 +237,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   if (step === "feedback") {
     return (
       // С клавиатурой экран отзыва стоит в видимой над ней области: поле и «Отправить тренеру» не уходят под неё
-      <div data-workout className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col" style={{ "--accent": accent, ...(kb ? { top: kb.top, bottom: kb.bottom } : {}) } as React.CSSProperties}>
+      <div data-workout className="fixed inset-0 z-50 pt-[env(safe-area-inset-top)] bg-zinc-950 text-zinc-100 flex flex-col" style={{ "--accent": accent, ...(kb ? { top: kb.top, bottom: kb.bottom } : {}) } as React.CSSProperties}>
         {draftFailed && (
           <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
@@ -285,7 +285,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
 
   return (
     <div data-workout style={{ "--accent": accent } as React.CSSProperties}>
-    <div className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col" style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
+    <div className="fixed inset-0 z-50 pt-[env(safe-area-inset-top)] bg-zinc-950 text-zinc-100 flex flex-col" style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       {draftFailed && (
         <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />

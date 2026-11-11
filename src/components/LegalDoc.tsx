@@ -55,7 +55,7 @@ export function LegalPage({ slug, onClose }: { slug: DocSlug; onClose: () => voi
     return () => { document.title = prev; };
   }, [doc]);
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-4 py-6">
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-4 pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-6">
       <div className="max-w-2xl mx-auto">
         <button onClick={onClose} className="inline-flex items-center gap-1.5 text-sm text-zinc-400 hover:text-zinc-100 mb-4"><ArrowLeft size={16} /> Reps</button>
         <h1 className="text-2xl font-extrabold tracking-tight mb-4">{doc.title}</h1>

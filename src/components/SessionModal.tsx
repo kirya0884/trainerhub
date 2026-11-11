@@ -239,7 +239,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   // вне общего контейнера с text-zinc-100 — без своего цвета текст падал
   // на умолчание браузера и становился чёрным на тёмном фоне.
   return (
-    <div {...panelProps} className="fixed inset-0 z-50 bg-zinc-950 text-zinc-100 flex flex-col outline-none" style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
+    <div {...panelProps} className="fixed inset-0 z-50 pt-[env(safe-area-inset-top)] bg-zinc-950 text-zinc-100 flex flex-col outline-none" style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       {draftFailed && (
         <div className="shrink-0 flex items-start gap-2 bg-orange-400/10 border-b border-orange-400/25 px-4 py-2 text-[13px] text-orange-300">
           <AlertTriangle size={15} className="shrink-0 mt-0.5" />
