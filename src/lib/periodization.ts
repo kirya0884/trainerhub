@@ -1,13 +1,17 @@
 import { supabase } from "./supabase";
 import { parseNum } from "./format";
 import type { Day, Exercise, Mesocycle } from "../types";
+import { DELOAD_NOTE, MAX_REPS_BONUS, MESO_TEMPLATES, addReps, findTemplate, progressByTemplate, shiftReps, templateWeekLabel } from "./mesoTemplates";
 
 // Схема не хранится (выбирается в окне генератора), поэтому прежняя «Линейная + разгрузка»
 // просто слилась с «Линейной» — разгрузка каждую 4-ю неделю теперь есть в обеих схемах.
-export type MesoScheme = "linear" | "wave";
-export const MESO_SCHEMES: { value: MesoScheme; label: string }[] = [
-  { value: "linear", label: "Линейная: +2,5% в неделю, 4-я — разгрузка" },
-  { value: "wave", label: "Волна: база → объём → интенсивность → разгрузка" },
+// Кроме «Линейной» и «Волны» — шаблоны из mesoTemplates.ts (id шаблона).
+export type MesoScheme = string;
+/** weeks — длина шаблона: у фиксированных (fixed) столько недель и создаётся, у повторяющихся — по умолчанию */
+export const MESO_SCHEMES: { value: MesoScheme; label: string; hint?: string; weeks: number; fixed: boolean }[] = [
+  { value: "linear", label: "Линейная: +2,5% в неделю, 4-я — разгрузка", weeks: 4, fixed: false },
+  { value: "wave", label: "Волна: база → объём → интенсивность → разгрузка", weeks: 4, fixed: false },
+  ...MESO_TEMPLATES.map((t) => ({ value: t.id, label: t.label, hint: t.hint, weeks: t.repeat ? Math.max(4, t.weeks.length + 1) : t.weeks.length, fixed: !t.repeat })),
 ];
 
 /** Потолок: вес не выше +10% к весу из плана — дальше растут повторы */
@@ -19,7 +23,7 @@ const CAP = 1.1;
 // +7,5 % ≈ −3 повтора, усилие недели остаётся примерно тем же (расчёт по Nuzzo 2024, см.
 // CloudeCode/Агент-тренер/«Шаблоны прогрессий мезоциклов.md», Ш4). Раньше «интенсивность» давала
 // +7,5 % при тех же повторах — при неделе 1 с запасом 2 повтора план был невыполним.
-export function weekModifier(i: number, scheme: MesoScheme): { weightMult: number; setsDelta: number; repsShift: number; deload: boolean; label: string } {
+export function weekModifier(i: number, scheme: "linear" | "wave"): { weightMult: number; setsDelta: number; repsShift: number; deload: boolean; label: string } {
   const b = Math.floor(i / 4), k = i % 4, B = 1 + 0.025 * b;
   if (k === 3) return { weightMult: 0.9, setsDelta: 0, repsShift: 0, deload: true, label: `Нед. ${i + 1} · разгрузка` };
   if (scheme === "wave") {
@@ -30,24 +34,6 @@ export function weekModifier(i: number, scheme: MesoScheme): { weightMult: numbe
   return { weightMult: B * (1 + 0.025 * k), setsDelta: 0, repsShift: 0, deload: false, label: `Нед. ${i + 1}` };
 }
 
-/** +n к верхней границе повторов: «10» → «11», «8-12» → «8-13». Другое («до отказа», «2×20») — как есть. */
-const addReps = (reps: string, n: number) => {
-  const m = n ? reps.match(/^(\s*\d+\s*[-–—]\s*)?(\d+)(\s*)$/) : null;
-  return m ? `${m[1] ?? ""}${Number(m[2]) + n}${m[3]}` : reps;
-};
-
-/** Сдвиг обеих границ: «10» → «12», «8-12» → «5-9»; не ниже min. Другое — как есть. */
-const shiftReps = (reps: string, n: number, min: number) => {
-  const m = n ? reps.match(/^(\s*)(?:(\d+)(\s*[-–—]\s*))?(\d+)(\s*)$/) : null;
-  if (!m) return reps;
-  const hi = Math.max(min, Number(m[4]) + n);
-  const lo = m[2] != null ? Math.min(hi, Math.max(min, Number(m[2]) + n)) : null;
-  return lo != null && lo !== hi ? `${m[1]}${lo}${m[3]}${hi}${m[5]}` : `${m[1]}${hi}${m[5]}`;
-};
-
-const DELOAD_NOTE = "разгрузка, 4+ повтора в запасе";
-/** Двойная прогрессия: повторы растут не больше чем на +4 к исходной верхней границе */
-const MAX_REPS_BONUS = 4;
 
 /**
  * Вес/повторы/подходы/заметка одного упражнения на неделях 2..weeks (индексы 1..weeks-1).
@@ -61,6 +47,8 @@ const MAX_REPS_BONUS = 4;
  * Вес пишется с запятой, как его вводят («62,5»).
  */
 export function progressExercise(ex: Pick<Exercise, "weight" | "reps" | "sets" | "kind" | "note">, weeks: number, scheme: MesoScheme) {
+  const tpl = findTemplate(scheme);
+  if (tpl) return progressByTemplate(ex, weeks, tpl);
   const functional = ex.kind === "functional";
   // Вес меняем только у простого числа («60», «62,5 кг»): умножение исказит «-20», «40-50», «2×20»
   const w0 = !functional && /^\s*\d+(?:[.,]\d+)?\s*(?:кг)?\s*$/i.test(ex.weight) ? parseNum(ex.weight) : null;
@@ -73,7 +61,7 @@ export function progressExercise(ex: Pick<Exercise, "weight" | "reps" | "sets" |
   const out: { weight: string; reps: string; sets: string; note: string }[] = [];
   let prevW = w0, blockW = w0, bonus = 0;
   for (let i = 1; i < weeks; i++) {
-    const mod = weekModifier(i, scheme);
+    const mod = weekModifier(i, scheme === "wave" ? "wave" : "linear");
     if (lowReps && mod.repsShift < 0) { mod.weightMult *= 1.05 / 1.075; mod.repsShift = -2; }
     if (light && !mod.deload) {
       const stepW = round(w0! * Math.min(1 + 0.025 * Math.floor(i / 4), CAP));
@@ -137,9 +125,10 @@ export async function generateMesocycle(planId: string, baseDays: Day[], weeks: 
   let position = opts.dayCount;
   try {
     for (let w = 1; w < weeks; w++) {
-      const mod = weekModifier(w, scheme);
+      const tpl = findTemplate(scheme);
+      const label = tpl ? templateWeekLabel(tpl, w) : weekModifier(w, scheme === "wave" ? "wave" : "linear").label;
       const { data: mesoRow, error: mesoErr } = await supabase.from("plan_mesocycles")
-        .insert({ plan_id: planId, name: mod.label, position: 0, visible_to_client: srcVisible }).select("id").single();
+        .insert({ plan_id: planId, name: label, position: 0, visible_to_client: srcVisible }).select("id").single();
       if (mesoErr) throw mesoErr;
       createdMesos.push(mesoRow.id as string);
       for (const [di, day] of baseDays.entries()) {

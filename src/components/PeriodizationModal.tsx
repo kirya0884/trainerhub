@@ -20,6 +20,8 @@ export default function PeriodizationModal({ days, mesocycles, planId, onClose, 
   const source = sources.find((s) => (s.id ?? "") === src) ?? sources[0];
   const [weeks, setWeeks] = useState(4);
   const [scheme, setScheme] = useState<MesoScheme>("linear");
+  const info = MESO_SCHEMES.find((s) => s.value === scheme) ?? MESO_SCHEMES[0];
+  const pickScheme = (v: MesoScheme) => { setScheme(v); setWeeks(MESO_SCHEMES.find((s) => s.value === v)?.weeks ?? 4); };
   const [busy, setBusy] = useState(false);
 
   const run = async () => {
@@ -52,24 +54,30 @@ export default function PeriodizationModal({ days, mesocycles, planId, onClose, 
         )}
         <p className="text-zinc-400">{source ? `«${source.name}» (${source.days.length} дн.) — неделя 1. Для недель 2…${weeks} дни склонируются с прогрессией, каждая неделя станет своим блоком.` : "В плане нет дней."}</p>
         <div>
-          <p className="text-xs text-zinc-500 mb-1">Длительность мезоцикла (недель)</p>
+          <p className="text-xs text-zinc-500 mb-1">Длительность мезоцикла (недель){info.fixed ? " — задана шаблоном" : ""}</p>
           <div className="flex items-center gap-2">
-            <button onClick={() => setWeeks((w) => Math.max(2, w - 1))} disabled={weeks <= 2} className={stepBtn} aria-label="Меньше недель"><Minus size={16} /></button>
+            <button onClick={() => setWeeks((w) => Math.max(2, w - 1))} disabled={info.fixed || weeks <= 2} className={stepBtn} aria-label="Меньше недель"><Minus size={16} /></button>
             <span className="flex-1 text-center text-lg font-bold">{weeks}</span>
-            <button onClick={() => setWeeks((w) => Math.min(12, w + 1))} disabled={weeks >= 12} className={stepBtn} aria-label="Больше недель"><Plus size={16} /></button>
+            <button onClick={() => setWeeks((w) => Math.min(12, w + 1))} disabled={info.fixed || weeks >= 12} className={stepBtn} aria-label="Больше недель"><Plus size={16} /></button>
           </div>
         </div>
         <label className="text-xs text-zinc-500 block">Схема прогрессии
-          <select value={scheme} onChange={(e) => setScheme(e.target.value as MesoScheme)} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 outline-none focus:ring-1 focus:ring-lime-400/40">
+          <select value={scheme} onChange={(e) => pickScheme(e.target.value)} className="w-full mt-0.5 bg-zinc-800 rounded-xl px-2.5 py-2 outline-none focus:ring-1 focus:ring-lime-400/40">
             {MESO_SCHEMES.map((s) => <option key={s.value} value={s.value} className="bg-zinc-900">{s.label}</option>)}
           </select>
         </label>
+        {info.hint ? (
+          <p className="text-xs text-zinc-500 leading-relaxed">
+            {info.hint} Целевой запас повторов (RIR) пишется в заметку. Вес без числа не меняется — вместо прибавки +1 повтор (не больше +4). До 20 кг вес внутри цикла стоит, растут повторы. Вес округляется по снаряду: от 40 кг — до 2,5, от 20 — до 1, легче — до 0,5. У функциональных меняются только подходы.
+          </p>
+        ) : (
         <p className="text-xs text-zinc-500 leading-relaxed">
           {scheme === "wave"
             ? "Блок из 4 недель: база → объём (вес −5%, +1 подход, повторы +2) → интенсивность (вес +7,5%, −1 подход, повторы −3) → разгрузка. При 6 повторах и меньше «интенсивность» мягче: вес +5%, повторы −2, не меньше 2. Без веса «объём» даёт +2 повтора к верхней границе. Каждый следующий блок на 2,5% тяжелее."
             : "Блок из 4 недель: вес +2,5% каждую неделю, 4-я — разгрузка. Каждый следующий блок стартует на 2,5% выше."}
           {" "}Разгрузка: вес −10% (до 20 кг — с округлением вниз до целого), подходов вдвое меньше. Вес не выше +10% к плану — дальше растут повторы: +1 к верхней границе, не больше +4. До 20 кг внутри блока растут повторы, а с новым блоком вес делает шаг и повторы возвращаются к исходным. У функциональных меняются только подходы. «Разные подходы» прогрессируют построчно.
         </p>
+        )}
         <button onClick={run} disabled={busy || !source} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 hover:bg-lime-300 transition disabled:opacity-50">{busy ? "Генерация..." : `Создать недель: ${weeks - 1}`}</button>
       </div>
     </ModalShell>
