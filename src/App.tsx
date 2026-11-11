@@ -739,6 +739,7 @@ export default function App() {
             onClose={() => setShowAssistant(false)}
             onOpenPlan={(planId, clientId) => { logEvent(dataTrainerId, "view", "plan"); go({ kind: "plan", planId, clientId, from: "plans" }); }}
             onChanged={() => { reloadPlans(); bookingsHook.reload(); }}
+            onOpenTariffs={() => { setShowAssistant(false); setShowSubscription(true); }}
           />
         )}
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}

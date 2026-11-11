@@ -3,8 +3,29 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildCommand, commandPrompt, defaultDayName, matchClient, normTime, parseModelJson, resolveDate, todayIn, topNames,
+  buildCommand, commandPrompt, countUsage, defaultDayName, matchClient, normTime, parseModelJson, PLAN_LIMITS, resolveDate, todayIn, topNames,
+  usageWindow,
 } from "./logic.ts";
+
+test("лимит Старта: 15 в месяц и 3 в день", () => {
+  assert.deepEqual(PLAN_LIMITS.start, { month: 15, day: 3 });
+});
+
+test("календарный месяц и дата обновления", () => {
+  assert.deepEqual(usageWindow("2026-11-11"), { monthStart: "2026-11-01", resetsOn: "2026-12-01" });
+  assert.deepEqual(usageWindow("2026-12-31"), { monthStart: "2026-12-01", resetsOn: "2027-01-01" });
+});
+
+test("подсчёт за месяц и за день", () => {
+  const rows = [
+    { day: "2026-10-31", count: 3 }, // прошлый месяц — не считается
+    { day: "2026-11-01", count: 3 },
+    { day: "2026-11-05", count: 2 },
+    { day: "2026-11-11", count: 1 },
+  ];
+  assert.deepEqual(countUsage(rows, "2026-11-11", PLAN_LIMITS.start), { used: 6, limit: 15, dayUsed: 1, dayLimit: 3, resetsOn: "2026-12-01" });
+  assert.equal(countUsage([], "2026-11-11", PLAN_LIMITS.start).used, 0);
+});
 
 const TODAY = "2026-11-11"; // среда
 

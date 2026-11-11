@@ -5,7 +5,7 @@ import { registerModal } from "../lib/modalHistory";
 import { ask, askInput, notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 import {
-  askAssistant, assistantConnectedCached, assistantStatus, AssistantError, createWorkout, currentPlanId, findDayOnDate, fmtDayDate, fmtExercise, undoWorkout,
+  askAssistant, assistantConnectedCached, assistantStatus, AssistantError, createWorkout, currentPlanId, findDayOnDate, fmtDayDate, fmtDayMonth, fmtExercise, undoWorkout,
   type ACommand, type AExercise, type AUsage, type CreatedWorkout,
 } from "../lib/assistant";
 
@@ -36,7 +36,7 @@ type Msg =
 let seq = 0;
 const EXAMPLE = "Создай Анне тренировку на четверг в 18:00: жим лёжа 4 по 8, присед 5 по 5 сто килограмм";
 
-export default function AssistantChat({ trainerId, clients, plans, onClose, onOpenPlan, onChanged }: {
+export default function AssistantChat({ trainerId, clients, plans, onClose, onOpenPlan, onChanged, onOpenTariffs }: {
   trainerId: string;
   clients: ClientListItem[];
   plans: PlanOverviewItem[];
@@ -44,6 +44,8 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
   onOpenPlan: (planId: string, clientId: string) => void;
   /** Создали или отменили — перечитать планы и календарь */
   onChanged: () => void;
+  /** «Посмотреть тарифы», когда запросы закончились */
+  onOpenTariffs: () => void;
 }) {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
@@ -52,7 +54,7 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
   const [online, setOnline] = useState(navigator.onLine);
   // Пока на сервере нет ключа Яндекса — «в разработке»: объясняем и ничего не отправляем
   const [connected, setConnected] = useState(assistantConnectedCached);
-  useEffect(() => { assistantStatus().then((v) => { if (v !== null) setConnected(v); }); }, []);
+  useEffect(() => { assistantStatus().then((v) => { if (v) { setConnected(v.connected); if (v.usage) setUsage(v.usage); } }); }, []);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -119,6 +121,13 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
       setMsgs((l) => [...l.filter((m) => m.id !== id), { id, from: "card", card }]);
       if (card.clientId) refreshTarget(id, card.clientId, card.date);
     } catch (e) {
+      // Лимит — не ошибка в ленте, а карточка внизу (её рисует состояние usage); текст вернём в поле
+      if (e instanceof AssistantError && e.code === "limit") {
+        if (e.usage) setUsage(e.usage);
+        setText(t);
+        setMsgs((l) => l.filter((m) => !(m.from === "me" && m.text === t && m === l[l.length - 1])));
+        return;
+      }
       const msg = e instanceof AssistantError ? e.message : humanError(e);
       // Не отправилось — возвращаем текст в поле, чтобы не набирать заново
       if (!(e instanceof AssistantError) || e.code === "network") setText(t);
@@ -306,7 +315,11 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
     );
   };
 
-  const left = usage ? usage.limit - usage.used : null;
+  // Счётчик показываем с 80% месячного лимита: раньше он только тревожит
+  const monthOut = !!usage && usage.used >= usage.limit;
+  const dayOut = !!usage && !monthOut && usage.dayUsed >= usage.dayLimit;
+  const showCounter = !!usage && connected && usage.used >= usage.limit * 0.8;
+  const blocked = !connected || monthOut || dayOut;
 
   return (
     <div className="fixed inset-0 z-[60] bg-zinc-950 text-zinc-100 flex flex-col" style={{ height: "100dvh" }} role="dialog" aria-label="Помощник">
@@ -315,7 +328,12 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
           <button onClick={tryClose} aria-label="Закрыть помощника" className="w-11 h-11 flex items-center justify-center rounded-full text-zinc-400 hover:text-zinc-100"><ChevronLeft size={22} /></button>
           <span className="w-8 h-8 rounded-full bg-lime-400 text-zinc-950 flex items-center justify-center shrink-0"><Sparkles size={17} /></span>
           <h1 className="text-[17px] font-bold flex-1">Помощник</h1>
-          {left !== null && left < 5 && <span className="text-xs text-zinc-500 pr-2">Осталось {left} из {usage!.limit}</span>}
+          {showCounter && (
+            <span className="flex items-center gap-2 pr-2 text-xs text-zinc-400" title="Запросов помощнику в этом месяце">
+              <span className="w-16 h-1.5 rounded-full bg-zinc-800 overflow-hidden"><span className="block h-full rounded-full bg-amber-400" style={{ width: `${Math.min(100, (usage!.used / usage!.limit) * 100)}%` }} /></span>
+              {usage!.used} из {usage!.limit}
+            </span>
+          )}
         </div>
 
         <div ref={listRef} className="flex-1 overflow-y-auto px-3 pb-4 space-y-2.5 min-h-0">
@@ -352,6 +370,22 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
             </div>
           ))}
 
+          {connected && (monthOut || dayOut) && (
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3.5 space-y-2" role="status">
+              <p className="text-[15px] font-bold">{monthOut ? "Запросы на этот месяц закончились" : "На сегодня запросы закончились"}</p>
+              <p className="text-sm text-zinc-400 leading-relaxed">
+                {monthOut
+                  ? `На тарифе Старт — ${usage!.limit} запросов в месяц, новые появятся ${fmtDayMonth(usage!.resetsOn)}.`
+                  : `На тарифе Старт — ${usage!.dayLimit} запроса в день. Завтра можно снова.`}
+              </p>
+              <p className="text-sm text-zinc-500 leading-relaxed">Тренировку можно создать и без помощника: «Добавить день» в плане клиента.</p>
+              <div className="flex gap-2 pt-1">
+                <button onClick={onOpenTariffs} className="h-11 px-4 rounded-xl bg-lime-400 text-zinc-950 text-sm font-bold">Посмотреть тарифы</button>
+                <button onClick={tryClose} className="h-11 px-3 rounded-xl bg-zinc-800 text-sm font-semibold">Позже</button>
+              </div>
+            </div>
+          )}
+
           {busy && (
             <div className="flex gap-2 items-end" aria-live="polite">
               <span className="w-7 h-7 rounded-full bg-lime-400 text-zinc-950 flex items-center justify-center shrink-0"><Sparkles size={14} /></span>
@@ -370,13 +404,13 @@ export default function AssistantChat({ trainerId, clients, plans, onClose, onOp
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
               rows={1}
               maxLength={2000}
-              disabled={!connected}
-              placeholder={!connected ? "Скоро заработает" : openCard() ? "Исправить или добавить…" : "Сообщение…"}
+              disabled={blocked}
+              placeholder={!connected ? "Скоро заработает" : monthOut ? `Запросы закончились до ${fmtDayMonth(usage!.resetsOn)}` : dayOut ? "На сегодня запросы закончились" : openCard() ? "Исправить или добавить…" : "Сообщение…"}
               aria-label="Команда помощнику"
               className="flex-1 min-w-0 resize-none bg-zinc-900 rounded-3xl px-4 py-[11px] text-[15px] leading-snug outline-none max-h-36 placeholder:text-zinc-600 focus:ring-1 focus:ring-lime-400/40"
               style={{ fieldSizing: "content" } as React.CSSProperties}
             />
-            <button onClick={send} disabled={!connected || !text.trim() || busy || !online} aria-label="Отправить"
+            <button onClick={send} disabled={blocked || !text.trim() || busy || !online} aria-label="Отправить"
               className="w-11 h-11 rounded-full bg-lime-400 text-zinc-950 flex items-center justify-center shrink-0 disabled:bg-zinc-800 disabled:text-zinc-600">
               <ArrowUp size={20} />
             </button>

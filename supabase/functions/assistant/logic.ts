@@ -86,6 +86,30 @@ const WEEKDAYS = ["понедельник", "вторник", "среда", "ч�
 const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
 
 export const MAX_COMMAND_CHARS = 2000;
+
+// Лимиты запросов по тарифам (reps-redesign/assistant-limits.html). Оплаты подписки пока нет —
+// все тренеры на «Старте» (решение владельца 11.11.2026). Платные тарифы — когда появится биллинг.
+export const PLAN_LIMITS = { start: { month: 15, day: 3 } } as const;
+export type Usage = { used: number; limit: number; dayUsed: number; dayLimit: number; resetsOn: string };
+
+// Месяц — календарный: с 1-го числа по московскому дню. resetsOn — когда лимит обновится.
+export function usageWindow(day: string): { monthStart: string; resetsOn: string } {
+  const [y, m] = day.split("-").map(Number);
+  const next = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`;
+  return { monthStart: `${day.slice(0, 7)}-01`, resetsOn: next };
+}
+
+/** Сколько использовано за месяц и за день по строкам assistant_usage (день → число) */
+export function countUsage(rows: { day: string; count: number }[], day: string, limits: { month: number; day: number }): Usage {
+  const { monthStart, resetsOn } = usageWindow(day);
+  let used = 0, dayUsed = 0;
+  for (const r of rows) {
+    if (r.day < monthStart || r.day > day) continue;
+    used += r.count;
+    if (r.day === day) dayUsed = r.count;
+  }
+  return { used, limit: limits.month, dayUsed, dayLimit: limits.day, resetsOn };
+}
 export const MAX_KNOWN_EXERCISES = 300;
 
 // Сегодняшняя дата в часовом поясе тренера: "2026-11-11"

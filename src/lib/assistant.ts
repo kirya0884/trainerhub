@@ -19,10 +19,11 @@ export type ACommand = {
   dayName: string;
   exercises: AExercise[];
 };
-export type AUsage = { used: number; limit: number };
+/** Запросы помощнику: за календарный месяц и за день; resetsOn — когда обновится месячный */
+export type AUsage = { used: number; limit: number; dayUsed: number; dayLimit: number; resetsOn: string };
 
 export class AssistantError extends Error {
-  constructor(message: string, readonly code: "not_connected" | "limit" | "server" | "network") { super(message); }
+  constructor(message: string, readonly code: "not_connected" | "limit" | "server" | "network", readonly usage?: AUsage) { super(message); }
 }
 
 // Подключён ли помощник (на сервере есть ключ Яндекса). Пока нет — функция «в разработке»:
@@ -30,7 +31,7 @@ export class AssistantError extends Error {
 // «Главной» не требовала запроса при каждом открытии; обновляется при входе в помощника.
 const CONNECTED_KEY = "reps-assistant-connected";
 export const assistantConnectedCached = () => readJson<boolean>(CONNECTED_KEY, false) === true;
-export async function assistantStatus(): Promise<boolean | null> {
+export async function assistantStatus(): Promise<{ connected: boolean; usage: AUsage | null } | null> {
   const { data: { session } } = await supabase.auth.getSession();
   try {
     const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/assistant`, {
@@ -42,7 +43,7 @@ export async function assistantStatus(): Promise<boolean | null> {
     const data = await res.json().catch(() => ({}));
     if (!res.ok || typeof data?.connected !== "boolean") return null;
     writeJson(CONNECTED_KEY, data.connected);
-    return data.connected;
+    return { connected: data.connected, usage: data.usage ?? null };
   } catch (e) {
     console.warn("[assistant] status:", e);
     return null; // нет сети — не знаем; экран решит по сохранённому
@@ -66,7 +67,7 @@ export async function askAssistant(text: string, previous?: { text: string; resu
   }
   const data = await res.json().catch(() => ({}));
   if (res.status === 503) throw new AssistantError("Помощник ещё не подключён", "not_connected");
-  if (res.status === 429) throw new AssistantError("На сегодня разборы закончились. Завтра лимит обновится", "limit");
+  if (res.status === 429) throw new AssistantError("Запросы закончились", "limit", data?.usage);
   if (!res.ok || !data?.result) throw new AssistantError(data?.error || "Помощник сейчас недоступен, попробуй через минуту", "server");
   return { result: data.result as ACommand, usage: data.usage as AUsage };
 }
@@ -188,6 +189,9 @@ export function fmtDayDate(iso: string): string {
   const wd = WD[new Date(y, m - 1, d).getDay()];
   return `${wd[0].toUpperCase()}${wd.slice(1)}, ${d} ${MONTHS[m - 1]}`;
 }
+
+/** «1 декабря» */
+export const fmtDayMonth = (iso: string) => fmtDayDate(iso).split(", ")[1] ?? iso;
 
 /** «4 × 8 · 100 кг» */
 export function fmtExercise(e: AExercise): string {

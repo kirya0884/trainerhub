@@ -9,7 +9,8 @@
 // Сам текст команды в журнал не пишем, только размеры и счётчик токенов.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  buildCommand, commandPrompt, COMMAND_SCHEMA, MAX_COMMAND_CHARS, parseModelJson, todayIn, topNames,
+  buildCommand, commandPrompt, COMMAND_SCHEMA, countUsage, MAX_COMMAND_CHARS, parseModelJson, PLAN_LIMITS, todayIn, topNames,
+  usageWindow,
 } from "./logic.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -18,7 +19,6 @@ const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const YANDEX_API_KEY = Deno.env.get("YANDEX_API_KEY") ?? "";
 const YANDEX_FOLDER_ID = Deno.env.get("YANDEX_FOLDER_ID") ?? "";
 const YANDEX_GPT_MODEL = Deno.env.get("YANDEX_GPT_MODEL") || "yandexgpt/latest";
-const DAILY_LIMIT = Number(Deno.env.get("ASSISTANT_DAILY_LIMIT")) || 20;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -71,10 +71,22 @@ Deno.serve(async (req) => {
     const { data: trainer } = await db.from("trainers").select("id").eq("id", uid).maybeSingle();
     if (!trainer) return json({ error: "Помощник доступен только тренеру" }, 403);
     const body = await req.json().catch(() => ({}));
+
+    // Лимит: месяц по календарю и день — по московскому дню, чтобы смена пояса в телефоне его не обнуляла.
+    // Месячный — сумма дневных строк; дневной берётся атомарно (assistant_take). Два запроса
+    // одновременно в конце месяца могут превысить месячный на единицу — это ограничено дневным.
+    const limits = PLAN_LIMITS.start;
+    const usageDay = todayIn("Europe/Moscow");
+    const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
+    const { data: usageRows, error: usageErr } = await admin.from("assistant_usage").select("day,count")
+      .eq("trainer_id", uid).gte("day", usageWindow(usageDay).monthStart);
+    if (usageErr) throw usageErr;
+    const usage = countUsage(usageRows ?? [], usageDay, limits);
+
     // Ключ проверяем после входа: посторонним не сообщаем, подключён ли помощник.
-    // status — приложение спрашивает, открыт ли помощник (пока нет ключа — «в разработке»)
+    // status — приложение спрашивает, открыт ли помощник (пока нет ключа — «в разработке») и сколько осталось
     const connected = !!(YANDEX_API_KEY && YANDEX_FOLDER_ID);
-    if (body?.mode === "status") return json({ ok: true, connected });
+    if (body?.mode === "status") return json({ ok: true, connected, usage });
     if (!connected) return json({ error: "Помощник ещё не подключён" }, 503);
     if (body?.mode !== "command") return json({ error: "Неизвестный режим" }, 400);
     const text = typeof body?.text === "string" ? body.text.trim() : "";
@@ -96,12 +108,10 @@ Deno.serve(async (req) => {
     const clients = (clientsRes.data ?? []) as { id: string; name: string }[];
     const known = topNames([...(exRes.data ?? []), ...(libRes.data ?? [])].map((r: any) => r.name));
 
-    // Лимит считаем по московскому дню, чтобы смена пояса в телефоне его не обнуляла
-    const usageDay = todayIn("Europe/Moscow");
-    const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
-    const { data: used, error: takeErr } = await admin.rpc("assistant_take", { p_trainer: uid, p_day: usageDay, p_limit: DAILY_LIMIT });
+    if (usage.used >= usage.limit) return json({ error: "limit", reason: "month", usage }, 429);
+    const { data: dayNow, error: takeErr } = await admin.rpc("assistant_take", { p_trainer: uid, p_day: usageDay, p_limit: limits.day });
     if (takeErr) throw takeErr;
-    if (used == null) return json({ error: "limit", usage: { used: DAILY_LIMIT, limit: DAILY_LIMIT } }, 429);
+    if (dayNow == null) return json({ error: "limit", reason: "day", usage: { ...usage, dayUsed: limits.day } }, 429);
     const refund = () => admin.rpc("assistant_refund", { p_trainer: uid, p_day: usageDay });
 
     const messages: Msg[] = [{ role: "system", text: commandPrompt(today, known) }];
@@ -127,9 +137,10 @@ Deno.serve(async (req) => {
     }
     const result = buildCommand(raw, today, clients, known);
     // Не команда («спасибо», шум) — разбор не засчитываем
-    const usedNow = result.action === "unknown" ? (await refund(), used - 1) : used;
+    const counted = result.action !== "unknown";
+    if (!counted) await refund();
     console.log(`[assistant] command chars=${text.length} tokens=${answer.tokens} action=${result.action} ex=${result.exercises.length} client=${result.client.status}`);
-    return json({ ok: true, result, usage: { used: usedNow, limit: DAILY_LIMIT } });
+    return json({ ok: true, result, usage: { ...usage, used: usage.used + (counted ? 1 : 0), dayUsed: dayNow - (counted ? 0 : 1) } });
   } catch (e) {
     console.error("[assistant]", String((e as any)?.message || e));
     return json({ error: "Ошибка помощника" }, 500);
