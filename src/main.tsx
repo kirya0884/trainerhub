@@ -14,6 +14,22 @@ import { registerSW } from "virtual:pwa-register";
 import { beforeReload, hasUnsaved } from "./lib/unsavedGuard";
 // Ловим «можно установить» (Android) с самого старта — кабинет клиента загрузится позже события
 import "./lib/install";
+import { trackError } from "./lib/events";
+import { isNetworkError } from "./lib/outbox";
+
+// Ошибки с телефонов — в журнал событий (см. trackError). Сбои сети и шум браузера не пишем.
+const noise = /ResizeObserver loop|^Script error.?$|Load failed|Failed to fetch|NetworkError|AbortError/i;
+window.addEventListener("error", (e) => {
+  if (!noise.test(e.message)) trackError("error", e.message, { at: `${(e.filename || "").split("/").pop()}:${e.lineno}` });
+});
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e.reason as { message?: string; name?: string } | undefined;
+  const msg = r?.message ?? String(r);
+  if (!noise.test(msg) && !noise.test(r?.name ?? "") && !isNetworkError(r)) trackError("promise", msg);
+});
+document.addEventListener("securitypolicyviolation", (e) => {
+  trackError("csp", `${e.effectiveDirective} ${e.blockedURI}`.slice(0, 200));
+});
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

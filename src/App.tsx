@@ -166,7 +166,7 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pw.length < 6) { setMsg("Минимум 6 символов"); return; }
+    if (pw.length < 8) { setMsg("Минимум 8 символов"); return; }
     if (pw !== pw2) { setMsg("Пароли не совпадают"); return; }
     setBusy(true);
     const { data, error } = await supabase.auth.updateUser({ password: pw });

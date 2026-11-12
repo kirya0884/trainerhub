@@ -11,7 +11,7 @@ import { isNetworkError } from "./outbox";
 // Кто сейчас работает (тренер или клиент) задаёт setAnalyticsContext — App для тренера,
 // кабинет для клиента; track() пишет событие от его имени. Каждое событие несёт сеанс
 // (перерыв больше 30 минут — новый) и устройство — для метрик админ-панели.
-export type AppEvent = "view" | "open_client" | "create" | "search" | "action" | "session";
+export type AppEvent = "view" | "open_client" | "create" | "search" | "action" | "session" | "error";
 
 type Ctx = { actor: "trainer"; trainerId: string } | { actor: "client"; trainerId: string; clientId: string };
 let ctx: Ctx | null = null;
@@ -65,4 +65,15 @@ export function track(event: AppEvent, target?: string, meta?: Record<string, st
 export function logEvent(trainerId: string, event: AppEvent, target?: string, meta?: Record<string, string | number | boolean>) {
   if (!trainerId) return;
   insert({ trainer_id: trainerId, actor: "trainer", event, target: target ?? null, meta: meta ?? {} });
+}
+
+// Ошибки на телефонах: падения экрана, необработанные ошибки и нарушения CSP. Пишем в тот же
+// журнал (event = "error", target — вид). Без входа не пишем; за загрузку страницы — не больше
+// 10 записей, одинаковые — один раз. Адрес — без параметров (в них бывает токен приглашения).
+const seenErrors = new Set<string>();
+export function trackError(kind: "crash" | "error" | "promise" | "csp", message: string, extra: Record<string, string | number> = {}) {
+  const msg = String(message || "").slice(0, 300);
+  if (!ctx || !msg || seenErrors.size >= 10 || seenErrors.has(kind + msg)) return;
+  seenErrors.add(kind + msg);
+  track("error", kind, { msg, v: __APP_VERSION__, path: location.hash.split("?")[0].slice(0, 80), ...extra });
 }

@@ -10,7 +10,8 @@ const TARGETS: Record<string, string> = {
   recipe: "Рецепт создан", recipe_edit: "Рецепт изменён", offline_queued: "Без сети: отложено", offline_sent: "Без сети: дослано",
   open_booking: "Открыта запись", start_workout: "Тренировка начата (старое)",
 };
-const EVENTS: Record<string, string> = { view: "Экран", open_client: "Открыт подопечный", create: "Создание", search: "Поиск", action: "Действие", session: "Сеанс" };
+const EVENTS: Record<string, string> = { view: "Экран", open_client: "Открыт подопечный", create: "Создание", search: "Поиск", action: "Действие", session: "Сеанс", error: "Ошибка" };
+const ERRORS: Record<string, string> = { crash: "падение экрана", error: "ошибка", promise: "ошибка", csp: "заблокировано CSP" };
 
 export const eventLabel = (event: string, target: string | null) => {
   if (event === "open_client") return "Открыт подопечный";
@@ -18,6 +19,7 @@ export const eventLabel = (event: string, target: string | null) => {
   if (event === "view") return t ? `Экран: ${t}` : "Экран";
   if (event === "create") return `Создание: ${target === "client" ? "подопечный" : target === "plan" ? "план" : target === "booking" ? "запись" : t}`;
   if (event === "search") return "Поиск";
+  if (event === "error") return `Ошибка: ${ERRORS[target ?? ""] ?? target ?? ""}`;
   return t || EVENTS[event] || event;
 };
 

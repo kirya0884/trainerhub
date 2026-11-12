@@ -116,7 +116,7 @@ export default function AuthScreen() {
                       <button type="button" onClick={() => { setForgotPw(true); resetMsg(); }} className="text-sm text-zinc-400 hover:text-zinc-100">Забыл пароль?</button>
                     )}
                   </div>
-                  <input id="auth-password" type="password" autoComplete={mode === "trainer" && isSignup ? "new-password" : "current-password"} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === "trainer" && isSignup ? "Минимум 6 символов" : ""} className={inputCls} />
+                  <input id="auth-password" type="password" autoComplete={mode === "trainer" && isSignup ? "new-password" : "current-password"} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === "trainer" && isSignup ? "Минимум 8 символов" : ""} className={inputCls} />
                 </div>
               )}
               {needsConsent && (

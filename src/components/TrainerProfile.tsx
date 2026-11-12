@@ -243,7 +243,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           <button
             disabled={pwBusy || !newPw}
             onClick={async () => {
-              if (newPw.length < 6) { setPwMsg("Минимум 6 символов"); return; }
+              if (newPw.length < 8) { setPwMsg("Минимум 8 символов"); return; }
               if (newPw !== newPw2) { setPwMsg("Пароли не совпадают"); return; }
               setPwBusy(true); setPwMsg("");
               const { error } = await supabase.auth.updateUser({ password: newPw });

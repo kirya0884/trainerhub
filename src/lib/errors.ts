@@ -9,7 +9,7 @@ export function humanError(e: unknown, fallback = "Не получилось. П
   if (/email not confirmed/i.test(msg)) return "Email не подтверждён — проверь почту и перейди по ссылке из письма";
   if (/user already registered/i.test(msg)) return "Аккаунт с таким email уже есть — войди";
   if (/new password should be different/i.test(msg)) return "Новый пароль должен отличаться от старого";
-  if (/password should be at least|password is too short/i.test(msg)) return "Пароль слишком короткий (минимум 6 символов)";
+  if (/password should be at least|password is too short/i.test(msg)) return "Пароль слишком короткий (минимум 8 символов)";
   if (/password should contain|weak password/i.test(msg)) return "Пароль слишком простой — добавь цифры и буквы разного регистра";
   if (/for security purposes|rate limit|too many/i.test(msg)) return "Слишком много попыток — подожди минуту и попробуй снова";
   if (/invalid format|email address .*is invalid|unable to validate email/i.test(msg)) return "Проверь email — похоже, в адресе ошибка";

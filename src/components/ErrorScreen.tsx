@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from "react";
+import { trackError } from "../lib/events";
 
 // Последний рубеж: любая ошибка отрисовки раньше давала белый экран без выхода.
 // Теперь — понятный экран и перезагрузка. Введённое в тренировке лежит в черновиках
@@ -6,7 +7,7 @@ import { Component, type ReactNode } from "react";
 export default class ErrorScreen extends Component<{ children: ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
-  componentDidCatch(e: unknown) { console.error("[ErrorScreen]", e); }
+  componentDidCatch(e: unknown) { console.error("[ErrorScreen]", e); trackError("crash", e instanceof Error ? `${e.name}: ${e.message}` : String(e)); }
   render() {
     if (!this.state.failed) return this.props.children;
     return (
