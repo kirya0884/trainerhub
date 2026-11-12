@@ -674,7 +674,7 @@ export default function App() {
     {splash && <SplashScreen onDone={() => setSplash(false)} ready={!loading && selfClient !== undefined && isTrainer !== undefined && trainerPin !== undefined} />}
     <ActiveWorkoutProvider key={session.user.id} userId={session.user.id}>
     <PinGate id={session.user.id} hasPin={trainerPin} onUnlock={() => setPinPassedId(session.user.id)}>
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-36 sm:pb-36" style={{ "--accent": trainerAccent } as React.CSSProperties}>
+    <div className="min-h-screen bg-zinc-950 text-zinc-100 px-3 sm:px-4 pt-[calc(env(safe-area-inset-top)+1rem)] sm:pt-[calc(env(safe-area-inset-top)+1.5rem)] pb-[calc(env(safe-area-inset-bottom)+12.5rem)]" style={{ "--accent": trainerAccent } as React.CSSProperties}>
       <div className="max-w-2xl mx-auto space-y-4"
         style={swipeDx ? { transform: `translateX(${swipeDx}px)`, transition: "none" } : { transition: "transform .18s ease-out" }}>
         {/* B30: одна строка вместо двух — логотип вместо надписи «Reps», профиль и подписка
