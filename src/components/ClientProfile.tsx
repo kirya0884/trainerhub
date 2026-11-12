@@ -1059,7 +1059,7 @@ function MembershipTab({ client, patchMembership, setMembership, clientId, train
                 {payMenu === p.id && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={() => setPayMenu(null)} />
-                    <div className="absolute right-2 top-full -mt-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-48 shadow-xl">
+                    <div className="absolute right-2 bottom-full -mb-1 z-20 bg-zinc-900 border border-zinc-800 rounded-xl p-1.5 w-48 shadow-xl">
                       <button onClick={() => { setPayMenu(null); setReceipt(p); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Printer size={15} className="text-zinc-500" /> Чек</button>
                       <button onClick={() => { setPayMenu(null); editPayment(p); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Pencil size={15} className="text-zinc-500" /> Изменить</button>
                       <button onClick={() => { setPayMenu(null); splitPayment(p); }} className="w-full flex items-center gap-2.5 px-2.5 h-10 rounded-lg text-sm text-zinc-200 hover:bg-zinc-800 transition"><Scissors size={15} className="text-zinc-500" /> Разбить</button>
