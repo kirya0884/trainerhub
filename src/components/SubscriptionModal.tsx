@@ -1,5 +1,7 @@
-import { Sparkles } from "lucide-react";
-import { useState } from "react";
+import { Copy, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { TIER_NAMES, fetchMySub, lastMySub, subLabel, type MySub } from "../lib/subscription";
+import { notify } from "../lib/dialog";
 import ModalShell from "./ModalShell";
 
 type Period = 1 | 3 | 12;
@@ -72,12 +74,29 @@ function calcPrice(monthly: number, period: Period): { perMonth: number; total: 
   return { perMonth, total: perMonth * period };
 }
 
-export default function SubscriptionModal({ onClose }: { onClose: () => void }) {
+export default function SubscriptionModal({ trainerId, onClose }: { trainerId: string; onClose: () => void }) {
   const [period, setPeriod] = useState<Period>(1);
+  const [sub, setSub] = useState<MySub | null>(() => lastMySub(trainerId));
+  useEffect(() => { fetchMySub(trainerId).then(setSub); }, [trainerId]);
+  const current = sub?.tier ?? "start";
+  const copyId = () => { if (sub) navigator.clipboard?.writeText(sub.public_id).then(() => notify("ID скопирован"), () => notify(`Твой ID: ${sub.public_id}`)); };
 
   return (
     <ModalShell title="Подписка на Reps" icon={<Sparkles size={17} className="text-lime-400" />} onClose={onClose} wide>
       <div className="overflow-y-auto p-4 space-y-4">
+        {/* Этап 13: ID — его называют, когда подписку выдают вручную (бартер, подарок) */}
+        {sub && (
+          <div className="flex items-center gap-3 bg-zinc-800/60 border border-zinc-700 rounded-2xl p-3.5">
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] text-zinc-400">Сейчас</p>
+              <p className="font-bold">{TIER_NAMES[sub.tier]}</p>
+              {sub.tier !== "start" && <p className="text-[13px] text-zinc-400">{subLabel(sub).replace(TIER_NAMES[sub.tier] + " ", "")}</p>}
+            </div>
+            <button onClick={copyId} className="h-11 px-3 rounded-xl bg-zinc-900 text-sm font-semibold inline-flex items-center gap-2 hover:text-lime-400 transition shrink-0" aria-label="Скопировать ID">
+              <span className="text-zinc-400 font-normal">ID</span> {sub.public_id} <Copy size={15} className="text-zinc-500" />
+            </button>
+          </div>
+        )}
         {/* Period switcher */}
         <div className="flex gap-1 bg-zinc-800 rounded-xl p-1 w-fit mx-auto">
           {PERIODS.map((p) => (
@@ -146,9 +165,9 @@ export default function SubscriptionModal({ onClose }: { onClose: () => void }) 
                 {/* ponytail: кнопка не делает ничего — оплата подключится позже */}
                 <button
                   onClick={() => {}}
-                  className={`w-full rounded-xl py-2.5 text-sm font-semibold transition ${plan.ctaClass}`}
+                  className={`w-full rounded-xl py-2.5 text-sm font-semibold transition ${plan.id === current ? PLANS[0].ctaClass : plan.id === "start" ? "bg-zinc-800 text-zinc-500 cursor-default" : plan.ctaClass}`}
                 >
-                  {plan.cta}
+                  {plan.id === current ? "Текущий тариф" : plan.id === "start" ? "Бесплатно" : plan.cta}
                 </button>
               </div>
             );

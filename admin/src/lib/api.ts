@@ -14,6 +14,7 @@ export type RetentionRow = { cohort: string; size: number; k: number; active: nu
 export type TrainerRow = {
   id: string; name: string; email: string; signed_up: string; last_active: string | null; active_days: number; events: number;
   clients: number; portal_clients: number; active_clients: number; workouts: number; client_workouts: number; gmv: number; tier: string;
+  public_id: string; sub: Sub;
 };
 
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
@@ -59,3 +60,22 @@ export const trainer = (id: string, r: Range) => rpc<{
   recent: { ts: string; actor: string; kind: string; device: string | null }[];
   kinds: { kind: string; n: number }[];
 }>("admin_trainer", { p_id: id, p_from: r.from, p_to: r.to, p_tz: r.tz });
+
+// Подписки (этап 13): выдаются вручную — бартер, подарок, разработчику; позже — оплата
+export type Tier = "start" | "basic" | "pro" | "studio";
+export type Source = "paid" | "barter" | "gift" | "developer" | "trial";
+/** Действующая подписка; tier = start — подписки нет */
+export type Sub = { tier: Tier; source?: Source; starts_at?: string; ends_at?: string | null };
+export type FoundTrainer = { id: string; public_id: string; email: string | null; name: string; created_at: string; sub: Sub };
+export type Grant = {
+  id: string; trainer_id: string; tier: Exclude<Tier, "start">; source: Source; starts_at: string; ends_at: string | null;
+  note: string; created_at: string; revoked_at: string | null;
+};
+export type ActiveGrant = Grant & { public_id: string; email: string | null; name: string };
+
+export const findTrainer = (q: string) => rpc<FoundTrainer | null>("admin_find_trainer", { p_query: q });
+export const trainerGrants = (id: string) => rpc<Grant[]>("admin_trainer_subscriptions", { p_trainer: id });
+export const activeGrants = () => rpc<ActiveGrant[]>("admin_active_subscriptions", {});
+export const grantSub = (p: { trainer: string; tier: Grant["tier"]; source: Source; starts: string | null; ends: string | null; note: string }) =>
+  rpc<string>("admin_grant_subscription", { p_trainer: p.trainer, p_tier: p.tier, p_source: p.source, p_starts: p.starts, p_ends: p.ends, p_note: p.note });
+export const revokeSub = (id: string) => rpc<void>("admin_revoke_subscription", { p_id: id });

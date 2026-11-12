@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { BarChart3, Briefcase, Filter, Gauge, LogOut, Moon, Repeat2, Sparkles, Sun, Users, Zap } from "lucide-react";
+import { BadgeCheck, BarChart3, Briefcase, Filter, Gauge, LogOut, Moon, Repeat2, Sparkles, Sun, Users, Zap } from "lucide-react";
 import { supabase } from "./lib/supabase";
 import * as api from "./lib/api";
 import type { Grain, Range } from "./lib/api";
@@ -13,10 +13,11 @@ import FunnelPage from "./pages/FunnelPage";
 import Features from "./pages/Features";
 import Business from "./pages/Business";
 import Trainers from "./pages/Trainers";
+import Subscriptions from "./pages/Subscriptions";
 
 const PAGES = [
   ["overview", "Обзор", Gauge], ["engagement", "Вовлечённость", Zap], ["retention", "Удержание", Repeat2], ["funnel", "Воронка", Filter],
-  ["features", "Функции", Sparkles], ["business", "Бизнес", Briefcase], ["trainers", "Тренеры", Users],
+  ["features", "Функции", Sparkles], ["business", "Бизнес", Briefcase], ["trainers", "Тренеры", Users], ["subs", "Подписки", BadgeCheck],
 ] as const;
 type Page = (typeof PAGES)[number][0];
 type Preset = "7" | "30" | "90" | "365" | "all" | "custom";
@@ -78,7 +79,7 @@ function Shell({ email }: { email: string }) {
     return { from, to, grain: g, ex, tz: tz() };
   }, [from, to, grain, ex]);
 
-  const P = { overview: Overview, engagement: Engagement, retention: Retention, funnel: FunnelPage, features: Features, business: Business, trainers: Trainers }[page];
+  const P = { overview: Overview, engagement: Engagement, retention: Retention, funnel: FunnelPage, features: Features, business: Business, trainers: Trainers, subs: Subscriptions }[page];
 
   return (
     <div className="min-h-screen lg:flex">
@@ -113,7 +114,8 @@ function Shell({ email }: { email: string }) {
         <div className="sticky top-0 z-20 bg-bg/85 backdrop-blur border-b border-line">
           <div className="max-w-[1400px] mx-auto px-4 py-3 flex flex-wrap items-center gap-2">
             <h1 className="text-xl font-extrabold tracking-tight mr-2">{PAGES.find(([k]) => k === page)![1]}</h1>
-            <div className="flex flex-wrap items-center gap-2 ml-auto">
+            {/* У подписок период не нужен */}
+            {page !== "subs" && <div className="flex flex-wrap items-center gap-2 ml-auto">
               <Seg value={preset} options={PRESETS} onChange={setPreset} />
               {preset === "custom" && (
                 <div className="flex items-center gap-1.5 text-[13px]">
@@ -126,7 +128,7 @@ function Shell({ email }: { email: string }) {
               <label className="h-8 px-3 rounded-xl bg-surface2 border border-line flex items-center gap-2 text-[13px] font-semibold cursor-pointer select-none" title="Ваш собственный аккаунт тренера (админа) не учитывается в цифрах">
                 <input type="checkbox" checked={ex} onChange={(e) => setEx(e.target.checked)} className="accent-[rgb(var(--accent))]" /> Без моего аккаунта
               </label>
-            </div>
+            </div>}
           </div>
         </div>
         <div className="max-w-[1400px] mx-auto px-4 py-5 pb-16">

@@ -753,7 +753,7 @@ export default function App() {
         {showBackup && <BackupModal trainerId={session.user.id} onClose={() => setShowBackup(false)} />}
         {showPinSettings && <Suspense fallback={null}><PinSettingsModal onClose={() => setShowPinSettings(false)} onChanged={setTrainerPin} /></Suspense>}
         {showTrash && <TrashModal trainerId={session.user.id} onClose={() => setShowTrash(false)} />}
-        {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
+        {showSubscription && <SubscriptionModal trainerId={session.user.id} onClose={() => setShowSubscription(false)} />}
         {/* Этап 12: новый раздел мягко проявляется (только прозрачность — без сдвига, см. index.css) */}
         <div key={view.kind} className="anim-screen">
         {view.kind === "dashboard" && (

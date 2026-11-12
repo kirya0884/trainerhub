@@ -7,6 +7,7 @@ import { ago, fmtDateTime, fmtDay, n0, rub } from "../lib/format";
 import { DEVICES, TIERS, kindLabel } from "../lib/labels";
 import { Card, ChartCard, Kpi, Skeleton } from "../components/ui";
 import { Bars, HBars } from "../components/charts";
+import { subText } from "./Subscriptions";
 
 type Col = { key: keyof TrainerRow; label: string; num?: boolean; fmt?: (r: TrainerRow) => string };
 const COLS: Col[] = [
@@ -20,7 +21,9 @@ const COLS: Col[] = [
   { key: "workouts", label: "Тренировок", num: true },
   { key: "client_workouts", label: "Сами клиенты", num: true },
   { key: "gmv", label: "Оборот", num: true, fmt: (r) => rub(Number(r.gmv)) },
-  { key: "tier", label: "Тариф", fmt: (r) => TIERS[r.tier] ?? r.tier },
+  { key: "public_id", label: "ID" },
+  { key: "sub", label: "Подписка", fmt: (r) => r.sub.tier === "start" ? "—" : `${TIERS[r.sub.tier]}${r.sub.ends_at ? ` до ${fmtDay(r.sub.ends_at)}` : " ∞"}` },
+  { key: "tier", label: "По клиентам", fmt: (r) => TIERS[r.tier] ?? r.tier },
 ];
 
 // Список тренеров с показателями за период; клик — подробности по одному
@@ -32,8 +35,8 @@ export default function Trainers({ range }: { range: Range }) {
 
   const rows = useMemo(() => {
     const s = q.trim().toLowerCase();
-    const xs = (t.data ?? []).filter((r) => !s || (r.name ?? "").toLowerCase().includes(s) || (r.email ?? "").toLowerCase().includes(s));
-    const v = (r: TrainerRow) => { const x = r[sort.key]; return typeof x === "string" && COLS.find((c) => c.key === sort.key)?.num ? Number(x) : x ?? ""; };
+    const xs = (t.data ?? []).filter((r) => !s || (r.name ?? "").toLowerCase().includes(s) || (r.email ?? "").toLowerCase().includes(s) || r.public_id.toLowerCase().replace("-", "").includes(s.replace(/[s-]/g, "")));
+    const v = (r: TrainerRow) => { const x = sort.key === "sub" ? r.sub.tier : r[sort.key]; return typeof x === "string" && COLS.find((c) => c.key === sort.key)?.num ? Number(x) : x ?? ""; };
     return [...xs].sort((a, b) => { const A = v(a), B = v(b); const c = A < B ? -1 : A > B ? 1 : 0; return sort.desc ? -c : c; });
   }, [t.data, q, sort]);
 
@@ -45,7 +48,7 @@ export default function Trainers({ range }: { range: Range }) {
       <div className="flex flex-wrap items-center gap-3">
         <label className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink3" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Имя или почта"
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Имя, почта или ID"
             className="h-9 w-64 pl-9 pr-3 rounded-lg bg-surface border border-line text-sm outline-none focus:border-accent" />
         </label>
         <span className="text-[13px] text-ink3">{t.data ? `${rows.length} из ${t.data.length}` : "…"} · показатели — за выбранный период, клиенты и тариф — сейчас</span>
@@ -92,7 +95,7 @@ function TrainerDetail({ row, range, onBack }: { row: TrainerRow; range: Range; 
         <button onClick={onBack} className="h-9 w-9 grid place-items-center rounded-lg border border-line hover:bg-surface2" aria-label="Назад"><ArrowLeft size={18} /></button>
         <div>
           <h2 className="text-lg font-extrabold">{row.name || "Без имени"}</h2>
-          <p className="text-[13px] text-ink3">{row.email} · с {fmtDay(row.signed_up.slice(0, 10))} · был {ago(row.last_active)} · тариф «{TIERS[row.tier] ?? row.tier}»</p>
+          <p className="text-[13px] text-ink3">{row.email} · с {fmtDay(row.signed_up.slice(0, 10))} · был {ago(row.last_active)} · {row.public_id} · подписка: {subText(row.sub)}</p>
         </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">

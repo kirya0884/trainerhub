@@ -44,7 +44,8 @@ export const FUNNEL: Record<string, string> = {
   payment: "Принял оплату", portal: "Пригласил в кабинет", client_active: "Клиент активен",
 };
 
-export const TIERS: Record<string, string> = { start: "Старт", basic: "Базовый", pro: "Про", studio: "Студия" };
+export const TIERS: Record<string, string> = { start: "Старт", basic: "Базовый", pro: "Профи", studio: "Студия" };
+export const SOURCES: Record<string, string> = { barter: "Бартер за рекламу", gift: "Подарок", developer: "Разработчик", trial: "Тест", paid: "Оплата" };
 export const DEVICES: Record<string, string> = {
   ios: "iPhone (браузер)", "ios-pwa": "iPhone (приложение)", android: "Android (браузер)", "android-pwa": "Android (приложение)",
   desktop: "Компьютер", "desktop-pwa": "Компьютер (приложение)", неизвестно: "До сбора устройств",

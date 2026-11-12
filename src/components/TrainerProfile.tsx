@@ -6,6 +6,7 @@ import { fileToThumb } from "../lib/thumb";
 import { supabase } from "../lib/supabase";
 import { cached, onRevalidate, releaseStale, signOutAndForget, staleAtOf } from "../lib/offlineCache";
 import SubscriptionModal from "./SubscriptionModal";
+import { fetchMySub, lastMySub, subLabel, type MySub } from "../lib/subscription";
 import { LegalList } from "./LegalDoc";
 import { deleteMyAccount } from "../lib/account";
 import { fetchPackageTemplates, savePackageTemplate, updatePackageTemplate, deletePackageTemplate, type PackageTemplate } from "../lib/payments";
@@ -49,6 +50,8 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   };
   const saveLabel = (key: SaveKey, idle: string) => saveState[key] === "saving" ? "Сохранение..." : saveState[key] === "saved" ? "✓ Сохранено" : idle;
   const [showSubscription, setShowSubscription] = useState(false);
+  const [mySub, setMySub] = useState<MySub | null>(() => lastMySub(trainerId));
+  useEffect(() => { fetchMySub(trainerId).then(setMySub); }, [trainerId, showSubscription]);
   const [templates, setTemplates] = useState<PackageTemplate[]>([]);
   // 0.3: не загрузилось — «Повторить» вместо вечного скелетона и пустых шаблонов
   const [profileFailed, setProfileFailed] = useState(false);
@@ -358,7 +361,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
 
           <button onClick={() => setShowSubscription(true)} className="w-full flex items-center gap-3 bg-zinc-900 border border-lime-400/40 hover:border-lime-400/70 rounded-2xl p-3.5 text-left transition">
             <span className="w-10 h-10 shrink-0 rounded-xl bg-lime-400/15 text-lime-400 flex items-center justify-center"><Sparkles size={20} /></span>
-            <span className="flex-1 min-w-0"><span className="block font-bold">Подписка Reps</span><span className="block text-[13px] text-zinc-400">Тариф и оплата</span></span>
+            <span className="flex-1 min-w-0"><span className="block font-bold">Подписка Reps</span><span className="block text-[13px] text-zinc-400 truncate">{mySub ? `${subLabel(mySub)} · ID ${mySub.public_id}` : "Тариф и оплата"}</span></span>
             <ChevronRight size={18} className="text-zinc-500 shrink-0" />
           </button>
 
@@ -396,7 +399,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
           <p className="text-center text-[11px] text-zinc-600">Версия {__APP_VERSION__}</p>
         </>
       )}
-      {showSubscription && <SubscriptionModal onClose={() => setShowSubscription(false)} />}
+      {showSubscription && <SubscriptionModal trainerId={trainerId} onClose={() => setShowSubscription(false)} />}
       {showDocs && <LegalList slugs={["privacy", "terms", "consent"]} onClose={() => setShowDocs(false)} />}
     </div>
   );
