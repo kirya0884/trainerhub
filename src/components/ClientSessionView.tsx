@@ -8,7 +8,7 @@ import { buildMetrics, factSets, itemRpe, isWeightRecord } from "../lib/sessionU
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SupersetRounds, askUnmarked, doneSets, tonnageOf } from "./SessionParts";
+import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SupersetRounds, askSkip, askUnmarked, askUntouched, canSkip, doneSets, ProgressBar, SkipButton, SkippedRow, skipPatch, tonnageOf } from "./SessionParts";
 import { applyLastTime, exKey, type LastFact, type LastTime } from "../lib/sessionUtils";
 import type { Day, Metric, Session } from "../types";
 import { ask } from "../lib/dialog";
@@ -46,7 +46,7 @@ const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} к
 
 
 type SetVal = { weight: string; reps: string; rpe?: number };
-type ExMeta = { note: string; done: boolean; setsDone?: Record<number, boolean> };
+type ExMeta = { note: string; done: boolean; setsDone?: Record<number, boolean>; skipped?: boolean };
 
 function SessionTimer({ startedAt }: { startedAt: number }) {
   const [now, setNow] = useState(Date.now());
@@ -103,7 +103,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
       const cur = m[exId] || { note: "", done: false, setsDone: {} };
       const sd = { ...(cur.setsDone || {}), [setIdx]: !cur.setsDone?.[setIdx] };
       const allDone = Array.from({ length: total }, (_, i) => i).every((i) => sd[i]);
-      return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
+      return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone, skipped: false } };
     });
 
   // #7 Save vals/meta to localStorage so progress survives app close
@@ -125,7 +125,8 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   }, [meta]); // eslint-disable-line react-hooks/exhaustive-deps
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
   // Как у тренера (SessionModal): текущее — первое невыполненное, выполненные сворачиваются
-  const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
+  const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done && !meta[ex.id]?.skipped)?.id;
+  const skippedEx = day.exercises.filter((ex) => meta[ex.id]?.skipped).length;
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
   const { anchor, offscreenAbove } = useScrollAnchor();
   // Только что отмеченное — открыто; выполненные выше сворачиваются, лишь когда целиком
@@ -144,7 +145,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   // прячется до закрытия клавиатуры — так поля ввода не перекрыты
   const kb = useKeyboardViewport();
   const openSets = () => day.exercises.reduce((n, ex) =>
-    ex.kind === "functional" || !ex.name || meta[ex.id]?.done ? n
+    ex.kind === "functional" || !ex.name || meta[ex.id]?.done || meta[ex.id]?.skipped ? n
       : n + (vals[ex.id] || []).filter((_, i) => !meta[ex.id]?.setsDone?.[i]).length, 0);
   const tapSet = (ex: Day["exercises"][number], i: number, total: number) => {
     const was = meta[ex.id]?.setsDone?.[i] ?? false;
@@ -191,8 +192,10 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
     if (finishing.current) return;
     finishing.current = true;
     // Есть заполненные, но не отмеченные подходы — спросить; закрыли окно — остаёмся в тренировке
-    const m = await askUnmarked(day, vals, meta, true).finally(() => { finishing.current = false; });
-    if (!m) return;
+    // Упражнения совсем без отметок — отметить «не сделано»?
+    let m1: Record<string, ExMeta> | null = null;
+    const m = await askUnmarked(day, vals, meta, true).then((r) => (m1 = r) && askUntouched(day, r, true)).finally(() => { finishing.current = false; });
+    if (!m) { if (m1 && m1 !== meta) setMeta(m1); return; }
     if (m !== meta) setMeta(m);
     const done = day.exercises.filter((ex) => m[ex.id]?.done).length;
     // Метрики — только по отмеченным подходам (неотмеченные — это план)
@@ -206,7 +209,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         ? ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }))
         : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
       // effort (огоньки) больше не собираем: усилие — RPE в каждом подходе
-      return { name: ex.name, effort: 0, rpe: itemRpe(actualSets), note: m[ex.id]?.note || "", actualSets, plannedSets, plannedSummary };
+      return { name: ex.name, effort: 0, rpe: itemRpe(actualSets), note: m[ex.id]?.note || "", actualSets, plannedSets, plannedSummary, ...(m[ex.id]?.skipped ? { skipped: true } : {}) };
     });
     const session: Omit<Session, "id"> = { date: today(), dayName: day.name, mood: 0, wellbeing: 0, clientRating: 0, review: "", done, total: day.exercises.length, fromClient: true, items };
     setDraft({ metrics, session });
@@ -299,7 +302,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="font-bold truncate">{day.name}</h2>
-            <p className="text-sm text-zinc-500 mt-0.5"><span className="font-mono font-bold text-base text-lime-400 mr-2"><SessionTimer startedAt={startedAt} /></span>{doneEx} из {day.exercises.length} упр.</p>
+            <p className="text-sm text-zinc-500 mt-0.5"><span className="font-mono font-bold text-base text-lime-400 mr-2"><SessionTimer startedAt={startedAt} /></span>{doneEx} из {day.exercises.length} упр.{skippedEx > 0 && <span className="text-red-400"> · {skippedEx} не сделано</span>}</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             <button onClick={() => onMinimize?.()} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Свернуть" aria-label="Свернуть"><Minimize2 size={20} /></button>
@@ -307,7 +310,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
           </div>
         </div>
         <div className="h-1 mt-2 rounded-full bg-zinc-800 overflow-hidden">
-          <div className="h-full rounded-full bg-lime-400 transition-[width] duration-300" style={{ width: `${day.exercises.length ? (doneEx / day.exercises.length) * 100 : 0}%` }} />
+          <ProgressBar done={doneEx} skipped={skippedEx} total={day.exercises.length} />
         </div>
       </div>
 
@@ -362,9 +365,10 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
             const prevSets = prevByName[exKey(ex.name)]?.sets;
-            const md = meta[ex.id] || { note: "", done: false };
+            const md: ExMeta = meta[ex.id] || { note: "", done: false };
             const tonnage = ex.kind === "functional" ? 0 : tonnageOf(doneSets(rows, meta[ex.id])); // функциональное: вес тут не про подходы, тоннаж не считаем
             const isCurrent = ex.id === currentId;
+            if (md.skipped) return <SkippedRow key={ex.id} exId={ex.id} label={exLabel(day, idx)} name={ex.name} note={md.note} onUndo={() => setMetaFor(ex.id, { skipped: false })} />;
             const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
             // Выполненное — строкой с фактическими подходами; тап раскрывает обратно
             if (md.done && !openDone[ex.id]) {
@@ -382,7 +386,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
             }
             return (
               <div key={ex.id} data-exid={ex.id} className={shell}>
-                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><TechniqueButton url={ex.video || (Object.prototype.hasOwnProperty.call(media, ex.name) ? media[ex.name] : "")} name={ex.name} /><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
+                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><TechniqueButton url={ex.video || (Object.prototype.hasOwnProperty.call(media, ex.name) ? media[ex.name] : "")} name={ex.name} />{canSkip(md) && <SkipButton onClick={async () => { const note = await askSkip(ex.name, md.note); if (note !== null) setMetaFor(ex.id, skipPatch(note)); }} />}<button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
                 {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-lime-400" /> отдых между подходами: {ex.rest}</p>}
                 {ex.kind === "functional" ? (
                 <div className="text-sm text-zinc-300 flex flex-wrap items-center gap-x-4 gap-y-1">

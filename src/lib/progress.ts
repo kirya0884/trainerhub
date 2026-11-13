@@ -36,7 +36,7 @@ export async function fetchProgress(planId: string): Promise<ProgressData> {
   if (e3) throw e3;
   const items = await fetchSessionItems((sessions ?? []).map((s) => s.id));
   const itemsBySession: Record<string, SessionItem[]> = {};
-  for (const it of items ?? []) (itemsBySession[it.session_id] ??= []).push({ name: it.name, effort: it.effort ?? 0, rpe: it.rpe ?? 0, note: it.note ?? "", actualSets: it.actual_sets ?? undefined, plannedSets: it.planned_sets ?? undefined, plannedSummary: it.planned_summary ?? undefined });
+  for (const it of items ?? []) (itemsBySession[it.session_id] ??= []).push({ name: it.name, effort: it.effort ?? 0, rpe: it.rpe ?? 0, note: it.note ?? "", actualSets: it.actual_sets ?? undefined, plannedSets: it.planned_sets ?? undefined, plannedSummary: it.planned_summary ?? undefined, ...(it.skipped ? { skipped: true } : {}) });
 
   return {
     progress: (progress ?? []).map((p) => ({ id: p.id, date: p.date, text: p.text })),
@@ -140,7 +140,7 @@ export async function logSession(planId: string, metricsIn: Omit<Metric, "id">[]
     date: session.date, day_name: session.dayName, day_id: session.dayId ?? null,
     mood: session.mood || null, wellbeing: session.wellbeing || null, client_rating: session.clientRating || null,
     review: session.review, done: session.done, total: session.total, from_client: session.fromClient,
-  }, session.items.map((i) => ({ name: i.name, effort: i.effort, rpe: i.rpe, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null })),
+  }, session.items.map((i) => ({ name: i.name, effort: i.effort, rpe: i.rpe, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null, ...(i.skipped ? { skipped: true } : {}) })),
   metricsIn, note.trim() ? note : "");
 
   // Повтор уже записанной (created: false): метрики и заметка ушли в прошлый раз, сессия — как отправляли

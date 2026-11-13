@@ -10,13 +10,13 @@ import { cached, onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCac
 import { useActiveWorkout } from "./useActiveWorkout";
 import { finishOrQueue, finishSummary } from "../lib/finishWorkout";
 import { feelingLabel } from "../components/FeelingScale";
-import { addSetRow, askUnmarked, confirmFinish, metaAfterRemove, resolveWorkoutDate } from "../components/SessionParts";
+import { addSetRow, askUnmarked, askUntouched, confirmFinish, metaAfterRemove, resolveWorkoutDate } from "../components/SessionParts";
 import type { Day, Plan, Session } from "../types";
 import { notify } from "../lib/dialog";
 import { draftPrefix, readSlotDraft, type SlotDraft } from "../lib/slotDrafts";
 
 export type SetVal = { weight: string; reps: string; rpe?: number };
-export type ExMeta = { done: boolean; note: string; setsDone?: Record<number, boolean> };
+export type ExMeta = { done: boolean; note: string; setsDone?: Record<number, boolean>; skipped?: boolean };
 
 export const buildVals = (day: Day): Record<string, SetVal[]> => {
   const init: Record<string, SetVal[]> = {};
@@ -170,11 +170,11 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
       const cur = m[exId] || { done: false, note: "", setsDone: {} };
       const sd = { ...(cur.setsDone || {}), [setIdx]: !cur.setsDone?.[setIdx] };
       const allDone = Array.from({ length: total }, (_, i) => i).every((i) => sd[i]);
-      return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
+      return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone, skipped: false } };
     });
   // Неотмеченные подходы у этого подопечного — после последнего отдых не нужен
   const openSets = () => (day ? day.exercises.reduce((n, ex) =>
-    ex.kind === "functional" || !ex.name || meta[ex.id]?.done ? n
+    ex.kind === "functional" || !ex.name || meta[ex.id]?.done || meta[ex.id]?.skipped ? n
       : n + (vals[ex.id] || []).filter((_, i) => !meta[ex.id]?.setsDone?.[i]).length, 0) : 0);
 
   // «Как в прошлый раз» — последнее проведение выбранного дня этого подопечного
@@ -198,6 +198,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
   const undoLast = () => { if (beforeLast) { touched.current = true; setVals(beforeLast); setBeforeLast(null); } };
 
   const doneEx = day ? day.exercises.filter((ex) => meta[ex.id]?.done).length : 0;
+  const skippedEx = day ? day.exercises.filter((ex) => meta[ex.id]?.skipped).length : 0;
   const totalTonnage = day ? day.exercises.reduce((sum, ex) => sum + (ex.kind === "functional" ? 0 : tonnageOf(doneSets(vals[ex.id] || [], meta[ex.id]))), 0) : 0;
 
   /** dateChoice: null — сегодня, иначе дата задним числом (общая на всю совместную) */
@@ -210,10 +211,13 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     try {
       if (!(await confirmFinish(day, date, plan.id, sessions))) return;
       // Есть заполненные, но не отмеченные подходы — спросить; закрыли окно — ничего не пишем
-      const m = await askUnmarked(day, vals, meta);
-      if (!m) return;
+      const m1 = await askUnmarked(day, vals, meta);
+      // Упражнения совсем без отметок — отметить «не сделано»?
+      const m = m1 && await askUntouched(day, m1);
+      if (!m) { if (m1 && m1 !== meta) setMeta(m1); return; }
       if (m !== meta) setMeta(m);
       const done = day.exercises.filter((ex) => m[ex.id]?.done).length;
+      const skippedN = day.exercises.filter((ex) => m[ex.id]?.skipped).length;
       const metrics = buildMetrics(day, vals, m, date);
       const items = day.exercises.filter((ex) => ex.name).map((ex) => {
         // План/факт — как в индивидуальной тренировке: без них «Как в прошлый раз»
@@ -223,13 +227,13 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
           ? ex.setRows.map((r) => ({ weight: r.weight || "", reps: r.reps || "" }))
           : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
         // effort (огоньки) больше не собираем: усилие — RPE в каждом подходе
-        return { name: ex.name, effort: 0, rpe: itemRpe(actualSets), note: m[ex.id]?.note || "", plannedSets, ...(actualSets.length ? { actualSets } : {}) };
+        return { name: ex.name, effort: 0, rpe: itemRpe(actualSets), note: m[ex.id]?.note || "", plannedSets, ...(actualSets.length ? { actualSets } : {}), ...(m[ex.id]?.skipped ? { skipped: true } : {}) };
       });
       const session: Omit<Session, "id"> = {
         date, dayName: day.name, dayId: day.id, mood, wellbeing, review: review.trim(), clientRating,
         done, total: day.exercises.length, fromClient: false, items,
       };
-      const note = `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${done}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`;
+      const note = `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${done}/${day.exercises.length} упр.${skippedN ? `, не сделано: ${skippedN}` : ""})${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`;
       // Д3: запись сессии, архивация дня, отметка в календаре и двойной гард
       // списания — всё в одной общей функции, а не копией на каждый экран.
       const res = await finishOrQueue({ trainerId, clientId, planId: plan.id, day, metrics, note, session, membership, booking: prefer && { id: prefer.id, occDate: prefer.occDate } });
@@ -248,7 +252,7 @@ export function useSessionSlot(clientId: string, trainerId: string, onFinished: 
     membership, finished, busy,
     vals, meta, setVal, setMetaFor, toggleSetDone, openSets, addSet, removeSet,
     mood, setMood, wellbeing, setWellbeing, review, setReview, clientRating, setClientRating,
-    doneEx, totalTonnage, finish,
+    doneEx, skippedEx, totalTonnage, finish,
     last, lastApplied: !!beforeLast, applyLast, undoLast, prevByName,
   };
 }

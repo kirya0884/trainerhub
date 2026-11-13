@@ -17,7 +17,7 @@ import type { Day, Session } from "../types";
 import DeleteSessionModal from "./DeleteSessionModal";
 import ExerciseRow from "./ExerciseRow";
 import ExerciseHistoryModal from "./ExerciseHistoryModal";
-import { exKey as nameKey, fmtRpe, isFact, isSessionOfDay, lastFactWeight, lastFactsByName, withFactWeights } from "../lib/sessionUtils";
+import { exKey as nameKey, fmtRpe, isFact, isSessionOfDay, lastFactWeight, lastFactsByName, skippedCount, withFactWeights } from "../lib/sessionUtils";
 import { useDragSort } from "../hooks/useDragSort";
 import LibraryModal from "./LibraryModal";
 import MetricsView from "./MetricsView";
@@ -888,7 +888,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                         <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                           <span className="text-xs text-zinc-500">{fmtDate(s.date)}</span>
                           <span className="text-zinc-700">·</span>
-                          <span className="text-xs text-zinc-500">{s.done}/{s.total} упр.</span>
+                          <span className="text-xs text-zinc-500">{s.done}/{s.total} упр.{skippedCount(s) > 0 && <span className="text-red-400"> · ✕ {skippedCount(s)} не сделано</span>}</span>
                           {s.fromClient && <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>}
                         </div>
                       </div>

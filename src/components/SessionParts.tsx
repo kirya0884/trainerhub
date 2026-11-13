@@ -1,10 +1,10 @@
-import { Check, ChevronDown, ChevronUp, History, Layers, Minus, Plus } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, CircleX, History, Layers, Minus, Plus, Undo2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { addDays, fmtDate, fmtSet, today, repsInput } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
 import { RPE_SCALE, doneSets, exKey, fmtRpe, isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
-import { ask, choose } from "../lib/dialog";
+import { ask, askInput, choose } from "../lib/dialog";
 import { pending } from "../lib/outbox";
 import type { Day, Exercise, Session } from "../types";
 
@@ -113,6 +113,62 @@ export async function askUnmarked<M extends { done: boolean; setsDone?: Record<n
     // Выполнено, если отмечены все непустые подходы
     next[ex.id] = { ...next[ex.id], setsDone: sd, done: rows.every((r, i) => sd[i] || !(r.weight || r.reps)) };
   }
+  return next;
+}
+
+// ── «Не сделано» ──
+// Упражнение, которое пропустили (больно, не успели, нет снаряда), отмечается явно — красным
+// крестиком в итоге и истории, а не выглядит забытыми галочками. Причина — в заметке упражнения.
+// Отметить можно, пока не отмечен ни один подход: сделал часть — это «частично», а не пропуск.
+type SkipMeta = { done: boolean; note: string; setsDone?: Record<number, boolean>; skipped?: boolean };
+export const canSkip = (m?: SkipMeta) => !!m && !m.done && !m.skipped && !Object.values(m.setsDone ?? {}).some(Boolean);
+/** Спросить причину; отмена — null (ничего не меняем) */
+export async function askSkip(name: string, note: string): Promise<string | null> {
+  const r = await askInput(`«${name}» — не сделано`, [{ key: "note", label: "Причина (можно пропустить)", value: note, placeholder: "Например, болит колено" }], { ok: "Не сделано", cancel: "Отмена" });
+  return r ? r.note.trim() : null;
+}
+export const skipPatch = (note: string) => ({ skipped: true, done: false, setsDone: {}, note });
+export function SkipButton({ onClick }: { onClick: () => void }) {
+  return <button onClick={onClick} className="text-xs px-3 h-11 rounded-lg font-medium bg-zinc-800 text-red-300 hover:text-red-200 transition flex items-center gap-1"><X size={14} /> Не сделано</button>;
+}
+/** Свёрнутая карточка пропущенного упражнения: красный крестик, причина, «Вернуть» */
+export function SkippedRow({ label, name, note, onUndo, exId }: { label: string; name: string; note?: string; onUndo: () => void; exId?: string }) {
+  return (
+    <div data-exid={exId} className="bg-red-950/30 border border-red-400/40 rounded-2xl px-3 py-2 flex items-center gap-2.5">
+      <CircleX size={18} className="text-red-400 shrink-0" />
+      <span className="min-w-0 flex-1">
+        <span className="block font-semibold truncate text-zinc-400"><span className="text-zinc-500 mr-1.5">{label}</span><span className="line-through">{name || "—"}</span></span>
+        <span className="block text-xs text-red-400 truncate">не сделано{note ? ` · ${note}` : ""}</span>
+      </span>
+      <button onClick={onUndo} className="h-11 px-3 rounded-lg bg-zinc-800 text-xs font-medium text-zinc-300 hover:text-zinc-100 transition flex items-center gap-1 shrink-0"><Undo2 size={14} /> Вернуть</button>
+    </div>
+  );
+}
+/** Полоса прогресса: сделанные — зелёным, не сделанные — красным */
+export function ProgressBar({ done, skipped, total }: { done: number; skipped: number; total: number }) {
+  const pct = (n: number) => `${total ? (n / total) * 100 : 0}%`;
+  return (
+    <div className="h-full flex">
+      <div className="h-full bg-lime-400 transition-[width] duration-300" style={{ width: pct(done) }} />
+      <div className="h-full bg-red-400 transition-[width] duration-300" style={{ width: pct(skipped) }} />
+    </div>
+  );
+}
+/**
+ * Перед записью: упражнения, где не отмечено вообще ничего, — пропущены или забыты.
+ * Спрашиваем: «Отметить не сделанными» / «как есть» (как раньше) / закрыли окно — null, назад к тренировке.
+ */
+export async function askUntouched<M extends SkipMeta>(day: Day, meta: Record<string, M>, client = false): Promise<Record<string, M> | null> {
+  const open = day.exercises.filter((ex) => ex.name && meta[ex.id] && canSkip(meta[ex.id]));
+  if (!open.length) return meta;
+  const n = open.length;
+  const names = open.slice(0, 4).map((ex) => `«${ex.name}»`).join(", ") + (n > 4 ? ` и ещё ${n - 4}` : "");
+  const res = await choose(`Без отметок: ${names}. Отметить не сделанными?`,
+    { ok: "Отметить не сделанными", alt: client ? "Отправить как есть" : "Сохранить как есть", cancel: "Вернуться к тренировке" });
+  if (res === null) return null;
+  if (res === "alt") return meta;
+  const next = { ...meta };
+  for (const ex of open) next[ex.id] = { ...next[ex.id], ...skipPatch(next[ex.id].note || "") };
   return next;
 }
 

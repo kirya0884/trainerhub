@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale, feelingLabel } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
-import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SetCountRow, SupersetRounds, WorkoutDatePick, addSetRow, askUnmarked, canRemoveSet, confirmFinish, metaAfterRemove, resolveWorkoutDate, tonnageOf } from "./SessionParts";
+import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SetCountRow, SupersetRounds, WorkoutDatePick, addSetRow, askSkip, askUnmarked, askUntouched, canRemoveSet, canSkip, ProgressBar, SkipButton, SkippedRow, skipPatch, confirmFinish, metaAfterRemove, resolveWorkoutDate, tonnageOf } from "./SessionParts";
 import { applyLastTime, buildMetrics, doneSets, exKey, factSets, itemRpe, lastFactsByName, lastTimeFor, type LastFact, type LastTime, isWeightRecord } from "../lib/sessionUtils";
 import { fetchProgressCached } from "../lib/progress";
 import { onRevalidate, releaseStale, staleAtOf } from "../lib/offlineCache";
@@ -47,7 +47,7 @@ const groupBlocks = (exercises: Day["exercises"]) => {
 const fmtTonnage = (kg: number) => `${Math.round(kg).toLocaleString("ru-RU")} кг`;
 
 type SetVal = { weight: string; reps: string; rpe?: number };
-type ExMeta = { done: boolean; note: string; setsDone?: Record<number, boolean> };
+type ExMeta = { done: boolean; note: string; setsDone?: Record<number, boolean>; skipped?: boolean };
 
 /** Что уже введено — для перехода в совместную тренировку без потери отметок */
 export type SessionSnapshot = { vals: Record<string, SetVal[]>; meta: Record<string, ExMeta>; mood: number; wellbeing: number; review: string; clientRating: number };
@@ -127,7 +127,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
       const cur = m[exId] || { done: false, note: "", setsDone: {} };
       const sd = { ...(cur.setsDone || {}), [setIdx]: !cur.setsDone?.[setIdx] };
       const allDone = Array.from({ length: total }, (_, i) => i).every((i) => sd[i]);
-      return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone } };
+      return { ...m, [exId]: { ...cur, setsDone: sd, done: allDone, skipped: false } };
     });
   // Разбор путей 4.1: подход на ходу — только в этой тренировке, план не меняется
   const addSet = (exId: string) => { setVals((a) => ({ ...a, [exId]: addSetRow(a[exId] ?? []) })); setMetaFor(exId, { done: false }); };
@@ -138,7 +138,12 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   };
   const doneEx = day.exercises.filter((ex) => meta[ex.id]?.done).length;
   // Текущее — первое невыполненное: подсвечиваем, чтобы в зале не искать глазами, где остановились
-  const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
+  const currentId = day.exercises.find((ex) => ex.name && !meta[ex.id]?.done && !meta[ex.id]?.skipped)?.id;
+  const skippedEx = day.exercises.filter((ex) => meta[ex.id]?.skipped).length;
+  const skip = async (ex: Exercise) => {
+    const note = await askSkip(ex.name, meta[ex.id]?.note || "");
+    if (note !== null) setMetaFor(ex.id, skipPatch(note));
+  };
   // Выполненные упражнения сворачиваются в строку; тап раскрывает обратно (поправить вес, заметку)
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
   const { anchor, offscreenAbove } = useScrollAnchor();
@@ -175,7 +180,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   const kb = useKeyboardViewport();
   // Неотмеченные подходы по всей тренировке — после самого последнего отдых не нужен
   const openSets = () => day.exercises.reduce((n, ex) =>
-    ex.kind === "functional" || !ex.name || meta[ex.id]?.done ? n
+    ex.kind === "functional" || !ex.name || meta[ex.id]?.done || meta[ex.id]?.skipped ? n
       : n + (vals[ex.id] || []).filter((_, i) => !meta[ex.id]?.setsDone?.[i]).length, 0);
   const startRest = (ex: Exercise) => {
     const sec = parseRest(ex.rest);
@@ -203,10 +208,13 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
     setSubmitting(true);
     if (!(await confirmFinish(day, date, planId, sessions).catch(() => false))) { setSubmitting(false); return; }
     // Есть заполненные, но не отмеченные подходы — спросить; закрыли окно — назад к тренировке
-    const m = await askUnmarked(day, vals, meta);
-    if (!m) { setSubmitting(false); return; }
+    const m1 = await askUnmarked(day, vals, meta);
+    // Упражнения совсем без отметок — отметить «не сделано»?
+    const m = m1 && await askUntouched(day, m1);
+    if (!m) { if (m1 && m1 !== meta) setMeta(m1); setSubmitting(false); return; }
     if (m !== meta) setMeta(m);
     const done = day.exercises.filter((ex) => m[ex.id]?.done).length;
+    const skippedN = day.exercises.filter((ex) => m[ex.id]?.skipped).length;
     // Метрики и факт — только по отмеченным подходам (неотмеченные — это план)
     const metrics = buildMetrics(day, vals, m, date);
     const items = day.exercises.filter((ex) => ex.name).map((ex) => {
@@ -216,11 +224,11 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
         ? ex.setRows.map((s) => ({ weight: s.weight || "", reps: s.reps || "" }))
         : Array.from({ length: parseInt(ex.sets) || 1 }, () => ({ weight: ex.weight || "", reps: ex.reps || "" }));
       // effort (огоньки) больше не собираем: усилие — RPE в каждом подходе
-      return { name: ex.name, effort: 0, rpe: itemRpe(fact), note: m[ex.id]?.note || "", plannedSets, ...(fact.length ? { actualSets: fact } : {}) };
+      return { name: ex.name, effort: 0, rpe: itemRpe(fact), note: m[ex.id]?.note || "", plannedSets, ...(fact.length ? { actualSets: fact } : {}), ...(m[ex.id]?.skipped ? { skipped: true } : {}) };
     });
     const session: Omit<Session, "id"> = { date, dayName: day.name, mood, wellbeing, review: review.trim(), clientRating, done, total: day.exercises.length, fromClient: false, items };
     try {
-      await Promise.resolve(onFinish(metrics, `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${done}/${day.exercises.length} упр.)${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`, session));
+      await Promise.resolve(onFinish(metrics, `✅ Проведена${date !== today() ? ` ${fmtDate(date)}` : ""}: ${day.name} (${done}/${day.exercises.length} упр.${skippedN ? `, не сделано: ${skippedN}` : ""})${mood ? ` · настроение: ${feelingLabel("mood", mood).toLowerCase()}` : ""}`, session));
       clearPersist();
       onClose();
     } catch (e) {
@@ -252,7 +260,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h2 className="font-bold truncate">{day.name}</h2>
-            <p className="text-sm text-zinc-500 mt-0.5"><span className="font-mono font-bold text-base text-lime-400 mr-2">{timer}</span>{doneEx} из {day.exercises.length} упр.</p>
+            <p className="text-sm text-zinc-500 mt-0.5"><span className="font-mono font-bold text-base text-lime-400 mr-2">{timer}</span>{doneEx} из {day.exercises.length} упр.{skippedEx > 0 && <span className="text-red-400"> · {skippedEx} не сделано</span>}</p>
           </div>
           <div className="flex items-center gap-1 shrink-0">
             {onAddClient && <button onClick={() => setShowAdd(true)} className="w-11 h-11 flex items-center justify-center rounded-xl hover:bg-zinc-800 text-zinc-400" title="Добавить клиента" aria-label="Добавить клиента в тренировку"><UserPlus size={20} /></button>}
@@ -261,7 +269,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
           </div>
         </div>
         <div className="h-1 mt-2 rounded-full bg-zinc-800 overflow-hidden">
-          <div className="h-full rounded-full bg-lime-400 transition-[width] duration-300" style={{ width: `${day.exercises.length ? (doneEx / day.exercises.length) * 100 : 0}%` }} />
+          <ProgressBar done={doneEx} skipped={skippedEx} total={day.exercises.length} />
         </div>
       </div>
 
@@ -316,9 +324,10 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
             const idx = block.startIdx + k;
             const rows = vals[ex.id] || [];
             const prevSets = prevByName[exKey(ex.name)]?.sets;
-            const md = meta[ex.id] || { done: false, note: "" };
+            const md: ExMeta = meta[ex.id] || { done: false, note: "" };
             const tonnage = ex.kind === "functional" ? 0 : tonnageOf(doneSets(rows, meta[ex.id])); // функциональное: вес тут не про подходы, тоннаж не считаем
             const isCurrent = ex.id === currentId;
+            if (md.skipped) return <SkippedRow key={ex.id} exId={ex.id} label={exLabel(day, idx)} name={ex.name} note={md.note} onUndo={() => setMetaFor(ex.id, { skipped: false })} />;
             const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : isCurrent ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
             if (md.done && !openDone[ex.id]) {
               const fact = rows.filter((r) => r.weight || r.reps).map((r) => fmtSet(r.weight, r.reps)).join(", ");
@@ -335,7 +344,7 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
             }
             return (
               <div key={ex.id} data-exid={ex.id} className={shell}>
-                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0"><button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
+                <div className="flex items-start justify-between gap-2 mb-2"><div className="min-w-0 flex-1"><h3 className="font-semibold leading-snug"><span className="text-lime-400 mr-1.5">{exLabel(day, idx)}</span>{ex.name || "—"}</h3>{tonnage > 0 && <p className="text-xs text-zinc-500 mt-0.5">тоннаж: <span className="text-orange-400">{fmtTonnage(tonnage)}</span></p>}{md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}</div><div className="flex items-center gap-1 shrink-0">{canSkip(md) && <SkipButton onClick={() => skip(ex)} />}<button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }} className={`text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button></div></div>
                 {ex.rest && <p className="text-xs text-zinc-500 mb-1.5 flex items-center gap-1"><Timer size={12} className="text-cyan-400" /> отдых между подходами: {ex.rest}</p>}
                 {ex.kind === "functional" ? (
                 <div className="text-sm text-zinc-300 flex flex-wrap items-center gap-x-4 gap-y-1">

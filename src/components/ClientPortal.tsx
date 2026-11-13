@@ -32,7 +32,7 @@ import { addDays, fmtDate, fmtSet, today as todayFn } from "../lib/format";
 import { notifyLowBalance, notifyRenewalSoon, notifyUpcomingBooking } from "../lib/notify";
 import { supabase } from "../lib/supabase";
 import ClientSessionView from "./ClientSessionView";
-import { fmtRpe, isFact, isSessionOfDay, lastFactsByName, lastTimeFor, nextDayOf, weeksStreak } from "../lib/sessionUtils";
+import { fmtRpe, isFact, isSessionOfDay, skippedCount, lastFactsByName, lastTimeFor, nextDayOf, weeksStreak } from "../lib/sessionUtils";
 import { SkeletonRows } from "./Skeleton";
 import { ask, notify } from "../lib/dialog";
 import { flushOutbox, isNetworkError } from "../lib/outbox";
@@ -581,7 +581,7 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
                     <button onClick={() => setOpenDetails(isOpen ? null : s.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2.5 hover:bg-zinc-800/40 transition text-left">
                       <div className="min-w-0">
                         <p className="font-semibold text-sm truncate">{s.dayName}</p>
-                        <p className="text-xs text-zinc-500">{fmtDate(s.date, true)} · {s.done}/{s.total} упр.{s.fromClient && " · сам"}</p>
+                        <p className="text-xs text-zinc-500">{fmtDate(s.date, true)} · {s.done}/{s.total} упр.{skippedCount(s) > 0 && <span className="text-red-400"> · ✕ {skippedCount(s)}</span>}{s.fromClient && " · сам"}</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         {s.wellbeing ? <FeelingBadge kind="wellbeing" value={s.wellbeing} withLabel={false} /> : null}
@@ -603,7 +603,9 @@ export default function ClientPortal({ client, onSwitchTrainer }: { client: port
                               const hasActual = facts.length > 0;
                               return (
                                 <div key={idx} className="bg-zinc-900 rounded-xl px-3 py-2 text-xs space-y-1">
-                                  <p className="font-medium text-sm text-zinc-200">{item.name}</p>
+                                  {item.skipped
+                                    ? <p className="font-medium text-sm text-zinc-400 flex items-center gap-1.5"><span className="text-red-400" aria-hidden>✕</span><span className="line-through">{item.name}</span><span className="text-xs text-red-400 no-underline">не сделано</span></p>
+                                    : <p className="font-medium text-sm text-zinc-200">{item.name}</p>}
                                   {item.plannedSummary && (
                                     <p className="text-zinc-500">План: {item.plannedSummary}</p>
                                   )}

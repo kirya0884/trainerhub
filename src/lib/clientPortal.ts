@@ -167,7 +167,7 @@ export const finishClientSession = (clientId: string, booking?: { id: string; oc
 export async function logClientSession(sessionId: string, planId: string, metricsIn: Omit<Metric, "id">[], session: Omit<Session, "id">) {
   await logWorkout(sessionId, planId,
     { date: session.date, day_name: session.dayName, day_id: session.dayId ?? null, done: session.done, total: session.total, from_client: true },
-    session.items.map((i) => ({ name: i.name, effort: i.effort, rpe: i.rpe || 0, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null })),
+    session.items.map((i) => ({ name: i.name, effort: i.effort, rpe: i.rpe || 0, note: i.note, actual_sets: i.actualSets ?? null, planned_sets: i.plannedSets ?? null, planned_summary: i.plannedSummary ?? null, ...(i.skipped ? { skipped: true } : {}) })),
     metricsIn);
 }
 

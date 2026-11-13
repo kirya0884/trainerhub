@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check } from "lucide-react";
+import { Check, CircleX } from "lucide-react";
 import { closeCelebrate, subscribeCelebrate, type DoneStats } from "../lib/celebrate";
 import { useCountUp } from "../hooks/useCountUp";
 import { useModalA11y } from "../hooks/useModalA11y";
@@ -48,6 +48,20 @@ function DoneScreen({ s }: { s: DoneStats }) {
           <Stat value={s.tonnage} label="кг тоннаж" delay={80} />
           <Stat value={s.exercises} label={`из ${s.total} упр.`} delay={160} />
         </div>
+        {(!!s.skipped?.length || !!s.partial) && (
+          <div className="anim-rise mt-3 text-left space-y-1.5" style={{ animationDelay: "240ms" }}>
+            <div className="flex flex-wrap gap-1.5 justify-center">
+              {!!s.skipped?.length && <span className="text-xs font-semibold rounded-lg px-2 py-1 bg-red-400/15 text-red-400">{s.skipped.length} не сделано</span>}
+              {!!s.partial && <span className="text-xs font-semibold rounded-lg px-2 py-1 bg-amber-400/15 text-amber-400">{s.partial} частично</span>}
+            </div>
+            {s.skipped?.map((x, i) => (
+              <p key={i} className="flex items-center gap-2 text-sm bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2">
+                <CircleX size={16} className="text-red-400 shrink-0" />
+                <span className="min-w-0 truncate text-zinc-300">{x.name}{x.note && <span className="text-red-400"> · {x.note}</span>}</span>
+              </p>
+            ))}
+          </div>
+        )}
         <button autoFocus onClick={closeCelebrate} className="mt-6 w-full h-12 rounded-2xl bg-lime-400 text-zinc-950 font-bold active:scale-[0.98] transition">Готово</button>
       </div>
     </div>

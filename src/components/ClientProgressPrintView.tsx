@@ -72,7 +72,7 @@ export default function ClientProgressPrintView({ clientId, planIds, clientName,
                   <tr key={s.id} className="border-b border-zinc-100">
                     <td className="py-1 pr-2 text-zinc-500 whitespace-nowrap">{s.date}</td>
                     <td className="py-1 pr-2 font-medium">{s.dayName || "—"}</td>
-                    <td className="py-1 pr-2 text-zinc-600 whitespace-nowrap">{s.done}/{s.total} выполнено</td>
+                    <td className="py-1 pr-2 text-zinc-600 whitespace-nowrap">{s.done}/{s.total} выполнено{(s.items ?? []).some((i) => i.skipped) ? `, не сделано: ${(s.items ?? []).filter((i) => i.skipped).length}` : ""}</td>
                     <td className="py-1 text-zinc-500">{s.review}</td>
                   </tr>
                 ))}

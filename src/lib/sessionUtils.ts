@@ -1,5 +1,5 @@
 import { fmtSet, parseNum, parseRest, today } from "./format";
-import type { Day, Exercise, Metric, Session } from "../types";
+import type { Day, Exercise, Metric, Session, SessionItem } from "../types";
 
 // Разбор путей 3.14: сводка упражнения из «разных подходов» — подходы по числу строк, вес и
 // повторы первой. Пишется вместе со строками, чтобы простой режим, печать и генератор не видели пустоту.
@@ -113,6 +113,18 @@ export const isRepeatOf = (sessions: Session[], day: Day, date: string) =>
 /** Вес последнего сделанного подхода с весом; нет такого — "" */
 export const lastFactWeight = (sets: SetVal[] | undefined) =>
   [...(sets ?? [])].reverse().find((r) => isFact(r) && r.weight)?.weight ?? "";
+
+/** Итог упражнения в записанной тренировке: отмечено «не сделано», сделано частично (меньше
+ *  подходов, чем в плане), сделано или без отметок (старые записи, сохранённые «как есть»). */
+export type ItemStatus = "done" | "partial" | "skipped" | "none";
+export function itemStatus(it: Pick<SessionItem, "skipped" | "actualSets" | "plannedSets">): ItemStatus {
+  if (it.skipped) return "skipped";
+  const f = (it.actualSets ?? []).filter(isFact).length;
+  if (!f) return "none";
+  const plan = it.plannedSets?.length ?? 0;
+  return plan && f < plan ? "partial" : "done";
+}
+export const skippedCount = (s: Pick<Session, "items">) => (s.items ?? []).filter((i) => i.skipped).length;
 
 /** Копия проведённого дня: вес — фактический из тренировки (последний сделанный), подходы и
  *  повторы — как в плане. Строки «разных подходов» берут вес своего подхода, лишние — последний. */

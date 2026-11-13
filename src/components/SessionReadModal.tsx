@@ -1,8 +1,8 @@
-import { CheckCircle2, ChevronDown, ChevronRight, Eye, Flame, X } from "lucide-react";
+import { CheckCircle2, ChevronDown, ChevronRight, CircleDashed, CircleX, Eye, Flame, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useState } from "react";
 import { fmtDate, fmtSet } from "../lib/format";
-import { fmtRpe, isFact, tonnageOf } from "../lib/sessionUtils";
+import { fmtRpe, isFact, itemStatus, skippedCount, tonnageOf } from "../lib/sessionUtils";
 import { FeelingBadge } from "./FeelingScale";
 import type { Session } from "../types";
 
@@ -34,6 +34,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
             <span className="text-xs text-zinc-500">{fmtDate(session.date)}</span>
             <span className="text-zinc-700 text-xs">·</span>
             <span className="text-xs text-zinc-500">{session.done}/{session.total} упр.</span>
+            {skippedCount(session) > 0 && <span className="text-xs text-red-400">✕ {skippedCount(session)} не сделано</span>}
             {session.fromClient && (
               <span className="text-[11px] bg-cyan-400/10 text-cyan-400 rounded-full px-1.5 py-0.5 leading-none">клиент</span>
             )}
@@ -59,6 +60,7 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
 
           // Тоннаж по фактическим подходам
           const tonnage = tonnageOf(item.actualSets ?? []);
+          const status = itemStatus(item);
 
           return (
             <div key={idx} className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
@@ -68,8 +70,12 @@ export default function SessionReadModal({ session, onClose }: { session: Sessio
                 className="w-full flex items-center gap-2 px-3 py-2.5 bg-zinc-800/40 text-left"
               >
                 {isOpen ? <ChevronDown size={16} className="text-zinc-400 shrink-0" /> : <ChevronRight size={16} className="text-zinc-400 shrink-0" />}
-                <span className="text-lime-400 font-semibold text-sm shrink-0">{idx + 1}</span>
-                <span className="flex-1 font-semibold text-sm min-w-0 truncate">{item.name || "—"}</span>
+                {status === "skipped" ? <CircleX size={16} className="text-red-400 shrink-0" aria-label="Не сделано" />
+                  : status === "partial" ? <CircleDashed size={16} className="text-amber-400 shrink-0" aria-label="Частично" />
+                  : <span className="text-lime-400 font-semibold text-sm shrink-0">{idx + 1}</span>}
+                <span className={`flex-1 font-semibold text-sm min-w-0 truncate ${status === "skipped" ? "line-through text-zinc-400" : ""}`}>{item.name || "—"}</span>
+                {status === "skipped" && <span className="text-[11px] bg-red-400/10 text-red-400 rounded-lg px-1.5 py-0.5 shrink-0">не сделано</span>}
+                {status === "partial" && <span className="text-[11px] bg-amber-400/10 text-amber-400 rounded-lg px-1.5 py-0.5 shrink-0">{(item.actualSets ?? []).filter(isFact).length} из {item.plannedSets?.length}</span>}
                 {/* Огонёчки — прежняя шкала усилия, у старых записей */}
                 {item.effort > 0 && (
                   <span className="flex items-center gap-0.5 shrink-0" title="Нагрузка (старая шкала)">

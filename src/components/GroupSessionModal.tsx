@@ -1,13 +1,13 @@
 import WorkoutPill from "./WorkoutPill";
 import { haptic } from "../hooks/useCountUp";
 import ClientPickModal, { type PickClient } from "./ClientPickModal";
-import { Check, CheckCircle2, MessageSquare, Minimize2, Timer, UserPlus, Users, X } from "lucide-react";
+import { Check, CheckCircle2, CircleX, MessageSquare, Minimize2, Timer, UserPlus, Users, X } from "lucide-react";
 import { useModalA11y } from "../hooks/useModalA11y";
 import { useScrollAnchor } from "../hooks/useScrollAnchor";
 import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
 import { loadViewState, saveViewState } from "../lib/viewState";
-import { readSlotDraft, useSessionSlot } from "../hooks/useSessionSlot";
-import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SetCountRow, SupersetRounds, WorkoutDatePick, canRemoveSet, doneSets, tonnageOf } from "./SessionParts";
+import { readSlotDraft, useSessionSlot, type ExMeta } from "../hooks/useSessionSlot";
+import { LastTimeBar, PREV_COLS, PrevCell, RpePick, SET_COLS, SetCountRow, SupersetRounds, WorkoutDatePick, askSkip, canRemoveSet, canSkip, doneSets, ProgressBar, SkipButton, SkippedRow, skipPatch, tonnageOf } from "./SessionParts";
 import { useEffect, useState } from "react";
 import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
@@ -78,9 +78,9 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
   const s = useSessionSlot(client.id, trainerId, onFinished, groupId, client.name);
   const { plans, planId, setPlanId, plan, dayId, setDayId, day, membership, finished, busy,
     vals, meta, setVal, setMetaFor, mood, setMood, wellbeing, setWellbeing,
-    review, setReview, clientRating, setClientRating, doneEx, totalTonnage, finish, prevByName } = s;
+    review, setReview, clientRating, setClientRating, doneEx, skippedEx, totalTonnage, finish, prevByName } = s;
   // Как в индивидуальной: текущее — первое невыполненное, выполненные сворачиваются
-  const currentId = day?.exercises.find((ex) => ex.name && !meta[ex.id]?.done)?.id;
+  const currentId = day?.exercises.find((ex) => ex.name && !meta[ex.id]?.done && !meta[ex.id]?.skipped)?.id;
   const [openDone, setOpenDone] = useState<Record<string, boolean>>({});
   // Только что отмеченное остаётся открытым (огоньки за последние подходы); раскрытые
   // выполненные сворачиваются, когда отмечают подход в другом упражнении
@@ -123,7 +123,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
             <>
               {day.exercises.length > 0 && (
                 <div className="h-1 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full rounded-full bg-lime-400 transition-[width] duration-300" style={{ width: `${(doneEx / day.exercises.length) * 100}%` }} />
+                  <ProgressBar done={doneEx} skipped={skippedEx} total={day.exercises.length} />
                 </div>
               )}
               <LastTimeBar last={s.last} applied={s.lastApplied} onApply={s.applyLast} onUndo={s.undoLast} />
@@ -138,8 +138,9 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                   const idx = block.startIdx + k;
                   const rows = vals[ex.id] || [];
                   const prevSets = prevByName[exKey(ex.name)]?.sets;
-                  const md = meta[ex.id] || { done: false, note: "", setsDone: {} };
+                  const md: ExMeta = meta[ex.id] || { done: false, note: "", setsDone: {} };
                   const tonnage = ex.kind === "functional" ? 0 : tonnageOf(doneSets(rows, meta[ex.id])); // функциональное: вес тут не про подходы, тоннаж не считаем
+                  if (md.skipped) return <SkippedRow key={ex.id} exId={ex.id} label={exLabel(day, idx)} name={ex.name} note={md.note} onUndo={() => setMetaFor(ex.id, { skipped: false })} />;
                   const shell = `bg-zinc-900 border rounded-2xl p-3 transition ${md.done ? "border-lime-400/40" : ex.id === currentId ? "border-lime-400/70 ring-1 ring-lime-400/40" : "border-zinc-800"}`;
                   if (md.done && !openDone[ex.id]) {
                     const fact = rows.filter((r) => r.weight || r.reps).map((r) => fmtSet(r.weight, r.reps)).join(", ");
@@ -162,6 +163,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                           <p className="text-xs text-zinc-500 mt-0.5">цель: {exSummary(ex)}{tonnage > 0 && <> · тоннаж <span className="text-orange-400">{fmtTonnage(tonnage)}</span></>}</p>
                           {md.done && <button onClick={() => setMetaFor(ex.id, { done: false })} className="text-xs text-zinc-500 underline underline-offset-2 py-1 hover:text-zinc-300 transition">Снять отметку</button>}
                         </div>
+                        {canSkip(md) && <SkipButton onClick={async () => { const note = await askSkip(ex.name, md.note); if (note !== null) setMetaFor(ex.id, skipPatch(note)); }} />}
                         <button onClick={() => { if (!md.done) setMetaFor(ex.id, { done: true }); setOpenDone((o) => ({ ...o, [ex.id]: false })); }}
                           className={`shrink-0 text-xs px-3 h-11 rounded-lg font-medium transition ${md.done ? "bg-lime-400/20 text-lime-400" : "bg-zinc-800 text-zinc-300 hover:text-zinc-100"}`}>{md.done ? "Свернуть" : "Готово"}</button>
                       </div>
@@ -216,7 +218,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="text-sm text-zinc-500 shrink-0"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span>
+                <span className="text-sm text-zinc-500 shrink-0"><span className="text-lime-400 font-semibold">{doneEx}</span>/{day.exercises.length} упр.{skippedEx > 0 && <span className="text-red-400"> · ✕{skippedEx}</span>}{totalTonnage > 0 && <span className="block text-xs text-orange-400 font-semibold">{fmtTonnage(totalTonnage)}</span>}</span>
                 {!finished && <button onClick={() => finish(date)} disabled={busy} className="flex-1 min-w-0 h-12 bg-lime-400 text-zinc-950 font-bold rounded-xl hover:bg-lime-300 transition active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-1.5"><CheckCircle2 size={18} className="shrink-0" /> <span className="truncate">Завершить: {client.name}</span> {membership?.type === "sessions" && <RemainingBadge remaining={membership.remaining !== "" ? String(combinedRemaining(membership)) : null} />}</button>}
               </div>
             </>
@@ -341,14 +343,25 @@ function SetRowsFor({ name, color, ex, slot, startRest }: {
   }
   const rows = slot.vals[ex.id] || [];
   const prevSets = slot.prevByName[exKey(ex.name)]?.sets;
-  const md = slot.meta[ex.id] || { done: false, note: "", setsDone: {} };
+  const md: ExMeta = slot.meta[ex.id] || { done: false, note: "", setsDone: {} };
+  if (md.skipped) return (
+    <div className="flex items-center gap-2 py-2">
+      <span className="w-1.5 h-4 rounded-full shrink-0" style={{ background: color }} />
+      <CircleX size={15} className="text-red-400 shrink-0" />
+      <span className="text-sm text-zinc-400 line-through min-w-0 truncate">{name}</span>
+      <span className="text-xs text-red-400 min-w-0 truncate">{md.note || "не сделано"}</span>
+      <button onClick={() => slot.setMetaFor(ex.id, { skipped: false })} className="ml-auto shrink-0 rounded-lg px-3 h-11 text-xs font-medium bg-zinc-800 text-zinc-300">Вернуть</button>
+    </div>
+  );
   return (
     <div className="py-2">
       <div className="flex items-center gap-2 mb-1.5">
         <span className="w-1.5 h-4 rounded-full shrink-0" style={{ background: color }} />
         <span className="text-sm font-semibold text-zinc-200 min-w-0 truncate">{name}</span>
+        {canSkip(md) && <button onClick={async () => { const note = await askSkip(ex.name, md.note); if (note !== null) slot.setMetaFor(ex.id, skipPatch(note)); }} aria-label={`${name}: не сделано`}
+          className="ml-auto shrink-0 w-11 h-11 rounded-lg bg-zinc-800 text-red-300 flex items-center justify-center"><X size={16} /></button>}
         <button onClick={() => slot.setMetaFor(ex.id, { done: !md.done })}
-          className={`ml-auto shrink-0 flex items-center gap-1 rounded-lg px-3 h-11 text-xs font-medium transition ${
+          className={`${canSkip(md) ? "" : "ml-auto "}shrink-0 flex items-center gap-1 rounded-lg px-3 h-11 text-xs font-medium transition ${
             md.done ? "bg-lime-400/15 text-lime-400" : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"}`}>
           {md.done ? <><CheckCircle2 size={14} /> сделано</> : "Готово"}
         </button>
