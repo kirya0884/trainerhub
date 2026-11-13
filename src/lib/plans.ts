@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import { cached } from "./offlineCache";
+import { fetchAllIn } from "./fetchAll";
 import type { Mesocycle, Plan, Exercise, SetRow } from "../types";
 
 // ponytail: построчный CRUD без батчинга — для размеров планов тренера (десятки дней/упражнений) этого достаточно
@@ -23,16 +24,15 @@ export async function fetchPlan(planId: string): Promise<Plan> {
   if (e2) throw e2;
   const dayIds = (days ?? []).map((d) => d.id);
 
-  const { data: exercises, error: e3 } = dayIds.length
-    ? await supabase.from("plan_exercises").select("*").in("day_id", dayIds).order("position")
-    : { data: [] as any[], error: null };
-  if (e3) throw e3;
-  const exIds = (exercises ?? []).map((e) => e.id);
+  // Постранично: больше 1000 строк сервер за раз не отдаёт и молчит. В большом плане подходов
+  // за 1000 — хвост (4-й, 5-й подходы части упражнений) пропадал с экрана, а с ним и из копий дня.
+  // Порядок — по уникальному ключу, иначе страницы пересекаются.
+  const exercises = await fetchAllIn<any>(dayIds, (chunk, from, to) =>
+    supabase.from("plan_exercises").select("*").in("day_id", chunk).order("position").order("id").range(from, to));
+  const exIds = exercises.map((e) => e.id);
 
-  const { data: setRows, error: e4 } = exIds.length
-    ? await supabase.from("plan_exercise_set_rows").select("*").in("exercise_id", exIds).order("position")
-    : { data: [] as any[], error: null };
-  if (e4) throw e4;
+  const setRows = await fetchAllIn<any>(exIds, (chunk, from, to) =>
+    supabase.from("plan_exercise_set_rows").select("*").in("exercise_id", chunk).order("exercise_id").order("position").range(from, to));
 
   const rowsByEx: Record<string, SetRow[]> = {};
   for (const r of setRows ?? []) (rowsByEx[r.exercise_id] ??= []).push({ id: r.id, weight: r.weight, reps: r.reps });
