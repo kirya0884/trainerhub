@@ -38,6 +38,7 @@ import { lazyRetry } from "./lib/lazy";
 import { ScreenSkeleton } from "./components/Skeleton";
 import { setAnalyticsContext } from "./lib/events";
 import RepsMark from "./components/RepsMark";
+import { TIER_NAMES, fetchMySub, lastMySub, type Tier } from "./lib/subscription";
 import { cached, onRevalidate, peekCache, setCacheOwner, signOutAndForget, staleAtOf } from "./lib/offlineCache";
 import { isNetworkError } from "./lib/outbox";
 import { assistantConnectedCached } from "./lib/assistant";
@@ -336,6 +337,15 @@ export default function App() {
   const [showPinSettings, setShowPinSettings] = useState(false);
   const [showTrash, setShowTrash] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
+  // Тариф для значка в шапке: сразу последний известный, потом свежий с сервера (и после окна подписки)
+  const [myTier, setMyTier] = useState<Tier>("start");
+  useEffect(() => {
+    if (!dataTrainerId) return;
+    let alive = true;
+    setMyTier(lastMySub(dataTrainerId)?.tier ?? "start");
+    fetchMySub(dataTrainerId).then((s) => { if (alive && s) setMyTier(s.tier); });
+    return () => { alive = false; };
+  }, [dataTrainerId, showSubscription]);
   const [trainerName, setTrainerName] = useState("");
   const [trainerAvatar, setTrainerAvatar] = useState("");
   const [trainerAccent, setTrainerAccent] = useState("#c6ff3d");
@@ -723,9 +733,8 @@ export default function App() {
             )}
             <span className="truncate">{trainerName || session.user.email}</span>
           </button>
-          {/* ponytail: план пока всегда «Старт» — подключится к биллингу при интеграции оплаты */}
           <button onClick={() => setShowSubscription(true)} className="flex items-center gap-1 shrink-0 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-400 text-[11px] font-semibold rounded-full px-2 py-0.5 transition">
-            <Sparkles size={10} className="text-lime-400" /> Старт
+            <Sparkles size={10} className="text-lime-400" /> {TIER_NAMES[myTier]}
           </button>
         </div>
         <Suspense fallback={<div className="pt-2"><ScreenSkeleton /></div>}>
