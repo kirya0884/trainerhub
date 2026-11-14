@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { ArrowUp, CalendarDays, Check, ChevronLeft, ClipboardList, Clock, Dumbbell, Loader2, Plus, Sparkles, Trash2, UserRound, WifiOff } from "lucide-react";
 import type { ClientListItem, PlanOverviewItem } from "../lib/clients";
 import { registerModal } from "../lib/modalHistory";
@@ -71,7 +71,8 @@ export default function AssistantChat({ open, trainerId, clients, plans, onClose
   // Окно всегда ровно в видимой области экрана, как в мессенджере: с клавиатурой шапка остаётся
   // наверху, сжимается только лента. Видимую область берём из visualViewport — так и на iOS, где
   // клавиатура сдвигает видимую часть, и там, где браузер сам уменьшает страницу.
-  const view = useVisibleArea(open);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const typing = useVisibleArea(open, panelRef, listRef);
 
   const openCard = () => [...msgs].reverse().find((m): m is Extract<Msg, { from: "card" }> => m.from === "card" && m.card.status === "open");
 
@@ -87,11 +88,6 @@ export default function AssistantChat({ open, trainerId, clients, plans, onClose
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
-  // Клавиатура открылась — лента стала ниже: держим внизу последнее сообщение, как в мессенджере
-  const viewH = view?.height;
-  useEffect(() => {
-    if (open && viewH) listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
-  }, [open, viewH]);
   // Страница под помощником стоит на месте — это делает useScrollLock(open) выше
   useEffect(() => {
     if (!open) return;
@@ -355,10 +351,14 @@ export default function AssistantChat({ open, trainerId, clients, plans, onClose
   return (
     // Выезжает снизу поверх всего и уезжает обратно. Скрытый — visibility:hidden после анимации:
     // не ловит касания, Tab и экранный диктор. С клавиатурой — в видимой над ней области.
-    <div role="dialog" aria-label="Помощник" aria-hidden={!open}
+    <>
+    {/* Сплошной фон под помощником, пока он открыт: когда iPhone открывает или прячет клавиатуру,
+        видимая область на миг сдвигается раньше окна — в щели виден был экран под ним */}
+    <div aria-hidden className="fixed inset-0 z-[59] bg-zinc-950 motion-reduce:!transition-none"
+      style={{ visibility: open ? "visible" : "hidden", transition: `visibility 0s linear ${open ? ".28s" : "0s"}` }} />
+    <div ref={panelRef} role="dialog" aria-label="Помощник" aria-hidden={!open}
       className="fixed inset-x-0 top-0 bottom-0 z-[60] bg-zinc-950 text-zinc-100 flex flex-col overscroll-none motion-reduce:!transition-none"
       style={{
-        ...(view ? { top: view.top, height: view.height, bottom: "auto" } : null),
         transform: open ? "translateY(0)" : "translateY(100%)",
         visibility: open ? "visible" : "hidden",
         transition: `transform .28s cubic-bezier(.2,.8,.2,1), visibility 0s linear ${open ? "0s" : ".28s"}`,
@@ -435,11 +435,19 @@ export default function AssistantChat({ open, trainerId, clients, plans, onClose
         </div>
 
         {/* Низ: над полосой «домой» iPhone и жестовой панелью Android; с клавиатурой окно стоит над ней — отступ не нужен */}
-        <div className="shrink-0 border-t border-zinc-800 px-2.5 pt-2 bg-zinc-950" style={{ paddingBottom: view?.typing ? "8px" : "max(12px, calc(env(safe-area-inset-bottom) + 6px))" }}>
+        <div className="shrink-0 border-t border-zinc-800 px-2.5 pt-2 bg-zinc-950" style={{ paddingBottom: typing ? "8px" : "max(12px, calc(env(safe-area-inset-bottom) + 6px))" }}>
           {!online && <p className="flex items-center gap-2 text-xs text-amber-400 px-1 pb-2"><WifiOff size={14} /> Нет интернета. Текст не пропадёт, отправь, когда появится связь.</p>}
           <div className="flex items-end gap-2">
             <textarea
               ref={inputRef}
+              // Первое касание: фокус без прокрутки — иначе iPhone сначала сдвигает весь экран к полю,
+              // а потом окно догоняет клавиатуру (прыгает шапка). Уже в фокусе — касание как обычно.
+              onTouchEnd={(e) => {
+                const el = e.currentTarget;
+                if (document.activeElement === el || el.disabled) return;
+                e.preventDefault();
+                el.focus({ preventScroll: true });
+              }}
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(); } }}
@@ -459,34 +467,51 @@ export default function AssistantChat({ open, trainerId, clients, plans, onClose
         </div>
       </div>
     </div>
+    </>
   );
 }
 
-/** Видимая часть экрана (над клавиатурой) и набирают ли сейчас текст. null — открытое окно не меряем */
-function useVisibleArea(active: boolean) {
-  const [box, setBox] = useState<{ top: number; height: number; typing: boolean } | null>(null);
+/**
+ * Окно помощника всегда ровно в видимой части экрана (над клавиатурой), как в мессенджере:
+ * шапка наверху, сжимается только лента. Размер ставим прямо в style, без перерисовки React —
+ * иначе окно отстаёт от клавиатуры на кадр и дёргается. Возвращает «сейчас набирают текст».
+ */
+function useVisibleArea(active: boolean, panelRef: RefObject<HTMLDivElement | null>, listRef: RefObject<HTMLDivElement | null>) {
+  const [typing, setTyping] = useState(false);
   useEffect(() => {
     const vv = window.visualViewport;
-    if (!active || !vv) { setBox(null); return; }
-    const update = () => {
+    const panel = panelRef.current;
+    if (!active || !vv || !panel) return;
+    let lastH = 0, frame = 0;
+    const apply = () => {
+      frame = 0;
       // Масштаб пальцами — окно не трогаем, иначе оно «прыгает» за увеличенной областью
       if (Math.abs(vv.scale - 1) > 0.01) return;
-      const next = { top: Math.round(vv.offsetTop), height: Math.round(vv.height), typing: isTextField(document.activeElement) };
-      setBox((b) => (b && b.top === next.top && b.height === next.height && b.typing === next.typing ? b : next));
+      const h = Math.round(vv.height);
+      panel.style.top = `${Math.round(vv.offsetTop)}px`;
+      panel.style.height = `${h}px`;
+      panel.style.bottom = "auto";
+      // Клавиатура открылась — лента стала ниже: держим внизу последнее сообщение
+      if (lastH && h < lastH) listRef.current?.scrollTo({ top: listRef.current.scrollHeight });
+      lastH = h;
+      setTyping(isTextField(document.activeElement));
     };
+    const update = () => { if (!frame) frame = requestAnimationFrame(apply); };
     // После ухода фокуса клавиатура закрывается не сразу, а resize в standalone iOS может не прийти
     let t = 0;
-    const later = () => { clearTimeout(t); t = window.setTimeout(update, 60); };
-    update();
+    const later = () => { update(); clearTimeout(t); t = window.setTimeout(update, 300); };
+    apply();
     vv.addEventListener("resize", update);
     vv.addEventListener("scroll", update);
     document.addEventListener("focusin", later);
     document.addEventListener("focusout", later);
     return () => {
-      clearTimeout(t);
+      clearTimeout(t); cancelAnimationFrame(frame);
       vv.removeEventListener("resize", update); vv.removeEventListener("scroll", update);
       document.removeEventListener("focusin", later); document.removeEventListener("focusout", later);
+      panel.style.top = panel.style.height = panel.style.bottom = "";
+      setTyping(false);
     };
-  }, [active]);
-  return box;
+  }, [active, panelRef, listRef]);
+  return typing;
 }
