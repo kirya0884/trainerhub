@@ -84,7 +84,7 @@ export default function RenewModal({ trainerId, clientId, name, onDone, onClose 
     <ModalShell title={`Продлить — ${name}`} icon={<RefreshCw size={16} className="text-lime-400" />} onClose={onClose}>
       <div className="p-4 space-y-3">
         {!data ? <SkeletonRows rows={2} /> : options.length === 0 ? (
-          <p className="text-sm text-zinc-400">Пакет не настроен и шаблонов нет. Укажи пакет в профиле клиента, во вкладке «Оплаты».</p>
+          <p className="text-sm text-zinc-400">Пакет не настроен и шаблонов нет. Укажи пакет в карточке клиента: нажми на абонемент под именем.</p>
         ) : (
           <>
             <div className="space-y-2">

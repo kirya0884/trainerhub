@@ -613,7 +613,7 @@ export default function PlanEditor({ planId, trainerId, clientId, onBack }: { pl
                 </div>
               </div>
             )}
-            <p className="text-zinc-600 text-xs">Изменить можно во вкладке «Абонемент» в карточке клиента.</p>
+            <p className="text-zinc-600 text-xs">Изменить можно в карточке клиента: нажми на абонемент под именем.</p>
           </div>
         </ModalShell>
       )}

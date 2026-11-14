@@ -113,7 +113,7 @@ export default function AuthScreen() {
                   <div className="flex items-center justify-between mb-2">
                     <label htmlFor="auth-password" className="text-sm font-medium">Пароль</label>
                     {!(mode === "trainer" && isSignup) && (
-                      <button type="button" onClick={() => { setForgotPw(true); resetMsg(); }} className="text-sm text-zinc-400 hover:text-zinc-100">Забыл пароль?</button>
+                      <button type="button" onClick={() => { setForgotPw(true); resetMsg(); }} className="text-sm text-zinc-400 hover:text-zinc-100">Не помнишь пароль?</button>
                     )}
                   </div>
                   <input id="auth-password" type="password" autoComplete={mode === "trainer" && isSignup ? "new-password" : "current-password"} required value={password} onChange={(e) => setPassword(e.target.value)} placeholder={mode === "trainer" && isSignup ? "Минимум 8 символов" : ""} className={inputCls} />

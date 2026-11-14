@@ -99,11 +99,13 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
   const saveProfile = () => { if (profile) runSave("profile", async () => { await trainerApi.saveTrainerProfile(trainerId, profile); onSaved?.(profile.name, profile.avatarUrl); }); };
   const saveBrand = () => runSave("brand", () => trainerApi.saveTrainerBrand(trainerId, brand));
 
+  // Выход — только после подтверждения: кнопка стоит среди настроек, легко задеть
+  const signOut = onSignOut && (async () => { if (await ask("Выйти из аккаунта?", { ok: "Выйти", danger: true })) onSignOut(); });
   // Без профиля нечего показать, но выйти из аккаунта должно быть можно и тогда
   if (!profile && profileFailed) return (
     <div className="p-4 space-y-2">
       <LoadError onRetry={() => setAttempt((n) => n + 1)} />
-      {onSignOut && <button onClick={onSignOut} className="w-full h-11 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition">Выйти</button>}
+      {signOut && <button onClick={signOut} className="w-full h-11 rounded-xl text-sm font-semibold text-red-400 hover:bg-red-500/10 transition">Выйти</button>}
     </div>
   );
   // Статистика не обязательна: без неё профиль открывается с прочерками
@@ -305,7 +307,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
                   <input type="text" inputMode="numeric" value={rawTpl[t.id]?.sessions ?? String(draft.sessions || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: e.target.value}}))} onBlur={() => { const v = Math.max(1, parseInt(rawTpl[t.id]?.sessions ?? "") || draft.sessions); setRawTpl(p => ({...p, [t.id]: {...p[t.id], sessions: undefined as any}})); save({ sessions: v }); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Цена пакета ₽
-                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.price ?? String(draft.price || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: e.target.value}}))} onBlur={() => { const v = parseInt(rawTpl[t.id]?.price ?? "") || 0; setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: undefined as any}})); save({ price: v }); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
+                  <input type="text" inputMode="numeric" value={rawTpl[t.id]?.price ?? String(draft.price || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: e.target.value}}))} onBlur={() => { const v = parseInt(rawTpl[t.id]?.price ?? "") || 0; setRawTpl(p => ({...p, [t.id]: {...p[t.id], price: undefined as any}})); save({ price: v }); }} placeholder="укажи" className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
                 </label>
                 <label className="text-xs text-zinc-500">Скидка %
                   <input type="text" inputMode="numeric" value={rawTpl[t.id]?.discount ?? String(draft.discount || "")} onChange={(e) => setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: e.target.value}}))} onBlur={() => { const v = Math.min(100, Math.max(0, parseInt(rawTpl[t.id]?.discount ?? "") || 0)); setRawTpl(p => ({...p, [t.id]: {...p[t.id], discount: undefined as any}})); save({ discount: v }); }} className="w-full mt-0.5 bg-zinc-700 rounded-lg px-2 py-1 text-sm text-zinc-100 outline-none focus:ring-1 focus:ring-lime-400/40" />
@@ -393,7 +395,7 @@ export default function TrainerProfile({ trainerId, email, onSaved, themeMode, o
                 else if (r === "error") setUpdState("error");
               }} />
             <SettingsRow icon={ScrollText} label="Документы" onClick={() => setShowDocs(true)} />
-            {onSignOut && <SettingsRow icon={LogOut} label="Выйти" danger onClick={onSignOut} />}
+            {signOut && <SettingsRow icon={LogOut} label="Выйти" danger onClick={signOut} />}
             <SettingsRow icon={Trash2} label="Удалить аккаунт" danger onClick={() => deleteMyAccount("trainer")} />
           </SettingsGroup>
           <p className="text-center text-[11px] text-zinc-600">Версия {__APP_VERSION__}</p>

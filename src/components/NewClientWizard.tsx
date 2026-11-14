@@ -157,7 +157,7 @@ export default function NewClientWizard({ trainerId, existingCount, onCreated, o
 
         {step === 3 && (
           <>
-            <p className="text-sm text-zinc-400">Пакет тренировок. Подписку и свой пакет можно настроить потом в профиле, во вкладке «Оплаты».</p>
+            <p className="text-sm text-zinc-400">Пакет тренировок. Подписку и свой пакет можно настроить потом в карточке клиента: нажми на абонемент под именем.</p>
             <div className="space-y-2">
               {templates.map((t) => (
                 <button key={t.id} onClick={() => setTplId(t.id)} aria-pressed={tplId === t.id} className={tile(tplId === t.id)}>

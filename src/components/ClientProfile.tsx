@@ -477,7 +477,7 @@ function InviteBlock({ clientId, email, hasAccount, onFixEmail }: { clientId: st
       // Ссылка бывает, только если клиент ни разу не входил; иначе он входит своим паролем.
       // linked — повтор после сбоя, показываем как обычную выдачу. Отказ (409, 426 — старая версия) — текст сервера в catch
       if (res.link) { setLink(res.link); setEmailSent(!!res.emailSent); }
-      else if (res.status === "already") setMsg("Доступ уже выдан. Если клиент забыл пароль — пусть нажмёт «Забыли пароль?» на экране входа.");
+      else if (res.status === "already") setMsg("Доступ уже выдан. Если клиент не помнит пароль — пусть нажмёт «Не помнишь пароль?» на экране входа.");
       else setMsg("Доступ выдан.");
     } catch (e) {
       setMsg(humanError(e, "Не удалось выдать доступ. Попробуй ещё раз"));

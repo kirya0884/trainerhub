@@ -151,7 +151,7 @@ export default function PinGate({ id, hasPin: known, onUnlock, children }: { id:
         {err && <p className="text-orange-400 text-sm">{err}</p>}
         <button type="submit" disabled={busy} className="w-full bg-lime-400 text-zinc-950 font-semibold rounded-xl py-2.5 hover:bg-lime-300 transition disabled:opacity-50">Войти</button>
         {/* Разбор путей 1.14: раньше выхода не было — после попыток «через 5 минут» по кругу */}
-        <button type="button" onClick={() => { try { localStorage.setItem(resetKey(id), String(Date.now())); } catch { /* нет доступа */ } signOutAndForget(); }} className="w-full h-11 text-sm text-zinc-400 hover:text-zinc-100 transition">Забыл PIN — выйти и войти по паролю</button>
+        <button type="button" onClick={() => { try { localStorage.setItem(resetKey(id), String(Date.now())); } catch { /* нет доступа */ } signOutAndForget(); }} className="w-full h-11 text-sm text-zinc-400 hover:text-zinc-100 transition">Не помнишь PIN? Выйти и войти по паролю</button>
       </form>
     </div>
   );
