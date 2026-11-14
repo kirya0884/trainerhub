@@ -2,7 +2,7 @@ import { Check, ChevronDown, ChevronUp, CircleX, History, Layers, Minus, Plus, U
 import { useEffect, useState } from "react";
 import { addDays, fmtDate, fmtSet, today, repsInput } from "../lib/format";
 import type { LastFact, LastTime } from "../lib/sessionUtils";
-import { RPE_SCALE, doneSets, exKey, fmtRpe, isEmptyDay, isRepeatOf, tonnageOf } from "../lib/sessionUtils";
+import { RPE_SCALE, doneSets, exKey, fmtRpe, isEmptyDay, isRepeatOf, isSetBetter, tonnageOf } from "../lib/sessionUtils";
 import { fetchProgress } from "../lib/progress";
 import { ask, askInput, choose } from "../lib/dialog";
 import { pending } from "../lib/outbox";
@@ -222,9 +222,21 @@ export function PrevCell({ p }: { p?: { weight: string; reps: string; dir?: stri
   return <span className="text-[12px] text-zinc-500 text-center truncate" title="В прошлый раз">{p && p.dir !== "skip" ? fmtSet(p.weight, p.reps) : "—"}</span>;
 }
 
-// Суперсет: на узком экране (до 640 px) название — отдельной строкой во всю ширину, под ним
-// вес/повторы/RPE/отметка; шире — всё в одну строку. Иначе на 320 px названию оставалось ~40 px.
-const SUPERSET_COLS = "grid-cols-[1fr_1fr_2.75rem_3rem] sm:grid-cols-[1fr_3.5rem_3.5rem_2.75rem_3rem]";
+// Суперсет плотно (макет superset-compact.html, вариант A): названия — один раз в шапке, в строках
+// только метки B1/B2; подписи колонок — одной строкой на блок; «было» — мелко внутри поля;
+// номер подхода — слева. Поля 44 px — под палец, как в обычном упражнении.
+const SUPERSET_COLS = "grid-cols-[1.75rem_1fr_1fr_2.75rem_2.75rem]";
+
+/** Поле веса/повторов с «было» мелко под значением */
+function WasInput({ value, onChange, was, label, placeholder, dim }: { value: string; onChange: (v: string) => void; was?: string; label: string; placeholder: string; dim: boolean }) {
+  return (
+    <span className="relative block h-11 min-w-0">
+      <input value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" placeholder={placeholder} aria-label={label}
+        className={`h-11 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${was ? "pb-3" : ""} ${dim ? "text-zinc-400" : ""}`} />
+      {was && <span aria-hidden className="absolute inset-x-0 bottom-1 text-center text-[10px] leading-none text-zinc-500 pointer-events-none truncate px-1">было {was}</span>}
+    </span>
+  );
+}
 
 export function SupersetRounds({ title, color, items, labels, vals, meta, onSetVal, onTapSet, onNote, prev = {}, trainer }: {
   title: string; color: string; items: Exercise[]; labels: string[]; prev?: Record<string, LastFact>;
@@ -275,49 +287,60 @@ export function SupersetRounds({ title, color, items, labels, vals, meta, onSetV
         </p>
       </div>
 
-      {Array.from({ length: rounds }, (_, r) => (
-        <div key={r} className={`pl-4 pr-3 py-2 border-t border-zinc-800 ${r === current ? "bg-lime-400/5" : ""}`}>
-          <div className={`grid ${SUPERSET_COLS} gap-1.5 items-center text-[11px] text-zinc-500 mb-1`}>
-            <span className={`col-span-4 sm:col-span-1 font-semibold ${r === current ? "text-lime-400" : ""}`}>Подход {r + 1}</span>
-            <span className="text-center">Кг</span><span className="text-center">Повт.</span><span className="text-center">RPE</span><span />
-          </div>
-          <div className="space-y-1.5">
-            {named.map((ex) => {
-              const rows = vals[ex.id] || [];
-              if (r >= rows.length) return null;
-              const row = rows[r];
-              const md = meta[ex.id];
-              const isDone = md?.setsDone?.[r] ?? false;
-              const was = prev[exKey(ex.name)]?.sets[r];
-              return (
-                <div key={ex.id}>
-                  <div className={`grid ${SUPERSET_COLS} gap-1.5 items-center`}>
-                    <span className={`col-span-4 sm:col-span-1 min-w-0 truncate text-sm font-medium ${isDone ? "text-zinc-500" : ""}`}>
-                      <span className="font-bold mr-1" style={{ color }}>{labels[items.indexOf(ex)]}</span>{ex.name}
-                      {was && was.dir !== "skip" && <span className="block text-[11px] text-zinc-500 font-normal">было {fmtSet(was.weight, was.reps)}</span>}
-                    </span>
+      <div className={`grid ${SUPERSET_COLS} gap-1.5 pl-[2.375rem] pr-3 pt-1 pb-0.5 border-t border-zinc-800 text-[11px] text-zinc-500 text-center`}>
+        <span /><span>Кг</span><span>Повт.</span><span>RPE</span><span />
+      </div>
+      {Array.from({ length: rounds }, (_, r) => {
+        const open = named.filter((ex) => r < (vals[ex.id] || []).length && !meta[ex.id]?.setsDone?.[r]);
+        return (
+        <div key={r} className={`pl-3 pr-3 py-1.5 border-t border-zinc-800/60 ${r === current ? "bg-lime-400/5" : ""}`}>
+          <div className="flex gap-1.5">
+            <span className={`w-5 shrink-0 pt-3 text-center text-[13px] font-bold ${r === current ? "text-lime-400" : "text-zinc-500"}`} aria-label={`Подход ${r + 1}`}>{r + 1}</span>
+            <div className="flex-1 min-w-0 space-y-1.5">
+              {named.map((ex) => {
+                const rows = vals[ex.id] || [];
+                if (r >= rows.length) return null;
+                const row = rows[r];
+                const isDone = meta[ex.id]?.setsDone?.[r] ?? false;
+                const was = prev[exKey(ex.name)]?.sets[r];
+                const wasOk = was && was.dir !== "skip" ? was : undefined;
+                const better = isDone && isSetBetter(row, was);
+                const label = labels[items.indexOf(ex)];
+                return (
+                  <div key={ex.id} className={`grid ${SUPERSET_COLS} gap-1.5 items-center`}>
+                    <span className="text-center text-[13px] font-bold" style={{ color }} title={ex.name}>{label}</span>
                     {ex.kind === "functional" ? (
-                      <span className="col-span-3 text-xs text-zinc-400 text-center truncate">{[ex.duration, ex.weight].filter(Boolean).join(" · ") || "функц."}</span>
+                      <span className="col-span-3 h-11 rounded-lg bg-zinc-800/60 flex items-center justify-center text-xs text-zinc-400 truncate px-2">{[ex.duration, ex.weight].filter(Boolean).join(" · ") || "функц."}</span>
                     ) : (
                       <>
-                        <input value={row.weight} onChange={(e) => onSetVal(ex.id, r, { weight: e.target.value })} inputMode="decimal" placeholder="кг" aria-label={`${ex.name}, подход ${r + 1}: вес`}
-                          className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
-                        <input value={row.reps} onChange={(e) => onSetVal(ex.id, r, { reps: repsInput(e.target.value) })} inputMode="decimal" placeholder="повт" aria-label={`${ex.name}, подход ${r + 1}: повторы`}
-                          className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
+                        <WasInput value={row.weight} onChange={(v) => onSetVal(ex.id, r, { weight: v })} was={wasOk?.weight || undefined} placeholder="кг" dim={isDone}
+                          label={`${ex.name}, подход ${r + 1}: вес`} />
+                        <WasInput value={row.reps} onChange={(v) => onSetVal(ex.id, r, { reps: repsInput(v) })} was={wasOk?.reps || undefined} placeholder="повт" dim={isDone}
+                          label={`${ex.name}, подход ${r + 1}: повторы`} />
                         <RpePick value={row.rpe} onChange={(v) => onSetVal(ex.id, r, { rpe: v })} trainer={trainer} label={`${ex.name}, подход ${r + 1}: RPE`} />
                       </>
                     )}
                     <button onClick={() => onTapSet(ex, r, rows.length)} aria-pressed={isDone} aria-label={isDone ? `${ex.name}: снять отметку с подхода ${r + 1}` : `${ex.name}: подход ${r + 1} выполнен`}
-                      className={`h-12 w-12 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
-                      <Check size={20} strokeWidth={2.5} key={isDone ? "d" : "u"} className={isDone ? "anim-draw" : undefined} />
+                      title={better ? "Больше, чем в прошлый раз" : undefined}
+                      className={`h-11 w-11 rounded-xl flex items-center justify-center transition active:scale-95 ${isDone ? "bg-lime-400 text-zinc-950" : "bg-zinc-800 text-zinc-500"}`}>
+                      {better ? <span key="pr" className="anim-pop inline-block text-xl leading-none">🏆</span>
+                        : <Check size={20} strokeWidth={2.5} key={isDone ? "d" : "u"} className={isDone ? "anim-draw" : undefined} />}
                     </button>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+              {/* Всё по плану — одна кнопка вместо галочки у каждого упражнения */}
+              {r === current && open.length > 1 && (
+                <button onClick={() => open.forEach((ex) => onTapSet(ex, r, (vals[ex.id] || []).length))}
+                  className="w-full h-10 rounded-xl border border-dashed border-zinc-700 text-[13px] font-semibold text-zinc-300 hover:border-lime-400/60 hover:text-lime-400 transition flex items-center justify-center gap-1.5">
+                  <Check size={15} strokeWidth={2.5} /> Отметить весь подход {r + 1}
+                </button>
+              )}
+            </div>
           </div>
         </div>
-      ))}
+        );
+      })}
 
       <div className="pl-4 pr-3 py-2 border-t border-zinc-800 space-y-1.5">
         {named.map((ex) => (
