@@ -9,7 +9,7 @@
 // Сам текст команды в журнал не пишем, только размеры и счётчик токенов.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  buildCommand, commandPrompt, countUsage, MAX_COMMAND_CHARS, parseModelJson, PLAN_LIMITS, planTier, todayIn, topNames,
+  buildCommand, commandPrompt, countUsage, MAX_COMMAND_CHARS, parseModelJson, PLAN_LIMITS, planTier, promptNames, todayIn, topNames,
   usageWindow,
 } from "./logic.ts";
 
@@ -18,7 +18,7 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
 const YANDEX_API_KEY = Deno.env.get("YANDEX_API_KEY") ?? "";
 const YANDEX_FOLDER_ID = Deno.env.get("YANDEX_FOLDER_ID") ?? "";
-const YANDEX_GPT_MODEL = Deno.env.get("YANDEX_GPT_MODEL") || "yandexgpt/latest";
+const YANDEX_GPT_MODEL = Deno.env.get("YANDEX_GPT_MODEL") || "yandexgpt-lite/latest";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,7 +117,7 @@ Deno.serve(async (req) => {
     if (dayNow == null) return json({ error: "limit", reason: "day", usage: { ...usage, dayUsed: limits.day } }, 429);
     const refund = () => admin.rpc("assistant_refund", { p_trainer: uid, p_day: usageDay });
 
-    const messages: Msg[] = [{ role: "system", text: commandPrompt(today, known) }];
+    const messages: Msg[] = [{ role: "system", text: commandPrompt(today, promptNames(known, `${prevText} ${prevResult} ${text}`)) }];
     if (prevText && prevResult) {
       messages.push({ role: "user", text: prevText }, { role: "assistant", text: prevResult }, { role: "user", text: `Поправка к команде: ${text}` });
     } else {
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
       console.error("[assistant] не JSON, длина", answer.text.length);
       return json({ error: "Не получилось разобрать ответ, попробуй сказать иначе" }, 502);
     }
-    const result = buildCommand(raw, today, clients, known);
+    const result = buildCommand(raw, today, clients, known, `${prevText} ${text}`);
     // Не команда («спасибо», шум) — разбор не засчитываем
     const counted = result.action !== "unknown";
     if (!counted) await refund();

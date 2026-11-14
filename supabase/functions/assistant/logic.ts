@@ -121,7 +121,11 @@ export function commandPrompt(today: string, known: string[]): string {
     "Правила:",
     "- action = create_workout, если просят создать или добавить тренировку либо упражнения клиенту. Иначе action = unknown, а в reply одной фразой скажи, что умеешь создавать тренировки клиентам.",
     "- clientMention — как клиент назван в тексте, дословно. clientNames — его имя (и фамилия, если названа) в именительном падеже; если имя уменьшительное, добавь и полную форму: «Ане» → [\"Аня\", \"Анна\"]. Клиент не назван — пустые значения.",
-    "- date.type: today, tomorrow, day_after_tomorrow; weekday — день недели в weekday (1 — понедельник … 7 — воскресенье), nextWeek = true, если сказано «на следующей неделе»; date — число в day и месяц в month, year только если год назван; in_days — «через N дней» в days; none — дата не названа. Сам дату не вычисляй.",
+    "- date.type — одно из: today, tomorrow, day_after_tomorrow, weekday, date, in_days, none.",
+    "  today — «сегодня», tomorrow — «завтра», day_after_tomorrow — «послезавтра».",
+    "  weekday — назван день недели: номер в weekday (1 — понедельник … 7 — воскресенье), nextWeek = true, если сказано «на следующей неделе».",
+    "  date — названо число месяца («20 ноября», «на 5-е»): число в day, месяц в month, year только если год назван.",
+    "  in_days — «через N дней»: N в days. none — дата не названа. Сам дату не вычисляй.",
     "- time — время начала в формате ЧЧ:ММ, 24 часа: «в шесть вечера» → 18:00. Не названо — пусто.",
     "- dayName — название тренировки, только если его назвали («назови Грудь и ноги»). Иначе пусто.",
     "- exercises — в порядке упоминания. «4 по 8», «4 на 8», «4х8» → sets 4, reps \"8\". Вес в килограммах числом в weight: «сто килограмм» → \"100\". Упражнения на время: «планка 3 по минуте» → sets 3, duration \"1 мин\". Числа словами пиши цифрами. Название упражнения пиши полностью, с заглавной буквы, без сокращений.",
@@ -180,6 +184,21 @@ function wordMatch(a: string, b: string): boolean {
   return sa.startsWith(sb) || sb.startsWith(sa);
 }
 
+// В задание модели — не все известные упражнения, а похожие на слова команды (+ самые частые
+// до min). Список целиком — ~2 400 токенов из ~2 700, а модели нужны только упомянутые.
+// known уже отсортирован по частоте (topNames). «твоё/новое» в карточке считается по полному списку.
+export const PROMPT_NAMES_MAX = 25;
+export function promptNames(known: string[], text: string, max = PROMPT_NAMES_MAX, min = 10): string[] {
+  const words = normName(text).split(" ").filter((w) => w.length >= 3 && !/\d/.test(w));
+  const scored = known.map((name, i) => {
+    const nw = normName(name).split(" ").filter((w) => w.length >= 3);
+    return { name, i, score: nw.filter((w) => words.some((t) => wordMatch(t, w))).length };
+  });
+  const hits = scored.filter((x) => x.score > 0).sort((a, b) => b.score - a.score || a.i - b.i).slice(0, max).map((x) => x.name);
+  const rest = known.filter((n) => !hits.includes(n)).slice(0, Math.max(0, min - hits.length));
+  return [...hits, ...rest];
+}
+
 // Ищем клиента у тренера. Список клиентов в Яндекс не уходит — сравнение здесь, на сервере.
 export function matchClient(mention: string, names: string[], clients: { id: string; name: string }[]): ClientMatch {
   const forms = [...names, mention].map(normName).filter(Boolean);
@@ -231,7 +250,19 @@ export function topNames(names: string[], max = MAX_KNOWN_EXERCISES): string[] {
 }
 
 // Ответ модели → то, что увидит тренер. Всё лишнее отбрасываем, длины и числа ограничиваем.
-export function buildCommand(raw: ModelCommand, today: string, clients: { id: string; name: string }[], known: string[]): Command {
+// Модели путают тип даты: «на 20 ноября» → day_after_tomorrow с day 20, month 11; «nextWeek» вместо weekday.
+// Тип поправляем по самому тексту команды: назван месяц или «дд.мм» — значит, число месяца.
+const MONTH_RE = /(январ|феврал|март|апрел|ма[яй]|июн|июл|август|сентябр|октябр|ноябр|декабр)|\d{1,2}[./]\d{1,2}/i;
+export function fixDateSpec(spec: DateSpec | undefined, text: string): DateSpec | undefined {
+  if (!spec || typeof spec !== "object") return spec;
+  const t = String(spec.type);
+  if (t === "nextWeek" || t === "next_week") return { ...spec, type: "weekday", nextWeek: true };
+  const d = Number(spec.day), m = Number(spec.month);
+  if (t !== "date" && MONTH_RE.test(text) && d >= 1 && d <= 31 && m >= 1 && m <= 12) return { ...spec, type: "date" };
+  return spec;
+}
+
+export function buildCommand(raw: ModelCommand, today: string, clients: { id: string; name: string }[], known: string[], text = ""): Command {
   const knownSet = new Set(known.map(normName));
   const exercises: Exercise[] = (Array.isArray(raw?.exercises) ? raw.exercises : [])
     .slice(0, 30)
@@ -251,7 +282,7 @@ export function buildCommand(raw: ModelCommand, today: string, clients: { id: st
     .filter((e) => e.name);
   const action = raw?.action === "create_workout" ? "create_workout" : "unknown";
   const names = (Array.isArray(raw?.clientNames) ? raw.clientNames : []).map((n) => clip(n, 60)).filter(Boolean).slice(0, 4);
-  const date = resolveDate(raw?.date, today);
+  const date = resolveDate(fixDateSpec(raw?.date, text), today);
   return {
     action,
     reply: action === "unknown" ? clip(raw?.reply, 300) || "Я умею создавать тренировки клиентам. Скажи, кому, на какой день и какие упражнения." : "",

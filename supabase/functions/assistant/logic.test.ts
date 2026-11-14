@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildCommand, commandPrompt, countUsage, defaultDayName, matchClient, normTime, parseModelJson, PLAN_LIMITS, planTier, resolveDate, todayIn, topNames,
+  buildCommand, commandPrompt, countUsage, defaultDayName, matchClient, normTime, parseModelJson, PLAN_LIMITS, planTier, promptNames, fixDateSpec, resolveDate, todayIn, topNames,
   usageWindow,
 } from "./logic.ts";
 
@@ -176,4 +176,21 @@ test("в задании есть сегодняшний день и упражн
   assert.match(p, /Сегодня среда, 11\.11\.2026/);
   assert.match(p, /Жим лёжа; Планка/);
   assert.match(commandPrompt(TODAY, []), /Известных упражнений у тренера пока нет/);
+});
+
+test("в задание идут упражнения, похожие на слова команды, и самые частые", () => {
+  const known = ["Присед со штангой", "Тяга верхнего блока", "Жим лёжа", "Махи в стороны", "Жим гантелей сидя", "Планка"];
+  const r = promptNames(known, "Анне на четверг жим 4 по 8 и приседания 3 по 10", 25, 0);
+  assert.deepEqual(r, ["Присед со штангой", "Жим лёжа", "Жим гантелей сидя"]);
+  assert.deepEqual(promptNames(known, "привет", 25, 2), ["Присед со штангой", "Тяга верхнего блока"]);
+  assert.equal(promptNames(known, "жим гантелей", 25, 0)[0], "Жим гантелей сидя");
+});
+
+test("тип даты поправляется по тексту команды", () => {
+  const spec = { type: "day_after_tomorrow", day: 20, month: 11 } as any;
+  assert.equal(fixDateSpec(spec, "Петрову на 20 ноября жим")!.type, "date");
+  assert.equal(fixDateSpec({ type: "weekday", weekday: 6, day: 10 } as any, "Маше на субботу в 10 утра")!.type, "weekday");
+  assert.deepEqual(fixDateSpec({ type: "nextWeek", weekday: 1 } as any, "в понедельник на следующей неделе"), { type: "weekday", weekday: 1, nextWeek: true });
+  assert.equal(fixDateSpec({ type: "tomorrow", day: 0, month: 0 } as any, "завтра")!.type, "tomorrow");
+  assert.equal(fixDateSpec({ type: "tomorrow", day: 5, month: 3 } as any, "на 05.03")!.type, "date");
 });
