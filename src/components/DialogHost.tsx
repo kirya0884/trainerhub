@@ -52,7 +52,9 @@ function AskDialog({ ask }: { ask: Ask }) {
     <div className="anim-fade fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 sm:p-4" onClick={() => answer(false)}
       style={kb ? { top: kb.top, bottom: kb.bottom } : undefined}>
       <div {...panelProps} onClick={(e) => e.stopPropagation()}
-        className="anim-sheet w-full sm:max-w-sm bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-4 space-y-4 outline-none" style={{ paddingBottom: kb ? 16 : "calc(env(safe-area-inset-bottom) + 16px)" }}>
+        // Окно не выше видимой части экрана (с клавиатурой — над ней) и листается внутри:
+        // в окне с несколькими полями верхние иначе уезжали за край, и до них было не добраться
+        className="anim-sheet w-full sm:max-w-sm bg-zinc-900 border border-zinc-800 rounded-t-3xl sm:rounded-2xl p-4 space-y-4 outline-none overflow-y-auto overscroll-contain" style={{ paddingBottom: kb ? 16 : "calc(env(safe-area-inset-bottom) + 16px)", maxHeight: kb ? kb.height - 12 : "88dvh" }}>
         <p className={`leading-snug text-zinc-100 whitespace-pre-line pt-1 ${ask.fields || ask.options ? "text-[17px] font-bold" : "text-[15px]"}`}>{ask.text}</p>
         {ask.options && (
           <div role="radiogroup" className="space-y-2">

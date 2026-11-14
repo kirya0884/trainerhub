@@ -28,7 +28,10 @@ export function useKeyboardViewport() {
     if (!vv) return;
     const update = () => {
       // Меньше 120 px — это не клавиатура, а панели браузера или погрешность
-      const open = isTextField(document.activeElement) && Math.abs(vv.scale - 1) < 0.01 && window.innerHeight - vv.height > 120;
+      // Сдвиг видимой области (offsetTop > 0) тоже клавиатура: на части iPhone innerHeight сжимается
+      // вместе с ней, и разница высот почти нулевая, а окно всё равно уезжает вверх
+      const open = isTextField(document.activeElement) && Math.abs(vv.scale - 1) < 0.01
+        && (window.innerHeight - vv.height > 120 || vv.offsetTop > 1);
       const next = open ? {
         top: Math.round(vv.offsetTop),
         bottom: Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop)),
