@@ -1,3 +1,4 @@
+import type { Tier } from "./subscription";
 import { supabase } from "./supabase";
 import { addPlan } from "./clients";
 import { addBooking } from "./bookings";
@@ -20,7 +21,7 @@ export type ACommand = {
   exercises: AExercise[];
 };
 /** Запросы помощнику: за календарный месяц и за день; resetsOn — когда обновится месячный */
-export type AUsage = { used: number; limit: number; dayUsed: number; dayLimit: number; resetsOn: string };
+export type AUsage = { used: number; limit: number; dayUsed: number; dayLimit: number; resetsOn: string; tier?: Tier };
 
 export class AssistantError extends Error {
   constructor(message: string, readonly code: "not_connected" | "limit" | "server" | "network", readonly usage?: AUsage) { super(message); }

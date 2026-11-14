@@ -3,12 +3,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildCommand, commandPrompt, countUsage, defaultDayName, matchClient, normTime, parseModelJson, PLAN_LIMITS, resolveDate, todayIn, topNames,
+  buildCommand, commandPrompt, countUsage, defaultDayName, matchClient, normTime, parseModelJson, PLAN_LIMITS, planTier, resolveDate, todayIn, topNames,
   usageWindow,
 } from "./logic.ts";
 
 test("лимит Старта: 15 в месяц и 3 в день", () => {
   assert.deepEqual(PLAN_LIMITS.start, { month: 15, day: 3 });
+  assert.deepEqual(PLAN_LIMITS.studio, { month: 350, day: 60 });
+  assert.equal(planTier("pro"), "pro");
+  assert.equal(planTier(undefined), "start");
+  assert.equal(planTier("toString"), "start");
 });
 
 test("календарный месяц и дата обновления", () => {

@@ -6,6 +6,7 @@ import { askInput, notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 import { isTextField } from "../hooks/useKeyboardViewport";
 import { useScrollLock } from "../lib/scrollLock";
+import { TIER_NAMES } from "../lib/subscription";
 import {
   askAssistant, assistantConnectedCached, assistantStatus, AssistantError, createWorkout, currentPlanId, findDayOnDate, fmtDayDate, fmtDayMonth, fmtExercise, undoWorkout,
   type ACommand, type AExercise, type AUsage, type CreatedWorkout,
@@ -415,8 +416,8 @@ export default function AssistantChat({ open, trainerId, clients, plans, onClose
               <p className="text-[15px] font-bold">{monthOut ? "Запросы на этот месяц закончились" : "На сегодня запросы закончились"}</p>
               <p className="text-sm text-zinc-400 leading-relaxed">
                 {monthOut
-                  ? `На тарифе Старт — ${usage!.limit} запросов в месяц, новые появятся ${fmtDayMonth(usage!.resetsOn)}.`
-                  : `На тарифе Старт — ${usage!.dayLimit} запроса в день. Завтра можно снова.`}
+                  ? `На тарифе ${TIER_NAMES[usage!.tier ?? "start"]} — ${usage!.limit} запросов в месяц, новые появятся ${fmtDayMonth(usage!.resetsOn)}.`
+                  : `На тарифе ${TIER_NAMES[usage!.tier ?? "start"]} — ${usage!.dayLimit} ${usage!.dayLimit === 3 ? "запроса" : "запросов"} в день. Завтра можно снова.`}
               </p>
               <p className="text-sm text-zinc-500 leading-relaxed">Тренировку можно создать и без помощника: «Добавить день» в плане клиента.</p>
               <div className="flex gap-2 pt-1">

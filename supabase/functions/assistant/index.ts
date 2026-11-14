@@ -9,7 +9,7 @@
 // Сам текст команды в журнал не пишем, только размеры и счётчик токенов.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  buildCommand, commandPrompt, countUsage, MAX_COMMAND_CHARS, parseModelJson, PLAN_LIMITS, todayIn, topNames,
+  buildCommand, commandPrompt, countUsage, MAX_COMMAND_CHARS, parseModelJson, PLAN_LIMITS, planTier, todayIn, topNames,
   usageWindow,
 } from "./logic.ts";
 
@@ -75,13 +75,16 @@ Deno.serve(async (req) => {
     // Лимит: месяц по календарю и день — по московскому дню, чтобы смена пояса в телефоне его не обнуляла.
     // Месячный — сумма дневных строк; дневной берётся атомарно (assistant_take). Два запроса
     // одновременно в конце месяца могут превысить месячный на единицу — это ограничено дневным.
-    const limits = PLAN_LIMITS.start;
+    // Тариф — под правами тренера; не ответила база — считаем по «Старту», а не отказываем
+    const { data: sub } = await db.rpc("my_subscription");
+    const tier = planTier((sub as { tier?: unknown } | null)?.tier);
+    const limits = PLAN_LIMITS[tier];
     const usageDay = todayIn("Europe/Moscow");
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
     const { data: usageRows, error: usageErr } = await admin.from("assistant_usage").select("day,count")
       .eq("trainer_id", uid).gte("day", usageWindow(usageDay).monthStart);
     if (usageErr) throw usageErr;
-    const usage = countUsage(usageRows ?? [], usageDay, limits);
+    const usage = { ...countUsage(usageRows ?? [], usageDay, limits), tier };
 
     // Ключ проверяем после входа: посторонним не сообщаем, подключён ли помощник.
     // status — приложение спрашивает, открыт ли помощник (пока нет ключа — «в разработке») и сколько осталось

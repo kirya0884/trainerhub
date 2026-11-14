@@ -58,9 +58,16 @@ const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн"
 
 export const MAX_COMMAND_CHARS = 2000;
 
-// Лимиты запросов по тарифам (reps-redesign/assistant-limits.html). Оплаты подписки пока нет —
-// все тренеры на «Старте» (решение владельца 11.11.2026). Платные тарифы — когда появится биллинг.
-export const PLAN_LIMITS = { start: { month: 15, day: 3 } } as const;
+// Лимиты запросов по тарифам (reps-redesign/assistant-limits.html). Тариф — действующая подписка
+// тренера (my_subscription: выдана из админки или оплачена); нет подписки — «Старт».
+export const PLAN_LIMITS = {
+  start: { month: 15, day: 3 },
+  basic: { month: 100, day: 20 },
+  pro: { month: 200, day: 40 },
+  studio: { month: 350, day: 60 },
+} as const;
+export type PlanTier = keyof typeof PLAN_LIMITS;
+export const planTier = (t: unknown): PlanTier => (typeof t === "string" && Object.hasOwn(PLAN_LIMITS, t) ? t as PlanTier : "start");
 export type Usage = { used: number; limit: number; dayUsed: number; dayLimit: number; resetsOn: string };
 
 // Месяц — календарный: с 1-го числа по московскому дню. resetsOn — когда лимит обновится.
