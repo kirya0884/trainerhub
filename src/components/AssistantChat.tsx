@@ -86,17 +86,11 @@ export default function AssistantChat({ open, trainerId, clients, plans, onClose
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
-  // Страница под помощником не прокручивается. На iOS overflow:hidden у body не держит
-  // прокрутку пальцем — фиксируем body на месте и возвращаем позицию после закрытия
+  // Страница под помощником стоит на месте — это делает useScrollLock(open) выше
   useEffect(() => {
     if (!open) return;
-    const y = window.scrollY;
-    const b = document.body.style;
-    const prev = { position: b.position, top: b.top, left: b.left, right: b.right, overflow: b.overflow };
-    Object.assign(b, { position: "fixed", top: `-${y}px`, left: "0", right: "0", overflow: "hidden" });
     // К последнему сообщению — помощник мог прятаться с длинной перепиской
     requestAnimationFrame(() => listRef.current?.scrollTo({ top: listRef.current.scrollHeight }));
-    return () => { Object.assign(b, prev); window.scrollTo(0, y); };
   }, [open]);
   useEffect(() => {
     const on = () => setOnline(true), off = () => setOnline(false);
