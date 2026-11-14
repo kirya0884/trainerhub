@@ -13,7 +13,7 @@ import { GROUP_COLORS } from "../constants";
 import { FeelingScale } from "./FeelingScale";
 import { RestBar, fmtClock, useRestTimer } from "./RestTimer";
 import { fmtSet, parseRest, repsInput } from "../lib/format";
-import { exKey, isWeightRecord } from "../lib/sessionUtils";
+import { exKey, isSetBetter } from "../lib/sessionUtils";
 import { combinedRemaining } from "../lib/clients";
 import type { Day, Exercise } from "../types";
 import RemainingBadge from "./RemainingBadge";
@@ -185,7 +185,7 @@ function ClientSlot({ client, trainerId, groupId, active, onFinished, startRest,
                             return (
                               <div key={i}>
                                 <div className={`grid ${prevSets ? PREV_COLS : SET_COLS} gap-1.5 items-center rounded-xl ${isDone ? "anim-flash" : ""}`}>
-                                  <span className="text-sm font-semibold text-zinc-500 text-center">{isDone && isWeightRecord(r.weight, prevSets) ? <span key="pr" className="anim-pop inline-block" title="Рекорд: больше прошлого лучшего веса" aria-label="Рекорд">🏆</span> : i + 1}</span>
+                                  <span className="text-sm font-semibold text-zinc-500 text-center">{isDone && isSetBetter(r, prevSets?.[i]) ? <span key="pr" className="anim-pop inline-block" title="Больше, чем в прошлый раз" aria-label="Больше, чем в прошлый раз">🏆</span> : i + 1}</span>
 {prevSets && <PrevCell p={prevSets[i]} />}
                                   <input value={r.weight} onChange={(e) => setVal(ex.id, i, { weight: e.target.value })} inputMode="decimal" placeholder="кг" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />
                                   <input value={r.reps} onChange={(e) => setVal(ex.id, i, { reps: repsInput(e.target.value) })} inputMode="decimal" placeholder="повт" className={`h-12 w-full min-w-0 bg-zinc-800 rounded-lg px-1 font-semibold text-center outline-none focus:ring-2 focus:ring-lime-400/60 ${isDone ? "text-zinc-400" : ""}`} />

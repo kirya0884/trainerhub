@@ -224,12 +224,13 @@ export function lastFactsByName(sessions: Session[]): Record<string, LastFact> {
   return out;
 }
 
-/** Этап 12: подход тяжелее лучшего веса прошлой тренировки этого упражнения — рекорд */
-export function isWeightRecord(weight: string, prev?: { weight: string }[] | null): boolean {
-  const w = parseNum(weight);
-  if (w == null || !prev?.length) return false;
-  const best = Math.max(...prev.map((p) => parseNum(p.weight) ?? 0));
-  return best > 0 && w > best;
+/** Подход лучше того же подхода прошлой тренировки: больше вес или тот же вес и больше повторов */
+export function isSetBetter(cur: { weight: string; reps: string }, prev?: { weight: string; reps: string; dir?: string } | null): boolean {
+  if (!prev || prev.dir === "skip") return false;
+  const w = parseNum(cur.weight) ?? 0, r = parseNum(cur.reps) ?? 0;
+  const pw = parseNum(prev.weight) ?? 0, pr = parseNum(prev.reps) ?? 0;
+  if (r <= 0 || (pw <= 0 && pr <= 0)) return false;
+  return w > pw || (w === pw && r > pr);
 }
 
 /** Этап 12: сколько недель подряд (пн–вс) были тренировки — по эту или прошлую неделю
