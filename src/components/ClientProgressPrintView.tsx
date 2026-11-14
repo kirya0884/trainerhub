@@ -3,6 +3,7 @@ import { usePrintBrand, PrintTopBar } from "./PrintTopBar";
 import * as clientsApi from "../lib/clients";
 import { fetchClientSessionsSummary } from "../lib/progress";
 import { BODY_METRICS } from "../constants";
+import { useScrollLock } from "../lib/scrollLock";
 import type { Measurement } from "../lib/clients";
 import type { Session } from "../types";
 
@@ -10,6 +11,7 @@ import type { Session } from "../types";
 export default function ClientProgressPrintView({ clientId, planIds, clientName, trainerId, onClose }: {
   clientId: string; planIds: string[]; clientName: string; trainerId: string; onClose: () => void;
 }) {
+  useScrollLock();
   const brand = usePrintBrand(trainerId);
   const [measurements, setMeasurements] = useState<Measurement[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);

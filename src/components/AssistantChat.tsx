@@ -5,6 +5,7 @@ import { registerModal } from "../lib/modalHistory";
 import { askInput, notify } from "../lib/dialog";
 import { humanError } from "../lib/errors";
 import { useKeyboardViewport } from "../hooks/useKeyboardViewport";
+import { useScrollLock } from "../lib/scrollLock";
 import {
   askAssistant, assistantConnectedCached, assistantStatus, AssistantError, createWorkout, currentPlanId, findDayOnDate, fmtDayDate, fmtDayMonth, fmtExercise, undoWorkout,
   type ACommand, type AExercise, type AUsage, type CreatedWorkout,
@@ -51,6 +52,8 @@ export default function AssistantChat({ open, trainerId, clients, plans, onClose
   /** «Посмотреть тарифы», когда запросы закончились */
   onOpenTariffs: () => void;
 }) {
+  // Открытый помощник листается сам, экран под ним стоит
+  useScrollLock(open);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);

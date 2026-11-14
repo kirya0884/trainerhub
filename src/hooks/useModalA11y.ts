@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef } from "react";
 import { registerModal } from "../lib/modalHistory";
+import { lockScroll } from "../lib/scrollLock";
 
 /** Стек открытых модалов: Escape должен закрывать только верхний, а не всю стопку. */
 const stack: symbol[] = [];
@@ -33,6 +34,8 @@ export function useModalA11y(onClose: () => void, label?: string, active = true)
     const me = Symbol("modal");
     // 0.1: «Назад» на телефоне закрывает это окно
     const unregBack = registerModal(onCloseRef);
+    // Экран под окном не листается, пока окно открыто
+    const unlock = lockScroll();
     stack.push(me);
     const restoreTo = document.activeElement as HTMLElement | null;
 
@@ -66,6 +69,7 @@ export function useModalA11y(onClose: () => void, label?: string, active = true)
     return () => {
       window.removeEventListener("keydown", onKey, true);
       unregBack();
+      unlock();
       const i = stack.indexOf(me);
       if (i >= 0) stack.splice(i, 1);
       // Возврат фокуса туда, откуда открыли, — иначе он падает на body

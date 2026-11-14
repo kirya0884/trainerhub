@@ -3,6 +3,7 @@ import { haptic } from "../hooks/useCountUp";
 import { AlertTriangle, Check, CheckCircle2, Minimize2, Play, Send, Timer, X } from "lucide-react";
 import { readJson, removeKey, touchDraft, writeJson } from "../lib/storage";
 import { useEffect, useRef, useState } from "react";
+import { useScrollLock } from "../lib/scrollLock";
 import { fmtSet, parseRest, today, repsInput } from "../lib/format";
 import { buildMetrics, factSets, itemRpe, isSetBetter } from "../lib/sessionUtils";
 import { GROUP_COLORS } from "../constants";
@@ -173,10 +174,7 @@ export default function ClientSessionView({ day, startedAt, onFinish, onCancel, 
   const isCircuit = day.method === "circuit";
   const maxRounds = isCircuit && day.exercises.length ? Math.max(1, ...day.exercises.map((ex) => (vals[ex.id] || []).length)) : 0;
   // Блокируем скролл страницы когда сессия открыта
-  useEffect(() => {
-    document.body.style.overflow = minimized ? "" : "hidden";
-    return () => { document.body.style.overflow = ""; };
-  }, [minimized]);
+  useScrollLock(!minimized);
   const [step, setStep] = useState<"training" | "feedback">("training");
   const [submitting, setSubmitting] = useState(false);
   const [draft, setDraft] = useState<{ metrics: Omit<Metric, "id">[]; session: Omit<Session, "id"> } | null>(null);

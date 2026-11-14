@@ -1,9 +1,11 @@
 import { usePrintBrand, PrintTopBar, PrintBrandHeader } from "./PrintTopBar";
 import type { Plan } from "../types";
 import { planSetsText } from "../lib/sessionUtils";
+import { useScrollLock } from "../lib/scrollLock";
 
 // Печать плана через native window.print() + @media print в index.css (.print-area) — без PDF-библиотек.
 export default function PlanPrintView({ plan, trainerId, clientName, onClose }: { plan: Plan; trainerId: string; clientName: string; onClose: () => void }) {
+  useScrollLock();
   const brand = usePrintBrand(trainerId);
 
   return (

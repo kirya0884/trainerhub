@@ -117,7 +117,6 @@ export default function SessionModal({ day, planId, who, addCandidates, onAddCli
   const hh = Math.floor(elapsed / 3600), mm = Math.floor((elapsed % 3600) / 60), ss = elapsed % 60;
   const timer = `${hh > 0 ? String(hh).padStart(2, "0") + ":" : ""}${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}`;
   // Блокируем скролл страницы когда сессия открыта
-  useEffect(() => { document.body.style.overflow = minimized ? "" : "hidden"; return () => { document.body.style.overflow = ""; }; }, [minimized]);
 
   const setVal = (exId: string, i: number, patch: Partial<SetVal>) =>
     setVals((a) => ({ ...a, [exId]: a[exId].map((r, idx) => (idx === i ? { ...r, ...patch } : r)) }));

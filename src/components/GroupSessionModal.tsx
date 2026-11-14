@@ -244,7 +244,6 @@ export default function GroupSessionModal({ groupId, clients, trainerId, onClose
   // Дата проведения — одна на всех: null — сегодня, иначе задним числом
   const [workoutDate, setWorkoutDate] = useState<string | null>(null);
   // Свёрнутая тренировка не держит прокрутку страницы
-  useEffect(() => { document.body.style.overflow = minimized ? "" : "hidden"; return () => { document.body.style.overflow = ""; }; }, [minimized]);
   const allDone = clients.every((c) => finishedIds.includes(c.id));
   const exit = async () => {
     if (allDone || (await ask("Прервать совместную тренировку? Кто ещё не завершил, записан не будет.", { danger: true, ok: "Прервать" }))) onClose();

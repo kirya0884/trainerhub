@@ -3,12 +3,14 @@ import { usePrintBrand, PrintTopBar, PrintBrandHeader } from "./PrintTopBar";
 import type { Payment } from "../lib/clients";
 import { plural } from "../lib/format";
 import { notify } from "../lib/dialog";
+import { useScrollLock } from "../lib/scrollLock";
 
 const STATUS = { paid: "Оплачено", deferred: "Ожидается оплата", installment: "Частями" } as const;
 
 // Печать чека через native window.print() + .print-area, по образцу PlanPrintView.
 // 5.9: для неоплаченного — «Счёт на оплату», статус, тренировки (sessions_delta), имя тренера и «Поделиться».
 export default function ReceiptPrintView({ payment, trainerId, clientName, onClose }: { payment: Payment; trainerId: string; clientName: string; onClose: () => void }) {
+  useScrollLock();
   const brand = usePrintBrand(trainerId);
   const paid = payment.payStatus === "paid";
   const title = paid ? "Квитанция об оплате" : "Счёт на оплату";

@@ -88,6 +88,8 @@ input, textarea, select { font-size: 16px !important; }
   .print-area, .print-area * { visibility: visible; }
   .print-area { position: absolute; left: 0; top: 0; width: 100%; }
   .no-print { display: none !important; }
+  /* Окно печати блокирует прокрутку экрана (lib/scrollLock) — на бумаге она не должна обрезать страницы */
+  html, body { overflow: visible !important; }
 }
 
 /* ── Анимации (этап 12) ────────────────────────────────────────────

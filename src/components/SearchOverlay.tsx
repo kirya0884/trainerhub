@@ -3,6 +3,7 @@ import { ClipboardList, Search, Users, X } from "lucide-react";
 import type { ClientListItem, PlanOverviewItem } from "../lib/clients";
 import { normSearch, phoneMatches } from "../lib/search";
 import { registerModal } from "../lib/modalHistory";
+import { useScrollLock } from "../lib/scrollLock";
 
 // B04: единый поиск по подопечным и планам. Отдельный оверлей, а не поле в шапке —
 // строку шапки четырьмя пунктами подряд расчищали (B23, B27, B28, B30), и возвращать
@@ -14,6 +15,7 @@ export default function SearchOverlay({ clients, plans, onOpenClient, onOpenPlan
   onOpenPlan: (planId: string, clientId: string) => void;
   onClose: () => void;
 }) {
+  useScrollLock();
   const [q, setQ] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 

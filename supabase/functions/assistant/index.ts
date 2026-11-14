@@ -9,7 +9,7 @@
 // Сам текст команды в журнал не пишем, только размеры и счётчик токенов.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import {
-  buildCommand, commandPrompt, COMMAND_SCHEMA, countUsage, MAX_COMMAND_CHARS, parseModelJson, PLAN_LIMITS, todayIn, topNames,
+  buildCommand, commandPrompt, countUsage, MAX_COMMAND_CHARS, parseModelJson, PLAN_LIMITS, todayIn, topNames,
   usageWindow,
 } from "./logic.ts";
 
@@ -41,7 +41,7 @@ async function askYandex(messages: Msg[]): Promise<{ text: string; tokens: numbe
       modelUri: `gpt://${YANDEX_FOLDER_ID}/${YANDEX_GPT_MODEL}`,
       completionOptions: { stream: false, temperature: 0.1, maxTokens: "2000" },
       messages,
-      jsonSchema: { schema: COMMAND_SCHEMA },
+      jsonObject: true,
     }),
     signal: AbortSignal.timeout(30_000),
   });

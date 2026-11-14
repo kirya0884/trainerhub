@@ -42,45 +42,16 @@ export type Command = {
   exercises: Exercise[];
 };
 
-const str = { type: "string" };
-const int = { type: "integer" };
-
-// Схема для YandexGPT (поле jsonSchema): модель обязана вернуть ровно такой JSON.
+// Образец ответа для YandexGPT (режим jsonObject). Строгая схема (jsonSchema) у Яндекса требует
+// все поля обязательными и заметно путает упражнения — образец в подсказке разбирает точнее.
 // Дату модель не вычисляет, а описывает словами-кодами: «в четверг» → weekday 4. Считаем сами —
 // языковые модели путают дни недели.
-export const COMMAND_SCHEMA = {
-  type: "object",
-  properties: {
-    action: { type: "string", enum: ["create_workout", "unknown"] },
-    reply: str,
-    clientMention: str,
-    clientNames: { type: "array", items: str },
-    date: {
-      type: "object",
-      properties: {
-        type: { type: "string", enum: ["today", "tomorrow", "day_after_tomorrow", "weekday", "date", "in_days", "none"] },
-        weekday: int,
-        nextWeek: { type: "boolean" },
-        day: int,
-        month: int,
-        year: int,
-        days: int,
-      },
-      required: ["type"],
-    },
-    time: str,
-    dayName: str,
-    exercises: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: { name: str, sets: int, reps: str, weight: str, duration: str, note: str },
-        required: ["name"],
-      },
-    },
-  },
-  required: ["action", "clientMention", "clientNames", "date", "time", "dayName", "exercises"],
-};
+export const COMMAND_TEMPLATE = JSON.stringify({
+  action: "create_workout", reply: "", clientMention: "", clientNames: [],
+  date: { type: "none", weekday: 0, nextWeek: false, day: 0, month: 0, year: 0, days: 0 },
+  time: "", dayName: "",
+  exercises: [{ name: "", sets: 0, reps: "", weight: "", duration: "", note: "" }],
+});
 
 const WEEKDAYS = ["понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
 const MONTHS_SHORT = ["янв", "фев", "мар", "апр", "мая", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"];
@@ -150,6 +121,7 @@ export function commandPrompt(today: string, known: string[]): string {
     "- Если упражнение — одно из известных упражнений тренера ниже, бери название из списка дословно.",
     "- Ничего не выдумывай: чего нет в тексте, оставь пустым или 0.",
     known.length ? `Известные упражнения тренера: ${known.join("; ")}.` : "Известных упражнений у тренера пока нет.",
+    `Ответь только JSON такого вида: ${COMMAND_TEMPLATE}`,
   ].join("\n");
 }
 
