@@ -78,7 +78,7 @@ export async function confirmFinish(day: Day, date: string, planId: string | und
  * «Отметить» — отмечаются только эти заполненные подходы; «как есть» — без изменений;
  * закрыли окно — null: завершение отменяется, человек возвращается к тренировке.
  */
-export async function askUnmarked<M extends { done: boolean; setsDone?: Record<number, boolean> }>(
+export async function askUnmarked<M extends { done: boolean; skipped?: boolean; setsDone?: Record<number, boolean> }>(
   day: Day, vals: Record<string, SetVal[]>, meta: Record<string, M>, client = false,
 ): Promise<Record<string, M> | null> {
   // У тренера «заполнен» — есть вес или повторы (нужно для внесения задним числом).
@@ -91,7 +91,8 @@ export async function askUnmarked<M extends { done: boolean; setsDone?: Record<n
     return !!r.rpe || !p || r.weight !== (p.weight || "") || r.reps !== (p.reps || "");
   };
   const open = day.exercises
-    .filter((ex) => ex.name && ex.kind !== "functional" && meta[ex.id] && !meta[ex.id].done)
+    // «Не сделано» — не спрашиваем: иначе «Отметить» засчитало бы его подходы сделанными
+    .filter((ex) => ex.name && ex.kind !== "functional" && meta[ex.id] && !meta[ex.id].done && !meta[ex.id].skipped)
     .map((ex) => ({ ex, idx: (vals[ex.id] ?? []).flatMap((r, i) => (filled(ex, r, i) && !meta[ex.id].setsDone?.[i] ? [i] : [])) }))
     .filter((x) => x.idx.length);
   if (!open.length) return meta;
